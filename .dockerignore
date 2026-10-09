@@ -20,6 +20,9 @@ frontend/build/
 
 relay/.gocache/
 relay/.gomodcache/
+relay/console-ui/node_modules/
+relay/console-ui/.dev-admin-token
+relay/.env
 
 deploy/onprem/.env
 *.log

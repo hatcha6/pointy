@@ -216,6 +216,10 @@ flutter:
     # wallet sheet falls back to a themed icon when one is absent. See
     # assets/payment_methods/README.md for the naming contract.
     - assets/payment_methods/
+    # Every country's flag (96x64), keyed by lower-case ISO code plus eu/ww.
+    # Baked from ops/catalog/flags by tool/bake_flags.py so the voucher menu
+    # and airtime/bill screens never download a flag.
+    - assets/flags/
     # Barcode scan feedback chimes (see shared/barcode/scan_feedback_sounds.dart).
     - assets/sounds/
 

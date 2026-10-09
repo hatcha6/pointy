@@ -1,0 +1,44 @@
+{
+ "results": [
+  {
+   "fulfillment": 1,
+   "order_line": 1,
+   "provider": "pointy",
+   "kind": "airtime",
+   "subscriber_ref": "+223•••••456",
+   "option_label": "أورنج مالي · 5,000 فرنك أفريقي",
+   "outcome": "charged",
+   "status": "confirmed",
+   "needs_attention": false,
+   "error_code": "",
+   "error_detail": "",
+   "provider_reference": "0856bb97-05eb-4129-8b14-88b2bcf761bd",
+   "balance_after": 506.37,
+   "receipt": {
+    "title": "شحن مباشر",
+    "rows": [
+     [
+      "الشبكة",
+      "أورنج مالي"
+     ],
+     [
+      "الرقم",
+      "+223 •••••456"
+     ],
+     [
+      "المبلغ المرسل",
+      "5,025 فرنك أفريقي"
+     ],
+     [
+      "رقم العملية",
+      "181441"
+     ]
+    ],
+    "pin": "",
+    "pin_label": "رمز الشحن",
+    "notice": "تم إرسال الرصيد إلى الرقم المذكور، ولا يمكن استرداده."
+   }
+  }
+ ],
+ "balance": 506.37
+}

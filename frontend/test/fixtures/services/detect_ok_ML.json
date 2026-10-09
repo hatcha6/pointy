@@ -1,0 +1,52 @@
+{
+ "detected": true,
+ "reason": "",
+ "operator": {
+  "id": 289,
+  "name": "أورنج مالي",
+  "name_en": "Orange Mali",
+  "logo": "https://s3.amazonaws.com/rld-operator/846891a6-4f91-4688-9b54-51ad7cce9e97-size-3.png",
+  "mode": "range",
+  "amount_currency": "XOF",
+  "receive_currency": "XOF",
+  "approximate": false,
+  "min": "1967",
+  "max": "32800",
+  "popular_amount": null,
+  "amounts": [
+   {
+    "amount": "2000",
+    "receive": "2000",
+    "receive_currency": "XOF",
+    "price": "38.75",
+    "exceeds_float": false
+   },
+   {
+    "amount": "5000",
+    "receive": "5000",
+    "receive_currency": "XOF",
+    "price": "97.00",
+    "exceeds_float": false
+   },
+   {
+    "amount": "10000",
+    "receive": "10000",
+    "receive_currency": "XOF",
+    "price": "193.75",
+    "exceeds_float": false
+   },
+   {
+    "amount": "20000",
+    "receive": "20000",
+    "receive_currency": "XOF",
+    "price": "387.50",
+    "exceeds_float": false
+   }
+  ]
+ },
+ "phone": {
+  "e164": "+223•••••456",
+  "national": "•••••456",
+  "country": "ML"
+ }
+}

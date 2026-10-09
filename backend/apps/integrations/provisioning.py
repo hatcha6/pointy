@@ -31,19 +31,35 @@ _PRODUCT_NAMES = {
     "qareeb": "شحن رصيد قريب",
 }
 
+#: The service lines a provider sells besides its recharges and cards, by kind
+#: (``INTEG-POINTY-AIRTIME``). The company's direct top-up and bill payments:
+#: one service product each, whatever the country, the network or the biller —
+#: what was bought is on the line's fulfillment, never on a product per option.
+_KIND_PRODUCT_NAMES = {
+    ("pointy", "airtime"): "شحن مباشر",
+    ("pointy", "bill"): "دفع فاتورة",
+}
 
-def service_sku(provider_key: str) -> str:
-    return f"{SKU_PREFIX}-{provider_key.upper()}"
+
+def service_sku(provider_key: str, kind: str = "") -> str:
+    """The SKU of a provider's service product: ``INTEG-HDBOX`` for a recharge,
+    ``INTEG-POINTY-AIRTIME`` for one of its service lines (``kind``)."""
+    base = f"{SKU_PREFIX}-{provider_key.upper()}"
+    return f"{base}-{kind.upper()}" if kind else base
 
 
 @transaction.atomic
-def service_variant_for(provider_key: str) -> ProductVariant:
+def service_variant_for(provider_key: str, kind: str = "") -> ProductVariant:
     """The variant a recharge from ``provider_key`` is rung up as.
+
+    ``kind`` names one of the provider's service lines (direct top-up, bill
+    payments) instead of its recharge; without it, nothing differs from what
+    every other provider has always got.
 
     Idempotent, and keyed on the SKU rather than the name, so a product a
     shop renamed before system products were locked is still found.
     """
-    sku = service_sku(provider_key)
+    sku = service_sku(provider_key, kind)
     existing = (
         ProductVariant.objects.select_related("product").filter(sku=sku).first()
     )
@@ -73,8 +89,13 @@ def service_variant_for(provider_key: str) -> ProductVariant:
             existing.save(update_fields=["is_active", "updated_at"])
         return existing
 
+    name = (
+        _KIND_PRODUCT_NAMES.get((provider_key, kind))
+        if kind
+        else _PRODUCT_NAMES.get(provider_key)
+    )
     product = Product.objects.create(
-        name=_PRODUCT_NAMES.get(provider_key, f"شحن {provider_key}"),
+        name=name or f"شحن {provider_key}",
         is_service=True,
         is_active=True,
         # Not a thing the shop stocks: it exists so a top-up has a line to be,

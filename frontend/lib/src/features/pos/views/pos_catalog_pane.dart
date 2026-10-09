@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
@@ -27,6 +29,8 @@ import 'modifier_sheet.dart';
 import 'pos_search_outcome_line.dart';
 import 'pos_unit_pick.dart';
 import 'pos_variant_picker_sheet.dart';
+import 'pos_voucher_brand_sheet.dart';
+import 'pos_voucher_menu.dart';
 import 'pos_voucher_picker_sheet.dart';
 import 'weight_entry_sheet.dart';
 
@@ -37,10 +41,15 @@ class PosCatalogPane extends StatelessWidget {
     required this.capabilities,
     this.rechargeProviders = const [],
     this.onRecharge,
+    this.onTransferVoucherBalance,
   });
 
   final PosViewModel viewModel;
   final AuthorizationCapabilities capabilities;
+
+  /// Moves money from the wallet into the voucher balance and says whether any
+  /// moved; null for a user who cannot do it from the till.
+  final Future<bool> Function()? onTransferVoucherBalance;
 
   /// The providers this shop can top up, by backend key. Empty draws no
   /// button at all — a grocer must not be able to tell this feature shipped.
@@ -52,7 +61,10 @@ class PosCatalogPane extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: viewModel.catalogLayout,
+      listenable: Listenable.merge([
+        viewModel.catalogLayout,
+        viewModel.voucherMenu,
+      ]),
       builder: (context, _) => _buildPane(context),
     );
   }
@@ -60,15 +72,29 @@ class PosCatalogPane extends StatelessWidget {
   Widget _buildPane(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final layout = viewModel.catalogLayout.layout;
+    // The «كروت دفتر» chip opens the company's own menu in the grid's place;
+    // typing a search brings the grid back.
+    final showsVoucherMenu = viewModel.showsVoucherMenu;
+    final products = _PosCatalogProducts(
+      viewModel: viewModel,
+      capabilities: capabilities,
+      layout: layout,
+      emptyMessage: l10n.emptyCatalog,
+      cartQuantities: _cartQuantitiesByProduct(viewModel.cart),
+    );
 
     return PointyCatalogPane(
       title: l10n.catalogTitle,
-      isLoading: viewModel.isLoading,
-      resultCount: viewModel.isLoading && viewModel.products.isEmpty
+      isLoading: showsVoucherMenu
+          ? viewModel.voucherMenu.isRefreshing
+          : viewModel.isLoading,
+      resultCount:
+          showsVoucherMenu ||
+              (viewModel.isLoading && viewModel.products.isEmpty)
           ? null
           : viewModel.products.length,
       hasMoreResults: viewModel.hasMoreProducts,
-      notice: viewModel.errorMessage != null
+      notice: !showsVoucherMenu && viewModel.errorMessage != null
           ? PointyInlineMessage.warning(message: l10n.sampleCatalogNotice)
           : null,
       headerAction: Row(
@@ -104,6 +130,11 @@ class PosCatalogPane extends StatelessWidget {
           viewModel.applyQuery(viewModel.query.copyWith(categories: const []));
         },
         onSelectCategory: (category) {
+          if (category.isPointyVouchers) {
+            // Picking the chip again re-reads the menu behind what is held,
+            // so a promotion that just started shows without waiting.
+            unawaited(viewModel.voucherMenu.refresh());
+          }
           viewModel.applyQuery(
             viewModel.query.copyWith(categories: [category]),
           );
@@ -111,14 +142,15 @@ class PosCatalogPane extends StatelessWidget {
       ),
       statusLine: viewModel.barcodeScanStatus != BarcodeScanStatus.idle
           ? _BarcodeScanStatusLine(viewModel: viewModel)
-          : _searchOutcomeLine(l10n, viewModel),
-      grid: _PosCatalogProducts(
-        viewModel: viewModel,
-        capabilities: capabilities,
-        layout: layout,
-        emptyMessage: l10n.emptyCatalog,
-        cartQuantities: _cartQuantitiesByProduct(viewModel.cart),
-      ),
+          : (showsVoucherMenu ? null : _searchOutcomeLine(l10n, viewModel)),
+      grid: showsVoucherMenu
+          ? PosVoucherMenuPane(
+              viewModel: viewModel,
+              capabilities: capabilities,
+              fallback: products,
+              onTransferVoucherBalance: onTransferVoucherBalance,
+            )
+          : products,
     );
   }
 
@@ -356,6 +388,24 @@ class _PosCatalogProducts extends StatelessWidget {
           );
         }
       case PosProductSelectionStatus.chooseVariant:
+        // One of the company's own cards, found by searching: the same sheet
+        // the menu opens, with its countries and flags.
+        final menu = viewModel.voucherMenu.menu;
+        final brand = product.isVoucher
+            ? menu?.brandForProduct(product.id)
+            : null;
+        if (menu != null && brand != null) {
+          final card = await showPosVoucherBrandSheet(
+            context,
+            brand: brand,
+            menu: menu,
+            showsProfit: viewModel.isCostRevealed,
+          );
+          if (card != null && context.mounted) {
+            viewModel.addVariant(card, source: 'voucher_menu');
+          }
+          return;
+        }
         if (product.isVoucher) {
           final card = await showPosVoucherPickerSheet(
             context,

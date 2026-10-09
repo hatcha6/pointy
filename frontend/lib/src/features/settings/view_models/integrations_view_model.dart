@@ -23,6 +23,8 @@ class IntegrationsViewModel extends ChangeNotifier {
 
   final IntegrationsRepository _repository;
 
+  IntegrationsRepository get repository => _repository;
+
   List<IntegrationProvider> _providers = const [];
   bool _isLoading = false;
   bool _hasLoadError = false;
@@ -83,6 +85,19 @@ class IntegrationsViewModel extends ChangeNotifier {
       key,
       IntegrationBusyKind.saving,
       (providerKey) => _repository.saveCredentials(providerKey, draft),
+    );
+  }
+
+  /// Switches on or off a provider that asks for no credential — «كروت دفتر»,
+  /// whose whole setup is this one switch.
+  Future<bool> setEnabled(IntegrationProviderKey key, bool enabled) {
+    return _run(
+      key,
+      IntegrationBusyKind.saving,
+      (providerKey) => _repository.saveCredentials(
+        providerKey,
+        IntegrationCredentialsDraft(isActive: enabled),
+      ),
     );
   }
 

@@ -1,0 +1,52 @@
+{
+ "results": [
+  {
+   "fulfillment": 41,
+   "order_line": 41,
+   "provider": "pointy",
+   "kind": "bill",
+   "subscriber_ref": "••••••••444",
+   "option_label": "ووفال السنغال (كهرباء مسبقة الدفع) · 2,000 فرنك أفريقي",
+   "outcome": "charged",
+   "status": "confirmed",
+   "needs_attention": false,
+   "error_code": "",
+   "error_detail": "",
+   "provider_reference": "c4e43935-c0ba-406c-a7d1-618a989d2eb2",
+   "balance_after": 72.66,
+   "receipt": {
+    "title": "دفع فاتورة كهرباء",
+    "rows": [
+     [
+      "الجهة",
+      "ووفال السنغال (كهرباء مسبقة الدفع)"
+     ],
+     [
+      "النوع",
+      "كهرباء"
+     ],
+     [
+      "رقم العدّاد",
+      "••••••••444"
+     ],
+     [
+      "المبلغ",
+      "2,000 فرنك أفريقي"
+     ],
+     [
+      "الوحدات",
+      "72.1 kWh"
+     ],
+     [
+      "رقم العملية",
+      "•••••••343"
+     ]
+    ],
+    "pin": "TEST-3399-5027-4599-5760",
+    "pin_label": "رمز الشحن",
+    "notice": "عملية تجريبية: لم يتم تسديد أي مبلغ فعلي."
+   }
+  }
+ ],
+ "balance": 72.66
+}

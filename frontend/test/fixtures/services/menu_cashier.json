@@ -1,0 +1,47 @@
+{
+ "available": true,
+ "provider": "pointy",
+ "error_code": "",
+ "balance": null,
+ "balance_at": null,
+ "categories": [],
+ "countries": [],
+ "brands": [],
+ "services": [
+  {
+   "key": "airtime",
+   "kind": "airtime",
+   "available": true,
+   "variant_id": 1,
+   "countries": 124,
+   "providers": 404
+  },
+  {
+   "key": "bill:electricity",
+   "kind": "bill",
+   "bill_type": "electricity",
+   "available": true,
+   "variant_id": 2,
+   "countries": 5,
+   "providers": 25
+  },
+  {
+   "key": "bill:water",
+   "kind": "bill",
+   "bill_type": "water",
+   "available": true,
+   "variant_id": 2,
+   "countries": 1,
+   "providers": 1
+  },
+  {
+   "key": "bill:tv",
+   "kind": "bill",
+   "bill_type": "tv",
+   "available": true,
+   "variant_id": 2,
+   "countries": 1,
+   "providers": 2
+  }
+ ]
+}

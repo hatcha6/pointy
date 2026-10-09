@@ -1,0 +1,27 @@
+{
+ "results": [
+  {
+   "fulfillment": 31,
+   "order_line": 31,
+   "provider": "pointy",
+   "kind": "voucher",
+   "subscriber_ref": "",
+   "option_label": "آيتونز الولايات المتحدة · 5 دولار",
+   "outcome": "charged",
+   "status": "confirmed",
+   "needs_attention": false,
+   "error_code": "",
+   "error_detail": "",
+   "provider_reference": "5eacd709-a455-462f-9cf4-204008deb637",
+   "balance_after": 480.98,
+   "receipt": {
+    "brand": "آيتونز",
+    "product": "الولايات المتحدة · 5 دولار",
+    "code": "21VAMtest",
+    "serial": "61410test",
+    "instructions": "App Store ← الحساب ← استرداد بطاقة هدية"
+   }
+  }
+ ],
+ "balance": 480.98
+}

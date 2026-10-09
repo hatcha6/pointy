@@ -1152,6 +1152,26 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
             pass
 
 
+def catalog_list_payloads(request, product_ids) -> dict[int, dict]:
+    """These products exactly as the catalog list sends them, keyed by id.
+
+    For a screen that shows products the list would and must hand the till
+    the same JSON for them — the till's voucher menu, whose cards are put in
+    the cart like any product (``apps.integrations.voucher_menu``). It runs
+    the list's own queryset, roll-ups, serializer and context, so attachment
+    URLs are signed the same way and a field added to the list reaches it
+    too; and it costs the list's constant number of queries, whatever the
+    count. No filters: the caller has already chosen the products.
+    """
+    ids = sorted({int(pk) for pk in product_ids if pk is not None})
+    if not ids:
+        return {}
+    view = ProductViewSet(request=request, action="list", format_kwarg=None, kwargs={})
+    queryset = view._with_variant_rollups(ProductViewSet.queryset.filter(pk__in=ids))
+    serializer = view.get_serializer(queryset, many=True)
+    return {row["id"]: row for row in serializer.data}
+
+
 def _int_param(request, name):
     raw = request.query_params.get(name)
     try:

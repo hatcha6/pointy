@@ -1,0 +1,925 @@
+{
+ "available": true,
+ "error_code": "",
+ "country": {
+  "code": "NG",
+  "name": "نيجيريا",
+  "name_en": "Nigeria",
+  "dial": [
+   "234"
+  ],
+  "currency": "NGN",
+  "currency_name": "نيرة نيجيرية",
+  "popular": 3
+ },
+ "airtime": {
+  "operators": [
+   {
+    "id": 341,
+    "max": "200000",
+    "min": "50",
+    "logo": "https://s3.amazonaws.com/rld-operator/cc553249-f52a-4b86-9dc4-68dda963b1b3-size-3.png",
+    "mode": "range",
+    "name": "إم تي إن نيجيريا",
+    "name_en": "MTN Nigeria",
+    "approximate": false,
+    "popular_amount": null,
+    "amount_currency": "NGN",
+    "receive_currency": "NGN",
+    "amounts": [
+     {
+      "amount": "2000",
+      "receive": "2000",
+      "receive_currency": "NGN",
+      "price": "16.25",
+      "exceeds_float": false
+     },
+     {
+      "amount": "5000",
+      "receive": "5000",
+      "receive_currency": "NGN",
+      "price": "40.25",
+      "exceeds_float": false
+     },
+     {
+      "amount": "10000",
+      "receive": "10000",
+      "receive_currency": "NGN",
+      "price": "80.50",
+      "exceeds_float": false
+     },
+     {
+      "amount": "20000",
+      "receive": "20000",
+      "receive_currency": "NGN",
+      "price": "160.75",
+      "exceeds_float": false
+     },
+     {
+      "amount": "50000",
+      "receive": "50000",
+      "receive_currency": "NGN",
+      "price": "401.50",
+      "exceeds_float": false
+     }
+    ]
+   },
+   {
+    "id": 342,
+    "max": "199999",
+    "min": "50",
+    "logo": "https://s3.amazonaws.com/rld-operator/2acbfe97-ef3e-4cce-906f-8681fed03b2d-size-3.png",
+    "mode": "range",
+    "name": "إيرتل نيجيريا",
+    "name_en": "Airtel Nigeria",
+    "approximate": false,
+    "popular_amount": null,
+    "amount_currency": "NGN",
+    "receive_currency": "NGN",
+    "amounts": [
+     {
+      "amount": "2000",
+      "receive": "2000",
+      "receive_currency": "NGN",
+      "price": "16.50",
+      "exceeds_float": false
+     },
+     {
+      "amount": "5000",
+      "receive": "5000",
+      "receive_currency": "NGN",
+      "price": "41.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "10000",
+      "receive": "10000",
+      "receive_currency": "NGN",
+      "price": "82.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "20000",
+      "receive": "20000",
+      "receive_currency": "NGN",
+      "price": "164.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "50000",
+      "receive": "50000",
+      "receive_currency": "NGN",
+      "price": "410.00",
+      "exceeds_float": false
+     }
+    ]
+   },
+   {
+    "id": 340,
+    "max": "50000",
+    "min": "50",
+    "logo": "https://s3.amazonaws.com/rld-operator/a6c9c490-39fa-47c0-a63a-b4a4d1d4dbe5-size-3.png",
+    "mode": "range",
+    "name": "تي 2 موبايل (ناين موبايل) نيجيريا",
+    "name_en": "T2 Mobile Nigeria",
+    "approximate": false,
+    "popular_amount": null,
+    "amount_currency": "NGN",
+    "receive_currency": "NGN",
+    "amounts": [
+     {
+      "amount": "2000",
+      "receive": "2000",
+      "receive_currency": "NGN",
+      "price": "16.25",
+      "exceeds_float": false
+     },
+     {
+      "amount": "5000",
+      "receive": "5000",
+      "receive_currency": "NGN",
+      "price": "40.25",
+      "exceeds_float": false
+     },
+     {
+      "amount": "10000",
+      "receive": "10000",
+      "receive_currency": "NGN",
+      "price": "80.25",
+      "exceeds_float": false
+     },
+     {
+      "amount": "20000",
+      "receive": "20000",
+      "receive_currency": "NGN",
+      "price": "160.50",
+      "exceeds_float": false
+     },
+     {
+      "amount": "50000",
+      "receive": "50000",
+      "receive_currency": "NGN",
+      "price": "424.75",
+      "exceeds_float": false
+     }
+    ]
+   },
+   {
+    "id": 344,
+    "max": "50000",
+    "min": "50",
+    "logo": "https://s3.amazonaws.com/rld-operator/18416726-e966-4ed0-b352-f02e9e9ff9db-size-1.png",
+    "mode": "range",
+    "name": "جلو نيجيريا",
+    "name_en": "Glo Nigeria",
+    "approximate": false,
+    "popular_amount": null,
+    "amount_currency": "NGN",
+    "receive_currency": "NGN",
+    "amounts": [
+     {
+      "amount": "2000",
+      "receive": "2000",
+      "receive_currency": "NGN",
+      "price": "16.25",
+      "exceeds_float": false
+     },
+     {
+      "amount": "5000",
+      "receive": "5000",
+      "receive_currency": "NGN",
+      "price": "40.75",
+      "exceeds_float": false
+     },
+     {
+      "amount": "10000",
+      "receive": "10000",
+      "receive_currency": "NGN",
+      "price": "81.25",
+      "exceeds_float": false
+     },
+     {
+      "amount": "20000",
+      "receive": "20000",
+      "receive_currency": "NGN",
+      "price": "162.25",
+      "exceeds_float": false
+     },
+     {
+      "amount": "50000",
+      "receive": "50000",
+      "receive_currency": "NGN",
+      "price": "424.75",
+      "exceeds_float": false
+     }
+    ]
+   }
+  ]
+ },
+ "bills": {
+  "billers": [
+   {
+    "id": 13,
+    "max": "300000",
+    "min": "350",
+    "mode": "range",
+    "name": "Kano Electricity Postpaid",
+    "type": "electricity",
+    "name_en": "Kano Electricity Postpaid",
+    "service": "postpaid",
+    "suggested": [
+     {
+      "amount": "1000",
+      "price": "28.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "2000",
+      "price": "50.75",
+      "exceeds_float": false
+     },
+     {
+      "amount": "5000",
+      "price": "119.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "10000",
+      "price": "233.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "20000",
+      "price": "460.50",
+      "exceeds_float": false
+     }
+    ],
+    "amount_currency": "NGN",
+    "requires_invoice": false
+   },
+   {
+    "id": 7,
+    "max": "300000",
+    "min": "350",
+    "mode": "range",
+    "name": "كهرباء إبادان (لاحقة الدفع)",
+    "type": "electricity",
+    "name_en": "Ibadan Electricity Postpaid",
+    "service": "postpaid",
+    "suggested": [
+     {
+      "amount": "1000",
+      "price": "28.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "2000",
+      "price": "50.75",
+      "exceeds_float": false
+     },
+     {
+      "amount": "5000",
+      "price": "119.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "10000",
+      "price": "233.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "20000",
+      "price": "460.50",
+      "exceeds_float": false
+     }
+    ],
+    "amount_currency": "NGN",
+    "requires_invoice": false
+   },
+   {
+    "id": 8,
+    "max": "300000",
+    "min": "350",
+    "mode": "range",
+    "name": "كهرباء إبادان (مسبقة الدفع)",
+    "type": "electricity",
+    "name_en": "Ibadan Electricity Prepaid",
+    "service": "prepaid",
+    "suggested": [
+     {
+      "amount": "1000",
+      "price": "28.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "2000",
+      "price": "50.75",
+      "exceeds_float": false
+     },
+     {
+      "amount": "5000",
+      "price": "119.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "10000",
+      "price": "233.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "20000",
+      "price": "460.50",
+      "exceeds_float": false
+     }
+    ],
+    "amount_currency": "NGN",
+    "requires_invoice": false
+   },
+   {
+    "id": 2,
+    "max": "300000",
+    "min": "350",
+    "mode": "range",
+    "name": "كهرباء أبوجا (لاحقة الدفع)",
+    "type": "electricity",
+    "name_en": "Abuja Electricity Postpaid",
+    "service": "postpaid",
+    "suggested": [
+     {
+      "amount": "1000",
+      "price": "28.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "2000",
+      "price": "50.75",
+      "exceeds_float": false
+     },
+     {
+      "amount": "5000",
+      "price": "119.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "10000",
+      "price": "233.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "20000",
+      "price": "460.50",
+      "exceeds_float": false
+     }
+    ],
+    "amount_currency": "NGN",
+    "requires_invoice": false
+   },
+   {
+    "id": 6,
+    "max": "300000",
+    "min": "350",
+    "mode": "range",
+    "name": "كهرباء أبوجا (مسبقة الدفع)",
+    "type": "electricity",
+    "name_en": "Abuja Electricity Prepaid",
+    "service": "prepaid",
+    "suggested": [
+     {
+      "amount": "1000",
+      "price": "28.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "2000",
+      "price": "50.75",
+      "exceeds_float": false
+     },
+     {
+      "amount": "5000",
+      "price": "119.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "10000",
+      "price": "233.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "20000",
+      "price": "460.50",
+      "exceeds_float": false
+     }
+    ],
+    "amount_currency": "NGN",
+    "requires_invoice": false
+   },
+   {
+    "id": 4,
+    "max": "300000",
+    "min": "350",
+    "mode": "range",
+    "name": "كهرباء إيكو (لاحقة الدفع)",
+    "type": "electricity",
+    "name_en": "Eko Electricity Postpaid",
+    "service": "postpaid",
+    "suggested": [
+     {
+      "amount": "1000",
+      "price": "28.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "2000",
+      "price": "50.75",
+      "exceeds_float": false
+     },
+     {
+      "amount": "5000",
+      "price": "119.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "10000",
+      "price": "233.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "20000",
+      "price": "460.50",
+      "exceeds_float": false
+     }
+    ],
+    "amount_currency": "NGN",
+    "requires_invoice": false
+   },
+   {
+    "id": 3,
+    "max": "300000",
+    "min": "350",
+    "mode": "range",
+    "name": "كهرباء إيكو (مسبقة الدفع)",
+    "type": "electricity",
+    "name_en": "Eko Electricity Prepaid",
+    "service": "prepaid",
+    "suggested": [
+     {
+      "amount": "1000",
+      "price": "28.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "2000",
+      "price": "50.75",
+      "exceeds_float": false
+     },
+     {
+      "amount": "5000",
+      "price": "119.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "10000",
+      "price": "233.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "20000",
+      "price": "460.50",
+      "exceeds_float": false
+     }
+    ],
+    "amount_currency": "NGN",
+    "requires_invoice": false
+   },
+   {
+    "id": 1,
+    "max": "300000",
+    "min": "350",
+    "mode": "range",
+    "name": "كهرباء إيكيجا (لاحقة الدفع)",
+    "type": "electricity",
+    "name_en": "Ikeja Electricity Postpaid",
+    "service": "postpaid",
+    "suggested": [
+     {
+      "amount": "1000",
+      "price": "28.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "2000",
+      "price": "50.75",
+      "exceeds_float": false
+     },
+     {
+      "amount": "5000",
+      "price": "119.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "10000",
+      "price": "233.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "20000",
+      "price": "460.50",
+      "exceeds_float": false
+     }
+    ],
+    "amount_currency": "NGN",
+    "requires_invoice": false
+   },
+   {
+    "id": 5,
+    "max": "300000",
+    "min": "350",
+    "mode": "range",
+    "name": "كهرباء إيكيجا (مسبقة الدفع)",
+    "type": "electricity",
+    "name_en": "Ikeja Electricity Prepaid",
+    "service": "prepaid",
+    "suggested": [
+     {
+      "amount": "1000",
+      "price": "28.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "2000",
+      "price": "50.75",
+      "exceeds_float": false
+     },
+     {
+      "amount": "5000",
+      "price": "119.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "10000",
+      "price": "233.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "20000",
+      "price": "460.50",
+      "exceeds_float": false
+     }
+    ],
+    "amount_currency": "NGN",
+    "requires_invoice": false
+   },
+   {
+    "id": 9,
+    "max": "300000",
+    "min": "350",
+    "mode": "range",
+    "name": "كهرباء إينوغو (لاحقة الدفع)",
+    "type": "electricity",
+    "name_en": "Enugu Electricity Postpaid",
+    "service": "postpaid",
+    "suggested": [
+     {
+      "amount": "1000",
+      "price": "28.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "2000",
+      "price": "50.75",
+      "exceeds_float": false
+     },
+     {
+      "amount": "5000",
+      "price": "119.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "10000",
+      "price": "233.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "20000",
+      "price": "460.50",
+      "exceeds_float": false
+     }
+    ],
+    "amount_currency": "NGN",
+    "requires_invoice": false
+   },
+   {
+    "id": 10,
+    "max": "300000",
+    "min": "350",
+    "mode": "range",
+    "name": "كهرباء إينوغو (مسبقة الدفع)",
+    "type": "electricity",
+    "name_en": "Enugu Electricity Prepaid",
+    "service": "prepaid",
+    "suggested": [
+     {
+      "amount": "1000",
+      "price": "28.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "2000",
+      "price": "50.75",
+      "exceeds_float": false
+     },
+     {
+      "amount": "5000",
+      "price": "119.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "10000",
+      "price": "233.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "20000",
+      "price": "460.50",
+      "exceeds_float": false
+     }
+    ],
+    "amount_currency": "NGN",
+    "requires_invoice": false
+   },
+   {
+    "id": 11,
+    "max": "300000",
+    "min": "350",
+    "mode": "range",
+    "name": "كهرباء بورت هاركورت (لاحقة الدفع)",
+    "type": "electricity",
+    "name_en": "Port Harcourt Electricity Postpaid",
+    "service": "postpaid",
+    "suggested": [
+     {
+      "amount": "1000",
+      "price": "28.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "2000",
+      "price": "50.75",
+      "exceeds_float": false
+     },
+     {
+      "amount": "5000",
+      "price": "119.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "10000",
+      "price": "233.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "20000",
+      "price": "460.50",
+      "exceeds_float": false
+     }
+    ],
+    "amount_currency": "NGN",
+    "requires_invoice": false
+   },
+   {
+    "id": 12,
+    "max": "300000",
+    "min": "350",
+    "mode": "range",
+    "name": "كهرباء بورت هاركورت (مسبقة الدفع)",
+    "type": "electricity",
+    "name_en": "Port Harcourt Electricity Prepaid",
+    "service": "prepaid",
+    "suggested": [
+     {
+      "amount": "1000",
+      "price": "28.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "2000",
+      "price": "50.75",
+      "exceeds_float": false
+     },
+     {
+      "amount": "5000",
+      "price": "119.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "10000",
+      "price": "233.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "20000",
+      "price": "460.50",
+      "exceeds_float": false
+     }
+    ],
+    "amount_currency": "NGN",
+    "requires_invoice": false
+   },
+   {
+    "id": 17,
+    "max": "300000",
+    "min": "350",
+    "mode": "range",
+    "name": "كهرباء جوس (لاحقة الدفع)",
+    "type": "electricity",
+    "name_en": "Jos Electricity Postpaid",
+    "service": "postpaid",
+    "suggested": [
+     {
+      "amount": "1000",
+      "price": "28.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "2000",
+      "price": "50.75",
+      "exceeds_float": false
+     },
+     {
+      "amount": "5000",
+      "price": "119.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "10000",
+      "price": "233.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "20000",
+      "price": "460.50",
+      "exceeds_float": false
+     }
+    ],
+    "amount_currency": "NGN",
+    "requires_invoice": false
+   },
+   {
+    "id": 18,
+    "max": "300000",
+    "min": "350",
+    "mode": "range",
+    "name": "كهرباء جوس (مسبقة الدفع)",
+    "type": "electricity",
+    "name_en": "Jos Electricity Prepaid",
+    "service": "prepaid",
+    "suggested": [
+     {
+      "amount": "1000",
+      "price": "28.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "2000",
+      "price": "50.75",
+      "exceeds_float": false
+     },
+     {
+      "amount": "5000",
+      "price": "119.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "10000",
+      "price": "233.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "20000",
+      "price": "460.50",
+      "exceeds_float": false
+     }
+    ],
+    "amount_currency": "NGN",
+    "requires_invoice": false
+   },
+   {
+    "id": 15,
+    "max": "300000",
+    "min": "350",
+    "mode": "range",
+    "name": "كهرباء كادونا (لاحقة الدفع)",
+    "type": "electricity",
+    "name_en": "Kaduna Electricity Postpaid",
+    "service": "postpaid",
+    "suggested": [
+     {
+      "amount": "1000",
+      "price": "28.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "2000",
+      "price": "50.75",
+      "exceeds_float": false
+     },
+     {
+      "amount": "5000",
+      "price": "119.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "10000",
+      "price": "233.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "20000",
+      "price": "460.50",
+      "exceeds_float": false
+     }
+    ],
+    "amount_currency": "NGN",
+    "requires_invoice": false
+   },
+   {
+    "id": 16,
+    "max": "300000",
+    "min": "350",
+    "mode": "range",
+    "name": "كهرباء كادونا (مسبقة الدفع)",
+    "type": "electricity",
+    "name_en": "Kaduna Electricity Prepaid",
+    "service": "prepaid",
+    "suggested": [
+     {
+      "amount": "1000",
+      "price": "28.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "2000",
+      "price": "50.75",
+      "exceeds_float": false
+     },
+     {
+      "amount": "5000",
+      "price": "119.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "10000",
+      "price": "233.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "20000",
+      "price": "460.50",
+      "exceeds_float": false
+     }
+    ],
+    "amount_currency": "NGN",
+    "requires_invoice": false
+   },
+   {
+    "id": 14,
+    "max": "300000",
+    "min": "350",
+    "mode": "range",
+    "name": "كهرباء كانو (مسبقة الدفع)",
+    "type": "electricity",
+    "name_en": "Kano Electricity Prepaid",
+    "service": "prepaid",
+    "suggested": [
+     {
+      "amount": "1000",
+      "price": "28.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "2000",
+      "price": "50.75",
+      "exceeds_float": false
+     },
+     {
+      "amount": "5000",
+      "price": "119.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "10000",
+      "price": "233.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "20000",
+      "price": "460.50",
+      "exceeds_float": false
+     }
+    ],
+    "amount_currency": "NGN",
+    "requires_invoice": false
+   }
+  ]
+ }
+}

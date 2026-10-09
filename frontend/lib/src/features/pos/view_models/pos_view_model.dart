@@ -12,6 +12,9 @@ import '../../../core/typed_lookup_text.dart';
 import '../../../data/models/barcode_resolution.dart';
 import '../../../data/models/cart_line.dart';
 import '../../../data/models/integration_card.dart';
+import '../../../data/models/integration_provider.dart';
+import '../../../data/models/service_kinds.dart';
+import '../../../data/models/service_quote.dart';
 import '../../../data/models/modifier_group.dart';
 import '../../../data/models/product_search_outcome.dart';
 import '../../../shared/barcode/scale_barcode.dart';
@@ -51,6 +54,8 @@ import '../../../data/services/performed_recharges.dart';
 import '../../../shared/unit_options.dart';
 import '../../../shared/catalog/catalog_layout_controller.dart';
 import '../../../core/analytics_burst_coalescer.dart';
+import 'pos_service_shelves.dart';
+import 'pos_voucher_menu_controller.dart';
 
 part 'pos_cart_actions.dart';
 part 'pos_catalog_actions.dart';
@@ -59,6 +64,7 @@ part 'pos_checkout.dart';
 part 'pos_register_session_actions.dart';
 part 'pos_sale_session_actions.dart';
 part 'pos_persistence.dart';
+part 'pos_service_requotes.dart';
 
 enum RegisterSessionGateStatus {
   loading,
@@ -231,12 +237,16 @@ class PosViewModel extends ChangeNotifier {
     ScanFeedbackPlayer? scanFeedback,
     Duration checkoutPrintDeadline = const Duration(seconds: 20),
     this.cartQuantityIdleTimeout = const Duration(milliseconds: 700),
+    Duration chargeRetryDelay = const Duration(milliseconds: 800),
+    Duration serviceQuoteFreshFor = const Duration(minutes: 2),
   }) : _trackedStockRepository = trackedStockRepository,
        _integrationsRepository = integrationsRepository,
        _analyticsEngine = analyticsEngine,
        _sessionStorage = sessionStorage,
        _scanFeedback = scanFeedback,
-       _checkoutPrintDeadline = checkoutPrintDeadline;
+       _checkoutPrintDeadline = checkoutPrintDeadline,
+       _chargeRetryDelay = chargeRetryDelay,
+       _serviceQuoteFreshFor = serviceQuoteFreshFor;
 
   /// How long a +/- run may pause before it counts as finished.
   ///
@@ -268,6 +278,17 @@ class PosViewModel extends ChangeNotifier {
   /// Performs a sale's recharges the moment it is rung up. Null in a shop
   /// with no provider configured, and on the preview harnesses.
   final IntegrationsRepository? _integrationsRepository;
+
+  /// The pause before a charge call that could not be made is made once more.
+  final Duration _chargeRetryDelay;
+
+  /// How long a service line's quote is trusted: older than this, the server
+  /// is asked its price again before the sale is paid, and when a held
+  /// invoice comes back.
+  final Duration _serviceQuoteFreshFor;
+
+  /// Service lines priced again that the cashier has to look at.
+  final ServiceRequoteQueue serviceRequotes = ServiceRequoteQueue();
 
   /// Exposed so the panes can open a picker. Null in a shop that has no
   /// identified stock, which is what hides every one of those surfaces.
@@ -307,6 +328,33 @@ class PosViewModel extends ChangeNotifier {
   final CatalogLayoutController catalogLayout = CatalogLayoutController(
     storageKey: 'pos_catalog_layout',
   );
+
+  /// The «كروت دفتر» menu the cards' chip opens in place of the product grid.
+  /// Held here for the same reason as [catalogLayout]: the pane is rebuilt
+  /// whenever the window crosses the two-pane breakpoint, and the menu must
+  /// not be read again — or flash empty — each time.
+  late final PosVoucherMenuController voucherMenu = PosVoucherMenuController(
+    load: _integrationsRepository?.loadVoucherMenu,
+  );
+
+  /// The direct services — airtime to a phone abroad, bills paid abroad —
+  /// that sit in that menu as tabs: what they know of the world and the
+  /// airtime form the cashier is half-way through, held for the same reason.
+  PosServiceShelves get serviceShelves => _serviceShelves ??= PosServiceShelves(
+    repository: _integrationsRepository,
+  );
+  PosServiceShelves? _serviceShelves;
+
+  /// Whether the catalog shows the voucher menu rather than the grid: the
+  /// cards' chip is the one filter. A typed search does not leave it — it
+  /// filters the menu in place ([voucherMenuSearch]).
+  bool get showsVoucherMenu =>
+      voucherMenu.isSupported &&
+      _query.categories.length == 1 &&
+      _query.categories.single.isPointyVouchers;
+
+  /// What is typed in the search box while the voucher menu is up.
+  String get voucherMenuSearch => showsVoucherMenu ? _query.search.trim() : '';
 
   // Local persistence of in-progress sale sessions (see pos_persistence.dart).
   String? _persistScope;
@@ -387,6 +435,12 @@ class PosViewModel extends ChangeNotifier {
   bool _isClosingRegisterSession = false;
   bool _isCreatingCashMovement = false;
   bool _isCheckingOut = false;
+  bool _isChargingProviders = false;
+  DateTime? _providerChargeStartedAt;
+
+  /// The register session the services were last used in: a different one is
+  /// a different shift.
+  int? _serviceShiftId;
   BarcodeScanStatus _barcodeScanStatus = BarcodeScanStatus.idle;
   List<TrackedScanWarning> _trackedScanWarnings = const [];
   bool _hasMoreProducts = true;
@@ -596,6 +650,14 @@ class PosViewModel extends ChangeNotifier {
   bool get isClosingRegisterSession => _isClosingRegisterSession;
   bool get isCreatingCashMovement => _isCreatingCashMovement;
   bool get isCheckingOut => _isCheckingOut;
+
+  /// The sale is recorded and a provider is being asked to perform what it
+  /// sold — airtime, a bill, a card. It can take over a minute, and the till
+  /// is busy for all of it: the result is what the customer is waiting for.
+  bool get isChargingProviders => _isChargingProviders;
+
+  /// When that began, for the seconds the screen counts.
+  DateTime? get providerChargeStartedAt => _providerChargeStartedAt;
   BarcodeScanStatus get barcodeScanStatus => _barcodeScanStatus;
   bool get isResolvingBarcode =>
       _barcodeScanStatus == BarcodeScanStatus.resolving;
@@ -871,7 +933,10 @@ class PosViewModel extends ChangeNotifier {
     _searchFocusController.dispose();
     _searchResetController.dispose();
     _unitPickRequests.dispose();
+    serviceRequotes.dispose();
     catalogLayout.dispose();
+    voucherMenu.dispose();
+    _serviceShelves?.dispose();
     super.dispose();
   }
 

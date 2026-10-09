@@ -11,12 +11,14 @@ import 'core/typed_lookup_text.dart';
 import 'data/models/integration_provider.dart';
 import 'shared/contact_picker_sheet.dart';
 import 'features/settings/views/integration_presentation.dart';
+import 'features/settings/views/voucher_pricing_screen.dart';
 import 'core/authorization.dart';
 import 'data/models/pos_user.dart';
 import 'data/models/purchase_submission.dart';
 import 'data/models/stock_unit.dart';
 import 'data/models/analytics_event.dart';
 import 'data/models/business_alert.dart';
+import 'data/models/voucher_pricing.dart';
 import 'data/models/analytics_export.dart';
 import 'data/models/report_run.dart';
 import 'data/models/sale_order.dart';
@@ -114,6 +116,7 @@ import 'features/settings/view_models/integrations_view_model.dart';
 import 'features/settings/view_models/messaging_settings_view_model.dart';
 import 'features/settings/view_models/exchange_rates_view_model.dart';
 import 'features/settings/view_models/subscription_status_view_model.dart';
+import 'features/settings/views/subscription_status_page.dart';
 import 'features/settings/view_models/wallet_view_model.dart';
 import 'features/settings/views/exchange_rates_page.dart';
 import 'features/settings/views/shop_settings_screen.dart';
@@ -179,6 +182,7 @@ class AuthenticatedHome extends StatelessWidget {
       child: NotificationCenterHost(
         viewModel: dependencies.notificationCenterViewModel,
         onOpenAlert: routes.openBusinessAlert,
+        onSecondaryAlertAction: routes.runBusinessAlertSecondaryAction,
         child: _BankRoutingLoader(
           routing: dependencies.bankRouting,
           canReadAccounts: capabilities.canViewMoneyAccounts,
@@ -403,6 +407,7 @@ class _AuthenticatedRoutes implements AppNavigation {
         catalogRepository: dependencies.catalogRepository,
         purchaseRepository: dependencies.purchaseRepository,
         integrationsRepository: dependencies.integrationsRepository,
+        walletRepository: dependencies.walletRepository,
         capabilities: capabilities,
         navigation: this,
       ),
@@ -1515,6 +1520,30 @@ class _AuthenticatedRoutes implements AppNavigation {
     );
   }
 
+  /// The alert's second button: for cards priced under cost, hand them all
+  /// back to the company's price.
+  Future<void> runBusinessAlertSecondaryAction(
+    BuildContext context,
+    BusinessAlert alert,
+  ) async {
+    if (alert.type != BusinessAlertType.belowCostCards ||
+        !capabilities.canManageIntegrations) {
+      return;
+    }
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final result = await dependencies.integrationsRepository
+        .bulkVoucherCardPrices(mode: PricingMode.company, belowCost: true);
+    if (result is Ok<int>) {
+      messenger
+        ?..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(content: Text(l10n.smartNotificationBelowCostCompanyDone)),
+        );
+      unawaited(dependencies.notificationCenterViewModel.refresh());
+    }
+  }
+
   Future<void> openBusinessAlert(
     BuildContext context,
     BusinessAlert alert,
@@ -1550,6 +1579,41 @@ class _AuthenticatedRoutes implements AppNavigation {
       navigator.pop();
       navigator.pushReplacement(
         MaterialPageRoute<void>(builder: employeePayrollRouteBuilder),
+      );
+      return;
+    }
+    // A bank transfer's verdict is read where the wallet is: its history
+    // shows the transfer, and a rejected one can be sent again from there.
+    if (alert.type == BusinessAlertType.walletTransferConfirmed ||
+        alert.type == BusinessAlertType.walletTransferRejected) {
+      if (!capabilities.canManageShopSettings) {
+        return;
+      }
+      final navigator = Navigator.of(context);
+      navigator.pop();
+      await navigator.push(
+        MaterialPageRoute<void>(
+          builder: (_) => SubscriptionStatusPage(
+            viewModel: SubscriptionStatusViewModel(
+              dependencies.subscriptionRepository,
+              wallet: WalletViewModel(dependencies.walletRepository),
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+    // Cards priced under cost are fixed on the pricing screen, filtered to them.
+    if (alert.type == BusinessAlertType.belowCostCards) {
+      if (!capabilities.canManageIntegrations) {
+        return;
+      }
+      final navigator = Navigator.of(context);
+      navigator.pop();
+      await showVoucherPricingScreen(
+        navigator.context,
+        dependencies.integrationsRepository,
+        belowCost: true,
       );
       return;
     }

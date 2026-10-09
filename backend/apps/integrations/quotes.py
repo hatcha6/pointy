@@ -17,12 +17,21 @@ price does move, but the charge itself refuses to spend anything other than
 the quoted amount (``expected_cost``), and that is the check that protects the
 float; an age limit here would only fail a held invoice that would have sold
 correctly.
+
+The company's direct top-up and bill payments (``services_quote``) seal more:
+the **price** the customer is asked for beside the cost the shop pays — the
+relay quoted both, and the till can no more assert the one than the other — and
+a little of what the quote was about (the country and the operator's name), so
+the line can say so without the shop looking anything up while a cart is being
+priced. Checkout opens all of it with :func:`open_sealed_quote`;
+:func:`open_quote` still reads the cost of any token, old or new.
 """
 
 from __future__ import annotations
 
 import base64
 import hashlib
+from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 
 from apps.core.secret_box import SecretBox
@@ -48,21 +57,43 @@ class _QuoteBox(SecretBox):
 _BOX = _QuoteBox("POINTY_INTEGRATIONS_SECRET_KEY")
 
 
-def seal_quote(account, subscriber_ref: str, option_code: str, cost) -> str:
-    """The token a till carries for one quoted option on one card."""
-    return _BOX.encrypt(
-        {
-            "kind": _KIND,
-            "account": account.pk,
-            "subscriber_ref": str(subscriber_ref),
-            "option_code": str(option_code),
-            "cost": str(cost),
-        }
-    )
+def seal_quote(
+    account, subscriber_ref: str, option_code: str, cost, price=None, *, meta=None
+) -> str:
+    """The token a till carries for one quoted option on one card.
+
+    ``price`` is the retail price quoted beside the cost, for the services that
+    are priced by the provider; ``meta`` a few plain strings about the quote
+    (kept short: the token travels in a line of the cart, in 1024 characters).
+    A token without a price is the one every other provider has always had.
+    """
+    data = {
+        "kind": _KIND,
+        "account": account.pk,
+        "subscriber_ref": str(subscriber_ref),
+        "option_code": str(option_code),
+        "cost": str(cost),
+    }
+    if price is not None:
+        data["price"] = str(price)
+    if meta:
+        data["meta"] = {str(key): str(value) for key, value in meta.items()}
+    return _BOX.encrypt(data)
 
 
-def open_quote(token: str, *, account, subscriber_ref: str, option_code: str):
-    """The cost sealed in ``token``, or ``None`` when it is not a quote for
+@dataclass(frozen=True)
+class SealedQuote:
+    """What a token holds: the cost, and for a priced service the price and the meta."""
+
+    cost: Decimal
+    price: Decimal | None = None
+    meta: dict = field(default_factory=dict)
+
+
+def open_sealed_quote(
+    token: str, *, account, subscriber_ref: str, option_code: str
+) -> SealedQuote | None:
+    """Everything sealed in ``token``, or ``None`` when it is not a quote for
     exactly this account, card and option. Never raises."""
     data = _BOX.decrypt(token or "")
     if data.get("kind") != _KIND:
@@ -73,10 +104,43 @@ def open_quote(token: str, *, account, subscriber_ref: str, option_code: str):
         or data.get("option_code") != option_code
     ):
         return None
+    cost = _amount(data.get("cost"))
+    if cost is None:
+        return None
+    price = None
+    if data.get("price") is not None:
+        price = _amount(data.get("price"))
+        if price is None:
+            return None
+    meta = data.get("meta") if isinstance(data.get("meta"), dict) else {}
+    return SealedQuote(cost=cost, price=price, meta=meta)
+
+
+def open_quote(token: str, *, account, subscriber_ref: str, option_code: str):
+    """The cost sealed in ``token``, or ``None`` when it is not a quote for
+    exactly this account, card and option. Never raises."""
+    sealed = open_sealed_quote(
+        token, account=account, subscriber_ref=subscriber_ref, option_code=option_code
+    )
+    return None if sealed is None else sealed.cost
+
+
+def open_priced_quote(token: str, *, account, subscriber_ref: str, option_code: str):
+    """``(cost, price)`` sealed in ``token``, or ``None`` when it is not a quote
+    for exactly this account, subscriber and option, or carries no price. Never raises."""
+    sealed = open_sealed_quote(
+        token, account=account, subscriber_ref=subscriber_ref, option_code=option_code
+    )
+    if sealed is None or sealed.price is None:
+        return None
+    return sealed.cost, sealed.price
+
+
+def _amount(value) -> Decimal | None:
     try:
-        cost = Decimal(str(data.get("cost")))
+        number = Decimal(str(value))
     except InvalidOperation:
         return None
-    if not cost.is_finite() or cost < 0:
+    if not number.is_finite() or number < 0:
         return None
-    return cost
+    return number

@@ -1,0 +1,44 @@
+{
+ "results": [
+  {
+   "fulfillment": 25,
+   "order_line": 25,
+   "provider": "pointy",
+   "kind": "airtime",
+   "subscriber_ref": "+212••••••678",
+   "option_label": "إنوي المغرب · 0.6 دولار أمريكي",
+   "outcome": "charged",
+   "status": "confirmed",
+   "needs_attention": false,
+   "error_code": "",
+   "error_detail": "",
+   "provider_reference": "534cb0aa-2171-4e29-97cb-2e6576a71109",
+   "balance_after": 699.27,
+   "receipt": {
+    "title": "شحن مباشر",
+    "rows": [
+     [
+      "الشبكة",
+      "إنوي المغرب"
+     ],
+     [
+      "الرقم",
+      "+212 ••••••678"
+     ],
+     [
+      "المبلغ المرسل",
+      "5.51 درهم مغربي"
+     ],
+     [
+      "رقم العملية",
+      "181451"
+     ]
+    ],
+    "pin": "",
+    "pin_label": "رمز الشحن",
+    "notice": "تم إرسال الرصيد إلى الرقم المذكور، ولا يمكن استرداده."
+   }
+  }
+ ],
+ "balance": 699.27
+}

@@ -1136,7 +1136,7 @@ class EscPosReceiptEncoder {
         bytes.addAll(_text(generator, line, styles: style(bold: true)));
       }
       if (slip.pin.isNotEmpty) {
-        bytes.addAll(_text(generator, receiptPinLabel, styles: style()));
+        bytes.addAll(_text(generator, slip.pinLabel, styles: style()));
         // Double width only where the whole PIN still fits one line: a PIN
         // broken over two lines is a PIN typed wrong.
         final doubleWidth = slip.pin.length * 2 <= columns;

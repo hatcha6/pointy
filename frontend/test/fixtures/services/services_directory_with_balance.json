@@ -1,0 +1,55 @@
+{
+ "available": true,
+ "error_code": "",
+ "version": "64c674de18f39eff",
+ "balance": "72.66",
+ "balance_at": "2026-10-08T12:22:24.981820+00:00",
+ "popular": [
+  "NE",
+  "ML",
+  "NG",
+  "EG",
+  "GH",
+  "SN",
+  "TN",
+  "BD",
+  "PK",
+  "PH",
+  "TR",
+  "MA",
+  "DZ",
+  "CM",
+  "BF",
+  "CI",
+  "GN",
+  "GM",
+  "ET"
+ ],
+ "bill_types": [
+  {
+   "type": "electricity",
+   "countries": [
+    "ML",
+    "NG",
+    "SN",
+    "UG",
+    "KE"
+   ],
+   "billers": 25
+  },
+  {
+   "type": "water",
+   "countries": [
+    "SN"
+   ],
+   "billers": 1
+  },
+  {
+   "type": "tv",
+   "countries": [
+    "ML"
+   ],
+   "billers": 2
+  }
+ ]
+}

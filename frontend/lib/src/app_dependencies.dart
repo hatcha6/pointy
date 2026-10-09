@@ -766,6 +766,8 @@ class PointyAppDependencies {
       serverStateWatcher.stop();
       _stopCompanionBridge();
       unawaited(syncCameraWedge());
+      // Nothing of this cashier's airtime form or customers stays for the next.
+      posViewModel.resetServiceState();
       _disposeSessionViewModels();
     }
   }

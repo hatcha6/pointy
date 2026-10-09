@@ -218,6 +218,11 @@ class ProductCategorySerializer(serializers.ModelSerializer):
     # Kept by a feature (a provider's shelf of cards): the client marks it and
     # offers no delete. Read-only — nobody declares a category a system one.
     is_system = serializers.BooleanField(read_only=True)
+    # WHICH feature keeps it (``vouchers:<provider>``, blank for the shop's
+    # own), so a till can tell one shelf from another — the company's own
+    # cards open a menu of their own instead of the grid. Read-only, like
+    # ``is_system``: it is the feature's handle, never the shop's to edit.
+    system_key = serializers.CharField(read_only=True)
 
     class Meta:
         model = ProductCategory
@@ -233,6 +238,7 @@ class ProductCategorySerializer(serializers.ModelSerializer):
             "is_quick_access",
             "display_order",
             "is_system",
+            "system_key",
             "created_at",
             "updated_at",
         ]

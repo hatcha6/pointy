@@ -645,6 +645,103 @@ void main() {
         ).writeAsBytesSync(render.bytes);
       }
     });
+
+    // The same, for a sale of «كروت دفتر» cards: three brands' slips, each
+    // with its own logo and the provider's mark (`pointy`), on every page size.
+    test(
+      'dumps a sale of «كروت دفتر» cards to look at',
+      skip: dumpDir == null,
+      () async {
+        String logo(String name) {
+          final file = File(
+            '${Platform.environment['POINTY_SLIP_LOGOS']}/$name.png',
+          );
+          return file.existsSync() ? base64Encode(file.readAsBytesSync()) : '';
+        }
+
+        Map<String, Object?> card(
+          int id,
+          String brand,
+          String key,
+          String variant,
+          String price,
+          Map<String, String> receipt,
+        ) => {
+          'id': id,
+          'product': id * 10,
+          'variant': id * 10 + 1,
+          'product_name': brand,
+          'variant_name': variant,
+          'quantity': '1',
+          'returned_quantity': '0',
+          'returnable_quantity': '1',
+          'unit_price': price,
+          'line_total': price,
+          'integration': {
+            'provider': 'pointy',
+            'kind': 'voucher',
+            'subscriber_ref': '',
+            'status': 'confirmed',
+            'receipt_logo': logo(key),
+            'provider_logo': logo('pointy'),
+            'receipt': receipt,
+          },
+        };
+
+        final sale = SaleOrder.fromJson({
+          'id': 9,
+          'receipt_number': 'R-9',
+          'status': 'paid',
+          'subtotal': '238.00',
+          'discount_total': '0',
+          'total': '238.00',
+          'lines': [
+            card(
+              1,
+              'بلايستيشن',
+              'playstation',
+              'تركيا · 1000 ليرة تركية',
+              '88.00',
+              {
+                'code': 'QW4P-7ZM2-KD93',
+                'serial': '439882298872854',
+                'instructions': 'PlayStation Store ← استرداد الرموز',
+              },
+            ),
+            card(
+              2,
+              'آيتونز',
+              'apple',
+              'الولايات المتحدة · 50 دولار',
+              '140.00',
+              {
+                'code': 'XK4M9QXD4HV6TF8R',
+                'serial': '439882298872855',
+                'instructions':
+                    'App Store ← صورة الحساب ← استرداد بطاقة الهدايا أو الرمز',
+              },
+            ),
+            card(3, 'ليبيانا', 'libyana', '10 دينار', '10.00', {
+              'code': '4028551190372264',
+              'serial': '439882298872856',
+              'instructions': 'اتصل بالرقم 120 متبوعاً بالرقم السري',
+            }),
+          ],
+          'payments': [],
+        });
+        const service = OrderDocumentService(fontLoader: _FileFontLoader());
+        Directory(dumpDir!).createSync(recursive: true);
+        for (final pageSize in PdfPageSize.values) {
+          final render = await service.buildSaleInvoiceRender(
+            order: sale,
+            pageSize: pageSize,
+          );
+          File(
+            '$dumpDir/daftar-invoice-${pageSize.name}.pdf',
+          ).writeAsBytesSync(render.bytes);
+        }
+      },
+    );
   });
 }
 

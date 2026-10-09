@@ -1,0 +1,48 @@
+{
+ "results": [
+  {
+   "fulfillment": 3,
+   "order_line": 3,
+   "provider": "pointy",
+   "kind": "bill",
+   "subscriber_ref": "•••••••789",
+   "option_label": "تلفزيون · كانال بلس أكسيس إنجليش بيسك – شهر · 10,000 فرنك أفريقي",
+   "outcome": "charged",
+   "status": "confirmed",
+   "needs_attention": false,
+   "error_code": "",
+   "error_detail": "",
+   "provider_reference": "5bf1a4ef-3d2b-48da-bb9f-d25a1d1f253b",
+   "balance_after": 254.19,
+   "receipt": {
+    "title": "دفع اشتراك تلفزيون",
+    "rows": [
+     [
+      "الجهة",
+      "كانال بلس مالي"
+     ],
+     [
+      "النوع",
+      "تلفزيون"
+     ],
+     [
+      "رقم بطاقة الاشتراك",
+      "•••••••789"
+     ],
+     [
+      "المبلغ",
+      "10,000 فرنك أفريقي"
+     ],
+     [
+      "رقم العملية",
+      "7542"
+     ]
+    ],
+    "pin": "",
+    "pin_label": "رمز الشحن",
+    "notice": "تم تسديد المبلغ للجهة المذكورة، ولا يمكن استرداده."
+   }
+  }
+ ],
+ "balance": 254.19
+}

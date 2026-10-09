@@ -7563,15 +7563,27 @@
   "sessionClosingCashMetric": "النقد المعدود",
   "sessionCashVarianceMetric": "فرق النقد",
   "sessionDenominationsTitle": "الفئات عند الإغلاق",
-  "sessionVarianceFlag": "فرق {amount}",
-  "@sessionVarianceFlag": {
-    "description": "Compact cash variance label.",
+  "sessionVarianceShort": "عجز {amount}",
+  "@sessionVarianceShort": {
+    "description": "Compact label: counted cash came in below expected.",
     "placeholders": {
       "amount": {
         "type": "String"
       }
     }
   },
+  "sessionVarianceOver": "زيادة {amount}",
+  "@sessionVarianceOver": {
+    "description": "Compact label: counted cash came in above expected.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "sessionCashShortageMetric": "عجز النقد",
+  "sessionCashOverageMetric": "زيادة النقد",
+  "sessionCashMatchedValue": "مطابق",
   "sessionNoVariance": "لا يوجد فرق مسجل",
   "sessionSummaryLoadError": "تعذّر تحميل ملخص الوردية.",
   "sessionSalesSummaryTitle": "ملخص المبيعات",
@@ -10467,6 +10479,42 @@
   "@labelBatchCopies": {
     "description": "Copies stepper label in a label batch."
   },
+  "labelBatchSelectAll": "تحديد الكل",
+  "@labelBatchSelectAll": {
+    "description": "Select-all / none checkbox above a label batch."
+  },
+  "purchaseOrderLabelsAction": "طباعة ملصقات الباركود",
+  "@purchaseOrderLabelsAction": {
+    "description": "Purchase order details app-bar button that prints barcode labels for the order's products."
+  },
+  "purchaseOrderLabelsTitle": "ملصقات منتجات الطلبية",
+  "@purchaseOrderLabelsTitle": {
+    "description": "Title of the purchase order barcode label sheet."
+  },
+  "purchaseOrderLabelsSubtitle": "عدد الملصقات هو الكمية المستلمة، أو المطلوبة إن لم يُستلم شيء بعد. عدّله أو ألغِ تحديد ما لا تريد طباعته.",
+  "@purchaseOrderLabelsSubtitle": {
+    "description": "Explains where the purchase order label counts come from."
+  },
+  "purchaseOrderLabelsReceived": "استُلم {quantity} · {barcode}",
+  "@purchaseOrderLabelsReceived": {
+    "description": "Purchase order label row: received quantity (in pieces) and the barcode printed.",
+    "placeholders": {
+      "quantity": {"type": "String"},
+      "barcode": {"type": "String"}
+    }
+  },
+  "purchaseOrderLabelsOrdered": "مطلوب {quantity} · {barcode}",
+  "@purchaseOrderLabelsOrdered": {
+    "description": "Purchase order label row: ordered quantity (in pieces, nothing received yet) and the barcode printed.",
+    "placeholders": {
+      "quantity": {"type": "String"},
+      "barcode": {"type": "String"}
+    }
+  },
+  "purchaseOrderLabelsSerialized": "أجهزة بأرقام تسلسلية — تُطبع ملصقاتها عند الاستلام أو من صفحة الجهاز",
+  "@purchaseOrderLabelsSerialized": {
+    "description": "Purchase order label row for serial-tracked goods, which carry their own numbers instead of the product barcode."
+  },
   "stockUnitsTitle": "الأجهزة المسلسلة",
   "@stockUnitsTitle": {
     "description": "Title of the identified-articles list."
@@ -11811,19 +11859,19 @@
   "@subscriptionSmsTitle": {
     "description": "Section title for the SMS subscription state."
   },
-  "subscriptionSmsActiveTitle": "الرسائل النصية مشمولة في اشتراكك",
+  "subscriptionSmsActiveTitle": "الرسائل النصية متاحة",
   "@subscriptionSmsActiveTitle": {
     "description": "Callout title when SMS is in the subscription."
   },
-  "subscriptionSmsActiveMessage": "الاستهلاك وحدود الإرسال ونصوص الرسائل في «الرسائل النصية» ضمن إعدادات المحل.",
+  "subscriptionSmsActiveMessage": "تُدفع كل رسالة من رصيد الرسائل. الاستهلاك ونصوص الرسائل في «الرسائل النصية» ضمن إعدادات المحل.",
   "@subscriptionSmsActiveMessage": {
     "description": "Callout body when SMS is in the subscription."
   },
-  "subscriptionSmsInactiveTitle": "الرسائل النصية غير مشمولة",
+  "subscriptionSmsInactiveTitle": "رصيد الرسائل لا يكفي للإرسال",
   "@subscriptionSmsInactiveTitle": {
     "description": "Callout title when SMS is not in the subscription."
   },
-  "subscriptionSmsInactiveMessage": "أضِف الرسائل النصية إلى اشتراكك لإرسال الفواتير والتذكيرات والعروض إلى عملائك. تواصل مع الدعم.",
+  "subscriptionSmsInactiveMessage": "اشحن محفظة دفتر وانقل مبلغاً إلى رصيد الرسائل لإرسال الفواتير والتذكيرات والعروض إلى عملائك.",
   "@subscriptionSmsInactiveMessage": {
     "description": "Callout body when SMS is not in the subscription."
   },
@@ -17059,6 +17107,14 @@
   "@integrationCapabilityProfiles": {
     "description": "Integration capability chip: one login with several profiles."
   },
+  "integrationCapabilityAirtime": "الشحن المباشر",
+  "@integrationCapabilityAirtime": {
+    "description": "Integration capability chip: sends airtime straight to a phone number abroad."
+  },
+  "integrationCapabilityBills": "دفع الفواتير",
+  "@integrationCapabilityBills": {
+    "description": "Integration capability chip: pays bills abroad (electricity, water, TV, internet)."
+  },
   "integrationProfileKindIndividual": "شخصي",
   "@integrationProfileKindIndividual": {
     "description": "Integration profile kind: the person's own profile."
@@ -17652,13 +17708,100 @@
   "@paymentMethodAccountCredit": {
     "description": "Payment method: a debt settled from credit the shop already owed the customer (no money moved)."
   },
-  "balanceDirectionTheyOweUs": "عليه لنا",
+  "balanceDirectionTheyOweUs": "دين عليه",
   "@balanceDirectionTheyOweUs": {
     "description": "Balance direction: the customer or supplier owes the shop."
   },
-  "balanceDirectionWeOweThem": "له علينا",
+  "balanceDirectionWeOweThem": "رصيد له",
   "@balanceDirectionWeOweThem": {
     "description": "Balance direction: the shop owes the customer or supplier."
+  },
+  "accountReceiveMoneyButton": "استلام مبلغ",
+  "@accountReceiveMoneyButton": {
+    "description": "Account action: the shop receives money from this customer, supplier or employee (or, without cash, records that it did)."
+  },
+  "accountPayMoneyButton": "دفع مبلغ",
+  "@accountPayMoneyButton": {
+    "description": "Account action: the shop pays money to this customer, supplier or employee (or, without cash, records that it did)."
+  },
+  "accountMoneyReceivableValue": "يمكن استلام حتى {amount}",
+  "@accountMoneyReceivableValue": {
+    "description": "Line in the receive dialog: the most real money this account can take in now.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "accountMoneyPayableValue": "يمكن دفع حتى {amount}",
+  "@accountMoneyPayableValue": {
+    "description": "Line in the pay dialog: the most real money this account can pay out now.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "accountMoneyNothingDue": "لا يوجد مبلغ مستحق الآن، فيمكن التسجيل على الحساب فقط.",
+  "@accountMoneyNothingDue": {
+    "description": "Line in the receive/pay dialog when no real money is due either way: only an account-only entry is possible."
+  },
+  "accountMoneySaved": "تم تسجيل المبلغ",
+  "@accountMoneySaved": {
+    "description": "Snackbar after a receive/pay on an account succeeds."
+  },
+  "accountMoneyError": "تعذر تسجيل المبلغ. حاول مرة أخرى.",
+  "@accountMoneyError": {
+    "description": "Snackbar when a receive/pay on an account fails for a reason with no specific message."
+  },
+  "paymentMethodAccountOnly": "بدون مبلغ نقدي (تسجيل على الحساب)",
+  "@paymentMethodAccountOnly": {
+    "description": "Method in the receive/pay dialog: no money changes hands; the amount is only written on the account."
+  },
+  "accountOnlyHint": "لا ينتقل أي مبلغ. استخدمه للديون والأرصدة القديمة وتصحيح الأخطاء فقط، لا للمرتجعات.",
+  "@accountOnlyHint": {
+    "description": "Help under the account-only method: no money moves; for old debts/balances and correcting mistakes only, not for returns."
+  },
+  "moneySourceLabel": "المبلغ عبر",
+  "@moneySourceLabel": {
+    "description": "Label above the drawer / treasury choice for cash in the receive/pay dialog."
+  },
+  "moneySourceDrawer": "الدرج",
+  "@moneySourceDrawer": {
+    "description": "Cash choice: through the cashier's own open drawer."
+  },
+  "moneySourceTreasury": "الخزينة",
+  "@moneySourceTreasury": {
+    "description": "Cash choice: straight into or out of the treasury's cash box, no drawer needed."
+  },
+  "balanceRowAccountOnly": "تسجيل على الحساب",
+  "@balanceRowAccountOnly": {
+    "description": "Suffix on a balance history row written without money moving."
+  },
+  "balanceSettledThroughDrawer": "عبر الدرج",
+  "@balanceSettledThroughDrawer": {
+    "description": "Balance history row detail: the money moved through a drawer."
+  },
+  "balanceSettledThroughCashBox": "عبر الخزينة",
+  "@balanceSettledThroughCashBox": {
+    "description": "Balance history row detail: the money moved through the treasury cash box."
+  },
+  "balanceSettledThroughBank": "عبر {account}",
+  "@balanceSettledThroughBank": {
+    "description": "Balance history row detail: the money moved through this bank account.",
+    "placeholders": {
+      "account": {
+        "type": "String"
+      }
+    }
+  },
+  "treasuryComponentAccountReceipts": "مبالغ مستلمة من الحسابات",
+  "@treasuryComponentAccountReceipts": {
+    "description": "Treasury component: money customers, suppliers or employees paid in through the treasury (استلام مبلغ)."
+  },
+  "treasuryComponentAccountPayouts": "مبالغ مدفوعة للحسابات",
+  "@treasuryComponentAccountPayouts": {
+    "description": "Treasury component: money paid out to customers, suppliers or employees through the treasury (دفع مبلغ)."
   },
   "customerBalanceTheyOweUsHint": "مبلغ مستحق على العميل للمحل",
   "@customerBalanceTheyOweUsHint": {
@@ -17684,11 +17827,11 @@
   "@balanceKindAdjustment": {
     "description": "Balance entry kind: balance adjustment."
   },
-  "balanceEntriesTitle": "الرصيد الافتتاحي والتسويات",
+  "balanceEntriesTitle": "حركات الحساب",
   "@balanceEntriesTitle": {
     "description": "Section title on customer/supplier details listing opening balances and adjustments."
   },
-  "balanceEntriesEmpty": "لا يوجد رصيد افتتاحي أو تسويات على هذا الحساب.",
+  "balanceEntriesEmpty": "لا توجد حركات على هذا الحساب بعد.",
   "@balanceEntriesEmpty": {
     "description": "Empty state for the balance entries section."
   },
@@ -17736,7 +17879,7 @@
   "@balanceEntryNoteOptionalLabel": {
     "description": "Optional note label for an opening balance."
   },
-  "balanceEntryNoteRequired": "اكتب سبب التسوية.",
+  "balanceEntryNoteRequired": "اكتب السبب.",
   "@balanceEntryNoteRequired": {
     "description": "Validation: an adjustment needs a note."
   },
@@ -17919,6 +18062,22 @@
         "type": "String"
       }
     }
+  },
+  "supplierHeroWeOweCaption": "مستحق للمورد",
+  "@supplierHeroWeOweCaption": {
+    "description": "Caption beside the supplier hero figure: the shop owes the supplier."
+  },
+  "supplierHeroTheyOweCaption": "مستحق على المورد",
+  "@supplierHeroTheyOweCaption": {
+    "description": "Caption beside the supplier hero figure: the supplier owes the shop."
+  },
+  "customerHeroOwesCaption": "مستحق على العميل",
+  "@customerHeroOwesCaption": {
+    "description": "Caption beside the customer hero figure: the customer owes the shop."
+  },
+  "contactHeroSettledCaption": "الحساب مسدَّد",
+  "@contactHeroSettledCaption": {
+    "description": "Caption beside a contact hero figure when nothing is outstanding either way."
   },
   "supplierNetBalanceTheyOweValue": "مستحق على المورد {amount}",
   "@supplierNetBalanceTheyOweValue": {
@@ -19119,13 +19278,13 @@
   "@walletTestModeHint": {
     "description": "Warning that top-ups are test payments."
   },
-  "walletRecordExpensesTitle": "تسجيل الشحنات كمصروفات تلقائياً",
+  "walletRecordExpensesTitle": "سجّل المحفظة في دفاتر المحل",
   "@walletRecordExpensesTitle": {
-    "description": "Switch that books every paid wallet top-up as a shop expense."
+    "description": "Switch (API name record_topups_as_expenses) that keeps the wallet in the shop's books: top-ups become the «محفظة دفتر» balance in the treasury."
   },
-  "walletRecordExpensesSubtitle": "كل شحن مدفوع يُسجَّل مصروفاً ضمن «{category}».",
+  "walletRecordExpensesSubtitle": "يصبح كل شحن رصيداً في الخزينة باسم «محفظة دفتر»، وتُسجَّل الخدمات مصروفاً ضمن «{category}» عند شرائها.",
   "@walletRecordExpensesSubtitle": {
-    "description": "Explains where auto-booked top-up expenses go.",
+    "description": "Explains keeping the wallet in the books: top-ups are an asset in the treasury, services become expenses in {category} when bought.",
     "placeholders": {
       "category": {
         "type": "String"
@@ -19184,17 +19343,267 @@
   "@walletTopUpStatusUnknown": {
     "description": "Top-up status the app does not recognise."
   },
-  "walletTopUpBookedAsExpense": "مسجّل كمصروف",
+  "walletTopUpStatusReview": "بانتظار التحقق",
+  "@walletTopUpStatusReview": {
+    "description": "Top-up status: a bank transfer the company's team is checking."
+  },
+  "walletTopUpStatusRejected": "مرفوض",
+  "@walletTopUpStatusRejected": {
+    "description": "Top-up status: the company's team rejected the bank transfer."
+  },
+  "walletMethodBankTransfer": "تحويل مصرفي",
+  "@walletMethodBankTransfer": {
+    "description": "Top-up method: a bank transfer to the company's account."
+  },
+  "walletMethodHintBankTransfer": "لي باي أو ون باي",
+  "@walletMethodHintBankTransfer": {
+    "description": "Under the bank-transfer method: the apps it works with."
+  },
+  "walletTransferChannelLyPay": "لي باي",
+  "@walletTransferChannelLyPay": {
+    "description": "The LYPay transfer app."
+  },
+  "walletTransferChannelOnePay": "ون باي",
+  "@walletTransferChannelOnePay": {
+    "description": "The OnePay transfer app."
+  },
+  "walletTransferSendTitle": "حوّل {amount} إلى حسابنا",
+  "@walletTransferSendTitle": {
+    "description": "Heading of the transfer step.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "walletTransferLyPayHint": "في لي باي، حوّل إلى رقم IBAN هذا:",
+  "@walletTransferLyPayHint": {
+    "description": "How to send with LYPay."
+  },
+  "walletTransferOnePayHint": "في ون باي، اختر المصرف ثم اكتب رقم الحساب:",
+  "@walletTransferOnePayHint": {
+    "description": "How to send with OnePay."
+  },
+  "walletTransferBank": "المصرف",
+  "@walletTransferBank": {
+    "description": "Label: the bank of an account."
+  },
+  "walletTransferIban": "رقم IBAN",
+  "@walletTransferIban": {
+    "description": "Label: an IBAN."
+  },
+  "walletTransferAccountNumber": "رقم الحساب",
+  "@walletTransferAccountNumber": {
+    "description": "Label: an account number."
+  },
+  "walletTransferAmount": "المبلغ",
+  "@walletTransferAmount": {
+    "description": "Label: the amount to transfer."
+  },
+  "walletTransferHolderCheck": "قبل الإرسال تأكد أن الاسم الظاهر لك: {name}",
+  "@walletTransferHolderCheck": {
+    "description": "Asks the payer to check the account holder's name.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "walletTransferCopy": "نسخ",
+  "@walletTransferCopy": {
+    "description": "Copy button tooltip."
+  },
+  "walletTransferCopied": "نُسخ",
+  "@walletTransferCopied": {
+    "description": "Shown after copying."
+  },
+  "walletTransferFromTitle": "من حسابك",
+  "@walletTransferFromTitle": {
+    "description": "Section heading: the payer's own account."
+  },
+  "walletTransferFromHint": "لنطابق التحويل في كشف حسابنا. نحفظه لك للمرة القادمة.",
+  "@walletTransferFromHint": {
+    "description": "Why the payer's account is asked for."
+  },
+  "walletTransferSavedPayers": "حساباتك السابقة",
+  "@walletTransferSavedPayers": {
+    "description": "Chips of accounts the shop paid from before."
+  },
+  "walletTransferPayerBank": "مصرفك",
+  "@walletTransferPayerBank": {
+    "description": "Label: the payer's bank."
+  },
+  "walletTransferPayerBankRequired": "اختر مصرفك.",
+  "@walletTransferPayerBankRequired": {
+    "description": "Validation: no bank picked."
+  },
+  "walletTransferPayerIbanHint": "يبدأ بـ LY ويليه 23 رقماً — رقم الحساب يُكمَل منه",
+  "@walletTransferPayerIbanHint": {
+    "description": "Helper under the payer's IBAN."
+  },
+  "walletTransferIbanInvalid": "رقم IBAN غير صحيح. راجعه من تطبيق المصرف.",
+  "@walletTransferIbanInvalid": {
+    "description": "Validation: bad IBAN."
+  },
+  "walletTransferAccountInvalid": "رقم الحساب أرقام فقط.",
+  "@walletTransferAccountInvalid": {
+    "description": "Validation: bad account number."
+  },
+  "walletTransferReceiptTitle": "إيصال التحويل",
+  "@walletTransferReceiptTitle": {
+    "description": "Section heading: the receipt."
+  },
+  "walletTransferReceiptHint": "لقطة شاشة أو صورة أو ملف PDF من تطبيق المصرف.",
+  "@walletTransferReceiptHint": {
+    "description": "What a receipt may be."
+  },
+  "walletTransferReceiptFromDevice": "اختر ملفاً",
+  "@walletTransferReceiptFromDevice": {
+    "description": "Pick the receipt from this device."
+  },
+  "walletTransferReceiptFromPhone": "من الهاتف",
+  "@walletTransferReceiptFromPhone": {
+    "description": "Get the receipt from the paired phone."
+  },
+  "walletTransferReceiptPhonePrompt": "أرسل إيصال تحويل {amount}",
+  "@walletTransferReceiptPhonePrompt": {
+    "description": "What the paired phone is asked for.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "walletTransferReceiptFromPhoneDone": "وصل الإيصال من الهاتف",
+  "@walletTransferReceiptFromPhoneDone": {
+    "description": "The receipt came from the phone."
+  },
+  "walletTransferReceiptRemove": "إزالة الإيصال",
+  "@walletTransferReceiptRemove": {
+    "description": "Remove the attached receipt."
+  },
+  "walletTransferReceiptRequired": "أرفق إيصال التحويل.",
+  "@walletTransferReceiptRequired": {
+    "description": "Validation: no receipt."
+  },
+  "walletTransferReceiptTooLarge": "الإيصال أكبر من 10 ميغابايت.",
+  "@walletTransferReceiptTooLarge": {
+    "description": "The receipt is too large."
+  },
+  "walletTransferReceiptUnreadable": "تعذّر فتح هذا الملف. اختر صورة أو ملف PDF.",
+  "@walletTransferReceiptUnreadable": {
+    "description": "The picked file could not be read."
+  },
+  "walletTransferNote": "بعد المتابعة نعرض لك حسابنا لتحوّل إليه، ثم ترسل الإيصال ويتحقق فريقنا منه.",
+  "@walletTransferNote": {
+    "description": "Under the top-up form when bank transfer is chosen."
+  },
+  "walletTransferSend": "أرسل للتحقق",
+  "@walletTransferSend": {
+    "description": "Send the transfer for checking."
+  },
+  "walletTransferSending": "جارٍ الإرسال… {percent}٪",
+  "@walletTransferSending": {
+    "description": "While the receipt uploads.",
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "walletTransferBack": "رجوع",
+  "@walletTransferBack": {
+    "description": "Back to the amount."
+  },
+  "walletTransferReviewTitle": "استلمنا إيصالك",
+  "@walletTransferReviewTitle": {
+    "description": "After sending a transfer."
+  },
+  "walletTransferReviewBody": "سيتحقق فريقنا من وصول التحويل خلال وقت قصير، ثم يُضاف المبلغ إلى محفظتك. يمكنك إغلاق هذه النافذة، وسنُعلمك بالنتيجة.",
+  "@walletTransferReviewBody": {
+    "description": "What happens next after sending a transfer."
+  },
+  "walletTransferReviewWaiting": "بانتظار التحقق…",
+  "@walletTransferReviewWaiting": {
+    "description": "While the team checks the transfer."
+  },
+  "walletTransferPaidTitle": "تحققنا من تحويلك",
+  "@walletTransferPaidTitle": {
+    "description": "The team confirmed the transfer."
+  },
+  "walletTransferRejectedTitle": "لم نؤكد التحويل",
+  "@walletTransferRejectedTitle": {
+    "description": "The team rejected the transfer."
+  },
+  "walletTransferRejectedReason": "السبب: {reason}",
+  "@walletTransferRejectedReason": {
+    "description": "The team's reason.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "walletTransferRejectedHelp": "إن كنت حوّلت فعلاً، أرسله من جديد بإيصال أوضح أو تواصل مع الدعم.",
+  "@walletTransferRejectedHelp": {
+    "description": "What to do after a rejection."
+  },
+  "walletTransferSendAgain": "أرسل من جديد",
+  "@walletTransferSendAgain": {
+    "description": "Start the transfer again after a rejection."
+  },
+  "walletTransferTooManyReviews": "لديك تحويلات بانتظار التحقق. انتظر حتى نتحقق منها.",
+  "@walletTransferTooManyReviews": {
+    "description": "Too many transfers waiting."
+  },
+  "walletTransferUnavailable": "التحويل المصرفي غير متاح حالياً.",
+  "@walletTransferUnavailable": {
+    "description": "Transfers not offered right now."
+  },
+  "walletTransferRowReview": "نتحقق من التحويل",
+  "@walletTransferRowReview": {
+    "description": "Wallet history row: a transfer in review."
+  },
+  "notificationWalletTransferConfirmedTitle": "أُضيف تحويلك إلى المحفظة",
+  "@notificationWalletTransferConfirmedTitle": {
+    "description": "Notification title: transfer confirmed."
+  },
+  "notificationWalletTransferConfirmedMessage": "تحققنا من تحويل {amount} وأضفناه إلى محفظة دفتر.",
+  "@notificationWalletTransferConfirmedMessage": {
+    "description": "Notification body: transfer confirmed.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "notificationWalletTransferRejectedTitle": "لم نؤكد تحويل المحفظة",
+  "@notificationWalletTransferRejectedTitle": {
+    "description": "Notification title: transfer rejected."
+  },
+  "notificationWalletTransferRejectedMessage": "تحويل {amount}: {reason}",
+  "@notificationWalletTransferRejectedMessage": {
+    "description": "Notification body: transfer rejected, with the reason.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "walletTopUpBookedAsExpense": "مسجّل في الخزينة",
   "@walletTopUpBookedAsExpense": {
-    "description": "Chip on a top-up that was booked as a shop expense."
+    "description": "Chip on a top-up that was recorded in the shop's books (the «محفظة دفتر» balance in the treasury)."
   },
-  "walletTopUpExpensePeriodLocked": "لم يُسجَّل كمصروف: الفترة مغلقة",
+  "walletTopUpExpensePeriodLocked": "لم يُسجَّل في الخزينة: الفترة مغلقة",
   "@walletTopUpExpensePeriodLocked": {
-    "description": "Chip when a paid top-up could not be booked because the books are closed."
+    "description": "Chip when a paid top-up could not be recorded because the books are closed."
   },
-  "walletTopUpExpensePending": "لم يُسجَّل كمصروف بعد",
+  "walletTopUpExpensePending": "لم يُسجَّل في الخزينة بعد",
   "@walletTopUpExpensePending": {
-    "description": "Chip when booking the expense failed and will be retried."
+    "description": "Chip when recording the top-up in the books failed and will be retried."
   },
   "walletTopUpRowTitle": "شحن {amount}",
   "@walletTopUpRowTitle": {
@@ -19277,9 +19686,9 @@
   "@walletTopUpMethodTitle": {
     "description": "Heading over the payment method."
   },
-  "walletTopUpRecordExpense": "سجّل هذا الشحن كمصروف",
+  "walletTopUpRecordExpense": "سجّل المحفظة في دفاتر المحل",
   "@walletTopUpRecordExpense": {
-    "description": "Switch in the top-up sheet; also saved as the default."
+    "description": "Switch in the top-up sheet (keep the wallet in the shop's books); also saved as the default."
   },
   "walletTopUpBrowserNote": "ستُفتح صفحة الدفع الآمنة في المتصفح. أتمّ الدفع ثم عُد إلى دفتر، وسيظهر الرصيد تلقائياً.",
   "@walletTopUpBrowserNote": {
@@ -19342,9 +19751,9 @@
       }
     }
   },
-  "walletPaidBooked": "سُجّل كمصروف ضمن «{category}».",
+  "walletPaidBooked": "أُضيف إلى رصيد «محفظة دفتر» في الخزينة، وتُسجَّل الخدمات مصروفاً ضمن «{category}» عند شرائها.",
   "@walletPaidBooked": {
-    "description": "The paid top-up was booked as an expense.",
+    "description": "The paid top-up was recorded in the books: an asset in the treasury; services become expenses in {category} when bought.",
     "placeholders": {
       "category": {
         "type": "String"
@@ -21390,5 +21799,1632 @@
   "commandPaletteStockUnitsSection": "الأجهزة المسلسلة",
   "@commandPaletteStockUnitsSection": {
     "description": "Command palette section: articles answering a typed IMEI/serial."
+  },
+  "posVoucherSearchEmptyTitle": "لا توجد نتائج لـ «{query}»",
+  "@posVoucherSearchEmptyTitle": {
+    "description": "Title when the typed search matches nothing on the «كروت دفتر» menu.",
+    "placeholders": {
+      "query": {"type": "String"}
+    }
+  },
+  "posVoucherSearchEmptyMessage": "جرّب اسماً آخر للبطاقة، مثل ماستركارد أو آيتونز أو بلايستيشن.",
+  "@posVoucherSearchEmptyMessage": {
+    "description": "Hint under the empty search result of the voucher menu."
+  },
+  "posVoucherSearchClear": "مسح البحث",
+  "@posVoucherSearchClear": {
+    "description": "Button that empties the search box from the empty voucher search result."
+  },
+  "posVoucherMenuAll": "الكل",
+  "@posVoucherMenuAll": {
+    "description": "Voucher menu tab that shows every brand of «كروت دفتر»."
+  },
+  "posVoucherMenuPriceFrom": "من {price}",
+  "@posVoucherMenuPriceFrom": {
+    "description": "Brand card price line when its cards have different prices: the cheapest.",
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "posVoucherMenuPromo": "عرض",
+  "@posVoucherMenuPromo": {
+    "description": "Default promotion badge on a voucher brand or card when the company gave no label."
+  },
+  "posVoucherMenuFeatured": "مميّز",
+  "@posVoucherMenuFeatured": {
+    "description": "Default label for a brand the company features, when it gave no badge text."
+  },
+  "posVoucherMenuUnavailable": "غير متوفر",
+  "@posVoucherMenuUnavailable": {
+    "description": "A voucher brand or card that cannot be sold right now."
+  },
+  "posVoucherMenuMoreCountries": "+{count}",
+  "@posVoucherMenuMoreCountries": {
+    "description": "How many more countries a brand's cards cover than the flags shown.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "posVoucherMenuEmptyTitle": "لا توجد كروت للبيع الآن",
+  "@posVoucherMenuEmptyTitle": {
+    "description": "Empty voucher menu title."
+  },
+  "posVoucherMenuEmptyMessage": "ستظهر كروت دفتر هنا فور توفرها.",
+  "@posVoucherMenuEmptyMessage": {
+    "description": "Empty voucher menu explanation."
+  },
+  "posVoucherMenuDisabledMessage": "فعّل «كروت دفتر» من الإعدادات ← التكاملات لتظهر هنا.",
+  "@posVoucherMenuDisabledMessage": {
+    "description": "Empty voucher menu when the owner has not switched the cards on."
+  },
+  "posVoucherMenuSwitchedOffMessage": "أُوقفت كروت دفتر مؤقتاً لجميع المحلات.",
+  "@posVoucherMenuSwitchedOffMessage": {
+    "description": "Empty voucher menu when Daftar paused the cards for every shop."
+  },
+  "posVoucherMenuLoadError": "تعذّر تحميل قائمة الكروت.",
+  "@posVoucherMenuLoadError": {
+    "description": "The voucher menu could not be loaded."
+  },
+  "posVoucherMenuCountryTitle": "البلد",
+  "@posVoucherMenuCountryTitle": {
+    "description": "Heading over the country chips in a voucher brand's sheet."
+  },
+  "posVoucherMenuDenominationTitle": "اختر الفئة",
+  "@posVoucherMenuDenominationTitle": {
+    "description": "Heading over the denomination tiles in a voucher brand's sheet."
+  },
+  "posVoucherMenuProfit": "ربحك {amount}",
+  "@posVoucherMenuProfit": {
+    "description": "What the shop earns on one card; only for readers allowed to see cost.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "posVoucherMenuBeyondBalance": "يتجاوز رصيد الكروت",
+  "@posVoucherMenuBeyondBalance": {
+    "description": "Warning on a card dearer than the voucher balance as last read."
+  },
+  "posVoucherMenuBalance": "رصيد الكروت: {amount}",
+  "@posVoucherMenuBalance": {
+    "description": "The voucher balance under a brand's cards.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "posVoucherMenuWasPrice": "بدلاً من {price}",
+  "@posVoucherMenuWasPrice": {
+    "description": "Screen-reader label for the struck-through regular price of a card on promotion.",
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "posServicesTabAirtime": "الشحن المباشر",
+  "@posServicesTabAirtime": {
+    "description": "Voucher menu tab: send airtime straight to a phone number abroad."
+  },
+  "posServicesTabBills": "دفع الفواتير",
+  "@posServicesTabBills": {
+    "description": "Voucher menu tab: pay a bill abroad (electricity, water, TV, internet)."
+  },
+  "posServicesNewBadge": "جديد",
+  "@posServicesNewBadge": {
+    "description": "Sticker on a direct-service card for the first weeks."
+  },
+  "posServicesTestModeBanner": "وضع تجريبي — لا يُرسل رصيد حقيقي ولا يُدفع شيء",
+  "@posServicesTestModeBanner": {
+    "description": "Banner over every service screen while the relay is buying from its test supplier: nothing sent is real and nothing paid is paid."
+  },
+  "posServicesTestModeMark": "عملية تجريبية",
+  "@posServicesTestModeMark": {
+    "description": "A small mark on a cart line, and on the success dialog, for a service sold while the relay was in test mode."
+  },
+  "posServicesStripTitle": "خدمات جديدة",
+  "@posServicesStripTitle": {
+    "description": "Heading of the strip of new services above the brands in the voucher menu's All tab."
+  },
+  "posServicesStripHint": "أرسل رصيداً أو سدّد فواتير أهلك في الخارج في ثوانٍ",
+  "@posServicesStripHint": {
+    "description": "One line under the strip heading."
+  },
+  "posServicesAirtimeTitle": "الشحن المباشر",
+  "@posServicesAirtimeTitle": {
+    "description": "Card title: airtime."
+  },
+  "posServicesAirtimePromise": "أرسل رصيداً إلى أي رقم هاتف في العالم خلال ثوانٍ، بدون بطاقة",
+  "@posServicesAirtimePromise": {
+    "description": "One-line promise under the airtime card."
+  },
+  "posServicesElectricityTitle": "فواتير الكهرباء",
+  "@posServicesElectricityTitle": {
+    "description": "Card title: electricity bills."
+  },
+  "posServicesElectricityPromise": "ادفع فاتورة الكهرباء أو اشحن عدّاد أهلك في الخارج",
+  "@posServicesElectricityPromise": {
+    "description": "One-line promise under the electricity card."
+  },
+  "posServicesWaterTitle": "فواتير المياه",
+  "@posServicesWaterTitle": {
+    "description": "Card title: water bills."
+  },
+  "posServicesWaterPromise": "سدّد فاتورة مياه أهلك في الخارج من هنا، بدون حوالة",
+  "@posServicesWaterPromise": {
+    "description": "One-line promise under the water card."
+  },
+  "posServicesTvTitle": "اشتراكات التلفزيون",
+  "@posServicesTvTitle": {
+    "description": "Card title: TV subscriptions."
+  },
+  "posServicesTvPromise": "جدّد اشتراك القنوات لأهلك في الخارج في دقائق",
+  "@posServicesTvPromise": {
+    "description": "One-line promise under the TV card."
+  },
+  "posServicesInternetTitle": "الإنترنت",
+  "@posServicesInternetTitle": {
+    "description": "Card title: internet bills and packages."
+  },
+  "posServicesInternetPromise": "اشحن باقة الإنترنت أو سدّد فاتورتها لأهلك في الخارج",
+  "@posServicesInternetPromise": {
+    "description": "One-line promise under the internet card."
+  },
+  "posServicesCountriesCount": "{count, plural, =1{دولة واحدة} =2{دولتان} few{{count} دول} many{{count} دولة} other{{count} دولة}}",
+  "@posServicesCountriesCount": {
+    "description": "How many countries a service reaches.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "posServicesNetworksCount": "{count, plural, =1{شبكة واحدة} =2{شبكتان} few{{count} شبكات} many{{count} شبكة} other{{count} شبكة}}",
+  "@posServicesNetworksCount": {
+    "description": "How many mobile networks the airtime reaches.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "posServicesProvidersCount": "{count, plural, =1{جهة واحدة} =2{جهتان} few{{count} جهات} many{{count} جهة} other{{count} جهة}}",
+  "@posServicesProvidersCount": {
+    "description": "How many bill providers a country or service has.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "posServicesBillsIntro": "اختر نوع الفاتورة التي تريد سدادها",
+  "@posServicesBillsIntro": {
+    "description": "Heading over the bill-type cards."
+  },
+  "posServicesAirtimeLineTitle": "شحن مباشر",
+  "@posServicesAirtimeLineTitle": {
+    "description": "Name of the airtime line in the cart and on the receipt."
+  },
+  "posServicesBillLineTitle": "دفع فاتورة",
+  "@posServicesBillLineTitle": {
+    "description": "Name of the bill line in the cart and on the receipt."
+  },
+  "posAirtimeCartSubtitle": "إلى {number} — {label}",
+  "@posAirtimeCartSubtitle": {
+    "description": "Cart line subtitle of an airtime top-up: the number, then the network and amount.",
+    "placeholders": {
+      "number": {
+        "type": "String"
+      },
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "posBillCartSubtitle": "رقم {account} — {label}",
+  "@posBillCartSubtitle": {
+    "description": "Cart line subtitle of a bill payment: the meter/account number, then the provider and amount.",
+    "placeholders": {
+      "account": {
+        "type": "String"
+      },
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "posServicesInvoiceAirtimeTarget": "إلى {number}",
+  "@posServicesInvoiceAirtimeTarget": {
+    "description": "Invoice details: the number an airtime top-up was sent to.",
+    "placeholders": {
+      "number": {
+        "type": "String"
+      }
+    }
+  },
+  "posServicesInvoiceBillTarget": "رقم {account}",
+  "@posServicesInvoiceBillTarget": {
+    "description": "Invoice details: the meter/account number a bill was paid for.",
+    "placeholders": {
+      "account": {
+        "type": "String"
+      }
+    }
+  },
+  "posServicesInvoiceToken": "رمز الشحن",
+  "@posServicesInvoiceToken": {
+    "description": "Invoice details: label of a bill's token."
+  },
+  "posServicesSuccessAirtimeTitle": "تم إرسال الرصيد",
+  "@posServicesSuccessAirtimeTitle": {
+    "description": "Title of the dialog after airtime was delivered."
+  },
+  "posServicesSuccessBillTitle": "تم سداد الفاتورة",
+  "@posServicesSuccessBillTitle": {
+    "description": "Title of the dialog after a bill was paid."
+  },
+  "posServicesSuccessMixedTitle": "تم تنفيذ الخدمات",
+  "@posServicesSuccessMixedTitle": {
+    "description": "Title of the dialog after several direct services were delivered."
+  },
+  "posServicesSuccessNumber": "الرقم",
+  "@posServicesSuccessNumber": {
+    "description": "Row of the success dialog: the phone number or account."
+  },
+  "posServicesSuccessOperation": "العملية",
+  "@posServicesSuccessOperation": {
+    "description": "Row of the success dialog: what was done."
+  },
+  "posServicesSuccessReference": "رقم العملية",
+  "@posServicesSuccessReference": {
+    "description": "Row of the success dialog: the provider's reference."
+  },
+  "posServicesSuccessToken": "رمز الشحن",
+  "@posServicesSuccessToken": {
+    "description": "Label of a bill's token when the server named none."
+  },
+  "posServicesSuccessTokenHint": "سلّم الزبون هذا الرمز ليُدخله في العدّاد.",
+  "@posServicesSuccessTokenHint": {
+    "description": "Under a bill's token in the success dialog."
+  },
+  "posServicesSuccessCopy": "نسخ الرمز",
+  "@posServicesSuccessCopy": {
+    "description": "Button that copies a bill's token."
+  },
+  "posServicesSuccessCopied": "تم نسخ الرمز",
+  "@posServicesSuccessCopied": {
+    "description": "Shown after a token was copied."
+  },
+  "posServicesSuccessDone": "تم",
+  "@posServicesSuccessDone": {
+    "description": "Closes the success dialog."
+  },
+  "posServicesLoadError": "تعذّر تحميل الدول والشبكات.",
+  "@posServicesLoadError": {
+    "description": "The services directory could not be read."
+  },
+  "posServicesUnavailableTitle": "الخدمة غير متاحة الآن",
+  "@posServicesUnavailableTitle": {
+    "description": "Empty state title when the direct services cannot be used."
+  },
+  "posServicesUnavailableSwitchedOff": "أوقفت دفتر هذه الخدمة مؤقتاً لجميع المحلات.",
+  "@posServicesUnavailableSwitchedOff": {
+    "description": "Empty state: the company paused the services for every shop."
+  },
+  "posServicesUnavailableNotConfigured": "هذه الخدمة غير مفعّلة بعد في محلك.",
+  "@posServicesUnavailableNotConfigured": {
+    "description": "Empty state: the services are not switched on for this shop."
+  },
+  "posServicesUnavailableEmpty": "لا توجد دول متاحة الآن، حاول لاحقاً.",
+  "@posServicesUnavailableEmpty": {
+    "description": "Empty state: the directory has no country."
+  },
+  "posServicesHow": "كيف يعمل؟",
+  "@posServicesHow": {
+    "description": "Button that opens the how-it-works sheet of a service."
+  },
+  "posServicesHowDone": "فهمت",
+  "@posServicesHowDone": {
+    "description": "Closes the how-it-works sheet."
+  },
+  "posServicesExplainerHide": "إخفاء الشرح",
+  "@posServicesExplainerHide": {
+    "description": "Tooltip of the button that hides a service's explainer banner."
+  },
+  "posServicesTimelineTitle": "ماذا يحدث بعد ذلك؟",
+  "@posServicesTimelineTitle": {
+    "description": "Heading over the four steps in the how-it-works sheet."
+  },
+  "posServicesTimelineChoose": "اختر",
+  "@posServicesTimelineChoose": {
+    "description": "First of the four steps shown on every service: choose."
+  },
+  "posServicesTimelineCart": "أضف إلى السلة",
+  "@posServicesTimelineCart": {
+    "description": "Second step: add to the cart."
+  },
+  "posServicesTimelineInvoice": "أصدر الفاتورة",
+  "@posServicesTimelineInvoice": {
+    "description": "Third step: issue the invoice."
+  },
+  "posServicesTimelineDone": "يصل المبلغ ويُطبع الإيصال",
+  "@posServicesTimelineDone": {
+    "description": "Fourth step: the amount arrives and the receipt prints."
+  },
+  "posServicesCountrySearchHint": "ابحث بالاسم أو رمز الدولة (223)",
+  "@posServicesCountrySearchHint": {
+    "description": "Hint of the country search box."
+  },
+  "posServicesCountryPopular": "الأكثر طلباً",
+  "@posServicesCountryPopular": {
+    "description": "Heading over the popular countries."
+  },
+  "posServicesCountryAll": "كل الدول",
+  "@posServicesCountryAll": {
+    "description": "Heading over the full A-Z list of countries."
+  },
+  "posServicesCountryUnavailable": "غير متاح حالياً",
+  "@posServicesCountryUnavailable": {
+    "description": "Tag on a country the services do not reach."
+  },
+  "posServicesCountryNoResults": "لا توجد دولة بهذا الاسم أو الرمز.",
+  "@posServicesCountryNoResults": {
+    "description": "No country matched the search."
+  },
+  "posServicesCountryChange": "تغيير",
+  "@posServicesCountryChange": {
+    "description": "Button that reopens the country picker."
+  },
+  "posServicesCountryDialMatch": "رمز +{dial} ← {country}",
+  "@posServicesCountryDialMatch": {
+    "description": "Hint under the search box: the typed digits are this country's calling code.",
+    "placeholders": {
+      "dial": {
+        "type": "String"
+      },
+      "country": {
+        "type": "String"
+      }
+    }
+  },
+  "posServicesCountrySharedCode": "رمز +{dial} مشترك بين أكثر من دولة، اختر الدولة.",
+  "@posServicesCountrySharedCode": {
+    "description": "Hint under the search box: several countries share the typed calling code.",
+    "placeholders": {
+      "dial": {
+        "type": "String"
+      }
+    }
+  },
+  "posServicesSummaryTitle": "ملخص الطلب",
+  "@posServicesSummaryTitle": {
+    "description": "Title of the summary card of a direct service."
+  },
+  "posServicesSummaryCountry": "الدولة",
+  "@posServicesSummaryCountry": {
+    "description": "Summary row label."
+  },
+  "posServicesSummaryNumber": "الرقم",
+  "@posServicesSummaryNumber": {
+    "description": "Summary row label: the phone number."
+  },
+  "posServicesSummaryNetwork": "الشبكة",
+  "@posServicesSummaryNetwork": {
+    "description": "Summary row label: the mobile network."
+  },
+  "posServicesSummaryProvider": "الجهة",
+  "@posServicesSummaryProvider": {
+    "description": "Summary row label: the bill provider."
+  },
+  "posServicesSummaryPlan": "الباقة",
+  "@posServicesSummaryPlan": {
+    "description": "Summary row label: the plan chosen."
+  },
+  "posServicesSummaryAmount": "المبلغ",
+  "@posServicesSummaryAmount": {
+    "description": "Summary row label: the amount."
+  },
+  "posServicesSummaryReceives": "يصل للمستلم",
+  "@posServicesSummaryReceives": {
+    "description": "Summary row label: what the recipient gets."
+  },
+  "posServicesSummaryPays": "يدفع الزبون",
+  "@posServicesSummaryPays": {
+    "description": "Summary label: what the customer pays."
+  },
+  "posServicesAddToCart": "أضف إلى السلة",
+  "@posServicesAddToCart": {
+    "description": "Button that puts the priced service in the cart."
+  },
+  "posServicesPricing": "جارٍ حساب السعر…",
+  "@posServicesPricing": {
+    "description": "The server is pricing the service."
+  },
+  "posServicesBlockNotSellable": "لا تملك صلاحية البيع",
+  "@posServicesBlockNotSellable": {
+    "description": "Why add is off: this user cannot sell."
+  },
+  "posServicesBlockNoCountry": "اختر الدولة أولاً",
+  "@posServicesBlockNoCountry": {
+    "description": "Why add is off: no country."
+  },
+  "posServicesBlockLoadingCountry": "جارٍ تحميل بيانات الدولة…",
+  "@posServicesBlockLoadingCountry": {
+    "description": "Why add is off: the country is loading."
+  },
+  "posServicesBlockCountryFailed": "تعذّر تحميل بيانات الدولة، أعد المحاولة",
+  "@posServicesBlockCountryFailed": {
+    "description": "Why add is off: the country could not be loaded."
+  },
+  "posServicesBlockNoNumber": "اكتب رقم الهاتف",
+  "@posServicesBlockNoNumber": {
+    "description": "Why add is off: no phone number."
+  },
+  "posServicesBlockNumberShort": "رقم الهاتف ناقص، أكمله",
+  "@posServicesBlockNumberShort": {
+    "description": "Why add is off: the phone number is too short."
+  },
+  "posServicesBlockNumberLong": "رقم الهاتف طويل جداً، راجعه",
+  "@posServicesBlockNumberLong": {
+    "description": "Why add is off: the phone number has more digits than any number can."
+  },
+  "posServicesBlockNumberMismatch": "الرقم الذي سيُشحن يختلف عن الرقم الذي تعرّفت عليه الشبكة — صحّح الرقم",
+  "@posServicesBlockNumberMismatch": {
+    "description": "Why add is off: the server and the relay read the phone digits as two different numbers."
+  },
+  "posServicesBalanceShort": "رصيد الكروت لا يكفي لهذه العملية — حوّل من المحفظة أولاً",
+  "@posServicesBalanceShort": {
+    "description": "Strong warning on a service the voucher balance (as last read) cannot pay for."
+  },
+  "posServicesBalanceWhere": "من الإعدادات ← المحفظة ← تحويل إلى رصيد الكروت",
+  "@posServicesBalanceWhere": {
+    "description": "Where to move money into the voucher balance, for a user who cannot do it from the till."
+  },
+  "posServicesAddRefused": "لا يمكن الإضافة أثناء إتمام البيع",
+  "@posServicesAddRefused": {
+    "description": "Said when a priced service could not be put in the cart because a sale is being completed."
+  },
+  "posProviderChargingTitle": "جارٍ تنفيذ الشحن… لا تُغلق الشاشة",
+  "@posProviderChargingTitle": {
+    "description": "Modal over the till while the provider is performing what the sale sold (airtime, a bill, a card)."
+  },
+  "posProviderChargingBody": "ننتظر ردّ المزوّد، وقد يستغرق ذلك دقيقة. لا تُعد العملية ولا تُرجع المبلغ للزبون.",
+  "@posProviderChargingBody": {
+    "description": "Under the title of the modal shown while the provider is performing a sale."
+  },
+  "posProviderChargingSeconds": "{seconds, plural, =0{لم تمضِ ثانية} =1{مضت ثانية واحدة} =2{مضت ثانيتان} few{مضت {seconds} ثوانٍ} many{مضت {seconds} ثانية} other{مضت {seconds} ثانية}}",
+  "@posProviderChargingSeconds": {
+    "description": "How long the provider has been asked, counted in seconds.",
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "posServiceIssueRefusedAirtimeTitle": "لم يُنفَّذ الشحن",
+  "@posServiceIssueRefusedAirtimeTitle": {
+    "description": "Title of the dialog after a sale whose airtime the provider refused."
+  },
+  "posServiceIssueRefusedBillTitle": "لم تُسدَّد الفاتورة",
+  "@posServiceIssueRefusedBillTitle": {
+    "description": "Title of the dialog after a sale whose bill payment the provider refused."
+  },
+  "posServiceIssueRefusedMixedTitle": "لم تُنفَّذ الخدمة",
+  "@posServiceIssueRefusedMixedTitle": {
+    "description": "Title of the dialog after a sale whose airtime and bill the provider refused."
+  },
+  "posServiceIssueRefusedAirtimeBody": "لم يُرسَل أي رصيد — أعد المبلغ للزبون.",
+  "@posServiceIssueRefusedAirtimeBody": {
+    "description": "First line under the title when airtime was refused: nothing was sent."
+  },
+  "posServiceIssueRefusedBillBody": "لم يُسدَّد أي مبلغ للجهة — أعد المبلغ للزبون.",
+  "@posServiceIssueRefusedBillBody": {
+    "description": "First line under the title when a bill payment was refused: nothing was paid."
+  },
+  "posServiceIssueUnknownAirtimeTitle": "نتيجة الشحن غير معروفة",
+  "@posServiceIssueUnknownAirtimeTitle": {
+    "description": "Title when nobody knows whether the airtime was sent."
+  },
+  "posServiceIssueUnknownBillTitle": "نتيجة السداد غير معروفة",
+  "@posServiceIssueUnknownBillTitle": {
+    "description": "Title when nobody knows whether the bill was paid."
+  },
+  "posServiceIssueUnknownAirtimeBody": "النتيجة غير معروفة — لا تُعد الشحن ولا تُرجع المبلغ حتى تتأكد.",
+  "@posServiceIssueUnknownAirtimeBody": {
+    "description": "First line when the airtime result is unknown: do not send again, do not refund."
+  },
+  "posServiceIssueUnknownBillBody": "النتيجة غير معروفة — لا تُعد السداد ولا تُرجع المبلغ حتى تتأكد.",
+  "@posServiceIssueUnknownBillBody": {
+    "description": "First line when the bill payment result is unknown: do not pay again, do not refund."
+  },
+  "posServiceIssueUnknownHint": "افتح الفاتورة من سجل الفواتير لترى حالة العملية، وتتم المطابقة تلقائياً مع سجل المزوّد.",
+  "@posServiceIssueUnknownHint": {
+    "description": "What to do about an unknown service result."
+  },
+  "posServiceIssueReceipt": "رقم الفاتورة: {number}",
+  "@posServiceIssueReceipt": {
+    "description": "The invoice the unknown result belongs to.",
+    "placeholders": {
+      "number": {
+        "type": "String"
+      }
+    }
+  },
+  "posServiceIssueReference": "رقم العملية: {reference}",
+  "@posServiceIssueReference": {
+    "description": "The provider reference of the service the result is unknown for.",
+    "placeholders": {
+      "reference": {
+        "type": "String"
+      }
+    }
+  },
+  "posServiceReasonInsufficient": "رصيد الكروت لا يكفي — حوّل من المحفظة ثم أعد البيع.",
+  "@posServiceReasonInsufficient": {
+    "description": "Why a service was refused: the voucher balance could not pay for it."
+  },
+  "posServiceReasonPriceChanged": "تغيّر السعر لدى المزوّد قبل التنفيذ — أعد البيع بالسعر الجديد.",
+  "@posServiceReasonPriceChanged": {
+    "description": "Why a service was refused: its price moved after it was quoted."
+  },
+  "posServiceReasonUnavailable": "الخدمة أو المزوّد غير متاح الآن — حاول بعد قليل.",
+  "@posServiceReasonUnavailable": {
+    "description": "Why a service was refused: the network or the provider could not be reached."
+  },
+  "posServiceReasonInvalidNumber": "الرقم غير صالح لدى المزوّد — تأكد منه ثم أعد البيع.",
+  "@posServiceReasonInvalidNumber": {
+    "description": "Why a service was refused: the number or account was not accepted."
+  },
+  "posServiceReasonRefused": "رفض المزوّد الطلب — لم يُخصم شيء.",
+  "@posServiceReasonRefused": {
+    "description": "Why a service was refused: no other reason was given."
+  },
+  "posServiceRequoteTitle": "تغيّر سعر الخدمة",
+  "@posServiceRequoteTitle": {
+    "description": "Title of the dialog shown when a service line, priced earlier, is priced again at another price or no longer offered."
+  },
+  "posServiceRequoteBody": "سُعّرت هذه الخدمة قبل مدة، والسعر الآن مختلف. راجعه مع الزبون قبل الدفع.",
+  "@posServiceRequoteBody": {
+    "description": "Under the title: the price a service was quoted has moved."
+  },
+  "posServiceRequotePrice": "كان {old} ← أصبح {now}",
+  "@posServiceRequotePrice": {
+    "description": "A service line's old price and its new one.",
+    "placeholders": {
+      "old": {
+        "type": "String"
+      },
+      "now": {
+        "type": "String"
+      }
+    }
+  },
+  "posServiceRequoteGone": "لم تعد هذه الخدمة متاحة بهذه المواصفات — سيُزال السطر من الفاتورة.",
+  "@posServiceRequoteGone": {
+    "description": "A service line whose offer the server no longer makes."
+  },
+  "posServiceRequoteAccept": "اعتمد السعر الجديد",
+  "@posServiceRequoteAccept": {
+    "description": "Button: take the service's new price."
+  },
+  "posServiceRequoteAcceptGone": "اعتمد التغييرات",
+  "@posServiceRequoteAcceptGone": {
+    "description": "Button: take the new prices and remove the lines no longer offered."
+  },
+  "posServiceQuoteAgeMinutes": "{count, plural, =1{سُعّرت قبل دقيقة} =2{سُعّرت قبل دقيقتين} few{سُعّرت قبل {count} دقائق} many{سُعّرت قبل {count} دقيقة} other{سُعّرت قبل {count} دقيقة}}",
+  "@posServiceQuoteAgeMinutes": {
+    "description": "How long ago a service line was priced, in minutes, on its cart row.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "posServiceQuoteAgeHours": "{count, plural, =1{سُعّرت قبل ساعة} =2{سُعّرت قبل ساعتين} few{سُعّرت قبل {count} ساعات} many{سُعّرت قبل {count} ساعة} other{سُعّرت قبل {count} ساعة}}",
+  "@posServiceQuoteAgeHours": {
+    "description": "How long ago a service line was priced, in hours, on its cart row.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "posServiceQuoteAgeDays": "{count, plural, =1{سُعّرت قبل يوم} =2{سُعّرت قبل يومين} few{سُعّرت قبل {count} أيام} many{سُعّرت قبل {count} يوماً} other{سُعّرت قبل {count} يوم}}",
+  "@posServiceQuoteAgeDays": {
+    "description": "How long ago a service line was priced, in days, on its cart row.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "posServicesCurrencyUsd": "دولار أمريكي",
+  "@posServicesCurrencyUsd": {
+    "description": "The US dollar, named next to an amount in dollars."
+  },
+  "posServicesCurrencyEur": "يورو",
+  "@posServicesCurrencyEur": {
+    "description": "The euro, named next to an amount in euros."
+  },
+  "posServicesRefreshList": "تحديث القائمة",
+  "@posServicesRefreshList": {
+    "description": "Button that reads the list of networks and providers again after it was found out of date."
+  },
+  "posServicesBlockNoNetwork": "اختر الشبكة",
+  "@posServicesBlockNoNetwork": {
+    "description": "Why add is off: no network."
+  },
+  "posServicesBlockNoProvider": "اختر الجهة",
+  "@posServicesBlockNoProvider": {
+    "description": "Why add is off: no provider."
+  },
+  "posServicesBlockNoAccount": "اكتب {label}",
+  "@posServicesBlockNoAccount": {
+    "description": "Why add is off: no meter/account number; label is its name.",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "posServicesBlockAccountShort": "{label} ناقص، تأكد منه",
+  "@posServicesBlockAccountShort": {
+    "description": "Why add is off: the meter/account number is too short.",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "posServicesBlockNoInvoice": "اكتب رقم الفاتورة",
+  "@posServicesBlockNoInvoice": {
+    "description": "Why add is off: the invoice number is missing."
+  },
+  "posServicesBlockNoAmount": "اختر المبلغ",
+  "@posServicesBlockNoAmount": {
+    "description": "Why add is off: no amount."
+  },
+  "posServicesBlockNoPlan": "اختر الباقة",
+  "@posServicesBlockNoPlan": {
+    "description": "Why add is off: no plan."
+  },
+  "posServicesBlockAmountInvalid": "اكتب مبلغاً صحيحاً",
+  "@posServicesBlockAmountInvalid": {
+    "description": "Why add is off: the typed amount is not a number."
+  },
+  "posServicesBlockAmountLow": "المبلغ أقل من الحد الأدنى ({min})",
+  "@posServicesBlockAmountLow": {
+    "description": "Why add is off: the amount is below the minimum.",
+    "placeholders": {
+      "min": {
+        "type": "String"
+      }
+    }
+  },
+  "posServicesBlockAmountHigh": "المبلغ أكبر من الحد الأقصى ({max})",
+  "@posServicesBlockAmountHigh": {
+    "description": "Why add is off: the amount is above the maximum.",
+    "placeholders": {
+      "max": {
+        "type": "String"
+      }
+    }
+  },
+  "posServicesBlockQuoteFailed": "تعذّر حساب السعر، أعد المحاولة",
+  "@posServicesBlockQuoteFailed": {
+    "description": "Why add is off: the price could not be read."
+  },
+  "posServicesRefusalInvalidPhone": "رقم الهاتف غير صالح لهذه الدولة",
+  "@posServicesRefusalInvalidPhone": {
+    "description": "The server refused: invalid phone."
+  },
+  "posServicesRefusalInvalidAccount": "الرقم غير صالح لدى هذه الجهة، تأكد منه",
+  "@posServicesRefusalInvalidAccount": {
+    "description": "The server refused: invalid account."
+  },
+  "posServicesRefusalInvoiceRequired": "هذه الجهة تطلب رقم الفاتورة",
+  "@posServicesRefusalInvoiceRequired": {
+    "description": "The server refused: the invoice number is required."
+  },
+  "posServicesRefusalInvalidInvoice": "رقم الفاتورة غير صالح — 24 خانة كحد أقصى من الأحرف الإنجليزية والأرقام و - _ /",
+  "@posServicesRefusalInvalidInvoice": {
+    "description": "The server refused: the invoice number is not one the provider takes (letters, digits, - _ / only, 24 at most)."
+  },
+  "posServicesRefusalOutOfRange": "المبلغ خارج الحدود التي تقبلها هذه الجهة",
+  "@posServicesRefusalOutOfRange": {
+    "description": "The server refused: amount out of range."
+  },
+  "posServicesRefusalOutOfRangeLimits": "المبلغ خارج الحدود: من {min} إلى {max}",
+  "@posServicesRefusalOutOfRangeLimits": {
+    "description": "The server refused: amount out of range, with limits.",
+    "placeholders": {
+      "min": {
+        "type": "String"
+      },
+      "max": {
+        "type": "String"
+      }
+    }
+  },
+  "posServicesRefusalNotOffered": "هذا المبلغ غير متاح، اختر مبلغاً آخر",
+  "@posServicesRefusalNotOffered": {
+    "description": "The server refused: amount not offered."
+  },
+  "posServicesRefusalInvalidAmount": "المبلغ غير صالح",
+  "@posServicesRefusalInvalidAmount": {
+    "description": "The server refused: invalid amount."
+  },
+  "posServicesRefusalUnknown": "لم تعد هذه الجهة متاحة، أعد تحميل القائمة",
+  "@posServicesRefusalUnknown": {
+    "description": "The server refused: unknown operator or biller."
+  },
+  "posServicesRefusalUnavailable": "الخدمة غير متاحة الآن",
+  "@posServicesRefusalUnavailable": {
+    "description": "The server refused: service unavailable."
+  },
+  "posServicesRefusalRateUnset": "أسعار هذه الخدمة لم تُضبط بعد، تواصل مع دفتر",
+  "@posServicesRefusalRateUnset": {
+    "description": "The server refused: exchange rate not set."
+  },
+  "posServicesRefusalUnreachable": "تعذّر الوصول إلى الخدمة، أعد المحاولة بعد قليل",
+  "@posServicesRefusalUnreachable": {
+    "description": "The server refused: the service is unreachable."
+  },
+  "posServicesRefusalNotConfigured": "هذه الخدمة غير مفعّلة بعد",
+  "@posServicesRefusalNotConfigured": {
+    "description": "The server refused: not configured."
+  },
+  "posServicesRefusalSwitchedOff": "أوقفت دفتر هذه الخدمة مؤقتاً",
+  "@posServicesRefusalSwitchedOff": {
+    "description": "The server refused: switched off."
+  },
+  "posServicesRefusalOther": "رفضت الخدمة الطلب",
+  "@posServicesRefusalOther": {
+    "description": "The server refused for a reason the till has no wording for."
+  },
+  "posAirtimeStepCountry": "الدولة",
+  "@posAirtimeStepCountry": {
+    "description": "Airtime step 1 title."
+  },
+  "posAirtimeStepNumber": "رقم الهاتف",
+  "@posAirtimeStepNumber": {
+    "description": "Airtime step 2 title."
+  },
+  "posAirtimeStepAmount": "المبلغ",
+  "@posAirtimeStepAmount": {
+    "description": "Airtime step 3 title."
+  },
+  "posAirtimeNeeds": "تحتاج: رقم هاتف المستلم + اسم الدولة",
+  "@posAirtimeNeeds": {
+    "description": "One line saying what the cashier needs in hand for airtime."
+  },
+  "posAirtimeExplainerBody": "أرسل رصيداً إلى أي رقم هاتف في العالم خلال ثوانٍ — بدون بطاقة. اختر الدولة، اكتب الرقم، اختر المبلغ.",
+  "@posAirtimeExplainerBody": {
+    "description": "The airtime explainer banner."
+  },
+  "posAirtimeHowTitle": "كيف يعمل الشحن المباشر؟",
+  "@posAirtimeHowTitle": {
+    "description": "Title of the airtime how-it-works sheet."
+  },
+  "posAirtimeHowStep1Title": "اختر الدولة واكتب الرقم",
+  "@posAirtimeHowStep1Title": {
+    "description": "Airtime how-it-works step 1 title."
+  },
+  "posAirtimeHowStep1Body": "اكتب رمز الدولة أو ابحث باسمها، ثم اكتب رقم المستلم. نتعرف على الشبكة تلقائياً، ويمكنك اختيارها بنفسك.",
+  "@posAirtimeHowStep1Body": {
+    "description": "Airtime how-it-works step 1 body."
+  },
+  "posAirtimeHowStep2Title": "اختر المبلغ",
+  "@posAirtimeHowStep2Title": {
+    "description": "Airtime how-it-works step 2 title."
+  },
+  "posAirtimeHowStep2Body": "ترى ما يصل للمستلم وما يدفعه الزبون، ويمكنك كتابة مبلغ آخر ضمن الحدود المسموحة.",
+  "@posAirtimeHowStep2Body": {
+    "description": "Airtime how-it-works step 2 body."
+  },
+  "posAirtimeHowStep3Title": "أضف إلى السلة وأصدر الفاتورة",
+  "@posAirtimeHowStep3Title": {
+    "description": "Airtime how-it-works step 3 title."
+  },
+  "posAirtimeHowStep3Body": "يُرسل الرصيد فور إصدار الفاتورة، ويُطبع إيصال للزبون بتفاصيل العملية.",
+  "@posAirtimeHowStep3Body": {
+    "description": "Airtime how-it-works step 3 body."
+  },
+  "posAirtimeHowNoRefund": "لا يمكن استرداد المبلغ بعد إرساله، فتأكد من الرقم والشبكة قبل إصدار الفاتورة.",
+  "@posAirtimeHowNoRefund": {
+    "description": "Plain statement: no refund after sending."
+  },
+  "posAirtimeHowUnsupported": "لا نرسل حالياً إلى: {countries}.",
+  "@posAirtimeHowUnsupported": {
+    "description": "Plain statement: countries airtime cannot be sent to.",
+    "placeholders": {
+      "countries": {
+        "type": "String"
+      }
+    }
+  },
+  "posAirtimeTruth": "يُرسل الرصيد فور إصدار الفاتورة ولا يمكن استرداده بعد إرساله.",
+  "@posAirtimeTruth": {
+    "description": "The one-line truth under the airtime summary."
+  },
+  "posAirtimeRecentTitle": "آخر الأرقام",
+  "@posAirtimeRecentTitle": {
+    "description": "Heading over the recent recipients."
+  },
+  "posAirtimePhoneLabel": "رقم الهاتف",
+  "@posAirtimePhoneLabel": {
+    "description": "Label of the airtime phone field (accessibility)."
+  },
+  "posAirtimePhoneExample": "70 12 34 56",
+  "@posAirtimePhoneExample": {
+    "description": "Example shown inside the empty phone field."
+  },
+  "posAirtimePhoneHelp": "تحتاج رقم المستلم فقط: اكتبه بدون رمز الدولة (مثل 70 12 34 56)، أو الصقه كاملاً مع الرمز فتُختار الدولة تلقائياً.",
+  "@posAirtimePhoneHelp": {
+    "description": "Help line under the phone field before a number is typed."
+  },
+  "posAirtimePhoneKeepTyping": "أكمل كتابة الرقم…",
+  "@posAirtimePhoneKeepTyping": {
+    "description": "Line under the phone field while the number is short."
+  },
+  "posAirtimePhoneUnknownCode": "رمز الدولة في الرقم غير معروف.",
+  "@posAirtimePhoneUnknownCode": {
+    "description": "The pasted number starts with a calling code no country has."
+  },
+  "posAirtimePhoneStartsWithDial": "يبدو أن الرقم يبدأ برمز الدولة +{dial} — هل تقصد {number}؟",
+  "@posAirtimePhoneStartsWithDial": {
+    "description": "Warning under the number field: the digits typed begin with the picked country's own calling code, so the number is probably meant without it.",
+    "placeholders": {
+      "dial": {
+        "type": "String"
+      },
+      "number": {
+        "type": "String"
+      }
+    }
+  },
+  "posAirtimePhoneFixDial": "نعم، صحّح الرقم",
+  "@posAirtimePhoneFixDial": {
+    "description": "Button that takes the number without the calling code it began with."
+  },
+  "posAirtimePhoneSharedCode": "رمز +{dial} تشترك فيه عدة دول — لأي دولة هذا الرقم؟",
+  "@posAirtimePhoneSharedCode": {
+    "description": "Under the number field: the pasted number begins with a calling code that more than one country has (+1), so the cashier is asked which country it is for instead of the till guessing.",
+    "placeholders": {
+      "dial": {
+        "type": "String"
+      }
+    }
+  },
+  "posServicesBlockChooseDialCountry": "اختر دولة الرقم من الخيارات أعلاه",
+  "@posServicesBlockChooseDialCountry": {
+    "description": "Why add is off: the pasted number's calling code belongs to several countries and none is chosen."
+  },
+  "posAirtimeDetecting": "جارٍ التعرف على الشبكة…",
+  "@posAirtimeDetecting": {
+    "description": "The network is being detected."
+  },
+  "posAirtimeDetected": "تعرّفنا على الشبكة: {network}",
+  "@posAirtimeDetected": {
+    "description": "The network was detected.",
+    "placeholders": {
+      "network": {
+        "type": "String"
+      }
+    }
+  },
+  "posAirtimeNotDetected": "لم نتعرف على الشبكة، اختر الشبكة",
+  "@posAirtimeNotDetected": {
+    "description": "The network could not be detected."
+  },
+  "posAirtimeDetectUnavailable": "التعرف التلقائي غير متاح الآن، اختر الشبكة",
+  "@posAirtimeDetectUnavailable": {
+    "description": "Detection is switched off or unavailable."
+  },
+  "posAirtimeDetectFailed": "تعذّر التعرف على الشبكة، اختر الشبكة",
+  "@posAirtimeDetectFailed": {
+    "description": "Detection could not be reached."
+  },
+  "posAirtimeDetectInvalid": "الرقم لا يبدو صحيحاً لهذه الدولة، تأكد منه",
+  "@posAirtimeDetectInvalid": {
+    "description": "The relay says the number is not valid."
+  },
+  "posAirtimeDetectDisagrees": "الرقم يبدو على شبكة {network}",
+  "@posAirtimeDetectDisagrees": {
+    "description": "The detected network differs from the one the cashier chose.",
+    "placeholders": {
+      "network": {
+        "type": "String"
+      }
+    }
+  },
+  "posAirtimeUseDetected": "استخدم {network}",
+  "@posAirtimeUseDetected": {
+    "description": "Button: switch to the detected network.",
+    "placeholders": {
+      "network": {
+        "type": "String"
+      }
+    }
+  },
+  "posAirtimeNetworks": "الشبكة",
+  "@posAirtimeNetworks": {
+    "description": "Heading over the network chips."
+  },
+  "posAirtimeNetworksNone": "لا توجد شبكات متاحة لهذه الدولة الآن.",
+  "@posAirtimeNetworksNone": {
+    "description": "The country has no network."
+  },
+  "posAirtimeCountryLoading": "جارٍ تحميل شبكات الدولة…",
+  "@posAirtimeCountryLoading": {
+    "description": "The country's networks are loading."
+  },
+  "posAirtimeCountryFailed": "تعذّر تحميل شبكات الدولة.",
+  "@posAirtimeCountryFailed": {
+    "description": "The country's networks could not be loaded."
+  },
+  "posAirtimeAmountWaiting": "اختر الشبكة لتظهر المبالغ",
+  "@posAirtimeAmountWaiting": {
+    "description": "Shown in place of the amounts until a network is chosen."
+  },
+  "posAirtimeCustom": "مبلغ آخر",
+  "@posAirtimeCustom": {
+    "description": "Tile that opens a field for an amount of the cashier's own."
+  },
+  "posAirtimeCustomLabel": "المبلغ بـ{currency}",
+  "@posAirtimeCustomLabel": {
+    "description": "Label of the custom amount field.",
+    "placeholders": {
+      "currency": {
+        "type": "String"
+      }
+    }
+  },
+  "posAirtimeCustomRange": "من {min} إلى {max}",
+  "@posAirtimeCustomRange": {
+    "description": "The limits of a custom amount.",
+    "placeholders": {
+      "min": {
+        "type": "String"
+      },
+      "max": {
+        "type": "String"
+      }
+    }
+  },
+  "posAirtimeCustomAnyAmount": "اكتب المبلغ",
+  "@posAirtimeCustomAnyAmount": {
+    "description": "Hint of the custom amount field when there are no limits."
+  },
+  "posAirtimeCustomInvalid": "اكتب مبلغاً صحيحاً",
+  "@posAirtimeCustomInvalid": {
+    "description": "The typed amount is not a number."
+  },
+  "posAirtimeCustomTooLow": "أقل مبلغ مسموح {min}",
+  "@posAirtimeCustomTooLow": {
+    "description": "The typed amount is below the minimum.",
+    "placeholders": {
+      "min": {
+        "type": "String"
+      }
+    }
+  },
+  "posAirtimeCustomTooHigh": "أكبر مبلغ مسموح {max}",
+  "@posAirtimeCustomTooHigh": {
+    "description": "The typed amount is above the maximum.",
+    "placeholders": {
+      "max": {
+        "type": "String"
+      }
+    }
+  },
+  "posAirtimeApproximate": "≈ المبلغ تقريبي: يصل للمستلم ما يعادله بـ{currency} بسعر المزوّد عند الإرسال.",
+  "@posAirtimeApproximate": {
+    "description": "Note under amounts of a network that converts at its own rate.",
+    "placeholders": {
+      "currency": {
+        "type": "String"
+      }
+    }
+  },
+  "posAirtimeLauncherTitle": "شحن رصيد لرقم في الخارج",
+  "@posAirtimeLauncherTitle": {
+    "description": "Title of the direct top-up launcher card."
+  },
+  "posAirtimeLauncherBody": "اختر الدولة ثم اكتب الرقم والمبلغ، وتُضاف العملية إلى السلة",
+  "@posAirtimeLauncherBody": {
+    "description": "One line under the launcher title."
+  },
+  "posAirtimeLauncherStart": "شحن جديد",
+  "@posAirtimeLauncherStart": {
+    "description": "Button that opens the stepped direct top-up dialog."
+  },
+  "voucherPricingTitle": "أسعار كروت دفتر",
+  "@voucherPricingTitle": {
+    "description": "Title of the card-pricing screen."
+  },
+  "voucherPricingOpen": "أسعار كروت دفتر",
+  "@voucherPricingOpen": {
+    "description": "Tooltip of the pricing icon in the voucher menu."
+  },
+  "voucherPricingTileSubtitle": "اتبع سعر الشركة أو حدّد سعرك لكل خدمة وكرت",
+  "@voucherPricingTileSubtitle": {
+    "description": "Subtitle of the pricing entry in integrations settings."
+  },
+  "voucherPricingTabServices": "الخدمات",
+  "@voucherPricingTabServices": {
+    "description": "Pricing tab for direct services."
+  },
+  "voucherPricingTabCards": "الكروت",
+  "@voucherPricingTabCards": {
+    "description": "Pricing tab for gift cards."
+  },
+  "voucherPricingDefaultTitle": "السعر الافتراضي",
+  "@voucherPricingDefaultTitle": {
+    "description": "Heading of the default pricing switch."
+  },
+  "voucherPricingDefaultHint": "يُطبَّق على كل خدمة وكرت لم تحدد له سعراً خاصاً.",
+  "@voucherPricingDefaultHint": {
+    "description": "Hint under the default pricing switch."
+  },
+  "voucherPricingModeCompany": "سعر الشركة",
+  "@voucherPricingModeCompany": {
+    "description": "Mode: follow the company price."
+  },
+  "voucherPricingModeCustom": "سعري أنا",
+  "@voucherPricingModeCustom": {
+    "description": "Mode: the shop sets its own price."
+  },
+  "voucherPricingMarkupLabel": "نسبة ربحي %",
+  "@voucherPricingMarkupLabel": {
+    "description": "Markup percent field."
+  },
+  "voucherPricingServicesTitle": "الخدمات المباشرة",
+  "@voucherPricingServicesTitle": {
+    "description": "Heading of the services list."
+  },
+  "voucherPricingExample": "مثال: تدفع {pays}، سعر الشركة {company}، سعرك {yours}",
+  "@voucherPricingExample": {
+    "description": "Live example line under a service.",
+    "placeholders": {
+      "pays": {
+        "type": "String"
+      },
+      "company": {
+        "type": "String"
+      },
+      "yours": {
+        "type": "String"
+      }
+    }
+  },
+  "voucherPricingRuleHint": "الشركة تضيف رسماً ثابتاً {fixed} وتتقاسم الهامش معك بنسبة {share}% لك",
+  "@voucherPricingRuleHint": {
+    "description": "Hint of the company formula.",
+    "placeholders": {
+      "fixed": {
+        "type": "String"
+      },
+      "share": {
+        "type": "String"
+      }
+    }
+  },
+  "voucherPricingSave": "حفظ الأسعار",
+  "@voucherPricingSave": {
+    "description": "Save button."
+  },
+  "voucherPricingSaved": "تم حفظ الأسعار",
+  "@voucherPricingSaved": {
+    "description": "Saved message."
+  },
+  "voucherPricingSaveFailed": "تعذر حفظ الأسعار",
+  "@voucherPricingSaveFailed": {
+    "description": "Save failure fallback."
+  },
+  "voucherPricingLoadError": "تعذر تحميل الأسعار",
+  "@voucherPricingLoadError": {
+    "description": "Load failure."
+  },
+  "voucherPricingForbidden": "هذه الشاشة للمالك والمدير فقط",
+  "@voucherPricingForbidden": {
+    "description": "403 message."
+  },
+  "voucherPricingSearchHint": "ابحث عن كرت",
+  "@voucherPricingSearchHint": {
+    "description": "Card search hint."
+  },
+  "voucherPricingAllBrands": "كل العلامات",
+  "@voucherPricingAllBrands": {
+    "description": "All brands filter chip."
+  },
+  "voucherPricingShopPays": "تدفع",
+  "@voucherPricingShopPays": {
+    "description": "Column label: what the shop pays."
+  },
+  "voucherPricingCompanyPrice": "سعر الشركة",
+  "@voucherPricingCompanyPrice": {
+    "description": "Column label: company price."
+  },
+  "voucherPricingYourPrice": "سعرك",
+  "@voucherPricingYourPrice": {
+    "description": "Field label: the shop's own price."
+  },
+  "voucherPricingFollowCompany": "اتباع سعر الشركة",
+  "@voucherPricingFollowCompany": {
+    "description": "Row action: hand back to the company."
+  },
+  "voucherPricingFollowAll": "اتباع سعر الشركة للكل",
+  "@voucherPricingFollowAll": {
+    "description": "Bulk action."
+  },
+  "voucherPricingFollowAllDone": "طُبّق سعر الشركة على الكروت المعروضة",
+  "@voucherPricingFollowAllDone": {
+    "description": "Bulk done message."
+  },
+  "voucherPricingCardSaved": "تم حفظ السعر",
+  "@voucherPricingCardSaved": {
+    "description": "Single card saved message."
+  },
+  "voucherPricingCardFailed": "تعذر حفظ السعر",
+  "@voucherPricingCardFailed": {
+    "description": "Single card failure fallback."
+  },
+  "voucherPricingNoCards": "لا توجد كروت مطابقة",
+  "@voucherPricingNoCards": {
+    "description": "Empty cards list."
+  },
+  "voucherPricingLoadMore": "عرض المزيد",
+  "@voucherPricingLoadMore": {
+    "description": "Load more button."
+  },
+  "voucherPricingCardCount": "{count} كرت",
+  "@voucherPricingCardCount": {
+    "description": "Count of cards shown.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "posAirtimeAdded": "أُضيف الشحن المباشر إلى السلة",
+  "@posAirtimeAdded": {
+    "description": "Snackbar after airtime is added to the cart."
+  },
+  "posBillTruth": "تُسدَّد الفاتورة فور إصدار فاتورة البيع، ولا يمكن استرجاع الدفع بعد إرساله.",
+  "@posBillTruth": {
+    "description": "The one-line truth under a bill summary."
+  },
+  "posBillAdded": "أُضيفت الفاتورة إلى السلة",
+  "@posBillAdded": {
+    "description": "Snackbar after a bill is added to the cart."
+  },
+  "posBillStepNameCountry": "الدولة",
+  "@posBillStepNameCountry": {
+    "description": "Step indicator label."
+  },
+  "posBillStepNameProvider": "الجهة",
+  "@posBillStepNameProvider": {
+    "description": "Step indicator label."
+  },
+  "posBillStepNameAccount": "الرقم",
+  "@posBillStepNameAccount": {
+    "description": "Step indicator label."
+  },
+  "posBillStepNameAmount": "المبلغ",
+  "@posBillStepNameAmount": {
+    "description": "Step indicator label."
+  },
+  "posBillStepNameSummary": "الملخص",
+  "@posBillStepNameSummary": {
+    "description": "Step indicator label."
+  },
+  "posBillStepCountryTitle": "اختر الدولة",
+  "@posBillStepCountryTitle": {
+    "description": "Bill step 1 heading."
+  },
+  "posBillStepProviderTitle": "اختر الجهة",
+  "@posBillStepProviderTitle": {
+    "description": "Bill step 2 heading."
+  },
+  "posBillStepAccountTitle": "أدخل {label}",
+  "@posBillStepAccountTitle": {
+    "description": "Bill step 3 heading; label is the number's name.",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "posBillStepAccountInvoiceTitle": "أدخل رقم الحساب ورقم الفاتورة",
+  "@posBillStepAccountInvoiceTitle": {
+    "description": "Bill step 3 heading for a bill that needs an invoice."
+  },
+  "posBillStepAmountTitle": "اختر المبلغ",
+  "@posBillStepAmountTitle": {
+    "description": "Bill step 4 heading."
+  },
+  "posBillStepPlanTitle": "اختر الباقة",
+  "@posBillStepPlanTitle": {
+    "description": "Bill step 4 heading for a bill that sells plans."
+  },
+  "posBillStepSummaryTitle": "راجع الطلب ثم أضفه إلى السلة",
+  "@posBillStepSummaryTitle": {
+    "description": "Bill step 5 heading."
+  },
+  "posBillNeedsElectricity": "تحتاج: رقم العدّاد — تجده على الفاتورة أو على العدّاد نفسه",
+  "@posBillNeedsElectricity": {
+    "description": "What the cashier needs for an electricity bill."
+  },
+  "posBillNeedsWater": "تحتاج: رقم حساب المشترك ورقم الفاتورة — تجدهما مكتوبين على الفاتورة",
+  "@posBillNeedsWater": {
+    "description": "What the cashier needs for a water bill."
+  },
+  "posBillNeedsTv": "تحتاج: رقم بطاقة الاشتراك — تجده على الفاتورة أو على جهاز الاستقبال",
+  "@posBillNeedsTv": {
+    "description": "What the cashier needs for a TV subscription."
+  },
+  "posBillNeedsInternet": "تحتاج: رقم الحساب أو الاشتراك — تجده على الفاتورة أو في رسالة المزوّد",
+  "@posBillNeedsInternet": {
+    "description": "What the cashier needs for an internet bill."
+  },
+  "posBillAccountLabelElectricity": "رقم العدّاد",
+  "@posBillAccountLabelElectricity": {
+    "description": "Field name for an electricity bill."
+  },
+  "posBillAccountLabelWater": "رقم الحساب",
+  "@posBillAccountLabelWater": {
+    "description": "Field name for a water bill."
+  },
+  "posBillAccountLabelTv": "رقم بطاقة الاشتراك",
+  "@posBillAccountLabelTv": {
+    "description": "Field name for a TV subscription."
+  },
+  "posBillAccountLabelInternet": "رقم الحساب أو الاشتراك",
+  "@posBillAccountLabelInternet": {
+    "description": "Field name for an internet bill."
+  },
+  "posBillAccountLabelContract": "رقم الحساب / العقد",
+  "@posBillAccountLabelContract": {
+    "description": "Field name when the bill also needs an invoice number."
+  },
+  "posBillAccountExampleElectricity": "04223568280",
+  "@posBillAccountExampleElectricity": {
+    "description": "Example meter number shown in the field."
+  },
+  "posBillAccountExampleWater": "12345678",
+  "@posBillAccountExampleWater": {
+    "description": "Example water account number."
+  },
+  "posBillAccountExampleTv": "0123456789",
+  "@posBillAccountExampleTv": {
+    "description": "Example TV subscription card number."
+  },
+  "posBillAccountExampleInternet": "0123456789",
+  "@posBillAccountExampleInternet": {
+    "description": "Example internet account number."
+  },
+  "posBillExample": "مثال: {example}",
+  "@posBillExample": {
+    "description": "Helper text under a field: an example.",
+    "placeholders": {
+      "example": {
+        "type": "String"
+      }
+    }
+  },
+  "posBillInvoiceLabel": "رقم الفاتورة",
+  "@posBillInvoiceLabel": {
+    "description": "Field name: the invoice number."
+  },
+  "posBillInvoiceExample": "2024-118833",
+  "@posBillInvoiceExample": {
+    "description": "Example invoice number."
+  },
+  "posBillInvoiceHelp": "حروف إنجليزية وأرقام و - و _ و / فقط، حتى 24 خانة.",
+  "@posBillInvoiceHelp": {
+    "description": "What an invoice number may contain."
+  },
+  "posBillCheckNumber": "تأكد من الرقم: لا يمكن استرجاع الدفع بعد إرساله.",
+  "@posBillCheckNumber": {
+    "description": "Warning under the number fields."
+  },
+  "posBillPrepaidNote": "ستظهر على الإيصال شيفرة الشحن لإدخالها في العدّاد.",
+  "@posBillPrepaidNote": {
+    "description": "Prepaid electricity: the token is on the receipt."
+  },
+  "posBillInvoiceAmountNote": "أدخل قيمة الفاتورة كما هي مكتوبة عليها.",
+  "@posBillInvoiceAmountNote": {
+    "description": "Postpaid: type the invoice total as written."
+  },
+  "posBillGroupPrepaid": "عدّاد مسبق الدفع — تستلم رمزاً وتُدخله في العدّاد",
+  "@posBillGroupPrepaid": {
+    "description": "Group heading: prepaid electricity providers."
+  },
+  "posBillGroupPostpaid": "فاتورة لاحقة الدفع — تسدّد قيمة فاتورتك",
+  "@posBillGroupPostpaid": {
+    "description": "Group heading: postpaid electricity providers."
+  },
+  "posBillProviderSearch": "ابحث عن الجهة",
+  "@posBillProviderSearch": {
+    "description": "Hint of the provider search box."
+  },
+  "posBillProviderNoResults": "لا توجد جهة بهذا الاسم.",
+  "@posBillProviderNoResults": {
+    "description": "No provider matched the search."
+  },
+  "posBillProvidersNone": "لا توجد جهات متاحة لهذا النوع في هذه الدولة الآن.",
+  "@posBillProvidersNone": {
+    "description": "The country has no provider of this type."
+  },
+  "posBillProviderNeedsInvoice": "يلزم رقم الفاتورة",
+  "@posBillProviderNeedsInvoice": {
+    "description": "Note under a provider that needs the invoice number."
+  },
+  "posBillLimitedCountry": "هذه الخدمة متاحة حالياً في {country} فقط.",
+  "@posBillLimitedCountry": {
+    "description": "This type of bill is only sold in one country.",
+    "placeholders": {
+      "country": {
+        "type": "String"
+      }
+    }
+  },
+  "posBillSuggestedAmounts": "مبالغ مقترحة",
+  "@posBillSuggestedAmounts": {
+    "description": "Heading over suggested bill amounts."
+  },
+  "posBillHowTitle": "كيف تعمل {type}؟",
+  "@posBillHowTitle": {
+    "description": "Title of the bill how-it-works sheet; type is the card title.",
+    "placeholders": {
+      "type": {
+        "type": "String"
+      }
+    }
+  },
+  "posBillHowStep1Title": "اختر الدولة والجهة",
+  "@posBillHowStep1Title": {
+    "description": "Bill how-it-works step 1 title."
+  },
+  "posBillHowStep1Body": "اختر الدولة ثم الشركة التي تُسدَّد لها الفاتورة، بأسمائها العربية.",
+  "@posBillHowStep1Body": {
+    "description": "Bill how-it-works step 1 body."
+  },
+  "posBillHowStep2Title": "اكتب الرقم واختر المبلغ",
+  "@posBillHowStep2Title": {
+    "description": "Bill how-it-works step 2 title."
+  },
+  "posBillHowStep2Body": "اكتب رقم العدّاد أو الحساب كما هو على الفاتورة، ثم اختر المبلغ أو الباقة.",
+  "@posBillHowStep2Body": {
+    "description": "Bill how-it-works step 2 body."
+  },
+  "posBillHowStep3Title": "أضف إلى السلة وأصدر الفاتورة",
+  "@posBillHowStep3Title": {
+    "description": "Bill how-it-works step 3 title."
+  },
+  "posBillHowStep3Body": "تُسدَّد الفاتورة فور إصدار فاتورة البيع، ويُطبع إيصال للزبون.",
+  "@posBillHowStep3Body": {
+    "description": "Bill how-it-works step 3 body."
+  },
+  "posBillHowElectricityToken": "للعدّاد المسبق الدفع: ستجد على الإيصال شيفرة تُدخلها في العدّاد.",
+  "@posBillHowElectricityToken": {
+    "description": "Prepaid electricity: the token is on the receipt."
+  },
+  "posBillsExplainerBody": "سدّد فواتير الكهرباء والمياه والتلفزيون والإنترنت في دول أخرى خلال ثوانٍ. اختر نوع الفاتورة، ثم الدولة والجهة، واكتب رقم العدّاد أو الحساب.",
+  "@posBillsExplainerBody": {
+    "description": "First-use banner on the bills tab: what bill payment does, in one breath."
+  },
+  "posBillsHowTitle": "كيف يعمل دفع الفواتير؟",
+  "@posBillsHowTitle": {
+    "description": "Title of the «how does it work» sheet opened from the bills tab."
+  },
+  "walletVouchersBalanceTitle": "رصيد الكروت",
+  "@walletVouchersBalanceTitle": {
+    "description": "Title of the voucher balance inside the wallet."
+  },
+  "walletVouchersSummary": "يُدفع منه ثمن كروت دفتر التي تُباع في نقطة البيع.",
+  "@walletVouchersSummary": {
+    "description": "Explains what the voucher balance pays for."
+  },
+  "walletVouchersNotReady": "بيع الكروت غير جاهز بعد لدى دفتر.",
+  "@walletVouchersNotReady": {
+    "description": "The company cannot buy cards yet, so money cannot be moved in."
+  },
+  "walletVouchersTestMode": "وضع تجريبي: الكروت المباعة الآن ليست حقيقية.",
+  "@walletVouchersTestMode": {
+    "description": "The company buys cards from its test supplier."
+  },
+  "walletVouchersAllocateButton": "تحويل إلى رصيد الكروت",
+  "@walletVouchersAllocateButton": {
+    "description": "Button on the voucher balance that moves money in from the main wallet."
+  },
+  "walletVouchersAllocateTitle": "تحويل إلى رصيد الكروت",
+  "@walletVouchersAllocateTitle": {
+    "description": "Title of the sheet that moves money into the voucher balance."
+  },
+  "walletVouchersAllocateIntro": "يُخصم المبلغ من المحفظة ويُضاف إلى رصيد الكروت، ومنه يُدفع ثمن كل كرت يبيعه الكاشير.",
+  "@walletVouchersAllocateIntro": {
+    "description": "Explains the transfer into the voucher balance."
+  },
+  "walletVouchersAllocateAvailable": "رصيد المحفظة: {balance}",
+  "@walletVouchersAllocateAvailable": {
+    "description": "The main wallet balance in the voucher transfer sheet.",
+    "placeholders": {
+      "balance": {
+        "type": "String"
+      }
+    }
+  },
+  "walletVouchersAllocateCurrent": "رصيد الكروت: {balance}",
+  "@walletVouchersAllocateCurrent": {
+    "description": "The voucher balance in the voucher transfer sheet.",
+    "placeholders": {
+      "balance": {
+        "type": "String"
+      }
+    }
+  },
+  "walletVouchersAllocateAmountLabel": "المبلغ",
+  "@walletVouchersAllocateAmountLabel": {
+    "description": "Amount field label in the voucher transfer sheet."
+  },
+  "walletVouchersAllocateAfter": "يصبح رصيد الكروت {balance}",
+  "@walletVouchersAllocateAfter": {
+    "description": "Helper under the amount: the voucher balance once the amount moves in.",
+    "placeholders": {
+      "balance": {
+        "type": "String"
+      }
+    }
+  },
+  "walletVouchersAllocateTooMuch": "المبلغ أكبر من رصيد المحفظة.",
+  "@walletVouchersAllocateTooMuch": {
+    "description": "The typed amount is more than the main wallet holds."
+  },
+  "walletVouchersAllocateAll": "كامل الرصيد",
+  "@walletVouchersAllocateAll": {
+    "description": "Quick pick: move the whole main wallet balance."
+  },
+  "walletVouchersAllocateConfirm": "تحويل {amount}",
+  "@walletVouchersAllocateConfirm": {
+    "description": "Confirm button of the voucher transfer.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "walletVouchersAllocateDone": "حُوِّل {amount} إلى رصيد الكروت.",
+  "@walletVouchersAllocateDone": {
+    "description": "Snackbar after money moved into the voucher balance.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "walletHistoryVouchersTab": "رصيد الكروت",
+  "@walletHistoryVouchersTab": {
+    "description": "Wallet history tab: movements of the voucher balance."
+  },
+  "walletHistoryEmptyVouchers": "لا توجد حركات على رصيد الكروت بعد.",
+  "@walletHistoryEmptyVouchers": {
+    "description": "Empty voucher balance statement."
+  },
+  "integrationProviderPointyName": "كروت دفتر",
+  "@integrationProviderPointyName": {
+    "description": "Name of Daftar's own prepaid cards provider."
+  },
+  "integrationProviderPointyTagline": "كروت الهدايا والألعاب والاتصالات من دفتر، يُدفع ثمنها من رصيد الكروت في المحفظة.",
+  "@integrationProviderPointyTagline": {
+    "description": "One line on what «كروت دفتر» is."
+  },
+  "integrationEnableTitle": "البيع في نقطة البيع",
+  "@integrationEnableTitle": {
+    "description": "Switch on a provider that needs no account: sell its cards at the till."
+  },
+  "integrationEnableOnHint": "تظهر قائمة الكروت في نقطة البيع.",
+  "@integrationEnableOnHint": {
+    "description": "Under the switch when the provider is on."
+  },
+  "integrationEnableOffHint": "لا يحتاج إلى حساب أو كلمة مرور، فعّله فقط.",
+  "@integrationEnableOffHint": {
+    "description": "Under the switch when the provider is off."
+  },
+  "integrationEnabledToast": "تم التفعيل",
+  "@integrationEnabledToast": {
+    "description": "Snackbar after switching a provider on."
+  },
+  "integrationDisabledToast": "تم الإيقاف",
+  "@integrationDisabledToast": {
+    "description": "Snackbar after switching a provider off."
+  },
+  "integrationSettingsAction": "الإعدادات",
+  "@integrationSettingsAction": {
+    "description": "Opens a provider's settings (low-balance alert) when it has no credentials."
+  },
+  "integrationStatusEnabled": "مفعّل",
+  "@integrationStatusEnabled": {
+    "description": "Status pill: a provider that needs no account is switched on."
+  },
+  "integrationStatusNotEnabled": "غير مفعّل",
+  "@integrationStatusNotEnabled": {
+    "description": "Status pill: a provider that needs no account is switched off."
+  },
+  "integrationVoucherBalanceLabel": "رصيد الكروت",
+  "@integrationVoucherBalanceLabel": {
+    "description": "Balance row on «كروت دفتر»: the wallet's voucher balance."
+  },
+  "integrationRefreshBalance": "تحديث الرصيد",
+  "@integrationRefreshBalance": {
+    "description": "Re-reads a provider's balance (for «كروت دفتر», which has no login to test)."
+  },
+  "voucherPricingBelowCostBadge": "أقل من التكلفة",
+  "@voucherPricingBelowCostBadge": {
+    "description": "Badge on a card whose own price is under what the shop pays."
+  },
+  "voucherPricingBelowCostBannerTitle": "{count} بطاقة متوقفة عن البيع",
+  "@voucherPricingBelowCostBannerTitle": {
+    "description": "Banner on the cards tab: cards blocked for being priced under cost.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "voucherPricingBelowCostBannerBody": "سعرك لهذه البطاقات أصبح أقل مما تدفعه للشركة، فلا تُباع حتى تعدّل سعرها أو تستخدم تسعير الشركة.",
+  "@voucherPricingBelowCostBannerBody": {
+    "description": "Banner body: why the cards are blocked and what fixes it."
+  },
+  "voucherPricingBelowCostShowOnly": "عرض هذه البطاقات فقط",
+  "@voucherPricingBelowCostShowOnly": {
+    "description": "Banner action: filter to the blocked cards."
+  },
+  "voucherPricingBelowCostShowAll": "عرض كل البطاقات",
+  "@voucherPricingBelowCostShowAll": {
+    "description": "Banner action: clear the blocked-cards filter."
+  },
+  "voucherPricingUseCompanyPricing": "استخدام تسعير الشركة",
+  "@voucherPricingUseCompanyPricing": {
+    "description": "Bulk action: hand every blocked card back to the company's price."
+  },
+  "voucherPricingUseCompanyPricingDone": "طُبّق تسعير الشركة على البطاقات المتوقفة",
+  "@voucherPricingUseCompanyPricingDone": {
+    "description": "Snackbar after the bulk action."
+  },
+  "smartNotificationBelowCostTitle": "بطاقات متوقفة لأن سعرك أقل من التكلفة",
+  "@smartNotificationBelowCostTitle": {
+    "description": "Alert title: cards priced under cost."
+  },
+  "smartNotificationBelowCostMessage": "سعرك لـ {count} بطاقة أصبح أقل مما تدفعه للشركة، فلا يمكن بيعها الآن: {cards}",
+  "@smartNotificationBelowCostMessage": {
+    "description": "Alert message: which cards, and that their sales are blocked.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "cards": {
+        "type": "String"
+      }
+    }
+  },
+  "smartNotificationBelowCostEditAction": "تعديل الأسعار",
+  "@smartNotificationBelowCostEditAction": {
+    "description": "Alert action: open the pricing screen filtered to the blocked cards."
+  },
+  "smartNotificationBelowCostCompanyAction": "استخدام تسعير الشركة",
+  "@smartNotificationBelowCostCompanyAction": {
+    "description": "Alert action: switch the blocked cards to the company's price."
+  },
+  "smartNotificationBelowCostCompanyDone": "طُبّق تسعير الشركة على البطاقات المتوقفة",
+  "@smartNotificationBelowCostCompanyDone": {
+    "description": "Snackbar after the alert's bulk action."
   }
 }

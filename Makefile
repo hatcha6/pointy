@@ -392,7 +392,7 @@ frontend-navigation-preview: frontend-install ## Run the navigation drawer/rail 
 frontend-treasury-preview: frontend-install ## Run the treasury (money position) UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/treasury_preview.dart
 
-frontend-balances-preview: frontend-install ## Run the customer/supplier/employee balance UI preview harness (?screen=customer|supplier|entry|refund|create|employee|loan).
+frontend-balances-preview: frontend-install ## Run the customer/supplier/employee balance UI preview harness (?screen=customer|supplier|entry|receive|record|create|employee|loan).
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/balances_preview.dart
 
 frontend-employee-loans-preview: frontend-install ## Run the employee-loan UI preview harness (?screen=new|request|payroll|account|picker, &theme=dark).
@@ -453,6 +453,9 @@ frontend-ai-ui-preview: frontend-install ## Run the AI generated-UI (catalog) pr
 frontend-export-ai-catalog: frontend-install ## Re-export the AI UI catalog contract the backend validates against.
 	cd "$(FRONTEND_DIR)" && POINTY_WRITE_AI_CATALOG=1 $(FLUTTER) test test/features/ai/ui/ai_catalog_export_test.dart
 
+frontend-bake-flags: ## Re-bake every country flag into the client from ops/catalog/flags (assets/flags + bundled_flags.dart).
+	cd "$(FRONTEND_DIR)" && python3 tool/bake_flags.py
+
 frontend-theme-preview: frontend-install ## Run the light/dark theme gallery preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/theme_preview.dart
 
@@ -488,6 +491,14 @@ marketing-site-capture: ## Re-record every screenshot and clip on the product pa
 
 frontend-wallet-preview: frontend-install ## Run the Daftar wallet (balance, Dafa top-up sheet with every method, history) UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/wallet_preview.dart
+
+.PHONY: frontend-voucher-menu-preview
+frontend-voucher-menu-preview: frontend-install ## Run the till's «كروت دفتر» voucher menu preview harness (?screen=board|menu|menu-dark|sheet|sheet-countries|cashier|manager|empty|error|loading).
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/voucher_menu_preview.dart
+
+.PHONY: frontend-services-preview
+frontend-services-preview: frontend-install ## Run the till's «كروت دفتر» direct services (airtime, bills) preview harness (?screen=strip|airtime|airtime-ready|bills|bill:electricity:ng:summary|bill:tv:ml:amount|bill:water|empty|error|loading, add -test for the relay on its sandbox supplier, -dark or &scale=1.3).
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/services_preview.dart
 
 frontend-messaging-preview: frontend-install ## Run the SMS (relay/Resala) settings UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/messaging_preview.dart
@@ -570,6 +581,21 @@ relay-production-test: ## Run opt-in relay production E2E tests against PostgreS
 		POINTY_RELAY_E2E_REDIS_URL="$(RELAY_E2E_REDIS_URL)" \
 		$(GO) test -count=1 ./internal/e2e
 
+relay-console-install: ## Install the operator console web app's dependencies.
+	cd "$(RELAY_DIR)/console-ui" && npm ci --no-audit --no-fund
+
+relay-console-build: relay-console-install ## Build the operator console into the relay binary's embedded files.
+	cd "$(RELAY_DIR)/console-ui" && npm run build
+
+relay-console-check: relay-console-install ## Type-check the operator console web app.
+	cd "$(RELAY_DIR)/console-ui" && npm run typecheck
+
+relay-console-preview: relay-console-build ## Run a throwaway relay with the console at http://localhost:8191/console/.
+	bash "$(RELAY_DIR)/console-ui/scripts/dev-relay.sh"
+
+relay-console-dev: ## Live-reload the console app on :5173 (start the relay with CONSOLE_DEV_ORIGIN=http://localhost:5173).
+	cd "$(RELAY_DIR)/console-ui" && npm run dev
+
 relay-run: ## Run the relay server.
 	cd "$(RELAY_DIR)" && GOCACHE="$(abspath $(GO_CACHE))" GOMODCACHE="$(abspath $(GO_MOD_CACHE))" \
 		POINTY_RELAY_ADMIN_TOKEN="$(RELAY_ADMIN_TOKEN)" \
@@ -616,11 +642,11 @@ relay-run: ## Run the relay server.
 		POINTY_RELAY_RESALA_BASE_URL="$(RELAY_RESALA_BASE_URL)" \
 		POINTY_RELAY_SMS_TEMPLATES='$(RELAY_SMS_TEMPLATES)' \
 		POINTY_RELAY_SMS_TEST_MODE="$(or $(RELAY_SMS_TEST_MODE),true)" \
-		POINTY_RELAY_SMS_MONTHLY_LIMIT="$(RELAY_SMS_MONTHLY_LIMIT)" \
 		POINTY_RELAY_SMS_RATE_LIMIT="$(RELAY_SMS_RATE_LIMIT)" \
 		POINTY_RELAY_SMS_REQUEST_TIMEOUT="$(RELAY_SMS_REQUEST_TIMEOUT)" \
 		POINTY_RELAY_SMS_MAX_VARIABLE_RUNES="$(RELAY_SMS_MAX_VARIABLE_RUNES)" \
 		POINTY_RELAY_SMS_DELIVERY_SYNC_INTERVAL="$(RELAY_SMS_DELIVERY_SYNC_INTERVAL)" \
+		POINTY_RELAY_VOUCHERS_TEST_MODE="$(or $(RELAY_VOUCHERS_TEST_MODE),true)" \
 		POINTY_RELAY_ALLOW_INSECURE_HTTP="$(RELAY_ALLOW_INSECURE_HTTP)" \
 		POINTY_RELAY_ALLOW_INSECURE_CONNECTOR="$(RELAY_ALLOW_INSECURE_CONNECTOR)" \
 		POINTY_RELAY_HTTP_TLS_CERT="$(RELAY_HTTP_TLS_CERT)" \

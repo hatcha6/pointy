@@ -3,7 +3,13 @@ import '../models/integration_card.dart';
 import '../models/integration_provider.dart';
 import '../models/integration_recent_search.dart';
 import '../models/portal_payment.dart';
+import '../models/service_country_detail.dart';
+import '../models/service_kinds.dart';
+import '../models/service_quote.dart';
+import '../models/services_directory.dart';
 import '../models/voucher_availability.dart';
+import '../models/voucher_menu.dart';
+import '../models/voucher_pricing.dart';
 import '../services/pos_api_service.dart';
 
 /// Access to the shop's resale-provider accounts (HD Box and friends) and the
@@ -83,6 +89,91 @@ class IntegrationsRepository {
   /// picker, which opens without waiting for it.
   Future<Result<VoucherAvailability>> loadVoucherAvailability(int productId) {
     return Result.guard(() => _service.fetchVoucherAvailability(productId));
+  }
+
+  /// The till's «كروت دفتر» menu.
+  Future<Result<VoucherMenu>> loadVoucherMenu() {
+    return Result.guard(_service.fetchVoucherMenu);
+  }
+
+  // --- «كروت دفتر»' pricing (owner and manager) -------------------------------
+
+  Future<Result<VoucherPricing>> loadVoucherPricing() =>
+      Result.guard(_service.fetchVoucherPricing);
+
+  Future<Result<VoucherPricing>> saveVoucherPricing(VoucherPricing pricing) =>
+      Result.guard(() => _service.saveVoucherPricing(pricing));
+
+  Future<Result<CardPricePage>> loadVoucherCardPrices({
+    String search = '',
+    String brand = '',
+    int page = 1,
+    bool belowCost = false,
+  }) => Result.guard(
+    () => _service.fetchVoucherCardPrices(
+      search: search,
+      brand: brand,
+      page: page,
+      belowCost: belowCost,
+    ),
+  );
+
+  Future<Result<CardPriceRow>> saveVoucherCardPrice(
+    int variantId, {
+    required PricingMode mode,
+    double? price,
+  }) => Result.guard(
+    () => _service.saveVoucherCardPrice(variantId, mode: mode, price: price),
+  );
+
+  Future<Result<int>> bulkVoucherCardPrices({
+    List<int>? variantIds,
+    String? brand,
+    required PricingMode mode,
+    double? markupPercent,
+    bool belowCost = false,
+  }) => Result.guard(
+    () => _service.bulkVoucherCardPrices(
+      variantIds: variantIds,
+      brand: brand,
+      mode: mode,
+      markupPercent: markupPercent,
+      belowCost: belowCost,
+    ),
+  );
+
+  // --- «كروت دفتر»' direct services: airtime and bills ------------------------
+
+  /// Every country the services reach, with calling codes and counts.
+  Future<Result<ServicesDirectory>> loadServicesDirectory() {
+    return Result.guard(_service.fetchServicesDirectory);
+  }
+
+  /// One country's networks and bill providers.
+  Future<Result<ServiceCountryDetail>> loadServiceCountry(String code) {
+    return Result.guard(() => _service.fetchServiceCountry(code));
+  }
+
+  /// The network the relay places [phone] on, asked live.
+  Future<Result<OperatorDetection>> detectServiceOperator({
+    required String country,
+    required String phone,
+  }) {
+    return Result.guard(
+      () => _service.detectServiceOperator(country: country, phone: phone),
+    );
+  }
+
+  /// The exact price of one top-up or bill payment; a refusal is an answer.
+  Future<Result<ServiceQuoteOutcome>> quoteService(
+    ServiceQuoteRequest request,
+  ) {
+    return Result.guard(() => _service.quoteService(request));
+  }
+
+  /// The recipients sold to lately, newest first.
+  Future<Result<List<RecentRecipient>>> loadServiceRecents(ServiceKind kind) {
+    return Result.guard(() => _service.fetchServiceRecents(kind));
   }
 
   Future<Result<IntegrationCardSnapshot>> lookupCard({

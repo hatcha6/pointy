@@ -3,6 +3,7 @@ import 'cart_line.dart';
 import 'modifier_group.dart';
 import 'print_job.dart';
 import 'printer_config.dart';
+import 'provider_receipt_fields.dart';
 import 'query.dart';
 import 'tracking_mode.dart';
 import '../../shared/payments/card_receipt_status.dart';
@@ -1115,6 +1116,7 @@ class SaleLineIntegration {
   bool get isConfirmed => status == 'confirmed';
   bool get isPending => status == 'pending';
   bool get isVoucher => kind == 'voucher';
+  bool get isDirectService => kind == 'airtime' || kind == 'bill';
   bool get hasFailed => status == 'failed';
 
   /// A write went out and nobody knows what it did. The dangerous one: it must
@@ -1142,11 +1144,7 @@ class SaleLineIntegration {
       )?.toLocal(),
       errorCode: json['error_code']?.toString() ?? '',
       attemptCount: int.tryParse(json['attempt_count']?.toString() ?? '') ?? 0,
-      receipt: {
-        for (final entry
-            in (json['receipt'] as Map<String, Object?>? ?? const {}).entries)
-          entry.key: entry.value?.toString() ?? '',
-      },
+      receipt: providerReceiptFromJson(json['receipt']),
       receiptLogo: json['receipt_logo']?.toString() ?? '',
       providerLogo: json['provider_logo']?.toString() ?? '',
     );

@@ -152,9 +152,9 @@ void main() {
     final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
     expect(find.text(l10n.editLinePriceBelowCostWarning), findsOneWidget);
     expect(
-      tester.widget<FilledButton>(
-        find.byKey(const ValueKey('line_price_save')),
-      ).onPressed,
+      tester
+          .widget<FilledButton>(find.byKey(const ValueKey('line_price_save')))
+          .onPressed,
       isNotNull,
     );
   });

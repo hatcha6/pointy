@@ -56,6 +56,14 @@ CAPABILITY_PROFILES = "profiles"
 #: payment be found and recorded as the sale it was. LNET has one; HD Box keeps
 #: its logs per card, which cannot be listed.
 CAPABILITY_PAYMENT_REPORT = "payment_report"
+#: Credit sent straight to a phone number, abroad, with no card in between —
+#: «الشحن المباشر». Sold as a service line of its own (``provisioning``), not as
+#: a product off a shelf, and not through a recharge screen: see
+#: ``apps.integrations.services_*`` and ``DIRECT_TOPUP_PLAN.md``.
+CAPABILITY_AIRTIME = "airtime"
+#: Bills paid on somebody's behalf — electricity, water, TV, internet — «دفع
+#: الفواتير». The same shape of line as ``CAPABILITY_AIRTIME``.
+CAPABILITY_BILLS = "bills"
 
 # --- credential field keys (stable codes) -----------------------------------
 FIELD_BASE_URL = "base_url"
@@ -186,6 +194,17 @@ class ProviderSpec:
     # the field. Nothing here may be routed through apps.fx on the strength of
     # that label, and the client must render LYD.
     currency: str = "LYD"
+    #: The company itself is the provider, reached through the relay (see
+    #: ``providers.pointy``). The shop types no credential: the relay link —
+    #: the installation's own access token — IS the credential, so such an
+    #: account is configured exactly while the shop is linked, and its float
+    #: is filled from the Daftar wallet (``apps.wallet.books``), never by a top-up
+    #: somebody records by hand.
+    relay_hosted: bool = False
+    #: How the variants of this provider's cards are coded (``QRB-…``), so a
+    #: code reads as a provider's card on a report and is never mistaken for
+    #: one the shop typed. Only for a provider that sells off a shelf.
+    voucher_sku_prefix: str = ""
 
     @property
     def is_available(self) -> bool:
@@ -325,9 +344,36 @@ QAREEB = ProviderSpec(
     # cards at five hundred dinars a time will raise it, which is the point
     # of it being a setting.
     settings=(_low_balance("100"),),
+    voucher_sku_prefix="QRB",
 )
 
-PROVIDERS: tuple[ProviderSpec, ...] = (HDBOX, LNET, QAREEB)
+#: «كروت دفتر» — the company's own cards, bought through the relay with the
+#: company's wholesale account and paid from the shop's voucher balance in its
+#: Daftar wallet. The code name stays ``pointy`` (the brand is the app's to
+#: show, see ``catalog``'s module note on Arabic wording).
+POINTY = ProviderSpec(
+    key="pointy",
+    availability=AVAILABILITY_AVAILABLE,
+    # A shelf, a balance and two service lines (direct top-up, bill payments):
+    # no ``lookup`` (nobody's line is looked up, so the recharge screen is not
+    # drawn — the services have their own panes in the voucher menu) and no
+    # profiles.
+    capabilities=(
+        CAPABILITY_BALANCE,
+        CAPABILITY_VOUCHERS,
+        CAPABILITY_AIRTIME,
+        CAPABILITY_BILLS,
+    ),
+    # Nothing to type: the relay link is the credential (``relay_hosted``).
+    fields=(),
+    # 50 is a small gift card or a handful of local ones: below it the next
+    # card a customer asks for is likely to be refused for want of balance.
+    settings=(_low_balance("50"),),
+    relay_hosted=True,
+    voucher_sku_prefix="DFT",
+)
+
+PROVIDERS: tuple[ProviderSpec, ...] = (HDBOX, LNET, QAREEB, POINTY)
 PROVIDERS_BY_KEY: dict[str, ProviderSpec] = {spec.key: spec for spec in PROVIDERS}
 
 PROVIDER_CHOICES = [(spec.key, spec.key) for spec in PROVIDERS]

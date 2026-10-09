@@ -47,6 +47,10 @@ void registerPosRevalidation({
     onStale: () async {
       if (signedIn()) {
         await posViewModel.refreshVisibleCatalog();
+        // The cards are mirrored into system products, so a new promotion or
+        // a card that sold out moves the same version. Only a menu the till
+        // already read is re-read.
+        await posViewModel.voucherMenu.refreshIfLoaded();
       }
     },
   );

@@ -32,7 +32,6 @@ class Command(BaseCommand):
                 f"subscription_active={installation.subscription_active} "
                 f"ai_enabled={installation.ai_enabled} "
                 f"ai_available={relay_ai_available(installation)} "
-                f"sms_enabled={installation.sms_enabled} "
                 f"sms_available={relay_sms_available(installation)}"
             )
         )

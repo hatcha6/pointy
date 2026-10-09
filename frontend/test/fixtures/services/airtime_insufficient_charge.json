@@ -1,0 +1,21 @@
+{
+ "results": [
+  {
+   "fulfillment": 16,
+   "order_line": 16,
+   "provider": "pointy",
+   "kind": "airtime",
+   "subscriber_ref": "+223•••••456",
+   "option_label": "أورنج مالي · 10,000 فرنك أفريقي",
+   "outcome": "refused",
+   "status": "pending",
+   "needs_attention": false,
+   "error_code": "insufficient_float",
+   "error_detail": "voucher balance 43.380 below 187.250",
+   "provider_reference": "",
+   "balance_after": 43.38,
+   "receipt": {}
+  }
+ ],
+ "balance": 43.38
+}

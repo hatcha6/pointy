@@ -15,6 +15,7 @@ import '../../../data/repositories/contact_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
 import '../../../data/repositories/shop_settings_repository.dart';
+import '../../../data/repositories/wallet_repository.dart';
 import '../../../shared/tracking/unit_intake_permissions.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/authorization_guards.dart';
@@ -31,9 +32,13 @@ import '../../../shared/tutor/tutor_target.dart';
 import '../../../shared/shell/shell.dart';
 import '../../../shared/unit_options.dart';
 import '../../contacts/views/collect_debt_dialog.dart';
+import '../../settings/view_models/wallet_view_model.dart';
+import '../../settings/views/wallet_vouchers_sheet.dart';
 import '../view_models/pos_view_model.dart';
 import 'pos_cash_purchase_sheet.dart';
+import 'direct_services/service_requote_dialog.dart';
 import 'pos_cart_pane.dart';
+import 'pos_provider_charge_overlay.dart';
 import 'pos_catalog_pane.dart';
 import 'pos_shortcuts_sheet.dart';
 import 'pos_unit_pick.dart';
@@ -54,6 +59,7 @@ class PosScreen extends StatelessWidget {
     required this.integrationsRepository,
     required this.capabilities,
     required this.navigation,
+    this.walletRepository,
   });
 
   final PosViewModel viewModel;
@@ -65,6 +71,10 @@ class PosScreen extends StatelessWidget {
   final IntegrationsRepository integrationsRepository;
   final AuthorizationCapabilities capabilities;
   final AppNavigation navigation;
+
+  /// The shop's wallet, for moving money into the voucher balance when a
+  /// service costs more than it holds. Null leaves that to the settings.
+  final WalletRepository? walletRepository;
 
   @override
   Widget build(BuildContext context) {
@@ -120,21 +130,36 @@ class PosScreen extends StatelessWidget {
                 ),
             ],
           ),
-          body: PosAccessGuard(
-            capabilities: capabilities,
-            child:
-                viewModel.registerSessionGateStatus ==
-                    RegisterSessionGateStatus.active
-                ? _PosWorkspace(
-                    viewModel: viewModel,
-                    contactRepository: contactRepository,
-                    integrationsRepository: integrationsRepository,
-                    capabilities: capabilities,
-                  )
-                : RegisterSessionGate(
-                    viewModel: viewModel,
-                    capabilities: capabilities,
+          body: Stack(
+            children: [
+              Positioned.fill(
+                child: PosAccessGuard(
+                  capabilities: capabilities,
+                  child:
+                      viewModel.registerSessionGateStatus ==
+                          RegisterSessionGateStatus.active
+                      ? _PosWorkspace(
+                          viewModel: viewModel,
+                          contactRepository: contactRepository,
+                          integrationsRepository: integrationsRepository,
+                          walletRepository: walletRepository,
+                          capabilities: capabilities,
+                        )
+                      : RegisterSessionGate(
+                          viewModel: viewModel,
+                          capabilities: capabilities,
+                        ),
+                ),
+              ),
+              // A provider is performing what the sale sold, which can take
+              // over a minute: the till is not free to sell until it answers.
+              if (viewModel.isChargingProviders)
+                Positioned.fill(
+                  child: PosProviderChargeOverlay(
+                    startedAt: viewModel.providerChargeStartedAt,
                   ),
+                ),
+            ],
           ),
         );
       },
@@ -530,12 +555,14 @@ class _PosWorkspace extends StatefulWidget {
     required this.contactRepository,
     required this.integrationsRepository,
     required this.capabilities,
+    this.walletRepository,
   });
 
   final PosViewModel viewModel;
   final ContactRepository contactRepository;
   final IntegrationsRepository integrationsRepository;
   final AuthorizationCapabilities capabilities;
+  final WalletRepository? walletRepository;
 
   @override
   State<_PosWorkspace> createState() => _PosWorkspaceState();
@@ -549,6 +576,31 @@ class _PosWorkspaceState extends State<_PosWorkspace> {
   List<String> get _rechargeProviders => widget.capabilities.canUseIntegrations
       ? widget.viewModel.rechargeIntegrations
       : const [];
+
+  /// Moves money from the wallet into the voucher balance — the one a service
+  /// is paid from — and says whether any moved. Only for a user who may move
+  /// the shop's money; everyone else is told where it is done.
+  Future<bool> Function()? get _voucherTransfer {
+    final repository = widget.walletRepository;
+    if (repository == null || !widget.capabilities.canManageShopSettings) {
+      return null;
+    }
+    return () async {
+      final wallet = WalletViewModel(repository);
+      try {
+        final moved = await showVoucherAllocationSheet(
+          context: context,
+          wallet: wallet,
+        );
+        if (moved && mounted) {
+          unawaited(widget.viewModel.voucherMenu.refresh());
+        }
+        return moved;
+      } finally {
+        wallet.dispose();
+      }
+    };
+  }
 
   Future<void> _openRecharge(String providerKey) async {
     final draft = await showIntegrationRecharge(
@@ -572,6 +624,7 @@ class _PosWorkspaceState extends State<_PosWorkspace> {
   void initState() {
     super.initState();
     widget.viewModel.unitPickRequests.addListener(_openRequestedUnitPicker);
+    widget.viewModel.serviceRequotes.addListener(_offerServiceRequotes);
   }
 
   @override
@@ -582,13 +635,32 @@ class _PosWorkspaceState extends State<_PosWorkspace> {
         _openRequestedUnitPicker,
       );
       widget.viewModel.unitPickRequests.addListener(_openRequestedUnitPicker);
+      oldWidget.viewModel.serviceRequotes.removeListener(_offerServiceRequotes);
+      widget.viewModel.serviceRequotes.addListener(_offerServiceRequotes);
     }
   }
 
   @override
   void dispose() {
     widget.viewModel.unitPickRequests.removeListener(_openRequestedUnitPicker);
+    widget.viewModel.serviceRequotes.removeListener(_offerServiceRequotes);
     super.dispose();
+  }
+
+  /// A held invoice came back and its airtime or bill lines were priced again:
+  /// what moved is the cashier's to decide, here rather than in the cart pane
+  /// because this workspace is mounted whichever pane the phone layout shows.
+  void _offerServiceRequotes() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      final changes = widget.viewModel.serviceRequotes.take();
+      if (changes.isEmpty) {
+        return;
+      }
+      unawaited(resolveServiceRequotes(context, widget.viewModel, changes));
+    });
   }
 
   /// A scan named a serialized model rather than an article: the cashier
@@ -770,6 +842,7 @@ class _PosWorkspaceState extends State<_PosWorkspace> {
                 capabilities: capabilities,
                 rechargeProviders: _rechargeProviders,
                 onRecharge: _openRecharge,
+                onTransferVoucherBalance: _voucherTransfer,
               ),
               secondaryPane: PosCartPane(
                 viewModel: viewModel,
@@ -786,6 +859,7 @@ class _PosWorkspaceState extends State<_PosWorkspace> {
             capabilities: capabilities,
             rechargeProviders: _rechargeProviders,
             onRecharge: _openRecharge,
+            onTransferVoucherBalance: _voucherTransfer,
           );
         },
       ),
@@ -800,6 +874,7 @@ class _CompactPosWorkspace extends StatelessWidget {
     required this.capabilities,
     this.rechargeProviders = const [],
     this.onRecharge,
+    this.onTransferVoucherBalance,
   });
 
   final PosViewModel viewModel;
@@ -807,6 +882,7 @@ class _CompactPosWorkspace extends StatelessWidget {
   final AuthorizationCapabilities capabilities;
   final List<String> rechargeProviders;
   final void Function(String providerKey)? onRecharge;
+  final Future<bool> Function()? onTransferVoucherBalance;
 
   @override
   Widget build(BuildContext context) {
@@ -820,6 +896,7 @@ class _CompactPosWorkspace extends StatelessWidget {
             capabilities: capabilities,
             rechargeProviders: rechargeProviders,
             onRecharge: onRecharge,
+            onTransferVoucherBalance: onTransferVoucherBalance,
           ),
         ),
         PointyCompactOrderLauncher(

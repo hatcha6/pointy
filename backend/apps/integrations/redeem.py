@@ -30,6 +30,10 @@ DIAL_FORMATS: dict[tuple[str, str], tuple[str, str]] = {
     # Almadar: "dial *112* followed by the 13 digit password and #"
     # (almadar.ly, Tawasul → top-up).
     ("qareeb", "31"): ("*112*", "#"),
+    # The same two operators on the company's own shelf, keyed on its brand
+    # keys (the relay's catalog), with the same published instructions.
+    ("pointy", "libyana"): ("120", ""),
+    ("pointy", "almadar"): ("*112*", "#"),
 }
 
 #: A PIN a keypad can dial: plain ASCII digits. ``str.isdigit`` would pass

@@ -53,15 +53,9 @@ type Installation struct {
 	// the relay holds one fulus.ly subscription for the whole fleet and serves
 	// the published rates, so this is what a shop is actually buying.
 	FXEnabled bool `json:"fx_enabled"`
-	// SMSEnabled was SMS as part of the subscription. SMS is now prepaid: each
-	// message is paid from the shop's SMS balance, so this flag no longer
-	// decides anything and is kept only because old rows and tools carry it.
-	SMSEnabled bool `json:"sms_enabled"`
-	// SMSMonthlyLimit is the operator's brake on one shop's billable messages
-	// per calendar month (UTC+2). 0 means "the relay default"
-	// (POINTY_RELAY_SMS_MONTHLY_LIMIT, itself 0 = no brake): the SMS balance is
-	// what normally limits sending.
-	SMSMonthlyLimit int `json:"sms_monthly_limit"`
+	// SMS is not part of the subscription: each message is paid by the part
+	// from the shop's SMS balance. The sms_enabled and sms_monthly_limit
+	// columns are no longer read or written (dropped in a later release).
 	// RemoteAccessPaidUntil and AIPaidUntil are how far the shop has paid for
 	// each plan from its wallet. They stand beside the operator's subscription
 	// (the feature flag plus SubscriptionActive/SubscriptionEndsAt): a plan
@@ -198,8 +192,6 @@ type ProvisionInstallationRequest struct {
 	RelayEnabled       *bool      `json:"relay_enabled,omitempty"`
 	AIEnabled          bool       `json:"ai_enabled"`
 	FXEnabled          bool       `json:"fx_enabled"`
-	SMSEnabled         bool       `json:"sms_enabled"`
-	SMSMonthlyLimit    int        `json:"sms_monthly_limit"`
 	SubscriptionActive *bool      `json:"subscription_active,omitempty"`
 	SubscriptionEndsAt *time.Time `json:"subscription_ends_at,omitempty"`
 }
@@ -214,8 +206,6 @@ type SubscriptionUpdate struct {
 	RelayEnabled       *bool      `json:"relay_enabled,omitempty"`
 	AIEnabled          *bool      `json:"ai_enabled,omitempty"`
 	FXEnabled          *bool      `json:"fx_enabled,omitempty"`
-	SMSEnabled         *bool      `json:"sms_enabled,omitempty"`
-	SMSMonthlyLimit    *int       `json:"sms_monthly_limit,omitempty"`
 	SubscriptionActive *bool      `json:"subscription_active,omitempty"`
 	SubscriptionEndsAt *time.Time `json:"subscription_ends_at,omitempty"`
 	ClearEnd           bool       `json:"clear_subscription_end,omitempty"`
@@ -633,6 +623,8 @@ type FileStore struct {
 	clock Clock
 	mu    sync.RWMutex
 	data  fileStoreData
+	// alertMarks are the alert channel's marks; memory only (see ClaimAlert).
+	alertMarks map[string]time.Time
 }
 
 type fileStoreData struct {
@@ -647,6 +639,14 @@ type fileStoreData struct {
 	IntegrationSwitches              map[string]IntegrationSwitch              `json:"integration_switches,omitempty"`
 	WalletEntries                    map[string]WalletEntry                    `json:"wallet_entries,omitempty"`
 	WalletTopUps                     map[string]WalletTopUp                    `json:"wallet_topups,omitempty"`
+	VoucherCatalogs                  map[string]VoucherCatalog                 `json:"voucher_catalogs,omitempty"`
+	VoucherSettings                  map[string]VoucherSettingsRecord          `json:"voucher_settings,omitempty"`
+	VoucherImages                    map[string]VoucherImage                   `json:"voucher_images,omitempty"`
+	VoucherOffers                    map[string]VoucherOffer                   `json:"voucher_offers,omitempty"`
+	VoucherPurchases                 map[string]VoucherPurchase                `json:"voucher_purchases,omitempty"`
+	AlertSettings                    *AlertSettings                            `json:"alert_settings,omitempty"`
+	Console                          *fileConsoleData                          `json:"console,omitempty"`
+	WalletBank                       *fileWalletBankData                       `json:"wallet_bank,omitempty"`
 }
 
 func NewFileStore(path string, clock Clock) (*FileStore, error) {
@@ -702,8 +702,6 @@ func (s *FileStore) ProvisionInstallation(
 		RelayEnabled:       relayEnabled,
 		AIEnabled:          request.AIEnabled,
 		FXEnabled:          request.FXEnabled,
-		SMSEnabled:         request.SMSEnabled,
-		SMSMonthlyLimit:    max(request.SMSMonthlyLimit, 0),
 		SubscriptionActive: subscriptionActive,
 		SubscriptionEndsAt: request.SubscriptionEndsAt,
 		CreatedAt:          now,
@@ -755,12 +753,6 @@ func (s *FileStore) UpdateSubscription(
 	}
 	if update.FXEnabled != nil {
 		installation.FXEnabled = *update.FXEnabled
-	}
-	if update.SMSEnabled != nil {
-		installation.SMSEnabled = *update.SMSEnabled
-	}
-	if update.SMSMonthlyLimit != nil {
-		installation.SMSMonthlyLimit = max(*update.SMSMonthlyLimit, 0)
 	}
 	if update.SubscriptionActive != nil {
 		installation.SubscriptionActive = *update.SubscriptionActive
@@ -1608,12 +1600,6 @@ func applySubscriptionUpdate(
 	if update.FXEnabled != nil {
 		installation.FXEnabled = *update.FXEnabled
 	}
-	if update.SMSEnabled != nil {
-		installation.SMSEnabled = *update.SMSEnabled
-	}
-	if update.SMSMonthlyLimit != nil {
-		installation.SMSMonthlyLimit = max(*update.SMSMonthlyLimit, 0)
-	}
 	if update.SubscriptionActive != nil {
 		installation.SubscriptionActive = *update.SubscriptionActive
 	}
@@ -1659,8 +1645,6 @@ func InstallationSubscriptionAuditState(
 		"subscription_ends_at":     installation.SubscriptionEndsAt,
 		"ai_enabled":               installation.AIEnabled,
 		"fx_enabled":               installation.FXEnabled,
-		"sms_enabled":              installation.SMSEnabled,
-		"sms_monthly_limit":        installation.SMSMonthlyLimit,
 		"remote_access_paid_until": installation.RemoteAccessPaidUntil,
 		"ai_paid_until":            installation.AIPaidUntil,
 		"relay_active":             installation.RelayActive(now),

@@ -36,6 +36,9 @@ from .models import IntegrationVoucherBrand
 #: and from then on it is the shop's to rename.
 CATEGORY_NAMES = {
     "qareeb": "كروت قريب",
+    # The company's own cards. The till recognises this chip by its key
+    # (``vouchers:pointy``) and opens the voucher menu instead of the grid.
+    "pointy": "كروت دفتر",
 }
 
 

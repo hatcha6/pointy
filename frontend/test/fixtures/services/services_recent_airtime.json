@@ -1,0 +1,59 @@
+{
+ "kind": "airtime",
+ "recent": [
+  {
+   "phone": "+223•••••654",
+   "country": "ML",
+   "operator_id": 289,
+   "operator_name": "أورنج مالي",
+   "amount": "2000",
+   "currency": "XOF",
+   "at": "2026-10-08T12:17:37.558486+00:00"
+  },
+  {
+   "phone": "+223•••••456",
+   "country": "ML",
+   "operator_id": 289,
+   "operator_name": "أورنج مالي",
+   "amount": "2000",
+   "currency": "XOF",
+   "at": "2026-10-08T12:12:32.867077+00:00"
+  },
+  {
+   "phone": "+223•••••456",
+   "country": "ML",
+   "operator_id": 684,
+   "operator_name": "تيليسل مالي",
+   "amount": "1000",
+   "currency": "XOF",
+   "at": "2026-10-08T12:11:04.321027+00:00"
+  },
+  {
+   "phone": "+216•••••456",
+   "country": "TN",
+   "operator_id": 508,
+   "operator_name": "أوريدو تونس",
+   "amount": "10",
+   "currency": "TND",
+   "at": "2026-10-08T12:10:46.974523+00:00"
+  },
+  {
+   "phone": "+212••••••678",
+   "country": "MA",
+   "operator_id": 312,
+   "operator_name": "إنوي المغرب",
+   "amount": "0.6",
+   "currency": "USD",
+   "at": "2026-10-08T12:10:45.402307+00:00"
+  },
+  {
+   "phone": "+201••••••678",
+   "country": "EG",
+   "operator_id": 120,
+   "operator_name": "اتصالات مصر",
+   "amount": "10",
+   "currency": "EGP",
+   "at": "2026-10-08T12:10:44.009436+00:00"
+  }
+ ]
+}

@@ -1,0 +1,16 @@
+{
+ "ok": true,
+ "kind": "airtime",
+ "option_code": "air:120:10:EGP",
+ "option_label": "اتصالات مصر · 10 جنيه مصري",
+ "subscriber_ref": "+201••••••678",
+ "price": "3.25",
+ "receive": {
+  "amount": "10",
+  "currency": "EGP"
+ },
+ "approximate": false,
+ "quote": "<base64/opaque, 420 chars>",
+ "service_variant_id": 1,
+ "exceeds_float": false
+}

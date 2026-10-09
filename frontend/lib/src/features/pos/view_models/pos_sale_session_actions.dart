@@ -28,6 +28,8 @@ extension PosSaleSessionActions on PosViewModel {
     // the search field so the next item can be added without a tap.
     _searchFocusController.requestFocus();
     _notifyChanged();
+    // What it holds was priced when it was put aside.
+    _scheduleServiceRequote();
   }
 
   /// Cycles the active invoice to the next ([forward]) or previous held sale

@@ -786,8 +786,10 @@ class RelayInstallation(TimeStampedModel):
     relay_enabled = models.BooleanField(default=False)
     subscription_active = models.BooleanField(default=False)
     ai_enabled = models.BooleanField(default=False)
-    # SMS is sent through the relay on the company's provider account, so it is
-    # an entitlement like AI — mirrored here, decided on the relay.
+    # No longer read or written: SMS is not part of the subscription, it is
+    # paid by the part from the SMS balance below. Kept only so a live update
+    # overlapping the previous release (which still writes it) works; drop it
+    # in a later release (expand/contract).
     sms_enabled = models.BooleanField(default=False, db_default=False)
     # Provider integrations the operator switched off for every shop at once
     # (`pointy-relay integrations disable qareeb`), as the relay last said.
@@ -800,8 +802,8 @@ class RelayInstallation(TimeStampedModel):
     remote_access_paid_until = models.DateTimeField(null=True, blank=True)
     ai_paid_until = models.DateTimeField(null=True, blank=True)
     # The shop's SMS balance and what one message costs, as the relay last
-    # said. SMS is prepaid by the message; a price of 0 is a relay from before
-    # the SMS balance, which still gates on ``sms_enabled``. ``db_default`` so
+    # said. SMS is prepaid by the part; a price of 0 means the relay has not
+    # reported one yet, and nothing can be sent until it does. ``db_default`` so
     # the previous release's INSERT, which names neither, still works while a
     # live update overlaps.
     sms_balance = models.DecimalField(max_digits=14, decimal_places=3, default=0, db_default=0)

@@ -5,6 +5,7 @@ __pycache__/
 *.egg-info/
 db.sqlite3
 .env
+bnplus.txt
 
 frontend/.dart_tool/
 frontend/.flutter-plugins
@@ -47,3 +48,7 @@ fahd_migration.sqlite
 # Operator workspace: compiled admin CLI + local .env holding the production
 # fleet admin token. Rebuild with `make relay-cli`.
 /ops/
+
+# Local relay build output and the console app's TypeScript build cache
+/relay/pointy-relay
+relay/console-ui/tsconfig.tsbuildinfo

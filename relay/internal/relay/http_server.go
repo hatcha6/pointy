@@ -21,12 +21,14 @@ import (
 	"sync"
 	"time"
 
+	"pointy/relay/internal/alerts"
 	"pointy/relay/internal/artifacts"
 	"pointy/relay/internal/control"
 	"pointy/relay/internal/limit"
 	"pointy/relay/internal/observability"
 	"pointy/relay/internal/ratelimit"
 	"pointy/relay/internal/security"
+	"pointy/relay/internal/services"
 )
 
 const (
@@ -104,16 +106,6 @@ var adminConsoleTemplate = template.Must(template.New("relay-admin").Parse(`<!do
         <option value="true">Enabled</option>
         <option value="false">Disabled</option>
       </select>
-    </label>
-    <label>SMS entitlement
-      <select name="sms_enabled">
-        <option value="keep">Keep current</option>
-        <option value="true">Enabled</option>
-        <option value="false">Disabled</option>
-      </select>
-    </label>
-    <label>SMS monthly limit
-      <input name="sms_monthly_limit" inputmode="numeric" placeholder="Keep current (0 = relay default)" autocomplete="off">
     </label>
     <label>Subscription end mode
       <select name="subscription_end_mode">
@@ -305,11 +297,28 @@ type HTTPServer struct {
 	Fulus FulusConfig
 	// SMS (Resala). The company's provider account: the API token and the
 	// approved template ids live only here, and every shop's messages go out
-	// through it, gated by the sms_enabled entitlement and a monthly cap.
+	// through it, paid by the part from each shop's SMS balance.
 	SMS SMSConfig
 	// Wallet (Dafa). The company's payment gateway account that shops top up
 	// their prepaid balance through; the API key lives only here.
 	Wallet WalletConfig
+	// Alerts is the company's ntfy alert channel; nil sends nothing.
+	Alerts *alerts.Ntfy
+	// Vouchers. The company's own card shop: the suppliers it buys cards from
+	// with its own accounts (BN Plus), and what a shop's voucher balance pays.
+	Vouchers VoucherConfig
+	// VoucherCache keeps the parsed current catalog between requests. Nil
+	// parses it on every request, which is correct, only slower.
+	VoucherCache *VoucherCatalogCache
+	// VoucherSettingsCache keeps the parsed pricing settings of top-up and
+	// bills between requests. Nil reads the store on every call, which is
+	// correct, only slower.
+	VoucherSettingsCache *VoucherSettingsCache
+	// Services. Direct top-up and bill payments, bought from Reloadly and paid
+	// from the same voucher balance as cards. Nil sells none.
+	Services *services.Service
+	// ServiceLogos is the relay's copy of the operators' logos; nil sends none.
+	ServiceLogos *ServiceLogos
 	// Relay-hosted AI (OpenRouter). The key and tier->model catalog live only
 	// here so AI billing and model routing stay company-controlled.
 	OpenRouterAPIKey  string
@@ -592,6 +601,22 @@ func (s HTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.withAdmin(w, r, s.handleSetIntegrationSwitch)
+	case r.URL.Path == "/v1/alerts" && r.Method == http.MethodGet,
+		r.URL.Path == "/v1/alerts/topic" && r.Method == http.MethodPost,
+		r.URL.Path == "/v1/alerts/test" && r.Method == http.MethodPost:
+		// The company's ntfy alert channel: status, topic rotation, test.
+		if !s.RouteMode.allowsAdmin() {
+			writeNotFound(w)
+			return
+		}
+		switch r.URL.Path {
+		case "/v1/alerts/topic":
+			s.withAdmin(w, r, s.handleAlertTopic)
+		case "/v1/alerts/test":
+			s.withAdmin(w, r, s.handleAlertTest)
+		default:
+			s.withAdmin(w, r, s.handleAlertStatus)
+		}
 	case strings.HasPrefix(r.URL.Path, "/v1/artifacts/"):
 		if !s.RouteMode.allowsAdmin() {
 			writeNotFound(w)
@@ -694,6 +719,14 @@ func (s HTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// A shop's prepaid balance: its own reads and top-ups (installation
 		// token), the gateway's return (signed), the operator's views (admin).
 		s.handleWalletRoutes(w, r)
+	case r.URL.Path == "/v1/services" || strings.HasPrefix(r.URL.Path, "/v1/services/"):
+		// Direct top-up and bill payments: the directory, detection, quotes and
+		// orders of a shop (installation token), the operator's views (admin).
+		s.handleServiceRoutes(w, r)
+	case strings.HasPrefix(r.URL.Path, "/v1/vouchers/"):
+		// The company's card shop: a shop's catalog, images and purchases
+		// (installation token), the operator's catalog and ledger (admin).
+		s.handleVoucherRoutes(w, r)
 	default:
 		if !s.RouteMode.allowsPublic() {
 			writeNotFound(w)
@@ -1167,10 +1200,6 @@ func (s HTTPServer) handleProvisionInstallation(w http.ResponseWriter, r *http.R
 	var request control.ProvisionInstallationRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil && !errors.Is(err, io.EOF) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
-		return
-	}
-	if request.SMSMonthlyLimit < 0 {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "sms_monthly_limit must be 0 or positive"})
 		return
 	}
 	provisioned, err := s.Store.ProvisionInstallation(r.Context(), request)
@@ -2155,9 +2184,6 @@ func (s HTTPServer) updateAdminSubscription(
 	if update.ClearEnd && update.SubscriptionEndsAt != nil {
 		return control.Installation{}, control.AdminAuditEvent{}, adminValidationError("clear_subscription_end cannot be combined with subscription_ends_at")
 	}
-	if update.SMSMonthlyLimit != nil && *update.SMSMonthlyLimit < 0 {
-		return control.Installation{}, control.AdminAuditEvent{}, adminValidationError("sms_monthly_limit must be 0 or positive")
-	}
 	adminStore, ok := s.Store.(control.AdminSubscriptionStore)
 	if !ok {
 		return control.Installation{}, control.AdminAuditEvent{}, errAdminAuditUnavailable
@@ -2192,8 +2218,6 @@ func subscriptionUpdateHasChange(update control.SubscriptionUpdate) bool {
 	return update.RelayEnabled != nil ||
 		update.AIEnabled != nil ||
 		update.FXEnabled != nil ||
-		update.SMSEnabled != nil ||
-		update.SMSMonthlyLimit != nil ||
 		update.SubscriptionActive != nil ||
 		update.SubscriptionEndsAt != nil ||
 		update.ClearEnd
@@ -2212,8 +2236,6 @@ func adminInstallationPayload(
 		"subscription_ends_at":              installation.SubscriptionEndsAt,
 		"ai_enabled":                        installation.AIEnabled,
 		"fx_enabled":                        installation.FXEnabled,
-		"sms_enabled":                       installation.SMSEnabled,
-		"sms_monthly_limit":                 installation.SMSMonthlyLimit,
 		"remote_access_paid_until":          installation.RemoteAccessPaidUntil,
 		"ai_paid_until":                     installation.AIPaidUntil,
 		"relay_active":                      installation.RelayActive(now),
@@ -2259,18 +2281,6 @@ func subscriptionUpdateFromForm(r *http.Request) (control.SubscriptionUpdate, er
 		return control.SubscriptionUpdate{}, err
 	} else if set {
 		update.FXEnabled = &value
-	}
-	if value, set, err := optionalBoolFormValue(r, "sms_enabled"); err != nil {
-		return control.SubscriptionUpdate{}, err
-	} else if set {
-		update.SMSEnabled = &value
-	}
-	if raw := strings.TrimSpace(r.FormValue("sms_monthly_limit")); raw != "" && raw != "keep" {
-		limit, err := strconv.Atoi(raw)
-		if err != nil || limit < 0 {
-			return control.SubscriptionUpdate{}, adminValidationError("sms monthly limit must be a whole number, 0 or more")
-		}
-		update.SMSMonthlyLimit = &limit
 	}
 	update.ClearEnd = r.FormValue("subscription_end_mode") == "clear"
 	if rawEndsAt := strings.TrimSpace(r.FormValue("subscription_ends_at")); rawEndsAt != "" {

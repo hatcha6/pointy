@@ -4,11 +4,12 @@ from decimal import Decimal
 
 from rest_framework import serializers
 
-from . import catalog, switches
+from . import catalog, relay_link, switches
 from .fulfillment import fulfillment_kind
 from .models import IntegrationAccount
 from .redeem import printed_receipt
 from .providers import is_implemented
+from .providers.base import without_figures
 
 
 class IntegrationAccountSerializer(serializers.ModelSerializer):
@@ -81,6 +82,7 @@ class ProviderSerializer(serializers.Serializer):
     currency = serializers.CharField()
     default_base_url = serializers.CharField()
     is_configurable = serializers.BooleanField()
+    relay_hosted = serializers.BooleanField()
     switched_off = serializers.BooleanField()
     account = IntegrationAccountSerializer(allow_null=True)
 
@@ -121,8 +123,14 @@ class ProviderSerializer(serializers.Serializer):
             "default_base_url": spec.default_base_url,
             # Availability is the catalog's intent; is_implemented is whether a
             # driver actually registered. They should agree, and a mismatch is a
-            # packaging bug we would rather surface than paper over.
-            "is_configurable": spec.is_available and is_implemented(spec.key),
+            # packaging bug we would rather surface than paper over. The
+            # company's own provider can also only be switched on by a shop
+            # linked to the relay — that link is its whole configuration.
+            "is_configurable": spec.is_available
+            and is_implemented(spec.key)
+            and (not spec.relay_hosted or relay_link.current() is not None),
+            # No credentials to type: the relay link is the credential.
+            "relay_hosted": spec.relay_hosted,
             # The operator switched it off for every shop (apps.integrations.
             # switches): nothing reaches the provider, and the screen says why
             # rather than showing a connection that no longer does anything.
@@ -142,7 +150,11 @@ class IntegrationAccountWriteSerializer(serializers.Serializer):
     base_url = serializers.CharField(required=False, allow_blank=True, max_length=255)
     username = serializers.CharField(required=False, allow_blank=True, max_length=120)
     password = serializers.CharField(
-        required=False, allow_blank=True, write_only=True, max_length=255, trim_whitespace=False
+        required=False,
+        allow_blank=True,
+        write_only=True,
+        max_length=255,
+        trim_whitespace=False,
     )
     # A purchase PIN, for a provider that declares one. Same rule as the
     # password: blank or absent keeps what is stored.
@@ -332,7 +344,6 @@ def status_payload(entry) -> dict:
     }
 
 
-
 def option_price_payload(row) -> dict:
     """One priceable thing, with the provider's cost beside the shop's price."""
     return {
@@ -364,7 +375,6 @@ class OptionPriceWriteSerializer(serializers.Serializer):
     price = serializers.DecimalField(
         max_digits=12, decimal_places=2, min_value=0, allow_null=True
     )
-
 
 
 class TopUpWriteSerializer(serializers.Serializer):
@@ -417,7 +427,6 @@ def float_payload(account) -> dict:
         if position["reported_balance"] is None
         else (position["reported_balance"] - position["expected_balance"]),
     }
-
 
 
 #: What an agency's portal says this subscriber's package and history cost the
@@ -485,13 +494,18 @@ class SubscriberWriteSerializer(serializers.Serializer):
     note = serializers.CharField(max_length=255, required=False, allow_blank=True)
 
 
-def charge_payload(outcome) -> dict:
+def charge_payload(outcome, *, with_cost: bool = False) -> dict:
     """The result of one attempted write, as the till needs to read it.
 
     ``outcome`` is the honest word and ``status`` is the row it left behind;
     the till renders the first and reconciliation cares about the second. The
     two disagree on purpose in the case that matters: an unknown outcome
     leaves the row ``submitted``, which is what forbids another attempt.
+
+    ``with_cost`` is whether the reader may see what things cost the shop (the
+    reporting roles, as everywhere). A refusal's detail can carry the shop's own
+    money — the price the provider now asks, the wallet balance — so anyone else
+    is given its code word alone, which the till words in Arabic.
     """
     fulfillment = outcome.fulfillment
     printed = printed_receipt(fulfillment)
@@ -508,7 +522,9 @@ def charge_payload(outcome) -> dict:
         "status": fulfillment.status if fulfillment else "",
         "needs_attention": outcome.needs_attention,
         "error_code": outcome.error_code,
-        "error_detail": outcome.error_detail,
+        "error_detail": (
+            outcome.error_detail if with_cost else without_figures(outcome.error_detail)
+        ),
         "provider_reference": fulfillment.provider_reference if fulfillment else "",
         "balance_after": outcome.balance_after,
         "receipt": printed or {},

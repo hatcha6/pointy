@@ -1,0 +1,35 @@
+{
+ "provider": "pointy",
+ "kind": "airtime",
+ "status": "confirmed",
+ "subscriber_ref": "+223•••••456",
+ "option_label": "أورنج مالي · 5,000 فرنك أفريقي",
+ "months": 0,
+ "reference": "0856bb97-05eb-4129-8b14-88b2bcf761bd",
+ "printed": {
+  "pin": "",
+  "rows": [
+   [
+    "الشبكة",
+    "أورنج مالي"
+   ],
+   [
+    "الرقم",
+    "+223 •••••456"
+   ],
+   [
+    "المبلغ المرسل",
+    "5,025 فرنك أفريقي"
+   ],
+   [
+    "رقم العملية",
+    "181441"
+   ]
+  ],
+  "title": "شحن مباشر",
+  "notice": "تم إرسال الرصيد إلى الرقم المذكور، ولا يمكن استرداده.",
+  "pin_label": "رمز الشحن"
+ },
+ "receipt_logo": "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",
+ "provider_logo": null
+}

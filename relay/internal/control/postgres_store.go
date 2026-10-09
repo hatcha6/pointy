@@ -212,8 +212,6 @@ func (s *PostgresStore) ProvisionInstallation(
 		RelayEnabled:       relayEnabled,
 		AIEnabled:          request.AIEnabled,
 		FXEnabled:          request.FXEnabled,
-		SMSEnabled:         request.SMSEnabled,
-		SMSMonthlyLimit:    max(request.SMSMonthlyLimit, 0),
 		SubscriptionActive: subscriptionActive,
 		SubscriptionEndsAt: request.SubscriptionEndsAt,
 		CreatedAt:          now,
@@ -313,17 +311,11 @@ SET
 		WHEN $11 THEN $12::timestamptz
 		ELSE subscription_ends_at
 	END,
-	updated_at = $13::timestamptz,
-	sms_enabled = CASE WHEN $14 THEN $15 ELSE sms_enabled END,
-	sms_monthly_limit = CASE WHEN $16 THEN $17::integer ELSE sms_monthly_limit END
+	updated_at = $13::timestamptz
 WHERE id = $1
 RETURNING ` + installationColumns
 
 func updateSubscriptionArgs(id string, update SubscriptionUpdate, now time.Time) []any {
-	smsMonthlyLimit := 0
-	if update.SMSMonthlyLimit != nil {
-		smsMonthlyLimit = max(*update.SMSMonthlyLimit, 0)
-	}
 	return []any{
 		id,
 		update.RelayEnabled != nil,
@@ -338,10 +330,6 @@ func updateSubscriptionArgs(id string, update SubscriptionUpdate, now time.Time)
 		update.SubscriptionEndsAt != nil,
 		update.SubscriptionEndsAt,
 		now,
-		update.SMSEnabled != nil,
-		boolValue(update.SMSEnabled),
-		update.SMSMonthlyLimit != nil,
-		smsMonthlyLimit,
 	}
 }
 
@@ -1108,8 +1096,6 @@ const installationColumns = `id,
 	update_error,
 	last_update_at,
 	agent_last_seen_at,
-	sms_enabled,
-	sms_monthly_limit,
 	remote_access_paid_until,
 	ai_paid_until`
 
@@ -1160,8 +1146,6 @@ func scanInstallation(row pgx.Row) (Installation, error) {
 		&installation.UpdateError,
 		&lastUpdateAt,
 		&agentLastSeenAt,
-		&installation.SMSEnabled,
-		&installation.SMSMonthlyLimit,
 		&remoteAccessPaidUntil,
 		&aiPaidUntil,
 	)

@@ -1,5 +1,6 @@
 export 'pointy_brand_mark.dart';
 export 'pointy_card_grid.dart';
+export 'pointy_choice_buttons.dart';
 export 'pointy_confirmation_dialog.dart';
 export 'pointy_unsaved_changes_guard.dart';
 export 'pointy_data_list.dart';
@@ -12,6 +13,7 @@ export 'pointy_disclosure_chevron.dart';
 export 'pointy_empty_state.dart';
 export 'pointy_error_state.dart';
 export 'pointy_filter_summary_bar.dart';
+export 'pointy_fitted_token.dart';
 export 'pointy_inline_message.dart';
 export 'pointy_loading_area.dart';
 export 'pointy_masonry_grid.dart';

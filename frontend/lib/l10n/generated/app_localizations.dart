@@ -20371,11 +20371,35 @@ abstract class AppLocalizations {
   /// **'الفئات عند الإغلاق'**
   String get sessionDenominationsTitle;
 
-  /// Compact cash variance label.
+  /// Compact label: counted cash came in below expected.
   ///
   /// In ar, this message translates to:
-  /// **'فرق {amount}'**
-  String sessionVarianceFlag(String amount);
+  /// **'عجز {amount}'**
+  String sessionVarianceShort(String amount);
+
+  /// Compact label: counted cash came in above expected.
+  ///
+  /// In ar, this message translates to:
+  /// **'زيادة {amount}'**
+  String sessionVarianceOver(String amount);
+
+  /// No description provided for @sessionCashShortageMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'عجز النقد'**
+  String get sessionCashShortageMetric;
+
+  /// No description provided for @sessionCashOverageMetric.
+  ///
+  /// In ar, this message translates to:
+  /// **'زيادة النقد'**
+  String get sessionCashOverageMetric;
+
+  /// No description provided for @sessionCashMatchedValue.
+  ///
+  /// In ar, this message translates to:
+  /// **'مطابق'**
+  String get sessionCashMatchedValue;
 
   /// No description provided for @sessionNoVariance.
   ///
@@ -26800,6 +26824,48 @@ abstract class AppLocalizations {
   /// **'النسخ'**
   String get labelBatchCopies;
 
+  /// Select-all / none checkbox above a label batch.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديد الكل'**
+  String get labelBatchSelectAll;
+
+  /// Purchase order details app-bar button that prints barcode labels for the order's products.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة ملصقات الباركود'**
+  String get purchaseOrderLabelsAction;
+
+  /// Title of the purchase order barcode label sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملصقات منتجات الطلبية'**
+  String get purchaseOrderLabelsTitle;
+
+  /// Explains where the purchase order label counts come from.
+  ///
+  /// In ar, this message translates to:
+  /// **'عدد الملصقات هو الكمية المستلمة، أو المطلوبة إن لم يُستلم شيء بعد. عدّله أو ألغِ تحديد ما لا تريد طباعته.'**
+  String get purchaseOrderLabelsSubtitle;
+
+  /// Purchase order label row: received quantity (in pieces) and the barcode printed.
+  ///
+  /// In ar, this message translates to:
+  /// **'استُلم {quantity} · {barcode}'**
+  String purchaseOrderLabelsReceived(String quantity, String barcode);
+
+  /// Purchase order label row: ordered quantity (in pieces, nothing received yet) and the barcode printed.
+  ///
+  /// In ar, this message translates to:
+  /// **'مطلوب {quantity} · {barcode}'**
+  String purchaseOrderLabelsOrdered(String quantity, String barcode);
+
+  /// Purchase order label row for serial-tracked goods, which carry their own numbers instead of the product barcode.
+  ///
+  /// In ar, this message translates to:
+  /// **'أجهزة بأرقام تسلسلية — تُطبع ملصقاتها عند الاستلام أو من صفحة الجهاز'**
+  String get purchaseOrderLabelsSerialized;
+
   /// Title of the identified-articles list.
   ///
   /// In ar, this message translates to:
@@ -30307,25 +30373,25 @@ abstract class AppLocalizations {
   /// Callout title when SMS is in the subscription.
   ///
   /// In ar, this message translates to:
-  /// **'الرسائل النصية مشمولة في اشتراكك'**
+  /// **'الرسائل النصية متاحة'**
   String get subscriptionSmsActiveTitle;
 
   /// Callout body when SMS is in the subscription.
   ///
   /// In ar, this message translates to:
-  /// **'الاستهلاك وحدود الإرسال ونصوص الرسائل في «الرسائل النصية» ضمن إعدادات المحل.'**
+  /// **'تُدفع كل رسالة من رصيد الرسائل. الاستهلاك ونصوص الرسائل في «الرسائل النصية» ضمن إعدادات المحل.'**
   String get subscriptionSmsActiveMessage;
 
   /// Callout title when SMS is not in the subscription.
   ///
   /// In ar, this message translates to:
-  /// **'الرسائل النصية غير مشمولة'**
+  /// **'رصيد الرسائل لا يكفي للإرسال'**
   String get subscriptionSmsInactiveTitle;
 
   /// Callout body when SMS is not in the subscription.
   ///
   /// In ar, this message translates to:
-  /// **'أضِف الرسائل النصية إلى اشتراكك لإرسال الفواتير والتذكيرات والعروض إلى عملائك. تواصل مع الدعم.'**
+  /// **'اشحن محفظة دفتر وانقل مبلغاً إلى رصيد الرسائل لإرسال الفواتير والتذكيرات والعروض إلى عملائك.'**
   String get subscriptionSmsInactiveMessage;
 
   /// Caption showing when the snapshot was last refreshed from the relay.
@@ -38806,6 +38872,18 @@ abstract class AppLocalizations {
   /// **'عدة ملفات'**
   String get integrationCapabilityProfiles;
 
+  /// Integration capability chip: sends airtime straight to a phone number abroad.
+  ///
+  /// In ar, this message translates to:
+  /// **'الشحن المباشر'**
+  String get integrationCapabilityAirtime;
+
+  /// Integration capability chip: pays bills abroad (electricity, water, TV, internet).
+  ///
+  /// In ar, this message translates to:
+  /// **'دفع الفواتير'**
+  String get integrationCapabilityBills;
+
   /// Integration profile kind: the person's own profile.
   ///
   /// In ar, this message translates to:
@@ -39481,14 +39559,122 @@ abstract class AppLocalizations {
   /// Balance direction: the customer or supplier owes the shop.
   ///
   /// In ar, this message translates to:
-  /// **'عليه لنا'**
+  /// **'دين عليه'**
   String get balanceDirectionTheyOweUs;
 
   /// Balance direction: the shop owes the customer or supplier.
   ///
   /// In ar, this message translates to:
-  /// **'له علينا'**
+  /// **'رصيد له'**
   String get balanceDirectionWeOweThem;
+
+  /// Account action: the shop receives money from this customer, supplier or employee (or, without cash, records that it did).
+  ///
+  /// In ar, this message translates to:
+  /// **'استلام مبلغ'**
+  String get accountReceiveMoneyButton;
+
+  /// Account action: the shop pays money to this customer, supplier or employee (or, without cash, records that it did).
+  ///
+  /// In ar, this message translates to:
+  /// **'دفع مبلغ'**
+  String get accountPayMoneyButton;
+
+  /// Line in the receive dialog: the most real money this account can take in now.
+  ///
+  /// In ar, this message translates to:
+  /// **'يمكن استلام حتى {amount}'**
+  String accountMoneyReceivableValue(String amount);
+
+  /// Line in the pay dialog: the most real money this account can pay out now.
+  ///
+  /// In ar, this message translates to:
+  /// **'يمكن دفع حتى {amount}'**
+  String accountMoneyPayableValue(String amount);
+
+  /// Line in the receive/pay dialog when no real money is due either way: only an account-only entry is possible.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد مبلغ مستحق الآن، فيمكن التسجيل على الحساب فقط.'**
+  String get accountMoneyNothingDue;
+
+  /// Snackbar after a receive/pay on an account succeeds.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تسجيل المبلغ'**
+  String get accountMoneySaved;
+
+  /// Snackbar when a receive/pay on an account fails for a reason with no specific message.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تسجيل المبلغ. حاول مرة أخرى.'**
+  String get accountMoneyError;
+
+  /// Method in the receive/pay dialog: no money changes hands; the amount is only written on the account.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدون مبلغ نقدي (تسجيل على الحساب)'**
+  String get paymentMethodAccountOnly;
+
+  /// Help under the account-only method: no money moves; for old debts/balances and correcting mistakes only, not for returns.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا ينتقل أي مبلغ. استخدمه للديون والأرصدة القديمة وتصحيح الأخطاء فقط، لا للمرتجعات.'**
+  String get accountOnlyHint;
+
+  /// Label above the drawer / treasury choice for cash in the receive/pay dialog.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ عبر'**
+  String get moneySourceLabel;
+
+  /// Cash choice: through the cashier's own open drawer.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدرج'**
+  String get moneySourceDrawer;
+
+  /// Cash choice: straight into or out of the treasury's cash box, no drawer needed.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخزينة'**
+  String get moneySourceTreasury;
+
+  /// Suffix on a balance history row written without money moving.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسجيل على الحساب'**
+  String get balanceRowAccountOnly;
+
+  /// Balance history row detail: the money moved through a drawer.
+  ///
+  /// In ar, this message translates to:
+  /// **'عبر الدرج'**
+  String get balanceSettledThroughDrawer;
+
+  /// Balance history row detail: the money moved through the treasury cash box.
+  ///
+  /// In ar, this message translates to:
+  /// **'عبر الخزينة'**
+  String get balanceSettledThroughCashBox;
+
+  /// Balance history row detail: the money moved through this bank account.
+  ///
+  /// In ar, this message translates to:
+  /// **'عبر {account}'**
+  String balanceSettledThroughBank(String account);
+
+  /// Treasury component: money customers, suppliers or employees paid in through the treasury (استلام مبلغ).
+  ///
+  /// In ar, this message translates to:
+  /// **'مبالغ مستلمة من الحسابات'**
+  String get treasuryComponentAccountReceipts;
+
+  /// Treasury component: money paid out to customers, suppliers or employees through the treasury (دفع مبلغ).
+  ///
+  /// In ar, this message translates to:
+  /// **'مبالغ مدفوعة للحسابات'**
+  String get treasuryComponentAccountPayouts;
 
   /// Helper under the direction choice for a customer who owes the shop.
   ///
@@ -39529,13 +39715,13 @@ abstract class AppLocalizations {
   /// Section title on customer/supplier details listing opening balances and adjustments.
   ///
   /// In ar, this message translates to:
-  /// **'الرصيد الافتتاحي والتسويات'**
+  /// **'حركات الحساب'**
   String get balanceEntriesTitle;
 
   /// Empty state for the balance entries section.
   ///
   /// In ar, this message translates to:
-  /// **'لا يوجد رصيد افتتاحي أو تسويات على هذا الحساب.'**
+  /// **'لا توجد حركات على هذا الحساب بعد.'**
   String get balanceEntriesEmpty;
 
   /// Error loading balance entries.
@@ -39607,7 +39793,7 @@ abstract class AppLocalizations {
   /// Validation: an adjustment needs a note.
   ///
   /// In ar, this message translates to:
-  /// **'اكتب سبب التسوية.'**
+  /// **'اكتب السبب.'**
   String get balanceEntryNoteRequired;
 
   /// Validation: amount must be positive.
@@ -39807,6 +39993,30 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'مستحق للمورد {amount}'**
   String supplierNetBalanceWeOweValue(String amount);
+
+  /// Caption beside the supplier hero figure: the shop owes the supplier.
+  ///
+  /// In ar, this message translates to:
+  /// **'مستحق للمورد'**
+  String get supplierHeroWeOweCaption;
+
+  /// Caption beside the supplier hero figure: the supplier owes the shop.
+  ///
+  /// In ar, this message translates to:
+  /// **'مستحق على المورد'**
+  String get supplierHeroTheyOweCaption;
+
+  /// Caption beside the customer hero figure: the customer owes the shop.
+  ///
+  /// In ar, this message translates to:
+  /// **'مستحق على العميل'**
+  String get customerHeroOwesCaption;
+
+  /// Caption beside a contact hero figure when nothing is outstanding either way.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحساب مسدَّد'**
+  String get contactHeroSettledCaption;
 
   /// Net balance sentence when the supplier owes the shop.
   ///
@@ -41206,16 +41416,16 @@ abstract class AppLocalizations {
   /// **'عمليات الشحن تجريبية الآن ولا تُحوَّل فيها أموال حقيقية.'**
   String get walletTestModeHint;
 
-  /// Switch that books every paid wallet top-up as a shop expense.
+  /// Switch (API name record_topups_as_expenses) that keeps the wallet in the shop's books: top-ups become the «محفظة دفتر» balance in the treasury.
   ///
   /// In ar, this message translates to:
-  /// **'تسجيل الشحنات كمصروفات تلقائياً'**
+  /// **'سجّل المحفظة في دفاتر المحل'**
   String get walletRecordExpensesTitle;
 
-  /// Explains where auto-booked top-up expenses go.
+  /// Explains keeping the wallet in the books: top-ups are an asset in the treasury, services become expenses in {category} when bought.
   ///
   /// In ar, this message translates to:
-  /// **'كل شحن مدفوع يُسجَّل مصروفاً ضمن «{category}».'**
+  /// **'يصبح كل شحن رصيداً في الخزينة باسم «محفظة دفتر»، وتُسجَّل الخدمات مصروفاً ضمن «{category}» عند شرائها.'**
   String walletRecordExpensesSubtitle(String category);
 
   /// Snackbar when the auto-expense switch could not be saved.
@@ -41296,22 +41506,343 @@ abstract class AppLocalizations {
   /// **'غير معروفة'**
   String get walletTopUpStatusUnknown;
 
-  /// Chip on a top-up that was booked as a shop expense.
+  /// Top-up status: a bank transfer the company's team is checking.
   ///
   /// In ar, this message translates to:
-  /// **'مسجّل كمصروف'**
+  /// **'بانتظار التحقق'**
+  String get walletTopUpStatusReview;
+
+  /// Top-up status: the company's team rejected the bank transfer.
+  ///
+  /// In ar, this message translates to:
+  /// **'مرفوض'**
+  String get walletTopUpStatusRejected;
+
+  /// Top-up method: a bank transfer to the company's account.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويل مصرفي'**
+  String get walletMethodBankTransfer;
+
+  /// Under the bank-transfer method: the apps it works with.
+  ///
+  /// In ar, this message translates to:
+  /// **'لي باي أو ون باي'**
+  String get walletMethodHintBankTransfer;
+
+  /// The LYPay transfer app.
+  ///
+  /// In ar, this message translates to:
+  /// **'لي باي'**
+  String get walletTransferChannelLyPay;
+
+  /// The OnePay transfer app.
+  ///
+  /// In ar, this message translates to:
+  /// **'ون باي'**
+  String get walletTransferChannelOnePay;
+
+  /// Heading of the transfer step.
+  ///
+  /// In ar, this message translates to:
+  /// **'حوّل {amount} إلى حسابنا'**
+  String walletTransferSendTitle(String amount);
+
+  /// How to send with LYPay.
+  ///
+  /// In ar, this message translates to:
+  /// **'في لي باي، حوّل إلى رقم IBAN هذا:'**
+  String get walletTransferLyPayHint;
+
+  /// How to send with OnePay.
+  ///
+  /// In ar, this message translates to:
+  /// **'في ون باي، اختر المصرف ثم اكتب رقم الحساب:'**
+  String get walletTransferOnePayHint;
+
+  /// Label: the bank of an account.
+  ///
+  /// In ar, this message translates to:
+  /// **'المصرف'**
+  String get walletTransferBank;
+
+  /// Label: an IBAN.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم IBAN'**
+  String get walletTransferIban;
+
+  /// Label: an account number.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم الحساب'**
+  String get walletTransferAccountNumber;
+
+  /// Label: the amount to transfer.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ'**
+  String get walletTransferAmount;
+
+  /// Asks the payer to check the account holder's name.
+  ///
+  /// In ar, this message translates to:
+  /// **'قبل الإرسال تأكد أن الاسم الظاهر لك: {name}'**
+  String walletTransferHolderCheck(String name);
+
+  /// Copy button tooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'نسخ'**
+  String get walletTransferCopy;
+
+  /// Shown after copying.
+  ///
+  /// In ar, this message translates to:
+  /// **'نُسخ'**
+  String get walletTransferCopied;
+
+  /// Section heading: the payer's own account.
+  ///
+  /// In ar, this message translates to:
+  /// **'من حسابك'**
+  String get walletTransferFromTitle;
+
+  /// Why the payer's account is asked for.
+  ///
+  /// In ar, this message translates to:
+  /// **'لنطابق التحويل في كشف حسابنا. نحفظه لك للمرة القادمة.'**
+  String get walletTransferFromHint;
+
+  /// Chips of accounts the shop paid from before.
+  ///
+  /// In ar, this message translates to:
+  /// **'حساباتك السابقة'**
+  String get walletTransferSavedPayers;
+
+  /// Label: the payer's bank.
+  ///
+  /// In ar, this message translates to:
+  /// **'مصرفك'**
+  String get walletTransferPayerBank;
+
+  /// Validation: no bank picked.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر مصرفك.'**
+  String get walletTransferPayerBankRequired;
+
+  /// Helper under the payer's IBAN.
+  ///
+  /// In ar, this message translates to:
+  /// **'يبدأ بـ LY ويليه 23 رقماً — رقم الحساب يُكمَل منه'**
+  String get walletTransferPayerIbanHint;
+
+  /// Validation: bad IBAN.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم IBAN غير صحيح. راجعه من تطبيق المصرف.'**
+  String get walletTransferIbanInvalid;
+
+  /// Validation: bad account number.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم الحساب أرقام فقط.'**
+  String get walletTransferAccountInvalid;
+
+  /// Section heading: the receipt.
+  ///
+  /// In ar, this message translates to:
+  /// **'إيصال التحويل'**
+  String get walletTransferReceiptTitle;
+
+  /// What a receipt may be.
+  ///
+  /// In ar, this message translates to:
+  /// **'لقطة شاشة أو صورة أو ملف PDF من تطبيق المصرف.'**
+  String get walletTransferReceiptHint;
+
+  /// Pick the receipt from this device.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر ملفاً'**
+  String get walletTransferReceiptFromDevice;
+
+  /// Get the receipt from the paired phone.
+  ///
+  /// In ar, this message translates to:
+  /// **'من الهاتف'**
+  String get walletTransferReceiptFromPhone;
+
+  /// What the paired phone is asked for.
+  ///
+  /// In ar, this message translates to:
+  /// **'أرسل إيصال تحويل {amount}'**
+  String walletTransferReceiptPhonePrompt(String amount);
+
+  /// The receipt came from the phone.
+  ///
+  /// In ar, this message translates to:
+  /// **'وصل الإيصال من الهاتف'**
+  String get walletTransferReceiptFromPhoneDone;
+
+  /// Remove the attached receipt.
+  ///
+  /// In ar, this message translates to:
+  /// **'إزالة الإيصال'**
+  String get walletTransferReceiptRemove;
+
+  /// Validation: no receipt.
+  ///
+  /// In ar, this message translates to:
+  /// **'أرفق إيصال التحويل.'**
+  String get walletTransferReceiptRequired;
+
+  /// The receipt is too large.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإيصال أكبر من 10 ميغابايت.'**
+  String get walletTransferReceiptTooLarge;
+
+  /// The picked file could not be read.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر فتح هذا الملف. اختر صورة أو ملف PDF.'**
+  String get walletTransferReceiptUnreadable;
+
+  /// Under the top-up form when bank transfer is chosen.
+  ///
+  /// In ar, this message translates to:
+  /// **'بعد المتابعة نعرض لك حسابنا لتحوّل إليه، ثم ترسل الإيصال ويتحقق فريقنا منه.'**
+  String get walletTransferNote;
+
+  /// Send the transfer for checking.
+  ///
+  /// In ar, this message translates to:
+  /// **'أرسل للتحقق'**
+  String get walletTransferSend;
+
+  /// While the receipt uploads.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ الإرسال… {percent}٪'**
+  String walletTransferSending(int percent);
+
+  /// Back to the amount.
+  ///
+  /// In ar, this message translates to:
+  /// **'رجوع'**
+  String get walletTransferBack;
+
+  /// After sending a transfer.
+  ///
+  /// In ar, this message translates to:
+  /// **'استلمنا إيصالك'**
+  String get walletTransferReviewTitle;
+
+  /// What happens next after sending a transfer.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيتحقق فريقنا من وصول التحويل خلال وقت قصير، ثم يُضاف المبلغ إلى محفظتك. يمكنك إغلاق هذه النافذة، وسنُعلمك بالنتيجة.'**
+  String get walletTransferReviewBody;
+
+  /// While the team checks the transfer.
+  ///
+  /// In ar, this message translates to:
+  /// **'بانتظار التحقق…'**
+  String get walletTransferReviewWaiting;
+
+  /// The team confirmed the transfer.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحققنا من تحويلك'**
+  String get walletTransferPaidTitle;
+
+  /// The team rejected the transfer.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم نؤكد التحويل'**
+  String get walletTransferRejectedTitle;
+
+  /// The team's reason.
+  ///
+  /// In ar, this message translates to:
+  /// **'السبب: {reason}'**
+  String walletTransferRejectedReason(String reason);
+
+  /// What to do after a rejection.
+  ///
+  /// In ar, this message translates to:
+  /// **'إن كنت حوّلت فعلاً، أرسله من جديد بإيصال أوضح أو تواصل مع الدعم.'**
+  String get walletTransferRejectedHelp;
+
+  /// Start the transfer again after a rejection.
+  ///
+  /// In ar, this message translates to:
+  /// **'أرسل من جديد'**
+  String get walletTransferSendAgain;
+
+  /// Too many transfers waiting.
+  ///
+  /// In ar, this message translates to:
+  /// **'لديك تحويلات بانتظار التحقق. انتظر حتى نتحقق منها.'**
+  String get walletTransferTooManyReviews;
+
+  /// Transfers not offered right now.
+  ///
+  /// In ar, this message translates to:
+  /// **'التحويل المصرفي غير متاح حالياً.'**
+  String get walletTransferUnavailable;
+
+  /// Wallet history row: a transfer in review.
+  ///
+  /// In ar, this message translates to:
+  /// **'نتحقق من التحويل'**
+  String get walletTransferRowReview;
+
+  /// Notification title: transfer confirmed.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُضيف تحويلك إلى المحفظة'**
+  String get notificationWalletTransferConfirmedTitle;
+
+  /// Notification body: transfer confirmed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحققنا من تحويل {amount} وأضفناه إلى محفظة دفتر.'**
+  String notificationWalletTransferConfirmedMessage(String amount);
+
+  /// Notification title: transfer rejected.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم نؤكد تحويل المحفظة'**
+  String get notificationWalletTransferRejectedTitle;
+
+  /// Notification body: transfer rejected, with the reason.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويل {amount}: {reason}'**
+  String notificationWalletTransferRejectedMessage(
+    String amount,
+    String reason,
+  );
+
+  /// Chip on a top-up that was recorded in the shop's books (the «محفظة دفتر» balance in the treasury).
+  ///
+  /// In ar, this message translates to:
+  /// **'مسجّل في الخزينة'**
   String get walletTopUpBookedAsExpense;
 
-  /// Chip when a paid top-up could not be booked because the books are closed.
+  /// Chip when a paid top-up could not be recorded because the books are closed.
   ///
   /// In ar, this message translates to:
-  /// **'لم يُسجَّل كمصروف: الفترة مغلقة'**
+  /// **'لم يُسجَّل في الخزينة: الفترة مغلقة'**
   String get walletTopUpExpensePeriodLocked;
 
-  /// Chip when booking the expense failed and will be retried.
+  /// Chip when recording the top-up in the books failed and will be retried.
   ///
   /// In ar, this message translates to:
-  /// **'لم يُسجَّل كمصروف بعد'**
+  /// **'لم يُسجَّل في الخزينة بعد'**
   String get walletTopUpExpensePending;
 
   /// Title of one top-up row.
@@ -41386,10 +41917,10 @@ abstract class AppLocalizations {
   /// **'طريقة الدفع'**
   String get walletTopUpMethodTitle;
 
-  /// Switch in the top-up sheet; also saved as the default.
+  /// Switch in the top-up sheet (keep the wallet in the shop's books); also saved as the default.
   ///
   /// In ar, this message translates to:
-  /// **'سجّل هذا الشحن كمصروف'**
+  /// **'سجّل المحفظة في دفاتر المحل'**
   String get walletTopUpRecordExpense;
 
   /// Explains that the card is entered on the gateway's page in the browser.
@@ -41476,10 +42007,10 @@ abstract class AppLocalizations {
   /// **'أُضيف {amount} إلى رصيدك.'**
   String walletPaidMessage(String amount);
 
-  /// The paid top-up was booked as an expense.
+  /// The paid top-up was recorded in the books: an asset in the treasury; services become expenses in {category} when bought.
   ///
   /// In ar, this message translates to:
-  /// **'سُجّل كمصروف ضمن «{category}».'**
+  /// **'أُضيف إلى رصيد «محفظة دفتر» في الخزينة، وتُسجَّل الخدمات مصروفاً ضمن «{category}» عند شرائها.'**
   String walletPaidBooked(String category);
 
   /// The balance after the top-up.
@@ -43833,6 +44364,2010 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'الأجهزة المسلسلة'**
   String get commandPaletteStockUnitsSection;
+
+  /// Title when the typed search matches nothing on the «كروت دفتر» menu.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد نتائج لـ «{query}»'**
+  String posVoucherSearchEmptyTitle(String query);
+
+  /// Hint under the empty search result of the voucher menu.
+  ///
+  /// In ar, this message translates to:
+  /// **'جرّب اسماً آخر للبطاقة، مثل ماستركارد أو آيتونز أو بلايستيشن.'**
+  String get posVoucherSearchEmptyMessage;
+
+  /// Button that empties the search box from the empty voucher search result.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسح البحث'**
+  String get posVoucherSearchClear;
+
+  /// Voucher menu tab that shows every brand of «كروت دفتر».
+  ///
+  /// In ar, this message translates to:
+  /// **'الكل'**
+  String get posVoucherMenuAll;
+
+  /// Brand card price line when its cards have different prices: the cheapest.
+  ///
+  /// In ar, this message translates to:
+  /// **'من {price}'**
+  String posVoucherMenuPriceFrom(String price);
+
+  /// Default promotion badge on a voucher brand or card when the company gave no label.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرض'**
+  String get posVoucherMenuPromo;
+
+  /// Default label for a brand the company features, when it gave no badge text.
+  ///
+  /// In ar, this message translates to:
+  /// **'مميّز'**
+  String get posVoucherMenuFeatured;
+
+  /// A voucher brand or card that cannot be sold right now.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير متوفر'**
+  String get posVoucherMenuUnavailable;
+
+  /// How many more countries a brand's cards cover than the flags shown.
+  ///
+  /// In ar, this message translates to:
+  /// **'+{count}'**
+  String posVoucherMenuMoreCountries(int count);
+
+  /// Empty voucher menu title.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد كروت للبيع الآن'**
+  String get posVoucherMenuEmptyTitle;
+
+  /// Empty voucher menu explanation.
+  ///
+  /// In ar, this message translates to:
+  /// **'ستظهر كروت دفتر هنا فور توفرها.'**
+  String get posVoucherMenuEmptyMessage;
+
+  /// Empty voucher menu when the owner has not switched the cards on.
+  ///
+  /// In ar, this message translates to:
+  /// **'فعّل «كروت دفتر» من الإعدادات ← التكاملات لتظهر هنا.'**
+  String get posVoucherMenuDisabledMessage;
+
+  /// Empty voucher menu when Daftar paused the cards for every shop.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُوقفت كروت دفتر مؤقتاً لجميع المحلات.'**
+  String get posVoucherMenuSwitchedOffMessage;
+
+  /// The voucher menu could not be loaded.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل قائمة الكروت.'**
+  String get posVoucherMenuLoadError;
+
+  /// Heading over the country chips in a voucher brand's sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'البلد'**
+  String get posVoucherMenuCountryTitle;
+
+  /// Heading over the denomination tiles in a voucher brand's sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر الفئة'**
+  String get posVoucherMenuDenominationTitle;
+
+  /// What the shop earns on one card; only for readers allowed to see cost.
+  ///
+  /// In ar, this message translates to:
+  /// **'ربحك {amount}'**
+  String posVoucherMenuProfit(String amount);
+
+  /// Warning on a card dearer than the voucher balance as last read.
+  ///
+  /// In ar, this message translates to:
+  /// **'يتجاوز رصيد الكروت'**
+  String get posVoucherMenuBeyondBalance;
+
+  /// The voucher balance under a brand's cards.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد الكروت: {amount}'**
+  String posVoucherMenuBalance(String amount);
+
+  /// Screen-reader label for the struck-through regular price of a card on promotion.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدلاً من {price}'**
+  String posVoucherMenuWasPrice(String price);
+
+  /// Voucher menu tab: send airtime straight to a phone number abroad.
+  ///
+  /// In ar, this message translates to:
+  /// **'الشحن المباشر'**
+  String get posServicesTabAirtime;
+
+  /// Voucher menu tab: pay a bill abroad (electricity, water, TV, internet).
+  ///
+  /// In ar, this message translates to:
+  /// **'دفع الفواتير'**
+  String get posServicesTabBills;
+
+  /// Sticker on a direct-service card for the first weeks.
+  ///
+  /// In ar, this message translates to:
+  /// **'جديد'**
+  String get posServicesNewBadge;
+
+  /// Banner over every service screen while the relay is buying from its test supplier: nothing sent is real and nothing paid is paid.
+  ///
+  /// In ar, this message translates to:
+  /// **'وضع تجريبي — لا يُرسل رصيد حقيقي ولا يُدفع شيء'**
+  String get posServicesTestModeBanner;
+
+  /// A small mark on a cart line, and on the success dialog, for a service sold while the relay was in test mode.
+  ///
+  /// In ar, this message translates to:
+  /// **'عملية تجريبية'**
+  String get posServicesTestModeMark;
+
+  /// Heading of the strip of new services above the brands in the voucher menu's All tab.
+  ///
+  /// In ar, this message translates to:
+  /// **'خدمات جديدة'**
+  String get posServicesStripTitle;
+
+  /// One line under the strip heading.
+  ///
+  /// In ar, this message translates to:
+  /// **'أرسل رصيداً أو سدّد فواتير أهلك في الخارج في ثوانٍ'**
+  String get posServicesStripHint;
+
+  /// Card title: airtime.
+  ///
+  /// In ar, this message translates to:
+  /// **'الشحن المباشر'**
+  String get posServicesAirtimeTitle;
+
+  /// One-line promise under the airtime card.
+  ///
+  /// In ar, this message translates to:
+  /// **'أرسل رصيداً إلى أي رقم هاتف في العالم خلال ثوانٍ، بدون بطاقة'**
+  String get posServicesAirtimePromise;
+
+  /// Card title: electricity bills.
+  ///
+  /// In ar, this message translates to:
+  /// **'فواتير الكهرباء'**
+  String get posServicesElectricityTitle;
+
+  /// One-line promise under the electricity card.
+  ///
+  /// In ar, this message translates to:
+  /// **'ادفع فاتورة الكهرباء أو اشحن عدّاد أهلك في الخارج'**
+  String get posServicesElectricityPromise;
+
+  /// Card title: water bills.
+  ///
+  /// In ar, this message translates to:
+  /// **'فواتير المياه'**
+  String get posServicesWaterTitle;
+
+  /// One-line promise under the water card.
+  ///
+  /// In ar, this message translates to:
+  /// **'سدّد فاتورة مياه أهلك في الخارج من هنا، بدون حوالة'**
+  String get posServicesWaterPromise;
+
+  /// Card title: TV subscriptions.
+  ///
+  /// In ar, this message translates to:
+  /// **'اشتراكات التلفزيون'**
+  String get posServicesTvTitle;
+
+  /// One-line promise under the TV card.
+  ///
+  /// In ar, this message translates to:
+  /// **'جدّد اشتراك القنوات لأهلك في الخارج في دقائق'**
+  String get posServicesTvPromise;
+
+  /// Card title: internet bills and packages.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإنترنت'**
+  String get posServicesInternetTitle;
+
+  /// One-line promise under the internet card.
+  ///
+  /// In ar, this message translates to:
+  /// **'اشحن باقة الإنترنت أو سدّد فاتورتها لأهلك في الخارج'**
+  String get posServicesInternetPromise;
+
+  /// How many countries a service reaches.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{دولة واحدة} =2{دولتان} few{{count} دول} many{{count} دولة} other{{count} دولة}}'**
+  String posServicesCountriesCount(int count);
+
+  /// How many mobile networks the airtime reaches.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{شبكة واحدة} =2{شبكتان} few{{count} شبكات} many{{count} شبكة} other{{count} شبكة}}'**
+  String posServicesNetworksCount(int count);
+
+  /// How many bill providers a country or service has.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{جهة واحدة} =2{جهتان} few{{count} جهات} many{{count} جهة} other{{count} جهة}}'**
+  String posServicesProvidersCount(int count);
+
+  /// Heading over the bill-type cards.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر نوع الفاتورة التي تريد سدادها'**
+  String get posServicesBillsIntro;
+
+  /// Name of the airtime line in the cart and on the receipt.
+  ///
+  /// In ar, this message translates to:
+  /// **'شحن مباشر'**
+  String get posServicesAirtimeLineTitle;
+
+  /// Name of the bill line in the cart and on the receipt.
+  ///
+  /// In ar, this message translates to:
+  /// **'دفع فاتورة'**
+  String get posServicesBillLineTitle;
+
+  /// Cart line subtitle of an airtime top-up: the number, then the network and amount.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلى {number} — {label}'**
+  String posAirtimeCartSubtitle(String number, String label);
+
+  /// Cart line subtitle of a bill payment: the meter/account number, then the provider and amount.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم {account} — {label}'**
+  String posBillCartSubtitle(String account, String label);
+
+  /// Invoice details: the number an airtime top-up was sent to.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلى {number}'**
+  String posServicesInvoiceAirtimeTarget(String number);
+
+  /// Invoice details: the meter/account number a bill was paid for.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم {account}'**
+  String posServicesInvoiceBillTarget(String account);
+
+  /// Invoice details: label of a bill's token.
+  ///
+  /// In ar, this message translates to:
+  /// **'رمز الشحن'**
+  String get posServicesInvoiceToken;
+
+  /// Title of the dialog after airtime was delivered.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم إرسال الرصيد'**
+  String get posServicesSuccessAirtimeTitle;
+
+  /// Title of the dialog after a bill was paid.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم سداد الفاتورة'**
+  String get posServicesSuccessBillTitle;
+
+  /// Title of the dialog after several direct services were delivered.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تنفيذ الخدمات'**
+  String get posServicesSuccessMixedTitle;
+
+  /// Row of the success dialog: the phone number or account.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرقم'**
+  String get posServicesSuccessNumber;
+
+  /// Row of the success dialog: what was done.
+  ///
+  /// In ar, this message translates to:
+  /// **'العملية'**
+  String get posServicesSuccessOperation;
+
+  /// Row of the success dialog: the provider's reference.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم العملية'**
+  String get posServicesSuccessReference;
+
+  /// Label of a bill's token when the server named none.
+  ///
+  /// In ar, this message translates to:
+  /// **'رمز الشحن'**
+  String get posServicesSuccessToken;
+
+  /// Under a bill's token in the success dialog.
+  ///
+  /// In ar, this message translates to:
+  /// **'سلّم الزبون هذا الرمز ليُدخله في العدّاد.'**
+  String get posServicesSuccessTokenHint;
+
+  /// Button that copies a bill's token.
+  ///
+  /// In ar, this message translates to:
+  /// **'نسخ الرمز'**
+  String get posServicesSuccessCopy;
+
+  /// Shown after a token was copied.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم نسخ الرمز'**
+  String get posServicesSuccessCopied;
+
+  /// Closes the success dialog.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم'**
+  String get posServicesSuccessDone;
+
+  /// The services directory could not be read.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل الدول والشبكات.'**
+  String get posServicesLoadError;
+
+  /// Empty state title when the direct services cannot be used.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخدمة غير متاحة الآن'**
+  String get posServicesUnavailableTitle;
+
+  /// Empty state: the company paused the services for every shop.
+  ///
+  /// In ar, this message translates to:
+  /// **'أوقفت دفتر هذه الخدمة مؤقتاً لجميع المحلات.'**
+  String get posServicesUnavailableSwitchedOff;
+
+  /// Empty state: the services are not switched on for this shop.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذه الخدمة غير مفعّلة بعد في محلك.'**
+  String get posServicesUnavailableNotConfigured;
+
+  /// Empty state: the directory has no country.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد دول متاحة الآن، حاول لاحقاً.'**
+  String get posServicesUnavailableEmpty;
+
+  /// Button that opens the how-it-works sheet of a service.
+  ///
+  /// In ar, this message translates to:
+  /// **'كيف يعمل؟'**
+  String get posServicesHow;
+
+  /// Closes the how-it-works sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'فهمت'**
+  String get posServicesHowDone;
+
+  /// Tooltip of the button that hides a service's explainer banner.
+  ///
+  /// In ar, this message translates to:
+  /// **'إخفاء الشرح'**
+  String get posServicesExplainerHide;
+
+  /// Heading over the four steps in the how-it-works sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'ماذا يحدث بعد ذلك؟'**
+  String get posServicesTimelineTitle;
+
+  /// First of the four steps shown on every service: choose.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر'**
+  String get posServicesTimelineChoose;
+
+  /// Second step: add to the cart.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضف إلى السلة'**
+  String get posServicesTimelineCart;
+
+  /// Third step: issue the invoice.
+  ///
+  /// In ar, this message translates to:
+  /// **'أصدر الفاتورة'**
+  String get posServicesTimelineInvoice;
+
+  /// Fourth step: the amount arrives and the receipt prints.
+  ///
+  /// In ar, this message translates to:
+  /// **'يصل المبلغ ويُطبع الإيصال'**
+  String get posServicesTimelineDone;
+
+  /// Hint of the country search box.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث بالاسم أو رمز الدولة (223)'**
+  String get posServicesCountrySearchHint;
+
+  /// Heading over the popular countries.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأكثر طلباً'**
+  String get posServicesCountryPopular;
+
+  /// Heading over the full A-Z list of countries.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل الدول'**
+  String get posServicesCountryAll;
+
+  /// Tag on a country the services do not reach.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير متاح حالياً'**
+  String get posServicesCountryUnavailable;
+
+  /// No country matched the search.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد دولة بهذا الاسم أو الرمز.'**
+  String get posServicesCountryNoResults;
+
+  /// Button that reopens the country picker.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيير'**
+  String get posServicesCountryChange;
+
+  /// Hint under the search box: the typed digits are this country's calling code.
+  ///
+  /// In ar, this message translates to:
+  /// **'رمز +{dial} ← {country}'**
+  String posServicesCountryDialMatch(String dial, String country);
+
+  /// Hint under the search box: several countries share the typed calling code.
+  ///
+  /// In ar, this message translates to:
+  /// **'رمز +{dial} مشترك بين أكثر من دولة، اختر الدولة.'**
+  String posServicesCountrySharedCode(String dial);
+
+  /// Title of the summary card of a direct service.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملخص الطلب'**
+  String get posServicesSummaryTitle;
+
+  /// Summary row label.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدولة'**
+  String get posServicesSummaryCountry;
+
+  /// Summary row label: the phone number.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرقم'**
+  String get posServicesSummaryNumber;
+
+  /// Summary row label: the mobile network.
+  ///
+  /// In ar, this message translates to:
+  /// **'الشبكة'**
+  String get posServicesSummaryNetwork;
+
+  /// Summary row label: the bill provider.
+  ///
+  /// In ar, this message translates to:
+  /// **'الجهة'**
+  String get posServicesSummaryProvider;
+
+  /// Summary row label: the plan chosen.
+  ///
+  /// In ar, this message translates to:
+  /// **'الباقة'**
+  String get posServicesSummaryPlan;
+
+  /// Summary row label: the amount.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ'**
+  String get posServicesSummaryAmount;
+
+  /// Summary row label: what the recipient gets.
+  ///
+  /// In ar, this message translates to:
+  /// **'يصل للمستلم'**
+  String get posServicesSummaryReceives;
+
+  /// Summary label: what the customer pays.
+  ///
+  /// In ar, this message translates to:
+  /// **'يدفع الزبون'**
+  String get posServicesSummaryPays;
+
+  /// Button that puts the priced service in the cart.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضف إلى السلة'**
+  String get posServicesAddToCart;
+
+  /// The server is pricing the service.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ حساب السعر…'**
+  String get posServicesPricing;
+
+  /// Why add is off: this user cannot sell.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا تملك صلاحية البيع'**
+  String get posServicesBlockNotSellable;
+
+  /// Why add is off: no country.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر الدولة أولاً'**
+  String get posServicesBlockNoCountry;
+
+  /// Why add is off: the country is loading.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ تحميل بيانات الدولة…'**
+  String get posServicesBlockLoadingCountry;
+
+  /// Why add is off: the country could not be loaded.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل بيانات الدولة، أعد المحاولة'**
+  String get posServicesBlockCountryFailed;
+
+  /// Why add is off: no phone number.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتب رقم الهاتف'**
+  String get posServicesBlockNoNumber;
+
+  /// Why add is off: the phone number is too short.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم الهاتف ناقص، أكمله'**
+  String get posServicesBlockNumberShort;
+
+  /// Why add is off: the phone number has more digits than any number can.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم الهاتف طويل جداً، راجعه'**
+  String get posServicesBlockNumberLong;
+
+  /// Why add is off: the server and the relay read the phone digits as two different numbers.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرقم الذي سيُشحن يختلف عن الرقم الذي تعرّفت عليه الشبكة — صحّح الرقم'**
+  String get posServicesBlockNumberMismatch;
+
+  /// Strong warning on a service the voucher balance (as last read) cannot pay for.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد الكروت لا يكفي لهذه العملية — حوّل من المحفظة أولاً'**
+  String get posServicesBalanceShort;
+
+  /// Where to move money into the voucher balance, for a user who cannot do it from the till.
+  ///
+  /// In ar, this message translates to:
+  /// **'من الإعدادات ← المحفظة ← تحويل إلى رصيد الكروت'**
+  String get posServicesBalanceWhere;
+
+  /// Said when a priced service could not be put in the cart because a sale is being completed.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يمكن الإضافة أثناء إتمام البيع'**
+  String get posServicesAddRefused;
+
+  /// Modal over the till while the provider is performing what the sale sold (airtime, a bill, a card).
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ تنفيذ الشحن… لا تُغلق الشاشة'**
+  String get posProviderChargingTitle;
+
+  /// Under the title of the modal shown while the provider is performing a sale.
+  ///
+  /// In ar, this message translates to:
+  /// **'ننتظر ردّ المزوّد، وقد يستغرق ذلك دقيقة. لا تُعد العملية ولا تُرجع المبلغ للزبون.'**
+  String get posProviderChargingBody;
+
+  /// How long the provider has been asked, counted in seconds.
+  ///
+  /// In ar, this message translates to:
+  /// **'{seconds, plural, =0{لم تمضِ ثانية} =1{مضت ثانية واحدة} =2{مضت ثانيتان} few{مضت {seconds} ثوانٍ} many{مضت {seconds} ثانية} other{مضت {seconds} ثانية}}'**
+  String posProviderChargingSeconds(int seconds);
+
+  /// Title of the dialog after a sale whose airtime the provider refused.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يُنفَّذ الشحن'**
+  String get posServiceIssueRefusedAirtimeTitle;
+
+  /// Title of the dialog after a sale whose bill payment the provider refused.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم تُسدَّد الفاتورة'**
+  String get posServiceIssueRefusedBillTitle;
+
+  /// Title of the dialog after a sale whose airtime and bill the provider refused.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم تُنفَّذ الخدمة'**
+  String get posServiceIssueRefusedMixedTitle;
+
+  /// First line under the title when airtime was refused: nothing was sent.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يُرسَل أي رصيد — أعد المبلغ للزبون.'**
+  String get posServiceIssueRefusedAirtimeBody;
+
+  /// First line under the title when a bill payment was refused: nothing was paid.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يُسدَّد أي مبلغ للجهة — أعد المبلغ للزبون.'**
+  String get posServiceIssueRefusedBillBody;
+
+  /// Title when nobody knows whether the airtime was sent.
+  ///
+  /// In ar, this message translates to:
+  /// **'نتيجة الشحن غير معروفة'**
+  String get posServiceIssueUnknownAirtimeTitle;
+
+  /// Title when nobody knows whether the bill was paid.
+  ///
+  /// In ar, this message translates to:
+  /// **'نتيجة السداد غير معروفة'**
+  String get posServiceIssueUnknownBillTitle;
+
+  /// First line when the airtime result is unknown: do not send again, do not refund.
+  ///
+  /// In ar, this message translates to:
+  /// **'النتيجة غير معروفة — لا تُعد الشحن ولا تُرجع المبلغ حتى تتأكد.'**
+  String get posServiceIssueUnknownAirtimeBody;
+
+  /// First line when the bill payment result is unknown: do not pay again, do not refund.
+  ///
+  /// In ar, this message translates to:
+  /// **'النتيجة غير معروفة — لا تُعد السداد ولا تُرجع المبلغ حتى تتأكد.'**
+  String get posServiceIssueUnknownBillBody;
+
+  /// What to do about an unknown service result.
+  ///
+  /// In ar, this message translates to:
+  /// **'افتح الفاتورة من سجل الفواتير لترى حالة العملية، وتتم المطابقة تلقائياً مع سجل المزوّد.'**
+  String get posServiceIssueUnknownHint;
+
+  /// The invoice the unknown result belongs to.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم الفاتورة: {number}'**
+  String posServiceIssueReceipt(String number);
+
+  /// The provider reference of the service the result is unknown for.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم العملية: {reference}'**
+  String posServiceIssueReference(String reference);
+
+  /// Why a service was refused: the voucher balance could not pay for it.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد الكروت لا يكفي — حوّل من المحفظة ثم أعد البيع.'**
+  String get posServiceReasonInsufficient;
+
+  /// Why a service was refused: its price moved after it was quoted.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيّر السعر لدى المزوّد قبل التنفيذ — أعد البيع بالسعر الجديد.'**
+  String get posServiceReasonPriceChanged;
+
+  /// Why a service was refused: the network or the provider could not be reached.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخدمة أو المزوّد غير متاح الآن — حاول بعد قليل.'**
+  String get posServiceReasonUnavailable;
+
+  /// Why a service was refused: the number or account was not accepted.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرقم غير صالح لدى المزوّد — تأكد منه ثم أعد البيع.'**
+  String get posServiceReasonInvalidNumber;
+
+  /// Why a service was refused: no other reason was given.
+  ///
+  /// In ar, this message translates to:
+  /// **'رفض المزوّد الطلب — لم يُخصم شيء.'**
+  String get posServiceReasonRefused;
+
+  /// Title of the dialog shown when a service line, priced earlier, is priced again at another price or no longer offered.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيّر سعر الخدمة'**
+  String get posServiceRequoteTitle;
+
+  /// Under the title: the price a service was quoted has moved.
+  ///
+  /// In ar, this message translates to:
+  /// **'سُعّرت هذه الخدمة قبل مدة، والسعر الآن مختلف. راجعه مع الزبون قبل الدفع.'**
+  String get posServiceRequoteBody;
+
+  /// A service line's old price and its new one.
+  ///
+  /// In ar, this message translates to:
+  /// **'كان {old} ← أصبح {now}'**
+  String posServiceRequotePrice(String old, String now);
+
+  /// A service line whose offer the server no longer makes.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم تعد هذه الخدمة متاحة بهذه المواصفات — سيُزال السطر من الفاتورة.'**
+  String get posServiceRequoteGone;
+
+  /// Button: take the service's new price.
+  ///
+  /// In ar, this message translates to:
+  /// **'اعتمد السعر الجديد'**
+  String get posServiceRequoteAccept;
+
+  /// Button: take the new prices and remove the lines no longer offered.
+  ///
+  /// In ar, this message translates to:
+  /// **'اعتمد التغييرات'**
+  String get posServiceRequoteAcceptGone;
+
+  /// How long ago a service line was priced, in minutes, on its cart row.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{سُعّرت قبل دقيقة} =2{سُعّرت قبل دقيقتين} few{سُعّرت قبل {count} دقائق} many{سُعّرت قبل {count} دقيقة} other{سُعّرت قبل {count} دقيقة}}'**
+  String posServiceQuoteAgeMinutes(int count);
+
+  /// How long ago a service line was priced, in hours, on its cart row.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{سُعّرت قبل ساعة} =2{سُعّرت قبل ساعتين} few{سُعّرت قبل {count} ساعات} many{سُعّرت قبل {count} ساعة} other{سُعّرت قبل {count} ساعة}}'**
+  String posServiceQuoteAgeHours(int count);
+
+  /// How long ago a service line was priced, in days, on its cart row.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{سُعّرت قبل يوم} =2{سُعّرت قبل يومين} few{سُعّرت قبل {count} أيام} many{سُعّرت قبل {count} يوماً} other{سُعّرت قبل {count} يوم}}'**
+  String posServiceQuoteAgeDays(int count);
+
+  /// The US dollar, named next to an amount in dollars.
+  ///
+  /// In ar, this message translates to:
+  /// **'دولار أمريكي'**
+  String get posServicesCurrencyUsd;
+
+  /// The euro, named next to an amount in euros.
+  ///
+  /// In ar, this message translates to:
+  /// **'يورو'**
+  String get posServicesCurrencyEur;
+
+  /// Button that reads the list of networks and providers again after it was found out of date.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث القائمة'**
+  String get posServicesRefreshList;
+
+  /// Why add is off: no network.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر الشبكة'**
+  String get posServicesBlockNoNetwork;
+
+  /// Why add is off: no provider.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر الجهة'**
+  String get posServicesBlockNoProvider;
+
+  /// Why add is off: no meter/account number; label is its name.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتب {label}'**
+  String posServicesBlockNoAccount(String label);
+
+  /// Why add is off: the meter/account number is too short.
+  ///
+  /// In ar, this message translates to:
+  /// **'{label} ناقص، تأكد منه'**
+  String posServicesBlockAccountShort(String label);
+
+  /// Why add is off: the invoice number is missing.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتب رقم الفاتورة'**
+  String get posServicesBlockNoInvoice;
+
+  /// Why add is off: no amount.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر المبلغ'**
+  String get posServicesBlockNoAmount;
+
+  /// Why add is off: no plan.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر الباقة'**
+  String get posServicesBlockNoPlan;
+
+  /// Why add is off: the typed amount is not a number.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتب مبلغاً صحيحاً'**
+  String get posServicesBlockAmountInvalid;
+
+  /// Why add is off: the amount is below the minimum.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ أقل من الحد الأدنى ({min})'**
+  String posServicesBlockAmountLow(String min);
+
+  /// Why add is off: the amount is above the maximum.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ أكبر من الحد الأقصى ({max})'**
+  String posServicesBlockAmountHigh(String max);
+
+  /// Why add is off: the price could not be read.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر حساب السعر، أعد المحاولة'**
+  String get posServicesBlockQuoteFailed;
+
+  /// The server refused: invalid phone.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم الهاتف غير صالح لهذه الدولة'**
+  String get posServicesRefusalInvalidPhone;
+
+  /// The server refused: invalid account.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرقم غير صالح لدى هذه الجهة، تأكد منه'**
+  String get posServicesRefusalInvalidAccount;
+
+  /// The server refused: the invoice number is required.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذه الجهة تطلب رقم الفاتورة'**
+  String get posServicesRefusalInvoiceRequired;
+
+  /// The server refused: the invoice number is not one the provider takes (letters, digits, - _ / only, 24 at most).
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم الفاتورة غير صالح — 24 خانة كحد أقصى من الأحرف الإنجليزية والأرقام و - _ /'**
+  String get posServicesRefusalInvalidInvoice;
+
+  /// The server refused: amount out of range.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ خارج الحدود التي تقبلها هذه الجهة'**
+  String get posServicesRefusalOutOfRange;
+
+  /// The server refused: amount out of range, with limits.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ خارج الحدود: من {min} إلى {max}'**
+  String posServicesRefusalOutOfRangeLimits(String min, String max);
+
+  /// The server refused: amount not offered.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا المبلغ غير متاح، اختر مبلغاً آخر'**
+  String get posServicesRefusalNotOffered;
+
+  /// The server refused: invalid amount.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ غير صالح'**
+  String get posServicesRefusalInvalidAmount;
+
+  /// The server refused: unknown operator or biller.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم تعد هذه الجهة متاحة، أعد تحميل القائمة'**
+  String get posServicesRefusalUnknown;
+
+  /// The server refused: service unavailable.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخدمة غير متاحة الآن'**
+  String get posServicesRefusalUnavailable;
+
+  /// The server refused: exchange rate not set.
+  ///
+  /// In ar, this message translates to:
+  /// **'أسعار هذه الخدمة لم تُضبط بعد، تواصل مع دفتر'**
+  String get posServicesRefusalRateUnset;
+
+  /// The server refused: the service is unreachable.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر الوصول إلى الخدمة، أعد المحاولة بعد قليل'**
+  String get posServicesRefusalUnreachable;
+
+  /// The server refused: not configured.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذه الخدمة غير مفعّلة بعد'**
+  String get posServicesRefusalNotConfigured;
+
+  /// The server refused: switched off.
+  ///
+  /// In ar, this message translates to:
+  /// **'أوقفت دفتر هذه الخدمة مؤقتاً'**
+  String get posServicesRefusalSwitchedOff;
+
+  /// The server refused for a reason the till has no wording for.
+  ///
+  /// In ar, this message translates to:
+  /// **'رفضت الخدمة الطلب'**
+  String get posServicesRefusalOther;
+
+  /// Airtime step 1 title.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدولة'**
+  String get posAirtimeStepCountry;
+
+  /// Airtime step 2 title.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم الهاتف'**
+  String get posAirtimeStepNumber;
+
+  /// Airtime step 3 title.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ'**
+  String get posAirtimeStepAmount;
+
+  /// One line saying what the cashier needs in hand for airtime.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحتاج: رقم هاتف المستلم + اسم الدولة'**
+  String get posAirtimeNeeds;
+
+  /// The airtime explainer banner.
+  ///
+  /// In ar, this message translates to:
+  /// **'أرسل رصيداً إلى أي رقم هاتف في العالم خلال ثوانٍ — بدون بطاقة. اختر الدولة، اكتب الرقم، اختر المبلغ.'**
+  String get posAirtimeExplainerBody;
+
+  /// Title of the airtime how-it-works sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'كيف يعمل الشحن المباشر؟'**
+  String get posAirtimeHowTitle;
+
+  /// Airtime how-it-works step 1 title.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر الدولة واكتب الرقم'**
+  String get posAirtimeHowStep1Title;
+
+  /// Airtime how-it-works step 1 body.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتب رمز الدولة أو ابحث باسمها، ثم اكتب رقم المستلم. نتعرف على الشبكة تلقائياً، ويمكنك اختيارها بنفسك.'**
+  String get posAirtimeHowStep1Body;
+
+  /// Airtime how-it-works step 2 title.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر المبلغ'**
+  String get posAirtimeHowStep2Title;
+
+  /// Airtime how-it-works step 2 body.
+  ///
+  /// In ar, this message translates to:
+  /// **'ترى ما يصل للمستلم وما يدفعه الزبون، ويمكنك كتابة مبلغ آخر ضمن الحدود المسموحة.'**
+  String get posAirtimeHowStep2Body;
+
+  /// Airtime how-it-works step 3 title.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضف إلى السلة وأصدر الفاتورة'**
+  String get posAirtimeHowStep3Title;
+
+  /// Airtime how-it-works step 3 body.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُرسل الرصيد فور إصدار الفاتورة، ويُطبع إيصال للزبون بتفاصيل العملية.'**
+  String get posAirtimeHowStep3Body;
+
+  /// Plain statement: no refund after sending.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يمكن استرداد المبلغ بعد إرساله، فتأكد من الرقم والشبكة قبل إصدار الفاتورة.'**
+  String get posAirtimeHowNoRefund;
+
+  /// Plain statement: countries airtime cannot be sent to.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا نرسل حالياً إلى: {countries}.'**
+  String posAirtimeHowUnsupported(String countries);
+
+  /// The one-line truth under the airtime summary.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُرسل الرصيد فور إصدار الفاتورة ولا يمكن استرداده بعد إرساله.'**
+  String get posAirtimeTruth;
+
+  /// Heading over the recent recipients.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر الأرقام'**
+  String get posAirtimeRecentTitle;
+
+  /// Label of the airtime phone field (accessibility).
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم الهاتف'**
+  String get posAirtimePhoneLabel;
+
+  /// Example shown inside the empty phone field.
+  ///
+  /// In ar, this message translates to:
+  /// **'70 12 34 56'**
+  String get posAirtimePhoneExample;
+
+  /// Help line under the phone field before a number is typed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحتاج رقم المستلم فقط: اكتبه بدون رمز الدولة (مثل 70 12 34 56)، أو الصقه كاملاً مع الرمز فتُختار الدولة تلقائياً.'**
+  String get posAirtimePhoneHelp;
+
+  /// Line under the phone field while the number is short.
+  ///
+  /// In ar, this message translates to:
+  /// **'أكمل كتابة الرقم…'**
+  String get posAirtimePhoneKeepTyping;
+
+  /// The pasted number starts with a calling code no country has.
+  ///
+  /// In ar, this message translates to:
+  /// **'رمز الدولة في الرقم غير معروف.'**
+  String get posAirtimePhoneUnknownCode;
+
+  /// Warning under the number field: the digits typed begin with the picked country's own calling code, so the number is probably meant without it.
+  ///
+  /// In ar, this message translates to:
+  /// **'يبدو أن الرقم يبدأ برمز الدولة +{dial} — هل تقصد {number}؟'**
+  String posAirtimePhoneStartsWithDial(String dial, String number);
+
+  /// Button that takes the number without the calling code it began with.
+  ///
+  /// In ar, this message translates to:
+  /// **'نعم، صحّح الرقم'**
+  String get posAirtimePhoneFixDial;
+
+  /// Under the number field: the pasted number begins with a calling code that more than one country has (+1), so the cashier is asked which country it is for instead of the till guessing.
+  ///
+  /// In ar, this message translates to:
+  /// **'رمز +{dial} تشترك فيه عدة دول — لأي دولة هذا الرقم؟'**
+  String posAirtimePhoneSharedCode(String dial);
+
+  /// Why add is off: the pasted number's calling code belongs to several countries and none is chosen.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر دولة الرقم من الخيارات أعلاه'**
+  String get posServicesBlockChooseDialCountry;
+
+  /// The network is being detected.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ التعرف على الشبكة…'**
+  String get posAirtimeDetecting;
+
+  /// The network was detected.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعرّفنا على الشبكة: {network}'**
+  String posAirtimeDetected(String network);
+
+  /// The network could not be detected.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم نتعرف على الشبكة، اختر الشبكة'**
+  String get posAirtimeNotDetected;
+
+  /// Detection is switched off or unavailable.
+  ///
+  /// In ar, this message translates to:
+  /// **'التعرف التلقائي غير متاح الآن، اختر الشبكة'**
+  String get posAirtimeDetectUnavailable;
+
+  /// Detection could not be reached.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر التعرف على الشبكة، اختر الشبكة'**
+  String get posAirtimeDetectFailed;
+
+  /// The relay says the number is not valid.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرقم لا يبدو صحيحاً لهذه الدولة، تأكد منه'**
+  String get posAirtimeDetectInvalid;
+
+  /// The detected network differs from the one the cashier chose.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرقم يبدو على شبكة {network}'**
+  String posAirtimeDetectDisagrees(String network);
+
+  /// Button: switch to the detected network.
+  ///
+  /// In ar, this message translates to:
+  /// **'استخدم {network}'**
+  String posAirtimeUseDetected(String network);
+
+  /// Heading over the network chips.
+  ///
+  /// In ar, this message translates to:
+  /// **'الشبكة'**
+  String get posAirtimeNetworks;
+
+  /// The country has no network.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد شبكات متاحة لهذه الدولة الآن.'**
+  String get posAirtimeNetworksNone;
+
+  /// The country's networks are loading.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ تحميل شبكات الدولة…'**
+  String get posAirtimeCountryLoading;
+
+  /// The country's networks could not be loaded.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل شبكات الدولة.'**
+  String get posAirtimeCountryFailed;
+
+  /// Shown in place of the amounts until a network is chosen.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر الشبكة لتظهر المبالغ'**
+  String get posAirtimeAmountWaiting;
+
+  /// Tile that opens a field for an amount of the cashier's own.
+  ///
+  /// In ar, this message translates to:
+  /// **'مبلغ آخر'**
+  String get posAirtimeCustom;
+
+  /// Label of the custom amount field.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ بـ{currency}'**
+  String posAirtimeCustomLabel(String currency);
+
+  /// The limits of a custom amount.
+  ///
+  /// In ar, this message translates to:
+  /// **'من {min} إلى {max}'**
+  String posAirtimeCustomRange(String min, String max);
+
+  /// Hint of the custom amount field when there are no limits.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتب المبلغ'**
+  String get posAirtimeCustomAnyAmount;
+
+  /// The typed amount is not a number.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتب مبلغاً صحيحاً'**
+  String get posAirtimeCustomInvalid;
+
+  /// The typed amount is below the minimum.
+  ///
+  /// In ar, this message translates to:
+  /// **'أقل مبلغ مسموح {min}'**
+  String posAirtimeCustomTooLow(String min);
+
+  /// The typed amount is above the maximum.
+  ///
+  /// In ar, this message translates to:
+  /// **'أكبر مبلغ مسموح {max}'**
+  String posAirtimeCustomTooHigh(String max);
+
+  /// Note under amounts of a network that converts at its own rate.
+  ///
+  /// In ar, this message translates to:
+  /// **'≈ المبلغ تقريبي: يصل للمستلم ما يعادله بـ{currency} بسعر المزوّد عند الإرسال.'**
+  String posAirtimeApproximate(String currency);
+
+  /// Title of the direct top-up launcher card.
+  ///
+  /// In ar, this message translates to:
+  /// **'شحن رصيد لرقم في الخارج'**
+  String get posAirtimeLauncherTitle;
+
+  /// One line under the launcher title.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر الدولة ثم اكتب الرقم والمبلغ، وتُضاف العملية إلى السلة'**
+  String get posAirtimeLauncherBody;
+
+  /// Button that opens the stepped direct top-up dialog.
+  ///
+  /// In ar, this message translates to:
+  /// **'شحن جديد'**
+  String get posAirtimeLauncherStart;
+
+  /// Title of the card-pricing screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'أسعار كروت دفتر'**
+  String get voucherPricingTitle;
+
+  /// Tooltip of the pricing icon in the voucher menu.
+  ///
+  /// In ar, this message translates to:
+  /// **'أسعار كروت دفتر'**
+  String get voucherPricingOpen;
+
+  /// Subtitle of the pricing entry in integrations settings.
+  ///
+  /// In ar, this message translates to:
+  /// **'اتبع سعر الشركة أو حدّد سعرك لكل خدمة وكرت'**
+  String get voucherPricingTileSubtitle;
+
+  /// Pricing tab for direct services.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخدمات'**
+  String get voucherPricingTabServices;
+
+  /// Pricing tab for gift cards.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكروت'**
+  String get voucherPricingTabCards;
+
+  /// Heading of the default pricing switch.
+  ///
+  /// In ar, this message translates to:
+  /// **'السعر الافتراضي'**
+  String get voucherPricingDefaultTitle;
+
+  /// Hint under the default pricing switch.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُطبَّق على كل خدمة وكرت لم تحدد له سعراً خاصاً.'**
+  String get voucherPricingDefaultHint;
+
+  /// Mode: follow the company price.
+  ///
+  /// In ar, this message translates to:
+  /// **'سعر الشركة'**
+  String get voucherPricingModeCompany;
+
+  /// Mode: the shop sets its own price.
+  ///
+  /// In ar, this message translates to:
+  /// **'سعري أنا'**
+  String get voucherPricingModeCustom;
+
+  /// Markup percent field.
+  ///
+  /// In ar, this message translates to:
+  /// **'نسبة ربحي %'**
+  String get voucherPricingMarkupLabel;
+
+  /// Heading of the services list.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخدمات المباشرة'**
+  String get voucherPricingServicesTitle;
+
+  /// Live example line under a service.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثال: تدفع {pays}، سعر الشركة {company}، سعرك {yours}'**
+  String voucherPricingExample(String pays, String company, String yours);
+
+  /// Hint of the company formula.
+  ///
+  /// In ar, this message translates to:
+  /// **'الشركة تضيف رسماً ثابتاً {fixed} وتتقاسم الهامش معك بنسبة {share}% لك'**
+  String voucherPricingRuleHint(String fixed, String share);
+
+  /// Save button.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ الأسعار'**
+  String get voucherPricingSave;
+
+  /// Saved message.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حفظ الأسعار'**
+  String get voucherPricingSaved;
+
+  /// Save failure fallback.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر حفظ الأسعار'**
+  String get voucherPricingSaveFailed;
+
+  /// Load failure.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر تحميل الأسعار'**
+  String get voucherPricingLoadError;
+
+  /// 403 message.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذه الشاشة للمالك والمدير فقط'**
+  String get voucherPricingForbidden;
+
+  /// Card search hint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث عن كرت'**
+  String get voucherPricingSearchHint;
+
+  /// All brands filter chip.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل العلامات'**
+  String get voucherPricingAllBrands;
+
+  /// Column label: what the shop pays.
+  ///
+  /// In ar, this message translates to:
+  /// **'تدفع'**
+  String get voucherPricingShopPays;
+
+  /// Column label: company price.
+  ///
+  /// In ar, this message translates to:
+  /// **'سعر الشركة'**
+  String get voucherPricingCompanyPrice;
+
+  /// Field label: the shop's own price.
+  ///
+  /// In ar, this message translates to:
+  /// **'سعرك'**
+  String get voucherPricingYourPrice;
+
+  /// Row action: hand back to the company.
+  ///
+  /// In ar, this message translates to:
+  /// **'اتباع سعر الشركة'**
+  String get voucherPricingFollowCompany;
+
+  /// Bulk action.
+  ///
+  /// In ar, this message translates to:
+  /// **'اتباع سعر الشركة للكل'**
+  String get voucherPricingFollowAll;
+
+  /// Bulk done message.
+  ///
+  /// In ar, this message translates to:
+  /// **'طُبّق سعر الشركة على الكروت المعروضة'**
+  String get voucherPricingFollowAllDone;
+
+  /// Single card saved message.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حفظ السعر'**
+  String get voucherPricingCardSaved;
+
+  /// Single card failure fallback.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذر حفظ السعر'**
+  String get voucherPricingCardFailed;
+
+  /// Empty cards list.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد كروت مطابقة'**
+  String get voucherPricingNoCards;
+
+  /// Load more button.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرض المزيد'**
+  String get voucherPricingLoadMore;
+
+  /// Count of cards shown.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} كرت'**
+  String voucherPricingCardCount(int count);
+
+  /// Snackbar after airtime is added to the cart.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُضيف الشحن المباشر إلى السلة'**
+  String get posAirtimeAdded;
+
+  /// The one-line truth under a bill summary.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُسدَّد الفاتورة فور إصدار فاتورة البيع، ولا يمكن استرجاع الدفع بعد إرساله.'**
+  String get posBillTruth;
+
+  /// Snackbar after a bill is added to the cart.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُضيفت الفاتورة إلى السلة'**
+  String get posBillAdded;
+
+  /// Step indicator label.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدولة'**
+  String get posBillStepNameCountry;
+
+  /// Step indicator label.
+  ///
+  /// In ar, this message translates to:
+  /// **'الجهة'**
+  String get posBillStepNameProvider;
+
+  /// Step indicator label.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرقم'**
+  String get posBillStepNameAccount;
+
+  /// Step indicator label.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ'**
+  String get posBillStepNameAmount;
+
+  /// Step indicator label.
+  ///
+  /// In ar, this message translates to:
+  /// **'الملخص'**
+  String get posBillStepNameSummary;
+
+  /// Bill step 1 heading.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر الدولة'**
+  String get posBillStepCountryTitle;
+
+  /// Bill step 2 heading.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر الجهة'**
+  String get posBillStepProviderTitle;
+
+  /// Bill step 3 heading; label is the number's name.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل {label}'**
+  String posBillStepAccountTitle(String label);
+
+  /// Bill step 3 heading for a bill that needs an invoice.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل رقم الحساب ورقم الفاتورة'**
+  String get posBillStepAccountInvoiceTitle;
+
+  /// Bill step 4 heading.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر المبلغ'**
+  String get posBillStepAmountTitle;
+
+  /// Bill step 4 heading for a bill that sells plans.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر الباقة'**
+  String get posBillStepPlanTitle;
+
+  /// Bill step 5 heading.
+  ///
+  /// In ar, this message translates to:
+  /// **'راجع الطلب ثم أضفه إلى السلة'**
+  String get posBillStepSummaryTitle;
+
+  /// What the cashier needs for an electricity bill.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحتاج: رقم العدّاد — تجده على الفاتورة أو على العدّاد نفسه'**
+  String get posBillNeedsElectricity;
+
+  /// What the cashier needs for a water bill.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحتاج: رقم حساب المشترك ورقم الفاتورة — تجدهما مكتوبين على الفاتورة'**
+  String get posBillNeedsWater;
+
+  /// What the cashier needs for a TV subscription.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحتاج: رقم بطاقة الاشتراك — تجده على الفاتورة أو على جهاز الاستقبال'**
+  String get posBillNeedsTv;
+
+  /// What the cashier needs for an internet bill.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحتاج: رقم الحساب أو الاشتراك — تجده على الفاتورة أو في رسالة المزوّد'**
+  String get posBillNeedsInternet;
+
+  /// Field name for an electricity bill.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم العدّاد'**
+  String get posBillAccountLabelElectricity;
+
+  /// Field name for a water bill.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم الحساب'**
+  String get posBillAccountLabelWater;
+
+  /// Field name for a TV subscription.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم بطاقة الاشتراك'**
+  String get posBillAccountLabelTv;
+
+  /// Field name for an internet bill.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم الحساب أو الاشتراك'**
+  String get posBillAccountLabelInternet;
+
+  /// Field name when the bill also needs an invoice number.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم الحساب / العقد'**
+  String get posBillAccountLabelContract;
+
+  /// Example meter number shown in the field.
+  ///
+  /// In ar, this message translates to:
+  /// **'04223568280'**
+  String get posBillAccountExampleElectricity;
+
+  /// Example water account number.
+  ///
+  /// In ar, this message translates to:
+  /// **'12345678'**
+  String get posBillAccountExampleWater;
+
+  /// Example TV subscription card number.
+  ///
+  /// In ar, this message translates to:
+  /// **'0123456789'**
+  String get posBillAccountExampleTv;
+
+  /// Example internet account number.
+  ///
+  /// In ar, this message translates to:
+  /// **'0123456789'**
+  String get posBillAccountExampleInternet;
+
+  /// Helper text under a field: an example.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثال: {example}'**
+  String posBillExample(String example);
+
+  /// Field name: the invoice number.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم الفاتورة'**
+  String get posBillInvoiceLabel;
+
+  /// Example invoice number.
+  ///
+  /// In ar, this message translates to:
+  /// **'2024-118833'**
+  String get posBillInvoiceExample;
+
+  /// What an invoice number may contain.
+  ///
+  /// In ar, this message translates to:
+  /// **'حروف إنجليزية وأرقام و - و _ و / فقط، حتى 24 خانة.'**
+  String get posBillInvoiceHelp;
+
+  /// Warning under the number fields.
+  ///
+  /// In ar, this message translates to:
+  /// **'تأكد من الرقم: لا يمكن استرجاع الدفع بعد إرساله.'**
+  String get posBillCheckNumber;
+
+  /// Prepaid electricity: the token is on the receipt.
+  ///
+  /// In ar, this message translates to:
+  /// **'ستظهر على الإيصال شيفرة الشحن لإدخالها في العدّاد.'**
+  String get posBillPrepaidNote;
+
+  /// Postpaid: type the invoice total as written.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل قيمة الفاتورة كما هي مكتوبة عليها.'**
+  String get posBillInvoiceAmountNote;
+
+  /// Group heading: prepaid electricity providers.
+  ///
+  /// In ar, this message translates to:
+  /// **'عدّاد مسبق الدفع — تستلم رمزاً وتُدخله في العدّاد'**
+  String get posBillGroupPrepaid;
+
+  /// Group heading: postpaid electricity providers.
+  ///
+  /// In ar, this message translates to:
+  /// **'فاتورة لاحقة الدفع — تسدّد قيمة فاتورتك'**
+  String get posBillGroupPostpaid;
+
+  /// Hint of the provider search box.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث عن الجهة'**
+  String get posBillProviderSearch;
+
+  /// No provider matched the search.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد جهة بهذا الاسم.'**
+  String get posBillProviderNoResults;
+
+  /// The country has no provider of this type.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد جهات متاحة لهذا النوع في هذه الدولة الآن.'**
+  String get posBillProvidersNone;
+
+  /// Note under a provider that needs the invoice number.
+  ///
+  /// In ar, this message translates to:
+  /// **'يلزم رقم الفاتورة'**
+  String get posBillProviderNeedsInvoice;
+
+  /// This type of bill is only sold in one country.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذه الخدمة متاحة حالياً في {country} فقط.'**
+  String posBillLimitedCountry(String country);
+
+  /// Heading over suggested bill amounts.
+  ///
+  /// In ar, this message translates to:
+  /// **'مبالغ مقترحة'**
+  String get posBillSuggestedAmounts;
+
+  /// Title of the bill how-it-works sheet; type is the card title.
+  ///
+  /// In ar, this message translates to:
+  /// **'كيف تعمل {type}؟'**
+  String posBillHowTitle(String type);
+
+  /// Bill how-it-works step 1 title.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر الدولة والجهة'**
+  String get posBillHowStep1Title;
+
+  /// Bill how-it-works step 1 body.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر الدولة ثم الشركة التي تُسدَّد لها الفاتورة، بأسمائها العربية.'**
+  String get posBillHowStep1Body;
+
+  /// Bill how-it-works step 2 title.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتب الرقم واختر المبلغ'**
+  String get posBillHowStep2Title;
+
+  /// Bill how-it-works step 2 body.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتب رقم العدّاد أو الحساب كما هو على الفاتورة، ثم اختر المبلغ أو الباقة.'**
+  String get posBillHowStep2Body;
+
+  /// Bill how-it-works step 3 title.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضف إلى السلة وأصدر الفاتورة'**
+  String get posBillHowStep3Title;
+
+  /// Bill how-it-works step 3 body.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُسدَّد الفاتورة فور إصدار فاتورة البيع، ويُطبع إيصال للزبون.'**
+  String get posBillHowStep3Body;
+
+  /// Prepaid electricity: the token is on the receipt.
+  ///
+  /// In ar, this message translates to:
+  /// **'للعدّاد المسبق الدفع: ستجد على الإيصال شيفرة تُدخلها في العدّاد.'**
+  String get posBillHowElectricityToken;
+
+  /// First-use banner on the bills tab: what bill payment does, in one breath.
+  ///
+  /// In ar, this message translates to:
+  /// **'سدّد فواتير الكهرباء والمياه والتلفزيون والإنترنت في دول أخرى خلال ثوانٍ. اختر نوع الفاتورة، ثم الدولة والجهة، واكتب رقم العدّاد أو الحساب.'**
+  String get posBillsExplainerBody;
+
+  /// Title of the «how does it work» sheet opened from the bills tab.
+  ///
+  /// In ar, this message translates to:
+  /// **'كيف يعمل دفع الفواتير؟'**
+  String get posBillsHowTitle;
+
+  /// Title of the voucher balance inside the wallet.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد الكروت'**
+  String get walletVouchersBalanceTitle;
+
+  /// Explains what the voucher balance pays for.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُدفع منه ثمن كروت دفتر التي تُباع في نقطة البيع.'**
+  String get walletVouchersSummary;
+
+  /// The company cannot buy cards yet, so money cannot be moved in.
+  ///
+  /// In ar, this message translates to:
+  /// **'بيع الكروت غير جاهز بعد لدى دفتر.'**
+  String get walletVouchersNotReady;
+
+  /// The company buys cards from its test supplier.
+  ///
+  /// In ar, this message translates to:
+  /// **'وضع تجريبي: الكروت المباعة الآن ليست حقيقية.'**
+  String get walletVouchersTestMode;
+
+  /// Button on the voucher balance that moves money in from the main wallet.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويل إلى رصيد الكروت'**
+  String get walletVouchersAllocateButton;
+
+  /// Title of the sheet that moves money into the voucher balance.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويل إلى رصيد الكروت'**
+  String get walletVouchersAllocateTitle;
+
+  /// Explains the transfer into the voucher balance.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُخصم المبلغ من المحفظة ويُضاف إلى رصيد الكروت، ومنه يُدفع ثمن كل كرت يبيعه الكاشير.'**
+  String get walletVouchersAllocateIntro;
+
+  /// The main wallet balance in the voucher transfer sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد المحفظة: {balance}'**
+  String walletVouchersAllocateAvailable(String balance);
+
+  /// The voucher balance in the voucher transfer sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد الكروت: {balance}'**
+  String walletVouchersAllocateCurrent(String balance);
+
+  /// Amount field label in the voucher transfer sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ'**
+  String get walletVouchersAllocateAmountLabel;
+
+  /// Helper under the amount: the voucher balance once the amount moves in.
+  ///
+  /// In ar, this message translates to:
+  /// **'يصبح رصيد الكروت {balance}'**
+  String walletVouchersAllocateAfter(String balance);
+
+  /// The typed amount is more than the main wallet holds.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ أكبر من رصيد المحفظة.'**
+  String get walletVouchersAllocateTooMuch;
+
+  /// Quick pick: move the whole main wallet balance.
+  ///
+  /// In ar, this message translates to:
+  /// **'كامل الرصيد'**
+  String get walletVouchersAllocateAll;
+
+  /// Confirm button of the voucher transfer.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويل {amount}'**
+  String walletVouchersAllocateConfirm(String amount);
+
+  /// Snackbar after money moved into the voucher balance.
+  ///
+  /// In ar, this message translates to:
+  /// **'حُوِّل {amount} إلى رصيد الكروت.'**
+  String walletVouchersAllocateDone(String amount);
+
+  /// Wallet history tab: movements of the voucher balance.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد الكروت'**
+  String get walletHistoryVouchersTab;
+
+  /// Empty voucher balance statement.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد حركات على رصيد الكروت بعد.'**
+  String get walletHistoryEmptyVouchers;
+
+  /// Name of Daftar's own prepaid cards provider.
+  ///
+  /// In ar, this message translates to:
+  /// **'كروت دفتر'**
+  String get integrationProviderPointyName;
+
+  /// One line on what «كروت دفتر» is.
+  ///
+  /// In ar, this message translates to:
+  /// **'كروت الهدايا والألعاب والاتصالات من دفتر، يُدفع ثمنها من رصيد الكروت في المحفظة.'**
+  String get integrationProviderPointyTagline;
+
+  /// Switch on a provider that needs no account: sell its cards at the till.
+  ///
+  /// In ar, this message translates to:
+  /// **'البيع في نقطة البيع'**
+  String get integrationEnableTitle;
+
+  /// Under the switch when the provider is on.
+  ///
+  /// In ar, this message translates to:
+  /// **'تظهر قائمة الكروت في نقطة البيع.'**
+  String get integrationEnableOnHint;
+
+  /// Under the switch when the provider is off.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يحتاج إلى حساب أو كلمة مرور، فعّله فقط.'**
+  String get integrationEnableOffHint;
+
+  /// Snackbar after switching a provider on.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم التفعيل'**
+  String get integrationEnabledToast;
+
+  /// Snackbar after switching a provider off.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم الإيقاف'**
+  String get integrationDisabledToast;
+
+  /// Opens a provider's settings (low-balance alert) when it has no credentials.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإعدادات'**
+  String get integrationSettingsAction;
+
+  /// Status pill: a provider that needs no account is switched on.
+  ///
+  /// In ar, this message translates to:
+  /// **'مفعّل'**
+  String get integrationStatusEnabled;
+
+  /// Status pill: a provider that needs no account is switched off.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير مفعّل'**
+  String get integrationStatusNotEnabled;
+
+  /// Balance row on «كروت دفتر»: the wallet's voucher balance.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد الكروت'**
+  String get integrationVoucherBalanceLabel;
+
+  /// Re-reads a provider's balance (for «كروت دفتر», which has no login to test).
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث الرصيد'**
+  String get integrationRefreshBalance;
+
+  /// Badge on a card whose own price is under what the shop pays.
+  ///
+  /// In ar, this message translates to:
+  /// **'أقل من التكلفة'**
+  String get voucherPricingBelowCostBadge;
+
+  /// Banner on the cards tab: cards blocked for being priced under cost.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} بطاقة متوقفة عن البيع'**
+  String voucherPricingBelowCostBannerTitle(int count);
+
+  /// Banner body: why the cards are blocked and what fixes it.
+  ///
+  /// In ar, this message translates to:
+  /// **'سعرك لهذه البطاقات أصبح أقل مما تدفعه للشركة، فلا تُباع حتى تعدّل سعرها أو تستخدم تسعير الشركة.'**
+  String get voucherPricingBelowCostBannerBody;
+
+  /// Banner action: filter to the blocked cards.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرض هذه البطاقات فقط'**
+  String get voucherPricingBelowCostShowOnly;
+
+  /// Banner action: clear the blocked-cards filter.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرض كل البطاقات'**
+  String get voucherPricingBelowCostShowAll;
+
+  /// Bulk action: hand every blocked card back to the company's price.
+  ///
+  /// In ar, this message translates to:
+  /// **'استخدام تسعير الشركة'**
+  String get voucherPricingUseCompanyPricing;
+
+  /// Snackbar after the bulk action.
+  ///
+  /// In ar, this message translates to:
+  /// **'طُبّق تسعير الشركة على البطاقات المتوقفة'**
+  String get voucherPricingUseCompanyPricingDone;
+
+  /// Alert title: cards priced under cost.
+  ///
+  /// In ar, this message translates to:
+  /// **'بطاقات متوقفة لأن سعرك أقل من التكلفة'**
+  String get smartNotificationBelowCostTitle;
+
+  /// Alert message: which cards, and that their sales are blocked.
+  ///
+  /// In ar, this message translates to:
+  /// **'سعرك لـ {count} بطاقة أصبح أقل مما تدفعه للشركة، فلا يمكن بيعها الآن: {cards}'**
+  String smartNotificationBelowCostMessage(int count, String cards);
+
+  /// Alert action: open the pricing screen filtered to the blocked cards.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل الأسعار'**
+  String get smartNotificationBelowCostEditAction;
+
+  /// Alert action: switch the blocked cards to the company's price.
+  ///
+  /// In ar, this message translates to:
+  /// **'استخدام تسعير الشركة'**
+  String get smartNotificationBelowCostCompanyAction;
+
+  /// Snackbar after the alert's bulk action.
+  ///
+  /// In ar, this message translates to:
+  /// **'طُبّق تسعير الشركة على البطاقات المتوقفة'**
+  String get smartNotificationBelowCostCompanyDone;
 }
 
 class _AppLocalizationsDelegate

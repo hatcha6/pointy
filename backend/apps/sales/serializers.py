@@ -66,6 +66,7 @@ from .services import (
     manual_discount_room,
     system_lines_without_top_up,
     unapplied_coupon_codes,
+    validate_integration_line_quantities,
     validate_manual_discount_allowed,
     validate_order_adjustment_allowed,
     void_order,
@@ -1970,6 +1971,9 @@ class DiscountPreviewSerializer(serializers.Serializer):
                     "variants": unpriced,
                 }
             )
+        # One to a line, as the checkout will insist: priced here at a quantity
+        # it would refuse, the cashier is told a total that cannot be tendered.
+        validate_integration_line_quantities(attrs["lines"])
         coupon_codes = normalized_checkout_coupon_codes(attrs)
         # The same ceiling checkout enforces, refused at the same moment the
         # cashier types it rather than held back until they try to take money.

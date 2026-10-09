@@ -45,8 +45,10 @@ extension PosSessionPersistence on PosViewModel {
     _persistScopeLoaded = false;
     _persistDebounce?.cancel();
     if (scopeChanged) {
-      // Different user on this device — never inherit the previous cart.
+      // Different user on this device — never inherit the previous cart, nor
+      // the airtime form and the recent numbers the last one left.
       _resetSaleSessions();
+      resetServiceState();
       _notifyChanged();
     }
 
@@ -78,6 +80,9 @@ extension PosSessionPersistence on PosViewModel {
     if (hasSaleToRestore) {
       // Discount totals were not persisted — reconcile them with the server.
       unawaited(refreshDiscountPreview());
+      // …and so was the price of every airtime and bill line, which was a
+      // quote from when the invoice was put aside.
+      _scheduleServiceRequote();
     }
   }
 

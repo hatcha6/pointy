@@ -1,0 +1,16 @@
+{
+ "ok": true,
+ "kind": "airtime",
+ "option_code": "air:508:10:TND",
+ "option_label": "أوريدو تونس · 10 دينار تونسي",
+ "subscriber_ref": "+216•••••456",
+ "price": "45.75",
+ "receive": {
+  "amount": "10",
+  "currency": "TND"
+ },
+ "approximate": false,
+ "quote": "<base64/opaque, 420 chars>",
+ "service_variant_id": 1,
+ "exceeds_float": false
+}

@@ -170,6 +170,21 @@ String _isolateNumbers(String text) =>
 
 final RegExp _numberRun = RegExp(r'[0-9]+(?:[-/:.][0-9]+)+');
 
+/// A `label: value` row whose value is only Latin letters, digits and
+/// punctuation — a phone number, a network's Latin name, `5,000 XOF` — with
+/// that value held left to right as one piece. Inside an Arabic line the
+/// bidi algorithm would otherwise put a number's `+` on the wrong side and
+/// turn `5,000 XOF` around.
+String _isolateLatinValue(String text) {
+  final match = _latinValueRow.firstMatch(text);
+  if (match == null) {
+    return text;
+  }
+  return '${match[1]}: \u{2066}${match[2]}\u{2069}';
+}
+
+final RegExp _latinValueRow = RegExp(r'^(.*?): ([\x20-\x7E]+)$');
+
 Future<ui.Image?> _decodeLogo(Uint8List? bytes) async {
   if (bytes == null) {
     return null;
@@ -324,7 +339,9 @@ class _SlipLayout {
   }) {
     final painter = TextPainter(
       text: TextSpan(
-        text: direction == TextDirection.rtl ? _isolateNumbers(value) : value,
+        text: direction == TextDirection.rtl
+            ? _isolateNumbers(_isolateLatinValue(value))
+            : value,
         style: TextStyle(
           fontFamily: fontFamily,
           fontSize: size,
@@ -517,7 +534,7 @@ class _SlipLayout {
         return null;
       }
       lines
-        ..add(_text(receiptPinLabel, metrics.label, maxWidth: room))
+        ..add(_text(slip.pinLabel, metrics.label, maxWidth: room))
         ..add(pin);
     }
     if (slip.dial.isNotEmpty) {
@@ -542,7 +559,7 @@ class _SlipLayout {
     }
 
     if (slip.pin.isNotEmpty) {
-      line(_text(receiptPinLabel, metrics.label));
+      line(_text(slip.pinLabel, metrics.label));
       line(
         _unbroken(slip.pin, metrics.pin, 12, _inner) ??
             _text(slip.pin, metrics.fact, direction: TextDirection.ltr),

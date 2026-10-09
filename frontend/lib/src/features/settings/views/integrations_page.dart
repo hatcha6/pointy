@@ -10,11 +10,13 @@ import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/integrations_view_model.dart';
 import 'integration_credentials_sheet.dart';
+import 'integration_enable_switch.dart';
 import 'integration_float_sheet.dart';
 import 'integration_prices_sheet.dart';
 import 'integration_presentation.dart';
 import 'integration_profile_sheet.dart';
 import 'integration_verification_sheet.dart';
+import 'voucher_pricing_screen.dart';
 
 /// Shop Settings → Integrations.
 ///
@@ -166,6 +168,19 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
     }
   }
 
+  /// A provider that asks for no credential is switched on and off, not
+  /// connected: «كروت دفتر».
+  Future<void> _setEnabled(IntegrationProvider provider, bool enabled) async {
+    final l10n = AppLocalizations.of(context)!;
+    final ok = await widget.viewModel.setEnabled(provider.key, enabled);
+    if (ok && mounted) {
+      _showSnack(
+        enabled ? l10n.integrationEnabledToast : l10n.integrationDisabledToast,
+        isError: false,
+      );
+    }
+  }
+
   Future<void> _disconnect(IntegrationProvider provider) async {
     final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
@@ -236,6 +251,18 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
                 ),
               ),
               SizedBox(height: spacing.md),
+              Card(
+                child: ListTile(
+                  key: const ValueKey('integrations_voucher_pricing'),
+                  leading: const Icon(Icons.tune_rounded),
+                  title: Text(l10n.voucherPricingTitle),
+                  subtitle: Text(l10n.voucherPricingTileSubtitle),
+                  trailing: const Icon(Icons.chevron_left_rounded),
+                  onTap: () =>
+                      showVoucherPricingScreen(context, viewModel.repository),
+                ),
+              ),
+              SizedBox(height: spacing.md),
               for (final provider in viewModel.providers) ...[
                 IntegrationProviderCard(
                   provider: provider,
@@ -248,6 +275,7 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
                   onFloat: () => _float(provider),
                   onVerify: () => _verify(provider),
                   onProfile: () => _profile(provider),
+                  onEnabledChanged: (value) => _setEnabled(provider, value),
                 ),
                 SizedBox(height: spacing.md),
               ],
@@ -274,6 +302,7 @@ class IntegrationProviderCard extends StatelessWidget {
     this.onFloat,
     this.onVerify,
     this.onProfile,
+    this.onEnabledChanged,
   });
 
   final IntegrationProvider provider;
@@ -297,6 +326,9 @@ class IntegrationProviderCard extends StatelessWidget {
 
   /// Chooses which of the login's profiles (shops) Pointy buys as.
   final VoidCallback? onProfile;
+
+  /// Switches on or off a provider that asks for no credential.
+  final ValueChanged<bool>? onEnabledChanged;
 
   bool get _isPlanned =>
       provider.availability == IntegrationAvailability.planned;
@@ -383,6 +415,15 @@ class IntegrationProviderCard extends StatelessWidget {
       );
     }
     final account = provider.account;
+    // No login to be missing: it is on, or it is not.
+    if (provider.needsNoCredentials &&
+        (account == null || !account.isConfigured || !account.isActive)) {
+      return PointyStatusPill(
+        label: l10n.integrationStatusNotEnabled,
+        icon: Icons.toggle_off_outlined,
+        color: colors.mutedInk,
+      );
+    }
     if (account == null || !account.isConfigured) {
       return PointyStatusPill(
         label: l10n.integrationStatusNotConfigured,
@@ -405,7 +446,9 @@ class IntegrationProviderCard extends StatelessWidget {
       );
     }
     return PointyStatusPill(
-      label: l10n.integrationStatusConnected,
+      label: provider.needsNoCredentials
+          ? l10n.integrationStatusEnabled
+          : l10n.integrationStatusConnected,
       icon: Icons.check_circle_outline,
       color: colors.success,
     );
@@ -474,12 +517,33 @@ class IntegrationProviderCard extends StatelessWidget {
       ],
     ];
 
+    // The switch is the whole setup of a provider that asks for no login.
+    final enableSwitch = [
+      if (provider.needsNoCredentials && provider.isConfigurable) ...[
+        SizedBox(height: spacing.sm),
+        IntegrationEnableSwitch(
+          provider: provider,
+          isBusy: isBusy && busyKind == IntegrationBusyKind.saving,
+          onChanged: provider.switchedOff ? null : onEnabledChanged,
+        ),
+      ],
+    ];
+
     final account = provider.account;
+    if (account == null || !account.isConfigured || !provider.isEnabled) {
+      if (provider.needsNoCredentials) {
+        return [...switchedOff, ...enableSwitch];
+      }
+    }
     if (account == null || !account.isConfigured) {
       return switchedOff;
     }
 
-    final widgets = <Widget>[...switchedOff, SizedBox(height: spacing.sm)];
+    final widgets = <Widget>[
+      ...switchedOff,
+      ...enableSwitch,
+      SizedBox(height: spacing.sm),
+    ];
 
     // A switched-off provider is not asked anything, so its last error is old
     // news beside the reason above.
@@ -497,7 +561,7 @@ class IntegrationProviderCard extends StatelessWidget {
       PointySummaryList(
         rows: [
           PointySummaryRow(
-            label: l10n.integrationBalanceLabel,
+            label: integrationBalanceLabel(provider.key, l10n),
             value: account.balance == null
                 ? l10n.integrationBalanceUnknown
                 : formatMoney(account.balance!),
@@ -519,21 +583,25 @@ class IntegrationProviderCard extends StatelessWidget {
 
     // The service address gets its own wrapping line rather than a summary
     // row: PointySummaryList lays its value out at natural width, and a URL
-    // overflows that on anything narrower than a desk.
-    widgets
-      ..add(SizedBox(height: spacing.xs))
-      ..add(
-        Text(
-          ltrIsolated(
-            account.baseUrl.isEmpty ? provider.defaultBaseUrl : account.baseUrl,
+    // overflows that on anything narrower than a desk. A provider with no
+    // login has no address of the shop's to show.
+    final address = account.baseUrl.isEmpty
+        ? provider.defaultBaseUrl
+        : account.baseUrl;
+    if (address.isNotEmpty) {
+      widgets
+        ..add(SizedBox(height: spacing.xs))
+        ..add(
+          Text(
+            ltrIsolated(address),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: context.pointyColors.mutedInk,
+            ),
           ),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(
-            context,
-          ).textTheme.bodySmall?.copyWith(color: context.pointyColors.mutedInk),
-        ),
-      );
+        );
+    }
 
     widgets
       ..add(SizedBox(height: spacing.xs))
@@ -560,6 +628,9 @@ class IntegrationProviderCard extends StatelessWidget {
   ) {
     if (!provider.isConfigurable) {
       return const [];
+    }
+    if (provider.needsNoCredentials) {
+      return _buildSwitchedActions(context, l10n, spacing);
     }
     final isConfigured = provider.isConfigured;
     // Switched off for every shop: only what never reaches the provider stays
@@ -630,6 +701,45 @@ class IntegrationProviderCard extends StatelessWidget {
               onPressed: isBusy ? null : onDisconnect,
               icon: const Icon(Icons.link_off),
               label: Text(l10n.integrationDisconnect),
+            ),
+        ],
+      ),
+    ];
+  }
+
+  /// What a provider with no login offers once it is on: re-reading its
+  /// balance, and its settings (the low-balance alert). No float to record
+  /// into — its balance is filled from the Daftar wallet — and nothing to
+  /// disconnect: the switch above turns it off.
+  List<Widget> _buildSwitchedActions(
+    BuildContext context,
+    AppLocalizations l10n,
+    AdaptiveSpacing spacing,
+  ) {
+    if (!provider.isEnabled || provider.switchedOff) {
+      return const [];
+    }
+    return [
+      SizedBox(height: spacing.md),
+      Wrap(
+        spacing: spacing.sm,
+        runSpacing: spacing.sm,
+        children: [
+          OutlinedButton.icon(
+            onPressed: isBusy ? null : onTest,
+            icon: isBusy && busyKind == IntegrationBusyKind.probing
+                ? const SizedBox.square(
+                    dimension: 16,
+                    child: PointySpinner(strokeWidth: 2),
+                  )
+                : const Icon(Icons.refresh),
+            label: Text(l10n.integrationRefreshBalance),
+          ),
+          if (provider.settings.isNotEmpty)
+            OutlinedButton.icon(
+              onPressed: isBusy ? null : onEdit,
+              icon: const Icon(Icons.tune_outlined),
+              label: Text(l10n.integrationSettingsAction),
             ),
         ],
       ),

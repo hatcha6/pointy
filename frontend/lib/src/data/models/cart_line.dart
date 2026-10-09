@@ -20,6 +20,9 @@ class CartLineIntegration {
     this.months = 0,
     this.packageId = '',
     this.packageName = '',
+    this.quotedAt,
+    this.quoteRequest,
+    this.testMode = false,
   });
 
   final String provider;
@@ -42,6 +45,30 @@ class CartLineIntegration {
   final String packageId;
   final String packageName;
 
+  /// When the till was given [quote], for a direct service: a line held in an
+  /// invoice for hours is priced by a quote that old. Kept with the held
+  /// invoice, never sent to the server.
+  final DateTime? quotedAt;
+
+  /// The request a direct service was priced from, as JSON: what is needed to
+  /// price the line again (country, network or provider, number, amount).
+  /// Kept with the held invoice, never sent to the server.
+  final Map<String, Object?>? quoteRequest;
+
+  /// The line was added while the relay was buying from its test supplier: the
+  /// sale will send nothing real and pay nothing, and the line says so. Kept
+  /// with the held invoice, never sent to the server (which knows its own mode).
+  final bool testMode;
+
+  /// «كروت دفتر»' direct services are told apart by the option code the server
+  /// built (`air:…` for airtime, `bill:…` for a bill), so a held invoice keeps
+  /// knowing what a line is without a field of its own.
+  bool get isAirtime =>
+      provider == 'pointy' && optionCode.toLowerCase().startsWith('air:');
+  bool get isBill =>
+      provider == 'pointy' && optionCode.toLowerCase().startsWith('bill:');
+  bool get isDirectService => isAirtime || isBill;
+
   /// The line a top-up the cashier chose rides on: its sealed quote, and its
   /// cost only when this reader was sent one.
   factory CartLineIntegration.fromRecharge(IntegrationRechargeDraft draft) {
@@ -58,6 +85,7 @@ class CartLineIntegration {
     );
   }
 
+  /// What the server reads: the line's integration, nothing local.
   Map<String, Object?> toJson() => {
     'provider': provider,
     'subscriber_ref': subscriberRef,
@@ -69,6 +97,37 @@ class CartLineIntegration {
     'package_id': packageId,
     'package_name': packageName,
   };
+
+  /// What a held invoice keeps: [toJson] and when the quote was given.
+  Map<String, Object?> toStorageJson() => {
+    ...toJson(),
+    if (quotedAt != null) 'quoted_at': quotedAt!.toUtc().toIso8601String(),
+    if (quoteRequest != null) 'quote_request': quoteRequest,
+    if (testMode) 'test_mode': true,
+  };
+
+  /// The same line with a new quote: the price the server stands behind now.
+  CartLineIntegration requoted({
+    required String subscriberRef,
+    required String optionCode,
+    required String optionLabel,
+    required String quote,
+    required DateTime quotedAt,
+    Map<String, Object?>? quoteRequest,
+  }) => CartLineIntegration(
+    provider: provider,
+    subscriberRef: subscriberRef,
+    optionCode: optionCode,
+    optionLabel: optionLabel,
+    cost: cost,
+    quote: quote,
+    months: months,
+    packageId: packageId,
+    packageName: packageName,
+    quotedAt: quotedAt,
+    quoteRequest: quoteRequest ?? this.quoteRequest,
+    testMode: testMode,
+  );
 
   factory CartLineIntegration.fromJson(Map<String, Object?> json) {
     final quote = json['quote']?.toString() ?? '';
@@ -82,6 +141,16 @@ class CartLineIntegration {
       months: _intOrNull(json['months']) ?? 0,
       packageId: json['package_id']?.toString() ?? '',
       packageName: json['package_name']?.toString() ?? '',
+      quotedAt: DateTime.tryParse(
+        json['quoted_at']?.toString() ?? '',
+      )?.toLocal(),
+      quoteRequest: json['quote_request'] is Map
+          ? {
+              for (final entry in (json['quote_request'] as Map).entries)
+                entry.key.toString(): entry.value,
+            }
+          : null,
+      testMode: json['test_mode'] == true,
     );
   }
 }
@@ -227,6 +296,11 @@ class CartLine {
   /// the variant is and buys it the moment the sale is recorded.
   bool get isVoucher => variant.productDetail?.isVoucher ?? false;
 
+  /// Airtime sent to a phone abroad, or a bill paid abroad. Its receipt is
+  /// printed whatever the shop's floor says, like a card's: it is the
+  /// customer's only proof of what was sent.
+  bool get isDirectService => integration?.isDirectService ?? false;
+
   /// A line a provider performs after the sale: a top-up or a card. Its
   /// receipt waits for the provider's answer, because that answer — a PIN, a
   /// new term — is printed beneath it.
@@ -344,7 +418,7 @@ class CartLine {
       'stock_batch_id': stockBatchId,
       'stock_batch_code': stockBatchCode,
       'stock_batch_expiry': stockBatchExpiry?.toIso8601String(),
-      'integration': integration?.toJson(),
+      'integration': integration?.toStorageJson(),
       'line_key': lineKey,
     };
   }

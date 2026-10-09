@@ -1,0 +1,2143 @@
+{
+  "available": true,
+  "error_code": "",
+  "version": "4e78394cc9e1c7f5",
+  "balance": null,
+  "balance_at": null,
+  "popular": [
+    "NE",
+    "ML",
+    "NG",
+    "EG",
+    "GH",
+    "SN",
+    "TN",
+    "BD",
+    "PK",
+    "PH",
+    "TR",
+    "MA",
+    "DZ",
+    "CM",
+    "BF",
+    "CI",
+    "GN",
+    "GM",
+    "ET"
+  ],
+  "countries": [
+    {
+      "code": "NE",
+      "name": "النيجر",
+      "name_en": "Niger",
+      "dial": [
+        "227"
+      ],
+      "currency": "XOF",
+      "currency_name": "فرنك أفريقي",
+      "popular": 1,
+      "airtime": 3,
+      "bills": 0
+    },
+    {
+      "code": "ML",
+      "name": "مالي",
+      "name_en": "Mali",
+      "dial": [
+        "223"
+      ],
+      "currency": "XOF",
+      "currency_name": "فرنك أفريقي",
+      "popular": 2,
+      "airtime": 3,
+      "bills": 3
+    },
+    {
+      "code": "NG",
+      "name": "نيجيريا",
+      "name_en": "Nigeria",
+      "dial": [
+        "234"
+      ],
+      "currency": "NGN",
+      "currency_name": "نيرة نيجيرية",
+      "popular": 3,
+      "airtime": 4,
+      "bills": 18
+    },
+    {
+      "code": "EG",
+      "name": "مصر",
+      "name_en": "Egypt",
+      "dial": [
+        "20"
+      ],
+      "currency": "EGP",
+      "currency_name": "جنيه مصري",
+      "popular": 4,
+      "airtime": 4,
+      "bills": 0
+    },
+    {
+      "code": "GH",
+      "name": "غانا",
+      "name_en": "Ghana",
+      "dial": [
+        "233"
+      ],
+      "currency": "GHS",
+      "currency_name": "سيدي غاني",
+      "popular": 5,
+      "airtime": 3,
+      "bills": 0
+    },
+    {
+      "code": "SN",
+      "name": "السنغال",
+      "name_en": "Senegal",
+      "dial": [
+        "221"
+      ],
+      "currency": "XOF",
+      "currency_name": "فرنك أفريقي",
+      "popular": 6,
+      "airtime": 3,
+      "bills": 3
+    },
+    {
+      "code": "TN",
+      "name": "تونس",
+      "name_en": "Tunisia",
+      "dial": [
+        "216"
+      ],
+      "currency": "TND",
+      "currency_name": "دينار تونسي",
+      "popular": 7,
+      "airtime": 3,
+      "bills": 0
+    },
+    {
+      "code": "BD",
+      "name": "بنغلاديش",
+      "name_en": "Bangladesh",
+      "dial": [
+        "880"
+      ],
+      "currency": "BDT",
+      "currency_name": "تاكا بنغلاديشية",
+      "popular": 8,
+      "airtime": 5,
+      "bills": 0
+    },
+    {
+      "code": "PK",
+      "name": "باكستان",
+      "name_en": "Pakistan",
+      "dial": [
+        "92"
+      ],
+      "currency": "PKR",
+      "currency_name": "روبية باكستانية",
+      "popular": 9,
+      "airtime": 5,
+      "bills": 0
+    },
+    {
+      "code": "PH",
+      "name": "الفلبين",
+      "name_en": "Philippines",
+      "dial": [
+        "63"
+      ],
+      "currency": "PHP",
+      "currency_name": "بيزو فلبيني",
+      "popular": 10,
+      "airtime": 7,
+      "bills": 0
+    },
+    {
+      "code": "TR",
+      "name": "تركيا",
+      "name_en": "Turkey",
+      "dial": [
+        "90"
+      ],
+      "currency": "TRY",
+      "currency_name": "ليرة تركية",
+      "popular": 11,
+      "airtime": 4,
+      "bills": 0
+    },
+    {
+      "code": "MA",
+      "name": "المغرب",
+      "name_en": "Morocco",
+      "dial": [
+        "212"
+      ],
+      "currency": "MAD",
+      "currency_name": "درهم مغربي",
+      "popular": 12,
+      "airtime": 3,
+      "bills": 0
+    },
+    {
+      "code": "DZ",
+      "name": "الجزائر",
+      "name_en": "Algeria",
+      "dial": [
+        "213"
+      ],
+      "currency": "DZD",
+      "currency_name": "دينار جزائري",
+      "popular": 13,
+      "airtime": 3,
+      "bills": 0
+    },
+    {
+      "code": "CM",
+      "name": "الكاميرون",
+      "name_en": "Cameroon",
+      "dial": [
+        "237"
+      ],
+      "currency": "XAF",
+      "currency_name": "فرنك أفريقي",
+      "popular": 14,
+      "airtime": 2,
+      "bills": 0
+    },
+    {
+      "code": "BF",
+      "name": "بوركينا فاسو",
+      "name_en": "Burkina Faso",
+      "dial": [
+        "226"
+      ],
+      "currency": "XOF",
+      "currency_name": "فرنك أفريقي",
+      "popular": 15,
+      "airtime": 3,
+      "bills": 0
+    },
+    {
+      "code": "CI",
+      "name": "ساحل العاج",
+      "name_en": "Côte d'Ivoire",
+      "dial": [
+        "225"
+      ],
+      "currency": "XOF",
+      "currency_name": "فرنك أفريقي",
+      "popular": 16,
+      "airtime": 3,
+      "bills": 0
+    },
+    {
+      "code": "GN",
+      "name": "غينيا",
+      "name_en": "Guinea-Conakry",
+      "dial": [
+        "224"
+      ],
+      "currency": "GNF",
+      "currency_name": "فرنك غيني",
+      "popular": 17,
+      "airtime": 3,
+      "bills": 0
+    },
+    {
+      "code": "GM",
+      "name": "غامبيا",
+      "name_en": "Gambia",
+      "dial": [
+        "220"
+      ],
+      "currency": "GMD",
+      "currency_name": "دالاسي غامبي",
+      "popular": 18,
+      "airtime": 4,
+      "bills": 0
+    },
+    {
+      "code": "ET",
+      "name": "إثيوبيا",
+      "name_en": "Ethiopia",
+      "dial": [
+        "251"
+      ],
+      "currency": "ETB",
+      "currency_name": "بير إثيوبي",
+      "popular": 19,
+      "airtime": 2,
+      "bills": 0
+    },
+    {
+      "code": "AZ",
+      "name": "أذربيجان",
+      "name_en": "Azerbaijan",
+      "dial": [
+        "994"
+      ],
+      "currency": "AZN",
+      "currency_name": "مانات أذربيجاني",
+      "popular": 0,
+      "airtime": 1,
+      "bills": 0
+    },
+    {
+      "code": "AR",
+      "name": "الأرجنتين",
+      "name_en": "Argentina",
+      "dial": [
+        "54"
+      ],
+      "currency": "ARS",
+      "currency_name": "بيزو أرجنتيني",
+      "popular": 0,
+      "airtime": 2,
+      "bills": 0
+    },
+    {
+      "code": "JO",
+      "name": "الأردن",
+      "name_en": "Jordan",
+      "dial": [
+        "962"
+      ],
+      "currency": "JOD",
+      "currency_name": "دينار أردني",
+      "popular": 0,
+      "airtime": 2,
+      "bills": 0
+    },
+    {
+      "code": "AM",
+      "name": "أرمينيا",
+      "name_en": "Armenia",
+      "dial": [
+        "374"
+      ],
+      "currency": "AMD",
+      "currency_name": "درام أرمني",
+      "popular": 0,
+      "airtime": 2,
+      "bills": 0
+    },
+    {
+      "code": "AW",
+      "name": "أروبا",
+      "name_en": "Aruba",
+      "dial": [
+        "297"
+      ],
+      "currency": "AWG",
+      "currency_name": "فلورن أروبي",
+      "popular": 0,
+      "airtime": 1,
+      "bills": 0
+    },
+    {
+      "code": "ES",
+      "name": "إسبانيا",
+      "name_en": "Spain",
+      "dial": [
+        "34"
+      ],
+      "currency": "EUR",
+      "currency_name": "يورو",
+      "popular": 0,
+      "airtime": 17,
+      "bills": 0
+    },
+    {
+      "code": "SZ",
+      "name": "إسواتيني",
+      "name_en": "Eswatini",
+      "dial": [
+        "268"
+      ],
+      "currency": "SZL",
+      "currency_name": "ليلانجيني إسواتيني",
+      "popular": 0,
+      "airtime": 2,
+      "bills": 0
+    },
+    {
+      "code": "CF",
+      "name": "أفريقيا الوسطى",
+      "name_en": "Central African Republic",
+      "dial": [
+        "236"
+      ],
+      "currency": "XAF",
+      "currency_name": "فرنك أفريقي",
+      "popular": 0,
+      "airtime": 2,
+      "bills": 0
+    },
+    {
+      "code": "AF",
+      "name": "أفغانستان",
+      "name_en": "Afghanistan",
+      "dial": [
+        "93"
+      ],
+      "currency": "AFN",
+      "currency_name": "أفغاني",
+      "popular": 0,
+      "airtime": 5,
+      "bills": 0
+    },
+    {
+      "code": "EC",
+      "name": "الإكوادور",
+      "name_en": "Ecuador",
+      "dial": [
+        "593"
+      ],
+      "currency": "USD",
+      "currency_name": "دولار أمريكي",
+      "popular": 0,
+      "airtime": 4,
+      "bills": 0
+    },
+    {
+      "code": "AE",
+      "name": "الإمارات",
+      "name_en": "United Arab Emirates",
+      "dial": [
+        "971"
+      ],
+      "currency": "AED",
+      "currency_name": "درهم إماراتي",
+      "popular": 0,
+      "airtime": 2,
+      "bills": 0
+    },
+    {
+      "code": "AG",
+      "name": "أنتيغوا وباربودا",
+      "name_en": "Antigua and Barbuda",
+      "dial": [
+        "1268"
+      ],
+      "currency": "XCD",
+      "currency_name": "دولار شرق الكاريبي",
+      "popular": 0,
+      "airtime": 2,
+      "bills": 0
+    },
+    {
+      "code": "ID",
+      "name": "إندونيسيا",
+      "name_en": "Indonesia",
+      "dial": [
+        "62"
+      ],
+      "currency": "IDR",
+      "currency_name": "روبية إندونيسية",
+      "popular": 0,
+      "airtime": 7,
+      "bills": 0
+    },
+    {
+      "code": "AO",
+      "name": "أنغولا",
+      "name_en": "Angola",
+      "dial": [
+        "244"
+      ],
+      "currency": "AOA",
+      "currency_name": "كوانزا أنغولي",
+      "popular": 0,
+      "airtime": 1,
+      "bills": 0
+    },
+    {
+      "code": "AI",
+      "name": "أنغويلا",
+      "name_en": "Anguilla",
+      "dial": [
+        "1264"
+      ],
+      "currency": "XCD",
+      "currency_name": "دولار شرق الكاريبي",
+      "popular": 0,
+      "airtime": 2,
+      "bills": 0
+    },
+    {
+      "code": "UY",
+      "name": "الأوروغواي",
+      "name_en": "Uruguay",
+      "dial": [
+        "598"
+      ],
+      "currency": "UYU",
+      "currency_name": "بيزو أوروغواي",
+      "popular": 0,
+      "airtime": 1,
+      "bills": 0
+    },
+    {
+      "code": "UG",
+      "name": "أوغندا",
+      "name_en": "Uganda",
+      "dial": [
+        "256"
+      ],
+      "currency": "UGX",
+      "currency_name": "شلن أوغندي",
+      "popular": 0,
+      "airtime": 4,
+      "bills": 2
+    },
+    {
+      "code": "IT",
+      "name": "إيطاليا",
+      "name_en": "Italy",
+      "dial": [
+        "39"
+      ],
+      "currency": "EUR",
+      "currency_name": "يورو",
+      "popular": 0,
+      "airtime": 13,
+      "bills": 0
+    },
+    {
+      "code": "PY",
+      "name": "باراغواي",
+      "name_en": "Paraguay",
+      "dial": [
+        "595"
+      ],
+      "currency": "PYG",
+      "currency_name": "غواراني باراغواي",
+      "popular": 0,
+      "airtime": 3,
+      "bills": 0
+    },
+    {
+      "code": "BB",
+      "name": "باربادوس",
+      "name_en": "Barbados",
+      "dial": [
+        "1246"
+      ],
+      "currency": "BBD",
+      "currency_name": "دولار بربادوسي",
+      "popular": 0,
+      "airtime": 2,
+      "bills": 0
+    },
+    {
+      "code": "BH",
+      "name": "البحرين",
+      "name_en": "Bahrain",
+      "dial": [
+        "973"
+      ],
+      "currency": "BHD",
+      "currency_name": "دينار بحريني",
+      "popular": 0,
+      "airtime": 1,
+      "bills": 0
+    },
+    {
+      "code": "BR",
+      "name": "البرازيل",
+      "name_en": "Brazil",
+      "dial": [
+        "55"
+      ],
+      "currency": "BRL",
+      "currency_name": "ريال برازيلي",
+      "popular": 0,
+      "airtime": 3,
+      "bills": 0
+    },
+    {
+      "code": "PT",
+      "name": "البرتغال",
+      "name_en": "Portugal",
+      "dial": [
+        "351"
+      ],
+      "currency": "EUR",
+      "currency_name": "يورو",
+      "popular": 0,
+      "airtime": 6,
+      "bills": 0
+    },
+    {
+      "code": "BM",
+      "name": "برمودا",
+      "name_en": "Bermuda",
+      "dial": [
+        "1441"
+      ],
+      "currency": "BMD",
+      "currency_name": "دولار برمودي",
+      "popular": 0,
+      "airtime": 1,
+      "bills": 0
+    },
+    {
+      "code": "BZ",
+      "name": "بليز",
+      "name_en": "Belize",
+      "dial": [
+        "501"
+      ],
+      "currency": "BZD",
+      "currency_name": "دولار بليزي",
+      "popular": 0,
+      "airtime": 2,
+      "bills": 0
+    },
+    {
+      "code": "PA",
+      "name": "بنما",
+      "name_en": "Panama",
+      "dial": [
+        "507"
+      ],
+      "currency": "USD",
+      "currency_name": "دولار أمريكي",
+      "popular": 0,
+      "airtime": 3,
+      "bills": 0
+    },
+    {
+      "code": "BJ",
+      "name": "بنين",
+      "name_en": "Benin",
+      "dial": [
+        "229"
+      ],
+      "currency": "XOF",
+      "currency_name": "فرنك أفريقي",
+      "popular": 0,
+      "airtime": 2,
+      "bills": 0
+    },
+    {
+      "code": "BW",
+      "name": "بوتسوانا",
+      "name_en": "Botswana",
+      "dial": [
+        "267"
+      ],
+      "currency": "BWP",
+      "currency_name": "بولا بوتسواني",
+      "popular": 0,
+      "airtime": 3,
+      "bills": 0
+    },
+    {
+      "code": "PR",
+      "name": "بورتوريكو",
+      "name_en": "Puerto Rico",
+      "dial": [
+        "1787",
+        "1939"
+      ],
+      "currency": "USD",
+      "currency_name": "دولار أمريكي",
+      "popular": 0,
+      "airtime": 1,
+      "bills": 0
+    },
+    {
+      "code": "BI",
+      "name": "بوروندي",
+      "name_en": "Burundi",
+      "dial": [
+        "257"
+      ],
+      "currency": "BIF",
+      "currency_name": "فرنك بوروندي",
+      "popular": 0,
+      "airtime": 1,
+      "bills": 0
+    },
+    {
+      "code": "PL",
+      "name": "بولندا",
+      "name_en": "Poland",
+      "dial": [
+        "48"
+      ],
+      "currency": "PLN",
+      "currency_name": "زلوتي بولندي",
+      "popular": 0,
+      "airtime": 7,
+      "bills": 0
+    },
+    {
+      "code": "BO",
+      "name": "بوليفيا",
+      "name_en": "Bolivia",
+      "dial": [
+        "591"
+      ],
+      "currency": "BOB",
+      "currency_name": "بوليفيانو بوليفي",
+      "popular": 0,
+      "airtime": 3,
+      "bills": 0
+    },
+    {
+      "code": "PE",
+      "name": "بيرو",
+      "name_en": "Peru",
+      "dial": [
+        "51"
+      ],
+      "currency": "PEN",
+      "currency_name": "سول بيروفي",
+      "popular": 0,
+      "airtime": 4,
+      "bills": 0
+    },
+    {
+      "code": "TH",
+      "name": "تايلاند",
+      "name_en": "Thailand",
+      "dial": [
+        "66"
+      ],
+      "currency": "THB",
+      "currency_name": "باخت تايلاندي",
+      "popular": 0,
+      "airtime": 4,
+      "bills": 0
+    },
+    {
+      "code": "TT",
+      "name": "ترينيداد وتوباغو",
+      "name_en": "Trinidad and Tobago",
+      "dial": [
+        "1868"
+      ],
+      "currency": "TTD",
+      "currency_name": "دولار ترينيداد وتوباغو",
+      "popular": 0,
+      "airtime": 1,
+      "bills": 0
+    },
+    {
+      "code": "CL",
+      "name": "تشيلي",
+      "name_en": "Chile",
+      "dial": [
+        "56"
+      ],
+      "currency": "CLP",
+      "currency_name": "بيزو تشيلي",
+      "popular": 0,
+      "airtime": 5,
+      "bills": 0
+    },
+    {
+      "code": "TZ",
+      "name": "تنزانيا",
+      "name_en": "Tanzania",
+      "dial": [
+        "255"
+      ],
+      "currency": "TZS",
+      "currency_name": "شلن تنزاني",
+      "popular": 0,
+      "airtime": 5,
+      "bills": 0
+    },
+    {
+      "code": "TG",
+      "name": "توغو",
+      "name_en": "Togo",
+      "dial": [
+        "228"
+      ],
+      "currency": "XOF",
+      "currency_name": "فرنك أفريقي",
+      "popular": 0,
+      "airtime": 2,
+      "bills": 0
+    },
+    {
+      "code": "JM",
+      "name": "جامايكا",
+      "name_en": "Jamaica",
+      "dial": [
+        "1876"
+      ],
+      "currency": "JMD",
+      "currency_name": "دولار جامايكي",
+      "popular": 0,
+      "airtime": 2,
+      "bills": 0
+    },
+    {
+      "code": "AN",
+      "name": "جزر الأنتيل الهولندية",
+      "name_en": "Netherlands Antilles",
+      "dial": [
+        "599"
+      ],
+      "currency": "ANG",
+      "currency_name": "غيلدر أنتيلي",
+      "popular": 0,
+      "airtime": 2,
+      "bills": 0
+    },
+    {
+      "code": "BS",
+      "name": "جزر البهاما",
+      "name_en": "Bahamas",
+      "dial": [
+        "1242"
+      ],
+      "currency": "BSD",
+      "currency_name": "دولار بهامي",
+      "popular": 0,
+      "airtime": 1,
+      "bills": 0
+    },
+    {
+      "code": "VG",
+      "name": "جزر العذراء البريطانية",
+      "name_en": "British Virgin Islands",
+      "dial": [
+        "1284"
+      ],
+      "currency": "USD",
+      "currency_name": "دولار أمريكي",
+      "popular": 0,
+      "airtime": 1,
+      "bills": 0
+    },
+    {
+      "code": "KM",
+      "name": "جزر القمر",
+      "name_en": "Comoros",
+      "dial": [
+        "269"
+      ],
+      "currency": "KMF",
+      "currency_name": "فرنك جزر القمر",
+      "popular": 0,
+      "airtime": 2,
+      "bills": 0
+    },
+    {
+      "code": "TC",
+      "name": "جزر توركس وكايكوس",
+      "name_en": "Turks And Caicos Islands",
+      "dial": [
+        "1649"
+      ],
+      "currency": "USD",
+      "currency_name": "دولار أمريكي",
+      "popular": 0,
+      "airtime": 2,
+      "bills": 0
+    },
+    {
+      "code": "KY",
+      "name": "جزر كايمان",
+      "name_en": "Cayman Islands",
+      "dial": [
+        "1345"
+      ],
+      "currency": "KYD",
+      "currency_name": "دولار جزر كايمان",
+      "popular": 0,
+      "airtime": 2,
+      "bills": 0
+    },
+    {
+      "code": "ZA",
+      "name": "جنوب أفريقيا",
+      "name_en": "South Africa",
+      "dial": [
+        "27"
+      ],
+      "currency": "ZAR",
+      "currency_name": "راند جنوب أفريقي",
+      "popular": 0,
+      "airtime": 4,
+      "bills": 0
+    },
+    {
+      "code": "GE",
+      "name": "جورجيا",
+      "name_en": "Georgia",
+      "dial": [
+        "995"
+      ],
+      "currency": "GEL",
+      "currency_name": "لاري جورجي",
+      "popular": 0,
+      "airtime": 2,
+      "bills": 0
+    },
+    {
+      "code": "DM",
+      "name": "دومينيكا",
+      "name_en": "Dominica",
+      "dial": [
+        "1767"
+      ],
+      "currency": "XCD",
+      "currency_name": "دولار شرق الكاريبي",
+      "popular": 0,
+      "airtime": 2,
+      "bills": 0
+    },
+    {
+      "code": "DO",
+      "name": "الدومينيكان",
+      "name_en": "Dominican Republic",
+      "dial": [
+        "1849",
+        "1829",
+        "1809"
+      ],
+      "currency": "DOP",
+      "currency_name": "بيزو دومينيكاني",
+      "popular": 0,
+      "airtime": 3,
+      "bills": 0
+    },
+    {
+      "code": "CV",
+      "name": "الرأس الأخضر",
+      "name_en": "Cape Verde",
+      "dial": [
+        "238"
+      ],
+      "currency": "CVE",
+      "currency_name": "إسكودو الرأس الأخضر",
+      "popular": 0,
+      "airtime": 2,
+      "bills": 0
+    },
+    {
+      "code": "RW",
+      "name": "رواندا",
+      "name_en": "Rwanda",
+      "dial": [
+        "250"
+      ],
+      "currency": "RWF",
+      "currency_name": "فرنك رواندي",
+      "popular": 0,
+      "airtime": 2,
+      "bills": 0
+    },
+    {
+      "code": "RU",
+      "name": "روسيا",
+      "name_en": "Russia",
+      "dial": [
+        "7"
+      ],
+      "currency": "RUB",
+      "currency_name": "روبل روسي",
+      "popular": 0,
+      "airtime": 7,
+      "bills": 0
+    },
+    {
+      "code": "RO",
+      "name": "رومانيا",
+      "name_en": "Romania",
+      "dial": [
+        "40"
+      ],
+      "currency": "EUR",
+      "currency_name": "يورو",
+      "popular": 0,
+      "airtime": 4,
+      "bills": 0
+    },
+    {
+      "code": "ZM",
+      "name": "زامبيا",
+      "name_en": "Zambia",
+      "dial": [
+        "260"
+      ],
+      "currency": "ZMW",
+      "currency_name": "كواشا زامبي",
+      "popular": 0,
+      "airtime": 3,
+      "bills": 0
+    },
+    {
+      "code": "ZW",
+      "name": "زيمبابوي",
+      "name_en": "Zimbabwe",
+      "dial": [
+        "263"
+      ],
+      "currency": "USD",
+      "currency_name": "دولار أمريكي",
+      "popular": 0,
+      "airtime": 3,
+      "bills": 0
+    },
+    {
+      "code": "VC",
+      "name": "سانت فينسنت والغرينادين",
+      "name_en": "Saint Vincent And The Grenadines",
+      "dial": [
+        "1784"
+      ],
+      "currency": "XCD",
+      "currency_name": "دولار شرق الكاريبي",
+      "popular": 0,
+      "airtime": 2,
+      "bills": 0
+    },
+    {
+      "code": "KN",
+      "name": "سانت كيتس ونيفيس",
+      "name_en": "Saint Kitts And Nevis",
+      "dial": [
+        "1869"
+      ],
+      "currency": "XCD",
+      "currency_name": "دولار شرق الكاريبي",
+      "popular": 0,
+      "airtime": 2,
+      "bills": 0
+    },
+    {
+      "code": "LC",
+      "name": "سانت لوسيا",
+      "name_en": "Saint Lucia",
+      "dial": [
+        "1758"
+      ],
+      "currency": "XCD",
+      "currency_name": "دولار شرق الكاريبي",
+      "popular": 0,
+      "airtime": 2,
+      "bills": 0
+    },
+    {
+      "code": "LK",
+      "name": "سريلانكا",
+      "name_en": "Sri Lanka",
+      "dial": [
+        "94"
+      ],
+      "currency": "LKR",
+      "currency_name": "روبية سريلانكية",
+      "popular": 0,
+      "airtime": 3,
+      "bills": 0
+    },
+    {
+      "code": "SA",
+      "name": "السعودية",
+      "name_en": "Saudi Arabia",
+      "dial": [
+        "966"
+      ],
+      "currency": "SAR",
+      "currency_name": "ريال سعودي",
+      "popular": 0,
+      "airtime": 1,
+      "bills": 0
+    },
+    {
+      "code": "SV",
+      "name": "السلفادور",
+      "name_en": "El Salvador",
+      "dial": [
+        "503"
+      ],
+      "currency": "USD",
+      "currency_name": "دولار أمريكي",
+      "popular": 0,
+      "airtime": 4,
+      "bills": 0
+    },
+    {
+      "code": "SG",
+      "name": "سنغافورة",
+      "name_en": "Singapore",
+      "dial": [
+        "65"
+      ],
+      "currency": "SGD",
+      "currency_name": "دولار سنغافوري",
+      "popular": 0,
+      "airtime": 3,
+      "bills": 0
+    },
+    {
+      "code": "SR",
+      "name": "سورينام",
+      "name_en": "Suriname",
+      "dial": [
+        "597"
+      ],
+      "currency": "SRD",
+      "currency_name": "دولار سورينامي",
+      "popular": 0,
+      "airtime": 1,
+      "bills": 0
+    },
+    {
+      "code": "SL",
+      "name": "سيراليون",
+      "name_en": "Sierra Leone",
+      "dial": [
+        "232"
+      ],
+      "currency": "SLE",
+      "currency_name": "ليون سيراليوني",
+      "popular": 0,
+      "airtime": 3,
+      "bills": 0
+    },
+    {
+      "code": "CN",
+      "name": "الصين",
+      "name_en": "China",
+      "dial": [
+        "86"
+      ],
+      "currency": "CNY",
+      "currency_name": "يوان صيني",
+      "popular": 0,
+      "airtime": 3,
+      "bills": 0
+    },
+    {
+      "code": "TJ",
+      "name": "طاجيكستان",
+      "name_en": "Tajikistan",
+      "dial": [
+        "992"
+      ],
+      "currency": "TJS",
+      "currency_name": "سوموني طاجيكي",
+      "popular": 0,
+      "airtime": 3,
+      "bills": 0
+    },
+    {
+      "code": "IQ",
+      "name": "العراق",
+      "name_en": "Iraq",
+      "dial": [
+        "964"
+      ],
+      "currency": "IQD",
+      "currency_name": "دينار عراقي",
+      "popular": 0,
+      "airtime": 1,
+      "bills": 0
+    },
+    {
+      "code": "OM",
+      "name": "عُمان",
+      "name_en": "Oman",
+      "dial": [
+        "968"
+      ],
+      "currency": "OMR",
+      "currency_name": "ريال عُماني",
+      "popular": 0,
+      "airtime": 1,
+      "bills": 0
+    },
+    {
+      "code": "GD",
+      "name": "غرينادا",
+      "name_en": "Grenada",
+      "dial": [
+        "1473"
+      ],
+      "currency": "XCD",
+      "currency_name": "دولار شرق الكاريبي",
+      "popular": 0,
+      "airtime": 2,
+      "bills": 0
+    },
+    {
+      "code": "GT",
+      "name": "غواتيمالا",
+      "name_en": "Guatemala",
+      "dial": [
+        "502"
+      ],
+      "currency": "GTQ",
+      "currency_name": "كيتزال غواتيمالي",
+      "popular": 0,
+      "airtime": 3,
+      "bills": 0
+    },
+    {
+      "code": "GY",
+      "name": "غيانا",
+      "name_en": "Guyana",
+      "dial": [
+        "592"
+      ],
+      "currency": "GYD",
+      "currency_name": "دولار غياني",
+      "popular": 0,
+      "airtime": 1,
+      "bills": 0
+    },
+    {
+      "code": "GW",
+      "name": "غينيا بيساو",
+      "name_en": "Guinea-Bissau",
+      "dial": [
+        "245"
+      ],
+      "currency": "XOF",
+      "currency_name": "فرنك أفريقي",
+      "popular": 0,
+      "airtime": 2,
+      "bills": 0
+    },
+    {
+      "code": "VE",
+      "name": "فنزويلا",
+      "name_en": "Venezuela",
+      "dial": [
+        "58"
+      ],
+      "currency": "VES",
+      "currency_name": "بوليفار فنزويلي",
+      "popular": 0,
+      "airtime": 3,
+      "bills": 0
+    },
+    {
+      "code": "VN",
+      "name": "فيتنام",
+      "name_en": "Vietnam",
+      "dial": [
+        "84"
+      ],
+      "currency": "VND",
+      "currency_name": "دونغ فيتنامي",
+      "popular": 0,
+      "airtime": 5,
+      "bills": 0
+    },
+    {
+      "code": "FJ",
+      "name": "فيجي",
+      "name_en": "Fiji",
+      "dial": [
+        "679"
+      ],
+      "currency": "FJD",
+      "currency_name": "دولار فيجي",
+      "popular": 0,
+      "airtime": 2,
+      "bills": 0
+    },
+    {
+      "code": "CY",
+      "name": "قبرص",
+      "name_en": "Cyprus",
+      "dial": [
+        "357"
+      ],
+      "currency": "EUR",
+      "currency_name": "يورو",
+      "popular": 0,
+      "airtime": 1,
+      "bills": 0
+    },
+    {
+      "code": "QA",
+      "name": "قطر",
+      "name_en": "Qatar",
+      "dial": [
+        "974"
+      ],
+      "currency": "QAR",
+      "currency_name": "ريال قطري",
+      "popular": 0,
+      "airtime": 1,
+      "bills": 0
+    },
+    {
+      "code": "KG",
+      "name": "قيرغيزستان",
+      "name_en": "Kyrgyzstan",
+      "dial": [
+        "996"
+      ],
+      "currency": "KGS",
+      "currency_name": "سوم قيرغيزي",
+      "popular": 0,
+      "airtime": 3,
+      "bills": 0
+    },
+    {
+      "code": "KH",
+      "name": "كمبوديا",
+      "name_en": "Cambodia",
+      "dial": [
+        "855"
+      ],
+      "currency": "USD",
+      "currency_name": "دولار أمريكي",
+      "popular": 0,
+      "airtime": 3,
+      "bills": 0
+    },
+    {
+      "code": "CA",
+      "name": "كندا",
+      "name_en": "Canada",
+      "dial": [
+        "1"
+      ],
+      "currency": "CAD",
+      "currency_name": "دولار كندي",
+      "popular": 0,
+      "airtime": 3,
+      "bills": 0
+    },
+    {
+      "code": "CU",
+      "name": "كوبا",
+      "name_en": "Cuba",
+      "dial": [
+        "53"
+      ],
+      "currency": "CUP",
+      "currency_name": "بيزو كوبي",
+      "popular": 0,
+      "airtime": 1,
+      "bills": 0
+    },
+    {
+      "code": "KR",
+      "name": "كوريا الجنوبية",
+      "name_en": "South Korea",
+      "dial": [
+        "82"
+      ],
+      "currency": "KRW",
+      "currency_name": "وون كوري",
+      "popular": 0,
+      "airtime": 3,
+      "bills": 0
+    },
+    {
+      "code": "CR",
+      "name": "كوستاريكا",
+      "name_en": "Costa Rica",
+      "dial": [
+        "506"
+      ],
+      "currency": "CRC",
+      "currency_name": "كولون كوستاريكي",
+      "popular": 0,
+      "airtime": 2,
+      "bills": 0
+    },
+    {
+      "code": "CO",
+      "name": "كولومبيا",
+      "name_en": "Colombia",
+      "dial": [
+        "57"
+      ],
+      "currency": "COP",
+      "currency_name": "بيزو كولومبي",
+      "popular": 0,
+      "airtime": 9,
+      "bills": 0
+    },
+    {
+      "code": "CG",
+      "name": "الكونغو",
+      "name_en": "Congo",
+      "dial": [
+        "242"
+      ],
+      "currency": "XAF",
+      "currency_name": "فرنك أفريقي",
+      "popular": 0,
+      "airtime": 1,
+      "bills": 0
+    },
+    {
+      "code": "CD",
+      "name": "الكونغو الديمقراطية",
+      "name_en": "The Democratic Republic Of Congo",
+      "dial": [
+        "243"
+      ],
+      "currency": "USD",
+      "currency_name": "دولار أمريكي",
+      "popular": 0,
+      "airtime": 4,
+      "bills": 0
+    },
+    {
+      "code": "KW",
+      "name": "الكويت",
+      "name_en": "Kuwait",
+      "dial": [
+        "965"
+      ],
+      "currency": "KWD",
+      "currency_name": "دينار كويتي",
+      "popular": 0,
+      "airtime": 3,
+      "bills": 0
+    },
+    {
+      "code": "KE",
+      "name": "كينيا",
+      "name_en": "Kenya",
+      "dial": [
+        "254"
+      ],
+      "currency": "KES",
+      "currency_name": "شلن كيني",
+      "popular": 0,
+      "airtime": 3,
+      "bills": 2
+    },
+    {
+      "code": "LA",
+      "name": "لاوس",
+      "name_en": "Laos",
+      "dial": [
+        "856"
+      ],
+      "currency": "LAK",
+      "currency_name": "كيب لاوسي",
+      "popular": 0,
+      "airtime": 3,
+      "bills": 0
+    },
+    {
+      "code": "LR",
+      "name": "ليبيريا",
+      "name_en": "Liberia",
+      "dial": [
+        "231"
+      ],
+      "currency": "USD",
+      "currency_name": "دولار أمريكي",
+      "popular": 0,
+      "airtime": 2,
+      "bills": 0
+    },
+    {
+      "code": "MQ",
+      "name": "مارتينيك",
+      "name_en": "Martinique",
+      "dial": [
+        "596"
+      ],
+      "currency": "EUR",
+      "currency_name": "يورو",
+      "popular": 0,
+      "airtime": 1,
+      "bills": 0
+    },
+    {
+      "code": "MY",
+      "name": "ماليزيا",
+      "name_en": "Malaysia",
+      "dial": [
+        "60"
+      ],
+      "currency": "MYR",
+      "currency_name": "رينغيت ماليزي",
+      "popular": 0,
+      "airtime": 9,
+      "bills": 0
+    },
+    {
+      "code": "MG",
+      "name": "مدغشقر",
+      "name_en": "Madagascar",
+      "dial": [
+        "261"
+      ],
+      "currency": "MGA",
+      "currency_name": "أرياري مدغشقري",
+      "popular": 0,
+      "airtime": 3,
+      "bills": 0
+    },
+    {
+      "code": "MX",
+      "name": "المكسيك",
+      "name_en": "Mexico",
+      "dial": [
+        "52"
+      ],
+      "currency": "MXN",
+      "currency_name": "بيزو مكسيكي",
+      "popular": 0,
+      "airtime": 8,
+      "bills": 0
+    },
+    {
+      "code": "MW",
+      "name": "ملاوي",
+      "name_en": "Malawi",
+      "dial": [
+        "265"
+      ],
+      "currency": "MWK",
+      "currency_name": "كواشا ملاوية",
+      "popular": 0,
+      "airtime": 2,
+      "bills": 0
+    },
+    {
+      "code": "MR",
+      "name": "موريتانيا",
+      "name_en": "Mauritania",
+      "dial": [
+        "222"
+      ],
+      "currency": "MRU",
+      "currency_name": "أوقية موريتانية",
+      "popular": 0,
+      "airtime": 3,
+      "bills": 0
+    },
+    {
+      "code": "MZ",
+      "name": "موزمبيق",
+      "name_en": "Mozambique",
+      "dial": [
+        "258"
+      ],
+      "currency": "MZN",
+      "currency_name": "متيكال موزمبيقي",
+      "popular": 0,
+      "airtime": 3,
+      "bills": 0
+    },
+    {
+      "code": "MS",
+      "name": "مونتسرات",
+      "name_en": "Montserrat",
+      "dial": [
+        "1"
+      ],
+      "currency": "XCD",
+      "currency_name": "دولار شرق الكاريبي",
+      "popular": 0,
+      "airtime": 2,
+      "bills": 0
+    },
+    {
+      "code": "MM",
+      "name": "ميانمار",
+      "name_en": "Myanmar",
+      "dial": [
+        "95"
+      ],
+      "currency": "MMK",
+      "currency_name": "كيات ميانماري",
+      "popular": 0,
+      "airtime": 5,
+      "bills": 0
+    },
+    {
+      "code": "NP",
+      "name": "نيبال",
+      "name_en": "Nepal",
+      "dial": [
+        "977"
+      ],
+      "currency": "NPR",
+      "currency_name": "روبية نيبالية",
+      "popular": 0,
+      "airtime": 5,
+      "bills": 0
+    },
+    {
+      "code": "NI",
+      "name": "نيكاراغوا",
+      "name_en": "Nicaragua",
+      "dial": [
+        "505"
+      ],
+      "currency": "NIO",
+      "currency_name": "كوردوبا نيكاراغوي",
+      "popular": 0,
+      "airtime": 3,
+      "bills": 0
+    },
+    {
+      "code": "HT",
+      "name": "هايتي",
+      "name_en": "Haiti",
+      "dial": [
+        "509"
+      ],
+      "currency": "HTG",
+      "currency_name": "غورد هايتي",
+      "popular": 0,
+      "airtime": 2,
+      "bills": 0
+    },
+    {
+      "code": "HN",
+      "name": "هندوراس",
+      "name_en": "Honduras",
+      "dial": [
+        "504"
+      ],
+      "currency": "HNL",
+      "currency_name": "لمبيرا هندوراسي",
+      "popular": 0,
+      "airtime": 2,
+      "bills": 0
+    },
+    {
+      "code": "US",
+      "name": "الولايات المتحدة",
+      "name_en": "United States",
+      "dial": [
+        "1"
+      ],
+      "currency": "USD",
+      "currency_name": "دولار أمريكي",
+      "popular": 0,
+      "airtime": 25,
+      "bills": 0
+    },
+    {
+      "code": "YE",
+      "name": "اليمن",
+      "name_en": "Yemen",
+      "dial": [
+        "967"
+      ],
+      "currency": "YER",
+      "currency_name": "ريال يمني",
+      "popular": 0,
+      "airtime": 2,
+      "bills": 0
+    }
+  ],
+  "bill_types": [
+    {
+      "type": "electricity",
+      "countries": [
+        "ML",
+        "NG",
+        "SN",
+        "UG",
+        "KE"
+      ],
+      "billers": 25
+    },
+    {
+      "type": "water",
+      "countries": [
+        "SN"
+      ],
+      "billers": 1
+    },
+    {
+      "type": "tv",
+      "countries": [
+        "ML"
+      ],
+      "billers": 2
+    }
+  ],
+  "unsupported": [
+    {
+      "code": "ER",
+      "name": "إريتريا"
+    },
+    {
+      "code": "AU",
+      "name": "أستراليا"
+    },
+    {
+      "code": "EE",
+      "name": "إستونيا"
+    },
+    {
+      "code": "AD",
+      "name": "أندورا"
+    },
+    {
+      "code": "UZ",
+      "name": "أوزبكستان"
+    },
+    {
+      "code": "UA",
+      "name": "أوكرانيا"
+    },
+    {
+      "code": "IR",
+      "name": "إيران"
+    },
+    {
+      "code": "IE",
+      "name": "أيرلندا"
+    },
+    {
+      "code": "IS",
+      "name": "آيسلندا"
+    },
+    {
+      "code": "PG",
+      "name": "بابوا غينيا الجديدة"
+    },
+    {
+      "code": "PW",
+      "name": "بالاو"
+    },
+    {
+      "code": "AL",
+      "name": "ألبانيا"
+    },
+    {
+      "code": "BN",
+      "name": "بروناي"
+    },
+    {
+      "code": "BE",
+      "name": "بلجيكا"
+    },
+    {
+      "code": "BG",
+      "name": "بلغاريا"
+    },
+    {
+      "code": "BT",
+      "name": "بوتان"
+    },
+    {
+      "code": "BA",
+      "name": "البوسنة والهرسك"
+    },
+    {
+      "code": "PF",
+      "name": "بولينيزيا الفرنسية"
+    },
+    {
+      "code": "BY",
+      "name": "بيلاروس"
+    },
+    {
+      "code": "TW",
+      "name": "تايوان"
+    },
+    {
+      "code": "TM",
+      "name": "تركمانستان"
+    },
+    {
+      "code": "TD",
+      "name": "تشاد"
+    },
+    {
+      "code": "CZ",
+      "name": "التشيك"
+    },
+    {
+      "code": "TV",
+      "name": "توفالو"
+    },
+    {
+      "code": "TK",
+      "name": "توكيلاو"
+    },
+    {
+      "code": "TO",
+      "name": "تونغا"
+    },
+    {
+      "code": "TL",
+      "name": "تيمور الشرقية"
+    },
+    {
+      "code": "ME",
+      "name": "الجبل الأسود"
+    },
+    {
+      "code": "GI",
+      "name": "جبل طارق"
+    },
+    {
+      "code": "VI",
+      "name": "جزر العذراء الأمريكية"
+    },
+    {
+      "code": "MV",
+      "name": "جزر المالديف"
+    },
+    {
+      "code": "AX",
+      "name": "جزر أولاند"
+    },
+    {
+      "code": "PN",
+      "name": "جزر بيتكيرن"
+    },
+    {
+      "code": "SB",
+      "name": "جزر سليمان"
+    },
+    {
+      "code": "FO",
+      "name": "جزر فارو"
+    },
+    {
+      "code": "FK",
+      "name": "جزر فوكلاند"
+    },
+    {
+      "code": "CK",
+      "name": "جزر كوك"
+    },
+    {
+      "code": "CC",
+      "name": "جزر كوكوس"
+    },
+    {
+      "code": "MH",
+      "name": "جزر مارشال"
+    },
+    {
+      "code": "MP",
+      "name": "جزر ماريانا الشمالية"
+    },
+    {
+      "code": "CX",
+      "name": "جزيرة عيد الميلاد"
+    },
+    {
+      "code": "IM",
+      "name": "جزيرة مان"
+    },
+    {
+      "code": "NF",
+      "name": "جزيرة نورفولك"
+    },
+    {
+      "code": "SS",
+      "name": "جنوب السودان"
+    },
+    {
+      "code": "DJ",
+      "name": "جيبوتي"
+    },
+    {
+      "code": "JE",
+      "name": "جيرسي"
+    },
+    {
+      "code": "DK",
+      "name": "الدنمارك"
+    },
+    {
+      "code": "WS",
+      "name": "ساموا"
+    },
+    {
+      "code": "AS",
+      "name": "ساموا الأمريكية"
+    },
+    {
+      "code": "BL",
+      "name": "سان بارتيلمي"
+    },
+    {
+      "code": "PM",
+      "name": "سان بيير وميكلون"
+    },
+    {
+      "code": "MF",
+      "name": "سان مارتن"
+    },
+    {
+      "code": "SM",
+      "name": "سان مارينو"
+    },
+    {
+      "code": "SH",
+      "name": "سانت هيلينا"
+    },
+    {
+      "code": "ST",
+      "name": "ساو تومي وبرينسيب"
+    },
+    {
+      "code": "SK",
+      "name": "سلوفاكيا"
+    },
+    {
+      "code": "SI",
+      "name": "سلوفينيا"
+    },
+    {
+      "code": "SD",
+      "name": "السودان"
+    },
+    {
+      "code": "SY",
+      "name": "سوريا"
+    },
+    {
+      "code": "SE",
+      "name": "السويد"
+    },
+    {
+      "code": "CH",
+      "name": "سويسرا"
+    },
+    {
+      "code": "SC",
+      "name": "سيشل"
+    },
+    {
+      "code": "SX",
+      "name": "سينت مارتن"
+    },
+    {
+      "code": "EH",
+      "name": "الصحراء الغربية"
+    },
+    {
+      "code": "RS",
+      "name": "صربيا"
+    },
+    {
+      "code": "SO",
+      "name": "الصومال"
+    },
+    {
+      "code": "GA",
+      "name": "الغابون"
+    },
+    {
+      "code": "GL",
+      "name": "غرينلاند"
+    },
+    {
+      "code": "GP",
+      "name": "غوادلوب"
+    },
+    {
+      "code": "GU",
+      "name": "غوام"
+    },
+    {
+      "code": "GF",
+      "name": "غويانا الفرنسية"
+    },
+    {
+      "code": "GG",
+      "name": "غيرنزي"
+    },
+    {
+      "code": "GQ",
+      "name": "غينيا الاستوائية"
+    },
+    {
+      "code": "VA",
+      "name": "الفاتيكان"
+    },
+    {
+      "code": "VU",
+      "name": "فانواتو"
+    },
+    {
+      "code": "FR",
+      "name": "فرنسا"
+    },
+    {
+      "code": "PS",
+      "name": "فلسطين"
+    },
+    {
+      "code": "FI",
+      "name": "فنلندا"
+    },
+    {
+      "code": "KZ",
+      "name": "كازاخستان"
+    },
+    {
+      "code": "NC",
+      "name": "كاليدونيا الجديدة"
+    },
+    {
+      "code": "HR",
+      "name": "كرواتيا"
+    },
+    {
+      "code": "CW",
+      "name": "كوراساو"
+    },
+    {
+      "code": "KP",
+      "name": "كوريا الشمالية"
+    },
+    {
+      "code": "KI",
+      "name": "كيريباتي"
+    },
+    {
+      "code": "RE",
+      "name": "لا ريونيون"
+    },
+    {
+      "code": "LV",
+      "name": "لاتفيا"
+    },
+    {
+      "code": "LB",
+      "name": "لبنان"
+    },
+    {
+      "code": "LU",
+      "name": "لوكسمبورغ"
+    },
+    {
+      "code": "LY",
+      "name": "ليبيا"
+    },
+    {
+      "code": "LT",
+      "name": "ليتوانيا"
+    },
+    {
+      "code": "LI",
+      "name": "ليختنشتاين"
+    },
+    {
+      "code": "LS",
+      "name": "ليسوتو"
+    },
+    {
+      "code": "MO",
+      "name": "ماكاو"
+    },
+    {
+      "code": "MT",
+      "name": "مالطا"
+    },
+    {
+      "code": "DE",
+      "name": "ألمانيا"
+    },
+    {
+      "code": "YT",
+      "name": "مايوت"
+    },
+    {
+      "code": "HU",
+      "name": "المجر"
+    },
+    {
+      "code": "MK",
+      "name": "مقدونيا الشمالية"
+    },
+    {
+      "code": "GB",
+      "name": "المملكة المتحدة"
+    },
+    {
+      "code": "MN",
+      "name": "منغوليا"
+    },
+    {
+      "code": "MU",
+      "name": "موريشيوس"
+    },
+    {
+      "code": "MD",
+      "name": "مولدوفا"
+    },
+    {
+      "code": "MC",
+      "name": "موناكو"
+    },
+    {
+      "code": "FM",
+      "name": "ميكرونيزيا"
+    },
+    {
+      "code": "NA",
+      "name": "ناميبيا"
+    },
+    {
+      "code": "NR",
+      "name": "ناورو"
+    },
+    {
+      "code": "NO",
+      "name": "النرويج"
+    },
+    {
+      "code": "AT",
+      "name": "النمسا"
+    },
+    {
+      "code": "NZ",
+      "name": "نيوزيلندا"
+    },
+    {
+      "code": "NU",
+      "name": "نييوي"
+    },
+    {
+      "code": "IN",
+      "name": "الهند"
+    },
+    {
+      "code": "NL",
+      "name": "هولندا"
+    },
+    {
+      "code": "BQ",
+      "name": "هولندا الكاريبية"
+    },
+    {
+      "code": "HK",
+      "name": "هونغ كونغ"
+    },
+    {
+      "code": "WF",
+      "name": "واليس وفوتونا"
+    },
+    {
+      "code": "JP",
+      "name": "اليابان"
+    },
+    {
+      "code": "GR",
+      "name": "اليونان"
+    }
+  ],
+  "test_mode": true
+}

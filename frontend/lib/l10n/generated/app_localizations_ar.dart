@@ -11856,9 +11856,23 @@ class AppLocalizationsAr extends AppLocalizations {
   String get sessionDenominationsTitle => 'الفئات عند الإغلاق';
 
   @override
-  String sessionVarianceFlag(String amount) {
-    return 'فرق $amount';
+  String sessionVarianceShort(String amount) {
+    return 'عجز $amount';
   }
+
+  @override
+  String sessionVarianceOver(String amount) {
+    return 'زيادة $amount';
+  }
+
+  @override
+  String get sessionCashShortageMetric => 'عجز النقد';
+
+  @override
+  String get sessionCashOverageMetric => 'زيادة النقد';
+
+  @override
+  String get sessionCashMatchedValue => 'مطابق';
 
   @override
   String get sessionNoVariance => 'لا يوجد فرق مسجل';
@@ -15722,6 +15736,33 @@ class AppLocalizationsAr extends AppLocalizations {
   String get labelBatchCopies => 'النسخ';
 
   @override
+  String get labelBatchSelectAll => 'تحديد الكل';
+
+  @override
+  String get purchaseOrderLabelsAction => 'طباعة ملصقات الباركود';
+
+  @override
+  String get purchaseOrderLabelsTitle => 'ملصقات منتجات الطلبية';
+
+  @override
+  String get purchaseOrderLabelsSubtitle =>
+      'عدد الملصقات هو الكمية المستلمة، أو المطلوبة إن لم يُستلم شيء بعد. عدّله أو ألغِ تحديد ما لا تريد طباعته.';
+
+  @override
+  String purchaseOrderLabelsReceived(String quantity, String barcode) {
+    return 'استُلم $quantity · $barcode';
+  }
+
+  @override
+  String purchaseOrderLabelsOrdered(String quantity, String barcode) {
+    return 'مطلوب $quantity · $barcode';
+  }
+
+  @override
+  String get purchaseOrderLabelsSerialized =>
+      'أجهزة بأرقام تسلسلية — تُطبع ملصقاتها عند الاستلام أو من صفحة الجهاز';
+
+  @override
   String get stockUnitsTitle => 'الأجهزة المسلسلة';
 
   @override
@@ -17735,18 +17776,18 @@ class AppLocalizationsAr extends AppLocalizations {
   String get subscriptionSmsTitle => 'الرسائل النصية';
 
   @override
-  String get subscriptionSmsActiveTitle => 'الرسائل النصية مشمولة في اشتراكك';
+  String get subscriptionSmsActiveTitle => 'الرسائل النصية متاحة';
 
   @override
   String get subscriptionSmsActiveMessage =>
-      'الاستهلاك وحدود الإرسال ونصوص الرسائل في «الرسائل النصية» ضمن إعدادات المحل.';
+      'تُدفع كل رسالة من رصيد الرسائل. الاستهلاك ونصوص الرسائل في «الرسائل النصية» ضمن إعدادات المحل.';
 
   @override
-  String get subscriptionSmsInactiveTitle => 'الرسائل النصية غير مشمولة';
+  String get subscriptionSmsInactiveTitle => 'رصيد الرسائل لا يكفي للإرسال';
 
   @override
   String get subscriptionSmsInactiveMessage =>
-      'أضِف الرسائل النصية إلى اشتراكك لإرسال الفواتير والتذكيرات والعروض إلى عملائك. تواصل مع الدعم.';
+      'اشحن محفظة دفتر وانقل مبلغاً إلى رصيد الرسائل لإرسال الفواتير والتذكيرات والعروض إلى عملائك.';
 
   @override
   String subscriptionLastSynced(String time) {
@@ -22757,6 +22798,12 @@ class AppLocalizationsAr extends AppLocalizations {
   String get integrationCapabilityProfiles => 'عدة ملفات';
 
   @override
+  String get integrationCapabilityAirtime => 'الشحن المباشر';
+
+  @override
+  String get integrationCapabilityBills => 'دفع الفواتير';
+
+  @override
   String get integrationProfileKindIndividual => 'شخصي';
 
   @override
@@ -23188,10 +23235,72 @@ class AppLocalizationsAr extends AppLocalizations {
   String get paymentMethodAccountCredit => 'من رصيد العميل';
 
   @override
-  String get balanceDirectionTheyOweUs => 'عليه لنا';
+  String get balanceDirectionTheyOweUs => 'دين عليه';
 
   @override
-  String get balanceDirectionWeOweThem => 'له علينا';
+  String get balanceDirectionWeOweThem => 'رصيد له';
+
+  @override
+  String get accountReceiveMoneyButton => 'استلام مبلغ';
+
+  @override
+  String get accountPayMoneyButton => 'دفع مبلغ';
+
+  @override
+  String accountMoneyReceivableValue(String amount) {
+    return 'يمكن استلام حتى $amount';
+  }
+
+  @override
+  String accountMoneyPayableValue(String amount) {
+    return 'يمكن دفع حتى $amount';
+  }
+
+  @override
+  String get accountMoneyNothingDue =>
+      'لا يوجد مبلغ مستحق الآن، فيمكن التسجيل على الحساب فقط.';
+
+  @override
+  String get accountMoneySaved => 'تم تسجيل المبلغ';
+
+  @override
+  String get accountMoneyError => 'تعذر تسجيل المبلغ. حاول مرة أخرى.';
+
+  @override
+  String get paymentMethodAccountOnly => 'بدون مبلغ نقدي (تسجيل على الحساب)';
+
+  @override
+  String get accountOnlyHint =>
+      'لا ينتقل أي مبلغ. استخدمه للديون والأرصدة القديمة وتصحيح الأخطاء فقط، لا للمرتجعات.';
+
+  @override
+  String get moneySourceLabel => 'المبلغ عبر';
+
+  @override
+  String get moneySourceDrawer => 'الدرج';
+
+  @override
+  String get moneySourceTreasury => 'الخزينة';
+
+  @override
+  String get balanceRowAccountOnly => 'تسجيل على الحساب';
+
+  @override
+  String get balanceSettledThroughDrawer => 'عبر الدرج';
+
+  @override
+  String get balanceSettledThroughCashBox => 'عبر الخزينة';
+
+  @override
+  String balanceSettledThroughBank(String account) {
+    return 'عبر $account';
+  }
+
+  @override
+  String get treasuryComponentAccountReceipts => 'مبالغ مستلمة من الحسابات';
+
+  @override
+  String get treasuryComponentAccountPayouts => 'مبالغ مدفوعة للحسابات';
 
   @override
   String get customerBalanceTheyOweUsHint => 'مبلغ مستحق على العميل للمحل';
@@ -23214,11 +23323,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get balanceKindAdjustment => 'تسوية رصيد';
 
   @override
-  String get balanceEntriesTitle => 'الرصيد الافتتاحي والتسويات';
+  String get balanceEntriesTitle => 'حركات الحساب';
 
   @override
-  String get balanceEntriesEmpty =>
-      'لا يوجد رصيد افتتاحي أو تسويات على هذا الحساب.';
+  String get balanceEntriesEmpty => 'لا توجد حركات على هذا الحساب بعد.';
 
   @override
   String get balanceEntriesLoadError => 'تعذر تحميل الأرصدة والتسويات.';
@@ -23256,7 +23364,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get balanceEntryNoteOptionalLabel => 'البيان (اختياري)';
 
   @override
-  String get balanceEntryNoteRequired => 'اكتب سبب التسوية.';
+  String get balanceEntryNoteRequired => 'اكتب السبب.';
 
   @override
   String get balanceEntryAmountInvalid => 'أدخل مبلغًا أكبر من صفر.';
@@ -23383,6 +23491,18 @@ class AppLocalizationsAr extends AppLocalizations {
   String supplierNetBalanceWeOweValue(String amount) {
     return 'مستحق للمورد $amount';
   }
+
+  @override
+  String get supplierHeroWeOweCaption => 'مستحق للمورد';
+
+  @override
+  String get supplierHeroTheyOweCaption => 'مستحق على المورد';
+
+  @override
+  String get customerHeroOwesCaption => 'مستحق على العميل';
+
+  @override
+  String get contactHeroSettledCaption => 'الحساب مسدَّد';
 
   @override
   String supplierNetBalanceTheyOweValue(String amount) {
@@ -24304,11 +24424,11 @@ class AppLocalizationsAr extends AppLocalizations {
       'عمليات الشحن تجريبية الآن ولا تُحوَّل فيها أموال حقيقية.';
 
   @override
-  String get walletRecordExpensesTitle => 'تسجيل الشحنات كمصروفات تلقائياً';
+  String get walletRecordExpensesTitle => 'سجّل المحفظة في دفاتر المحل';
 
   @override
   String walletRecordExpensesSubtitle(String category) {
-    return 'كل شحن مدفوع يُسجَّل مصروفاً ضمن «$category».';
+    return 'يصبح كل شحن رصيداً في الخزينة باسم «محفظة دفتر»، وتُسجَّل الخدمات مصروفاً ضمن «$category» عند شرائها.';
   }
 
   @override
@@ -24351,14 +24471,201 @@ class AppLocalizationsAr extends AppLocalizations {
   String get walletTopUpStatusUnknown => 'غير معروفة';
 
   @override
-  String get walletTopUpBookedAsExpense => 'مسجّل كمصروف';
+  String get walletTopUpStatusReview => 'بانتظار التحقق';
+
+  @override
+  String get walletTopUpStatusRejected => 'مرفوض';
+
+  @override
+  String get walletMethodBankTransfer => 'تحويل مصرفي';
+
+  @override
+  String get walletMethodHintBankTransfer => 'لي باي أو ون باي';
+
+  @override
+  String get walletTransferChannelLyPay => 'لي باي';
+
+  @override
+  String get walletTransferChannelOnePay => 'ون باي';
+
+  @override
+  String walletTransferSendTitle(String amount) {
+    return 'حوّل $amount إلى حسابنا';
+  }
+
+  @override
+  String get walletTransferLyPayHint => 'في لي باي، حوّل إلى رقم IBAN هذا:';
+
+  @override
+  String get walletTransferOnePayHint =>
+      'في ون باي، اختر المصرف ثم اكتب رقم الحساب:';
+
+  @override
+  String get walletTransferBank => 'المصرف';
+
+  @override
+  String get walletTransferIban => 'رقم IBAN';
+
+  @override
+  String get walletTransferAccountNumber => 'رقم الحساب';
+
+  @override
+  String get walletTransferAmount => 'المبلغ';
+
+  @override
+  String walletTransferHolderCheck(String name) {
+    return 'قبل الإرسال تأكد أن الاسم الظاهر لك: $name';
+  }
+
+  @override
+  String get walletTransferCopy => 'نسخ';
+
+  @override
+  String get walletTransferCopied => 'نُسخ';
+
+  @override
+  String get walletTransferFromTitle => 'من حسابك';
+
+  @override
+  String get walletTransferFromHint =>
+      'لنطابق التحويل في كشف حسابنا. نحفظه لك للمرة القادمة.';
+
+  @override
+  String get walletTransferSavedPayers => 'حساباتك السابقة';
+
+  @override
+  String get walletTransferPayerBank => 'مصرفك';
+
+  @override
+  String get walletTransferPayerBankRequired => 'اختر مصرفك.';
+
+  @override
+  String get walletTransferPayerIbanHint =>
+      'يبدأ بـ LY ويليه 23 رقماً — رقم الحساب يُكمَل منه';
+
+  @override
+  String get walletTransferIbanInvalid =>
+      'رقم IBAN غير صحيح. راجعه من تطبيق المصرف.';
+
+  @override
+  String get walletTransferAccountInvalid => 'رقم الحساب أرقام فقط.';
+
+  @override
+  String get walletTransferReceiptTitle => 'إيصال التحويل';
+
+  @override
+  String get walletTransferReceiptHint =>
+      'لقطة شاشة أو صورة أو ملف PDF من تطبيق المصرف.';
+
+  @override
+  String get walletTransferReceiptFromDevice => 'اختر ملفاً';
+
+  @override
+  String get walletTransferReceiptFromPhone => 'من الهاتف';
+
+  @override
+  String walletTransferReceiptPhonePrompt(String amount) {
+    return 'أرسل إيصال تحويل $amount';
+  }
+
+  @override
+  String get walletTransferReceiptFromPhoneDone => 'وصل الإيصال من الهاتف';
+
+  @override
+  String get walletTransferReceiptRemove => 'إزالة الإيصال';
+
+  @override
+  String get walletTransferReceiptRequired => 'أرفق إيصال التحويل.';
+
+  @override
+  String get walletTransferReceiptTooLarge => 'الإيصال أكبر من 10 ميغابايت.';
+
+  @override
+  String get walletTransferReceiptUnreadable =>
+      'تعذّر فتح هذا الملف. اختر صورة أو ملف PDF.';
+
+  @override
+  String get walletTransferNote =>
+      'بعد المتابعة نعرض لك حسابنا لتحوّل إليه، ثم ترسل الإيصال ويتحقق فريقنا منه.';
+
+  @override
+  String get walletTransferSend => 'أرسل للتحقق';
+
+  @override
+  String walletTransferSending(int percent) {
+    return 'جارٍ الإرسال… $percent٪';
+  }
+
+  @override
+  String get walletTransferBack => 'رجوع';
+
+  @override
+  String get walletTransferReviewTitle => 'استلمنا إيصالك';
+
+  @override
+  String get walletTransferReviewBody =>
+      'سيتحقق فريقنا من وصول التحويل خلال وقت قصير، ثم يُضاف المبلغ إلى محفظتك. يمكنك إغلاق هذه النافذة، وسنُعلمك بالنتيجة.';
+
+  @override
+  String get walletTransferReviewWaiting => 'بانتظار التحقق…';
+
+  @override
+  String get walletTransferPaidTitle => 'تحققنا من تحويلك';
+
+  @override
+  String get walletTransferRejectedTitle => 'لم نؤكد التحويل';
+
+  @override
+  String walletTransferRejectedReason(String reason) {
+    return 'السبب: $reason';
+  }
+
+  @override
+  String get walletTransferRejectedHelp =>
+      'إن كنت حوّلت فعلاً، أرسله من جديد بإيصال أوضح أو تواصل مع الدعم.';
+
+  @override
+  String get walletTransferSendAgain => 'أرسل من جديد';
+
+  @override
+  String get walletTransferTooManyReviews =>
+      'لديك تحويلات بانتظار التحقق. انتظر حتى نتحقق منها.';
+
+  @override
+  String get walletTransferUnavailable => 'التحويل المصرفي غير متاح حالياً.';
+
+  @override
+  String get walletTransferRowReview => 'نتحقق من التحويل';
+
+  @override
+  String get notificationWalletTransferConfirmedTitle =>
+      'أُضيف تحويلك إلى المحفظة';
+
+  @override
+  String notificationWalletTransferConfirmedMessage(String amount) {
+    return 'تحققنا من تحويل $amount وأضفناه إلى محفظة دفتر.';
+  }
+
+  @override
+  String get notificationWalletTransferRejectedTitle => 'لم نؤكد تحويل المحفظة';
+
+  @override
+  String notificationWalletTransferRejectedMessage(
+    String amount,
+    String reason,
+  ) {
+    return 'تحويل $amount: $reason';
+  }
+
+  @override
+  String get walletTopUpBookedAsExpense => 'مسجّل في الخزينة';
 
   @override
   String get walletTopUpExpensePeriodLocked =>
-      'لم يُسجَّل كمصروف: الفترة مغلقة';
+      'لم يُسجَّل في الخزينة: الفترة مغلقة';
 
   @override
-  String get walletTopUpExpensePending => 'لم يُسجَّل كمصروف بعد';
+  String get walletTopUpExpensePending => 'لم يُسجَّل في الخزينة بعد';
 
   @override
   String walletTopUpRowTitle(String amount) {
@@ -24410,7 +24717,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get walletTopUpMethodTitle => 'طريقة الدفع';
 
   @override
-  String get walletTopUpRecordExpense => 'سجّل هذا الشحن كمصروف';
+  String get walletTopUpRecordExpense => 'سجّل المحفظة في دفاتر المحل';
 
   @override
   String get walletTopUpBrowserNote =>
@@ -24462,7 +24769,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String walletPaidBooked(String category) {
-    return 'سُجّل كمصروف ضمن «$category».';
+    return 'أُضيف إلى رصيد «محفظة دفتر» في الخزينة، وتُسجَّل الخدمات مصروفاً ضمن «$category» عند شرائها.';
   }
 
   @override
@@ -25978,4 +26285,1251 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get commandPaletteStockUnitsSection => 'الأجهزة المسلسلة';
+
+  @override
+  String posVoucherSearchEmptyTitle(String query) {
+    return 'لا توجد نتائج لـ «$query»';
+  }
+
+  @override
+  String get posVoucherSearchEmptyMessage =>
+      'جرّب اسماً آخر للبطاقة، مثل ماستركارد أو آيتونز أو بلايستيشن.';
+
+  @override
+  String get posVoucherSearchClear => 'مسح البحث';
+
+  @override
+  String get posVoucherMenuAll => 'الكل';
+
+  @override
+  String posVoucherMenuPriceFrom(String price) {
+    return 'من $price';
+  }
+
+  @override
+  String get posVoucherMenuPromo => 'عرض';
+
+  @override
+  String get posVoucherMenuFeatured => 'مميّز';
+
+  @override
+  String get posVoucherMenuUnavailable => 'غير متوفر';
+
+  @override
+  String posVoucherMenuMoreCountries(int count) {
+    return '+$count';
+  }
+
+  @override
+  String get posVoucherMenuEmptyTitle => 'لا توجد كروت للبيع الآن';
+
+  @override
+  String get posVoucherMenuEmptyMessage => 'ستظهر كروت دفتر هنا فور توفرها.';
+
+  @override
+  String get posVoucherMenuDisabledMessage =>
+      'فعّل «كروت دفتر» من الإعدادات ← التكاملات لتظهر هنا.';
+
+  @override
+  String get posVoucherMenuSwitchedOffMessage =>
+      'أُوقفت كروت دفتر مؤقتاً لجميع المحلات.';
+
+  @override
+  String get posVoucherMenuLoadError => 'تعذّر تحميل قائمة الكروت.';
+
+  @override
+  String get posVoucherMenuCountryTitle => 'البلد';
+
+  @override
+  String get posVoucherMenuDenominationTitle => 'اختر الفئة';
+
+  @override
+  String posVoucherMenuProfit(String amount) {
+    return 'ربحك $amount';
+  }
+
+  @override
+  String get posVoucherMenuBeyondBalance => 'يتجاوز رصيد الكروت';
+
+  @override
+  String posVoucherMenuBalance(String amount) {
+    return 'رصيد الكروت: $amount';
+  }
+
+  @override
+  String posVoucherMenuWasPrice(String price) {
+    return 'بدلاً من $price';
+  }
+
+  @override
+  String get posServicesTabAirtime => 'الشحن المباشر';
+
+  @override
+  String get posServicesTabBills => 'دفع الفواتير';
+
+  @override
+  String get posServicesNewBadge => 'جديد';
+
+  @override
+  String get posServicesTestModeBanner =>
+      'وضع تجريبي — لا يُرسل رصيد حقيقي ولا يُدفع شيء';
+
+  @override
+  String get posServicesTestModeMark => 'عملية تجريبية';
+
+  @override
+  String get posServicesStripTitle => 'خدمات جديدة';
+
+  @override
+  String get posServicesStripHint =>
+      'أرسل رصيداً أو سدّد فواتير أهلك في الخارج في ثوانٍ';
+
+  @override
+  String get posServicesAirtimeTitle => 'الشحن المباشر';
+
+  @override
+  String get posServicesAirtimePromise =>
+      'أرسل رصيداً إلى أي رقم هاتف في العالم خلال ثوانٍ، بدون بطاقة';
+
+  @override
+  String get posServicesElectricityTitle => 'فواتير الكهرباء';
+
+  @override
+  String get posServicesElectricityPromise =>
+      'ادفع فاتورة الكهرباء أو اشحن عدّاد أهلك في الخارج';
+
+  @override
+  String get posServicesWaterTitle => 'فواتير المياه';
+
+  @override
+  String get posServicesWaterPromise =>
+      'سدّد فاتورة مياه أهلك في الخارج من هنا، بدون حوالة';
+
+  @override
+  String get posServicesTvTitle => 'اشتراكات التلفزيون';
+
+  @override
+  String get posServicesTvPromise =>
+      'جدّد اشتراك القنوات لأهلك في الخارج في دقائق';
+
+  @override
+  String get posServicesInternetTitle => 'الإنترنت';
+
+  @override
+  String get posServicesInternetPromise =>
+      'اشحن باقة الإنترنت أو سدّد فاتورتها لأهلك في الخارج';
+
+  @override
+  String posServicesCountriesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count دولة',
+      many: '$count دولة',
+      few: '$count دول',
+      two: 'دولتان',
+      one: 'دولة واحدة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String posServicesNetworksCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count شبكة',
+      many: '$count شبكة',
+      few: '$count شبكات',
+      two: 'شبكتان',
+      one: 'شبكة واحدة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String posServicesProvidersCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count جهة',
+      many: '$count جهة',
+      few: '$count جهات',
+      two: 'جهتان',
+      one: 'جهة واحدة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get posServicesBillsIntro => 'اختر نوع الفاتورة التي تريد سدادها';
+
+  @override
+  String get posServicesAirtimeLineTitle => 'شحن مباشر';
+
+  @override
+  String get posServicesBillLineTitle => 'دفع فاتورة';
+
+  @override
+  String posAirtimeCartSubtitle(String number, String label) {
+    return 'إلى $number — $label';
+  }
+
+  @override
+  String posBillCartSubtitle(String account, String label) {
+    return 'رقم $account — $label';
+  }
+
+  @override
+  String posServicesInvoiceAirtimeTarget(String number) {
+    return 'إلى $number';
+  }
+
+  @override
+  String posServicesInvoiceBillTarget(String account) {
+    return 'رقم $account';
+  }
+
+  @override
+  String get posServicesInvoiceToken => 'رمز الشحن';
+
+  @override
+  String get posServicesSuccessAirtimeTitle => 'تم إرسال الرصيد';
+
+  @override
+  String get posServicesSuccessBillTitle => 'تم سداد الفاتورة';
+
+  @override
+  String get posServicesSuccessMixedTitle => 'تم تنفيذ الخدمات';
+
+  @override
+  String get posServicesSuccessNumber => 'الرقم';
+
+  @override
+  String get posServicesSuccessOperation => 'العملية';
+
+  @override
+  String get posServicesSuccessReference => 'رقم العملية';
+
+  @override
+  String get posServicesSuccessToken => 'رمز الشحن';
+
+  @override
+  String get posServicesSuccessTokenHint =>
+      'سلّم الزبون هذا الرمز ليُدخله في العدّاد.';
+
+  @override
+  String get posServicesSuccessCopy => 'نسخ الرمز';
+
+  @override
+  String get posServicesSuccessCopied => 'تم نسخ الرمز';
+
+  @override
+  String get posServicesSuccessDone => 'تم';
+
+  @override
+  String get posServicesLoadError => 'تعذّر تحميل الدول والشبكات.';
+
+  @override
+  String get posServicesUnavailableTitle => 'الخدمة غير متاحة الآن';
+
+  @override
+  String get posServicesUnavailableSwitchedOff =>
+      'أوقفت دفتر هذه الخدمة مؤقتاً لجميع المحلات.';
+
+  @override
+  String get posServicesUnavailableNotConfigured =>
+      'هذه الخدمة غير مفعّلة بعد في محلك.';
+
+  @override
+  String get posServicesUnavailableEmpty =>
+      'لا توجد دول متاحة الآن، حاول لاحقاً.';
+
+  @override
+  String get posServicesHow => 'كيف يعمل؟';
+
+  @override
+  String get posServicesHowDone => 'فهمت';
+
+  @override
+  String get posServicesExplainerHide => 'إخفاء الشرح';
+
+  @override
+  String get posServicesTimelineTitle => 'ماذا يحدث بعد ذلك؟';
+
+  @override
+  String get posServicesTimelineChoose => 'اختر';
+
+  @override
+  String get posServicesTimelineCart => 'أضف إلى السلة';
+
+  @override
+  String get posServicesTimelineInvoice => 'أصدر الفاتورة';
+
+  @override
+  String get posServicesTimelineDone => 'يصل المبلغ ويُطبع الإيصال';
+
+  @override
+  String get posServicesCountrySearchHint => 'ابحث بالاسم أو رمز الدولة (223)';
+
+  @override
+  String get posServicesCountryPopular => 'الأكثر طلباً';
+
+  @override
+  String get posServicesCountryAll => 'كل الدول';
+
+  @override
+  String get posServicesCountryUnavailable => 'غير متاح حالياً';
+
+  @override
+  String get posServicesCountryNoResults => 'لا توجد دولة بهذا الاسم أو الرمز.';
+
+  @override
+  String get posServicesCountryChange => 'تغيير';
+
+  @override
+  String posServicesCountryDialMatch(String dial, String country) {
+    return 'رمز +$dial ← $country';
+  }
+
+  @override
+  String posServicesCountrySharedCode(String dial) {
+    return 'رمز +$dial مشترك بين أكثر من دولة، اختر الدولة.';
+  }
+
+  @override
+  String get posServicesSummaryTitle => 'ملخص الطلب';
+
+  @override
+  String get posServicesSummaryCountry => 'الدولة';
+
+  @override
+  String get posServicesSummaryNumber => 'الرقم';
+
+  @override
+  String get posServicesSummaryNetwork => 'الشبكة';
+
+  @override
+  String get posServicesSummaryProvider => 'الجهة';
+
+  @override
+  String get posServicesSummaryPlan => 'الباقة';
+
+  @override
+  String get posServicesSummaryAmount => 'المبلغ';
+
+  @override
+  String get posServicesSummaryReceives => 'يصل للمستلم';
+
+  @override
+  String get posServicesSummaryPays => 'يدفع الزبون';
+
+  @override
+  String get posServicesAddToCart => 'أضف إلى السلة';
+
+  @override
+  String get posServicesPricing => 'جارٍ حساب السعر…';
+
+  @override
+  String get posServicesBlockNotSellable => 'لا تملك صلاحية البيع';
+
+  @override
+  String get posServicesBlockNoCountry => 'اختر الدولة أولاً';
+
+  @override
+  String get posServicesBlockLoadingCountry => 'جارٍ تحميل بيانات الدولة…';
+
+  @override
+  String get posServicesBlockCountryFailed =>
+      'تعذّر تحميل بيانات الدولة، أعد المحاولة';
+
+  @override
+  String get posServicesBlockNoNumber => 'اكتب رقم الهاتف';
+
+  @override
+  String get posServicesBlockNumberShort => 'رقم الهاتف ناقص، أكمله';
+
+  @override
+  String get posServicesBlockNumberLong => 'رقم الهاتف طويل جداً، راجعه';
+
+  @override
+  String get posServicesBlockNumberMismatch =>
+      'الرقم الذي سيُشحن يختلف عن الرقم الذي تعرّفت عليه الشبكة — صحّح الرقم';
+
+  @override
+  String get posServicesBalanceShort =>
+      'رصيد الكروت لا يكفي لهذه العملية — حوّل من المحفظة أولاً';
+
+  @override
+  String get posServicesBalanceWhere =>
+      'من الإعدادات ← المحفظة ← تحويل إلى رصيد الكروت';
+
+  @override
+  String get posServicesAddRefused => 'لا يمكن الإضافة أثناء إتمام البيع';
+
+  @override
+  String get posProviderChargingTitle => 'جارٍ تنفيذ الشحن… لا تُغلق الشاشة';
+
+  @override
+  String get posProviderChargingBody =>
+      'ننتظر ردّ المزوّد، وقد يستغرق ذلك دقيقة. لا تُعد العملية ولا تُرجع المبلغ للزبون.';
+
+  @override
+  String posProviderChargingSeconds(int seconds) {
+    String _temp0 = intl.Intl.pluralLogic(
+      seconds,
+      locale: localeName,
+      other: 'مضت $seconds ثانية',
+      many: 'مضت $seconds ثانية',
+      few: 'مضت $seconds ثوانٍ',
+      two: 'مضت ثانيتان',
+      one: 'مضت ثانية واحدة',
+      zero: 'لم تمضِ ثانية',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get posServiceIssueRefusedAirtimeTitle => 'لم يُنفَّذ الشحن';
+
+  @override
+  String get posServiceIssueRefusedBillTitle => 'لم تُسدَّد الفاتورة';
+
+  @override
+  String get posServiceIssueRefusedMixedTitle => 'لم تُنفَّذ الخدمة';
+
+  @override
+  String get posServiceIssueRefusedAirtimeBody =>
+      'لم يُرسَل أي رصيد — أعد المبلغ للزبون.';
+
+  @override
+  String get posServiceIssueRefusedBillBody =>
+      'لم يُسدَّد أي مبلغ للجهة — أعد المبلغ للزبون.';
+
+  @override
+  String get posServiceIssueUnknownAirtimeTitle => 'نتيجة الشحن غير معروفة';
+
+  @override
+  String get posServiceIssueUnknownBillTitle => 'نتيجة السداد غير معروفة';
+
+  @override
+  String get posServiceIssueUnknownAirtimeBody =>
+      'النتيجة غير معروفة — لا تُعد الشحن ولا تُرجع المبلغ حتى تتأكد.';
+
+  @override
+  String get posServiceIssueUnknownBillBody =>
+      'النتيجة غير معروفة — لا تُعد السداد ولا تُرجع المبلغ حتى تتأكد.';
+
+  @override
+  String get posServiceIssueUnknownHint =>
+      'افتح الفاتورة من سجل الفواتير لترى حالة العملية، وتتم المطابقة تلقائياً مع سجل المزوّد.';
+
+  @override
+  String posServiceIssueReceipt(String number) {
+    return 'رقم الفاتورة: $number';
+  }
+
+  @override
+  String posServiceIssueReference(String reference) {
+    return 'رقم العملية: $reference';
+  }
+
+  @override
+  String get posServiceReasonInsufficient =>
+      'رصيد الكروت لا يكفي — حوّل من المحفظة ثم أعد البيع.';
+
+  @override
+  String get posServiceReasonPriceChanged =>
+      'تغيّر السعر لدى المزوّد قبل التنفيذ — أعد البيع بالسعر الجديد.';
+
+  @override
+  String get posServiceReasonUnavailable =>
+      'الخدمة أو المزوّد غير متاح الآن — حاول بعد قليل.';
+
+  @override
+  String get posServiceReasonInvalidNumber =>
+      'الرقم غير صالح لدى المزوّد — تأكد منه ثم أعد البيع.';
+
+  @override
+  String get posServiceReasonRefused => 'رفض المزوّد الطلب — لم يُخصم شيء.';
+
+  @override
+  String get posServiceRequoteTitle => 'تغيّر سعر الخدمة';
+
+  @override
+  String get posServiceRequoteBody =>
+      'سُعّرت هذه الخدمة قبل مدة، والسعر الآن مختلف. راجعه مع الزبون قبل الدفع.';
+
+  @override
+  String posServiceRequotePrice(String old, String now) {
+    return 'كان $old ← أصبح $now';
+  }
+
+  @override
+  String get posServiceRequoteGone =>
+      'لم تعد هذه الخدمة متاحة بهذه المواصفات — سيُزال السطر من الفاتورة.';
+
+  @override
+  String get posServiceRequoteAccept => 'اعتمد السعر الجديد';
+
+  @override
+  String get posServiceRequoteAcceptGone => 'اعتمد التغييرات';
+
+  @override
+  String posServiceQuoteAgeMinutes(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'سُعّرت قبل $count دقيقة',
+      many: 'سُعّرت قبل $count دقيقة',
+      few: 'سُعّرت قبل $count دقائق',
+      two: 'سُعّرت قبل دقيقتين',
+      one: 'سُعّرت قبل دقيقة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String posServiceQuoteAgeHours(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'سُعّرت قبل $count ساعة',
+      many: 'سُعّرت قبل $count ساعة',
+      few: 'سُعّرت قبل $count ساعات',
+      two: 'سُعّرت قبل ساعتين',
+      one: 'سُعّرت قبل ساعة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String posServiceQuoteAgeDays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'سُعّرت قبل $count يوم',
+      many: 'سُعّرت قبل $count يوماً',
+      few: 'سُعّرت قبل $count أيام',
+      two: 'سُعّرت قبل يومين',
+      one: 'سُعّرت قبل يوم',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get posServicesCurrencyUsd => 'دولار أمريكي';
+
+  @override
+  String get posServicesCurrencyEur => 'يورو';
+
+  @override
+  String get posServicesRefreshList => 'تحديث القائمة';
+
+  @override
+  String get posServicesBlockNoNetwork => 'اختر الشبكة';
+
+  @override
+  String get posServicesBlockNoProvider => 'اختر الجهة';
+
+  @override
+  String posServicesBlockNoAccount(String label) {
+    return 'اكتب $label';
+  }
+
+  @override
+  String posServicesBlockAccountShort(String label) {
+    return '$label ناقص، تأكد منه';
+  }
+
+  @override
+  String get posServicesBlockNoInvoice => 'اكتب رقم الفاتورة';
+
+  @override
+  String get posServicesBlockNoAmount => 'اختر المبلغ';
+
+  @override
+  String get posServicesBlockNoPlan => 'اختر الباقة';
+
+  @override
+  String get posServicesBlockAmountInvalid => 'اكتب مبلغاً صحيحاً';
+
+  @override
+  String posServicesBlockAmountLow(String min) {
+    return 'المبلغ أقل من الحد الأدنى ($min)';
+  }
+
+  @override
+  String posServicesBlockAmountHigh(String max) {
+    return 'المبلغ أكبر من الحد الأقصى ($max)';
+  }
+
+  @override
+  String get posServicesBlockQuoteFailed => 'تعذّر حساب السعر، أعد المحاولة';
+
+  @override
+  String get posServicesRefusalInvalidPhone =>
+      'رقم الهاتف غير صالح لهذه الدولة';
+
+  @override
+  String get posServicesRefusalInvalidAccount =>
+      'الرقم غير صالح لدى هذه الجهة، تأكد منه';
+
+  @override
+  String get posServicesRefusalInvoiceRequired => 'هذه الجهة تطلب رقم الفاتورة';
+
+  @override
+  String get posServicesRefusalInvalidInvoice =>
+      'رقم الفاتورة غير صالح — 24 خانة كحد أقصى من الأحرف الإنجليزية والأرقام و - _ /';
+
+  @override
+  String get posServicesRefusalOutOfRange =>
+      'المبلغ خارج الحدود التي تقبلها هذه الجهة';
+
+  @override
+  String posServicesRefusalOutOfRangeLimits(String min, String max) {
+    return 'المبلغ خارج الحدود: من $min إلى $max';
+  }
+
+  @override
+  String get posServicesRefusalNotOffered =>
+      'هذا المبلغ غير متاح، اختر مبلغاً آخر';
+
+  @override
+  String get posServicesRefusalInvalidAmount => 'المبلغ غير صالح';
+
+  @override
+  String get posServicesRefusalUnknown =>
+      'لم تعد هذه الجهة متاحة، أعد تحميل القائمة';
+
+  @override
+  String get posServicesRefusalUnavailable => 'الخدمة غير متاحة الآن';
+
+  @override
+  String get posServicesRefusalRateUnset =>
+      'أسعار هذه الخدمة لم تُضبط بعد، تواصل مع دفتر';
+
+  @override
+  String get posServicesRefusalUnreachable =>
+      'تعذّر الوصول إلى الخدمة، أعد المحاولة بعد قليل';
+
+  @override
+  String get posServicesRefusalNotConfigured => 'هذه الخدمة غير مفعّلة بعد';
+
+  @override
+  String get posServicesRefusalSwitchedOff => 'أوقفت دفتر هذه الخدمة مؤقتاً';
+
+  @override
+  String get posServicesRefusalOther => 'رفضت الخدمة الطلب';
+
+  @override
+  String get posAirtimeStepCountry => 'الدولة';
+
+  @override
+  String get posAirtimeStepNumber => 'رقم الهاتف';
+
+  @override
+  String get posAirtimeStepAmount => 'المبلغ';
+
+  @override
+  String get posAirtimeNeeds => 'تحتاج: رقم هاتف المستلم + اسم الدولة';
+
+  @override
+  String get posAirtimeExplainerBody =>
+      'أرسل رصيداً إلى أي رقم هاتف في العالم خلال ثوانٍ — بدون بطاقة. اختر الدولة، اكتب الرقم، اختر المبلغ.';
+
+  @override
+  String get posAirtimeHowTitle => 'كيف يعمل الشحن المباشر؟';
+
+  @override
+  String get posAirtimeHowStep1Title => 'اختر الدولة واكتب الرقم';
+
+  @override
+  String get posAirtimeHowStep1Body =>
+      'اكتب رمز الدولة أو ابحث باسمها، ثم اكتب رقم المستلم. نتعرف على الشبكة تلقائياً، ويمكنك اختيارها بنفسك.';
+
+  @override
+  String get posAirtimeHowStep2Title => 'اختر المبلغ';
+
+  @override
+  String get posAirtimeHowStep2Body =>
+      'ترى ما يصل للمستلم وما يدفعه الزبون، ويمكنك كتابة مبلغ آخر ضمن الحدود المسموحة.';
+
+  @override
+  String get posAirtimeHowStep3Title => 'أضف إلى السلة وأصدر الفاتورة';
+
+  @override
+  String get posAirtimeHowStep3Body =>
+      'يُرسل الرصيد فور إصدار الفاتورة، ويُطبع إيصال للزبون بتفاصيل العملية.';
+
+  @override
+  String get posAirtimeHowNoRefund =>
+      'لا يمكن استرداد المبلغ بعد إرساله، فتأكد من الرقم والشبكة قبل إصدار الفاتورة.';
+
+  @override
+  String posAirtimeHowUnsupported(String countries) {
+    return 'لا نرسل حالياً إلى: $countries.';
+  }
+
+  @override
+  String get posAirtimeTruth =>
+      'يُرسل الرصيد فور إصدار الفاتورة ولا يمكن استرداده بعد إرساله.';
+
+  @override
+  String get posAirtimeRecentTitle => 'آخر الأرقام';
+
+  @override
+  String get posAirtimePhoneLabel => 'رقم الهاتف';
+
+  @override
+  String get posAirtimePhoneExample => '70 12 34 56';
+
+  @override
+  String get posAirtimePhoneHelp =>
+      'تحتاج رقم المستلم فقط: اكتبه بدون رمز الدولة (مثل 70 12 34 56)، أو الصقه كاملاً مع الرمز فتُختار الدولة تلقائياً.';
+
+  @override
+  String get posAirtimePhoneKeepTyping => 'أكمل كتابة الرقم…';
+
+  @override
+  String get posAirtimePhoneUnknownCode => 'رمز الدولة في الرقم غير معروف.';
+
+  @override
+  String posAirtimePhoneStartsWithDial(String dial, String number) {
+    return 'يبدو أن الرقم يبدأ برمز الدولة +$dial — هل تقصد $number؟';
+  }
+
+  @override
+  String get posAirtimePhoneFixDial => 'نعم، صحّح الرقم';
+
+  @override
+  String posAirtimePhoneSharedCode(String dial) {
+    return 'رمز +$dial تشترك فيه عدة دول — لأي دولة هذا الرقم؟';
+  }
+
+  @override
+  String get posServicesBlockChooseDialCountry =>
+      'اختر دولة الرقم من الخيارات أعلاه';
+
+  @override
+  String get posAirtimeDetecting => 'جارٍ التعرف على الشبكة…';
+
+  @override
+  String posAirtimeDetected(String network) {
+    return 'تعرّفنا على الشبكة: $network';
+  }
+
+  @override
+  String get posAirtimeNotDetected => 'لم نتعرف على الشبكة، اختر الشبكة';
+
+  @override
+  String get posAirtimeDetectUnavailable =>
+      'التعرف التلقائي غير متاح الآن، اختر الشبكة';
+
+  @override
+  String get posAirtimeDetectFailed => 'تعذّر التعرف على الشبكة، اختر الشبكة';
+
+  @override
+  String get posAirtimeDetectInvalid =>
+      'الرقم لا يبدو صحيحاً لهذه الدولة، تأكد منه';
+
+  @override
+  String posAirtimeDetectDisagrees(String network) {
+    return 'الرقم يبدو على شبكة $network';
+  }
+
+  @override
+  String posAirtimeUseDetected(String network) {
+    return 'استخدم $network';
+  }
+
+  @override
+  String get posAirtimeNetworks => 'الشبكة';
+
+  @override
+  String get posAirtimeNetworksNone => 'لا توجد شبكات متاحة لهذه الدولة الآن.';
+
+  @override
+  String get posAirtimeCountryLoading => 'جارٍ تحميل شبكات الدولة…';
+
+  @override
+  String get posAirtimeCountryFailed => 'تعذّر تحميل شبكات الدولة.';
+
+  @override
+  String get posAirtimeAmountWaiting => 'اختر الشبكة لتظهر المبالغ';
+
+  @override
+  String get posAirtimeCustom => 'مبلغ آخر';
+
+  @override
+  String posAirtimeCustomLabel(String currency) {
+    return 'المبلغ بـ$currency';
+  }
+
+  @override
+  String posAirtimeCustomRange(String min, String max) {
+    return 'من $min إلى $max';
+  }
+
+  @override
+  String get posAirtimeCustomAnyAmount => 'اكتب المبلغ';
+
+  @override
+  String get posAirtimeCustomInvalid => 'اكتب مبلغاً صحيحاً';
+
+  @override
+  String posAirtimeCustomTooLow(String min) {
+    return 'أقل مبلغ مسموح $min';
+  }
+
+  @override
+  String posAirtimeCustomTooHigh(String max) {
+    return 'أكبر مبلغ مسموح $max';
+  }
+
+  @override
+  String posAirtimeApproximate(String currency) {
+    return '≈ المبلغ تقريبي: يصل للمستلم ما يعادله بـ$currency بسعر المزوّد عند الإرسال.';
+  }
+
+  @override
+  String get posAirtimeLauncherTitle => 'شحن رصيد لرقم في الخارج';
+
+  @override
+  String get posAirtimeLauncherBody =>
+      'اختر الدولة ثم اكتب الرقم والمبلغ، وتُضاف العملية إلى السلة';
+
+  @override
+  String get posAirtimeLauncherStart => 'شحن جديد';
+
+  @override
+  String get voucherPricingTitle => 'أسعار كروت دفتر';
+
+  @override
+  String get voucherPricingOpen => 'أسعار كروت دفتر';
+
+  @override
+  String get voucherPricingTileSubtitle =>
+      'اتبع سعر الشركة أو حدّد سعرك لكل خدمة وكرت';
+
+  @override
+  String get voucherPricingTabServices => 'الخدمات';
+
+  @override
+  String get voucherPricingTabCards => 'الكروت';
+
+  @override
+  String get voucherPricingDefaultTitle => 'السعر الافتراضي';
+
+  @override
+  String get voucherPricingDefaultHint =>
+      'يُطبَّق على كل خدمة وكرت لم تحدد له سعراً خاصاً.';
+
+  @override
+  String get voucherPricingModeCompany => 'سعر الشركة';
+
+  @override
+  String get voucherPricingModeCustom => 'سعري أنا';
+
+  @override
+  String get voucherPricingMarkupLabel => 'نسبة ربحي %';
+
+  @override
+  String get voucherPricingServicesTitle => 'الخدمات المباشرة';
+
+  @override
+  String voucherPricingExample(String pays, String company, String yours) {
+    return 'مثال: تدفع $pays، سعر الشركة $company، سعرك $yours';
+  }
+
+  @override
+  String voucherPricingRuleHint(String fixed, String share) {
+    return 'الشركة تضيف رسماً ثابتاً $fixed وتتقاسم الهامش معك بنسبة $share% لك';
+  }
+
+  @override
+  String get voucherPricingSave => 'حفظ الأسعار';
+
+  @override
+  String get voucherPricingSaved => 'تم حفظ الأسعار';
+
+  @override
+  String get voucherPricingSaveFailed => 'تعذر حفظ الأسعار';
+
+  @override
+  String get voucherPricingLoadError => 'تعذر تحميل الأسعار';
+
+  @override
+  String get voucherPricingForbidden => 'هذه الشاشة للمالك والمدير فقط';
+
+  @override
+  String get voucherPricingSearchHint => 'ابحث عن كرت';
+
+  @override
+  String get voucherPricingAllBrands => 'كل العلامات';
+
+  @override
+  String get voucherPricingShopPays => 'تدفع';
+
+  @override
+  String get voucherPricingCompanyPrice => 'سعر الشركة';
+
+  @override
+  String get voucherPricingYourPrice => 'سعرك';
+
+  @override
+  String get voucherPricingFollowCompany => 'اتباع سعر الشركة';
+
+  @override
+  String get voucherPricingFollowAll => 'اتباع سعر الشركة للكل';
+
+  @override
+  String get voucherPricingFollowAllDone =>
+      'طُبّق سعر الشركة على الكروت المعروضة';
+
+  @override
+  String get voucherPricingCardSaved => 'تم حفظ السعر';
+
+  @override
+  String get voucherPricingCardFailed => 'تعذر حفظ السعر';
+
+  @override
+  String get voucherPricingNoCards => 'لا توجد كروت مطابقة';
+
+  @override
+  String get voucherPricingLoadMore => 'عرض المزيد';
+
+  @override
+  String voucherPricingCardCount(int count) {
+    return '$count كرت';
+  }
+
+  @override
+  String get posAirtimeAdded => 'أُضيف الشحن المباشر إلى السلة';
+
+  @override
+  String get posBillTruth =>
+      'تُسدَّد الفاتورة فور إصدار فاتورة البيع، ولا يمكن استرجاع الدفع بعد إرساله.';
+
+  @override
+  String get posBillAdded => 'أُضيفت الفاتورة إلى السلة';
+
+  @override
+  String get posBillStepNameCountry => 'الدولة';
+
+  @override
+  String get posBillStepNameProvider => 'الجهة';
+
+  @override
+  String get posBillStepNameAccount => 'الرقم';
+
+  @override
+  String get posBillStepNameAmount => 'المبلغ';
+
+  @override
+  String get posBillStepNameSummary => 'الملخص';
+
+  @override
+  String get posBillStepCountryTitle => 'اختر الدولة';
+
+  @override
+  String get posBillStepProviderTitle => 'اختر الجهة';
+
+  @override
+  String posBillStepAccountTitle(String label) {
+    return 'أدخل $label';
+  }
+
+  @override
+  String get posBillStepAccountInvoiceTitle => 'أدخل رقم الحساب ورقم الفاتورة';
+
+  @override
+  String get posBillStepAmountTitle => 'اختر المبلغ';
+
+  @override
+  String get posBillStepPlanTitle => 'اختر الباقة';
+
+  @override
+  String get posBillStepSummaryTitle => 'راجع الطلب ثم أضفه إلى السلة';
+
+  @override
+  String get posBillNeedsElectricity =>
+      'تحتاج: رقم العدّاد — تجده على الفاتورة أو على العدّاد نفسه';
+
+  @override
+  String get posBillNeedsWater =>
+      'تحتاج: رقم حساب المشترك ورقم الفاتورة — تجدهما مكتوبين على الفاتورة';
+
+  @override
+  String get posBillNeedsTv =>
+      'تحتاج: رقم بطاقة الاشتراك — تجده على الفاتورة أو على جهاز الاستقبال';
+
+  @override
+  String get posBillNeedsInternet =>
+      'تحتاج: رقم الحساب أو الاشتراك — تجده على الفاتورة أو في رسالة المزوّد';
+
+  @override
+  String get posBillAccountLabelElectricity => 'رقم العدّاد';
+
+  @override
+  String get posBillAccountLabelWater => 'رقم الحساب';
+
+  @override
+  String get posBillAccountLabelTv => 'رقم بطاقة الاشتراك';
+
+  @override
+  String get posBillAccountLabelInternet => 'رقم الحساب أو الاشتراك';
+
+  @override
+  String get posBillAccountLabelContract => 'رقم الحساب / العقد';
+
+  @override
+  String get posBillAccountExampleElectricity => '04223568280';
+
+  @override
+  String get posBillAccountExampleWater => '12345678';
+
+  @override
+  String get posBillAccountExampleTv => '0123456789';
+
+  @override
+  String get posBillAccountExampleInternet => '0123456789';
+
+  @override
+  String posBillExample(String example) {
+    return 'مثال: $example';
+  }
+
+  @override
+  String get posBillInvoiceLabel => 'رقم الفاتورة';
+
+  @override
+  String get posBillInvoiceExample => '2024-118833';
+
+  @override
+  String get posBillInvoiceHelp =>
+      'حروف إنجليزية وأرقام و - و _ و / فقط، حتى 24 خانة.';
+
+  @override
+  String get posBillCheckNumber =>
+      'تأكد من الرقم: لا يمكن استرجاع الدفع بعد إرساله.';
+
+  @override
+  String get posBillPrepaidNote =>
+      'ستظهر على الإيصال شيفرة الشحن لإدخالها في العدّاد.';
+
+  @override
+  String get posBillInvoiceAmountNote =>
+      'أدخل قيمة الفاتورة كما هي مكتوبة عليها.';
+
+  @override
+  String get posBillGroupPrepaid =>
+      'عدّاد مسبق الدفع — تستلم رمزاً وتُدخله في العدّاد';
+
+  @override
+  String get posBillGroupPostpaid => 'فاتورة لاحقة الدفع — تسدّد قيمة فاتورتك';
+
+  @override
+  String get posBillProviderSearch => 'ابحث عن الجهة';
+
+  @override
+  String get posBillProviderNoResults => 'لا توجد جهة بهذا الاسم.';
+
+  @override
+  String get posBillProvidersNone =>
+      'لا توجد جهات متاحة لهذا النوع في هذه الدولة الآن.';
+
+  @override
+  String get posBillProviderNeedsInvoice => 'يلزم رقم الفاتورة';
+
+  @override
+  String posBillLimitedCountry(String country) {
+    return 'هذه الخدمة متاحة حالياً في $country فقط.';
+  }
+
+  @override
+  String get posBillSuggestedAmounts => 'مبالغ مقترحة';
+
+  @override
+  String posBillHowTitle(String type) {
+    return 'كيف تعمل $type؟';
+  }
+
+  @override
+  String get posBillHowStep1Title => 'اختر الدولة والجهة';
+
+  @override
+  String get posBillHowStep1Body =>
+      'اختر الدولة ثم الشركة التي تُسدَّد لها الفاتورة، بأسمائها العربية.';
+
+  @override
+  String get posBillHowStep2Title => 'اكتب الرقم واختر المبلغ';
+
+  @override
+  String get posBillHowStep2Body =>
+      'اكتب رقم العدّاد أو الحساب كما هو على الفاتورة، ثم اختر المبلغ أو الباقة.';
+
+  @override
+  String get posBillHowStep3Title => 'أضف إلى السلة وأصدر الفاتورة';
+
+  @override
+  String get posBillHowStep3Body =>
+      'تُسدَّد الفاتورة فور إصدار فاتورة البيع، ويُطبع إيصال للزبون.';
+
+  @override
+  String get posBillHowElectricityToken =>
+      'للعدّاد المسبق الدفع: ستجد على الإيصال شيفرة تُدخلها في العدّاد.';
+
+  @override
+  String get posBillsExplainerBody =>
+      'سدّد فواتير الكهرباء والمياه والتلفزيون والإنترنت في دول أخرى خلال ثوانٍ. اختر نوع الفاتورة، ثم الدولة والجهة، واكتب رقم العدّاد أو الحساب.';
+
+  @override
+  String get posBillsHowTitle => 'كيف يعمل دفع الفواتير؟';
+
+  @override
+  String get walletVouchersBalanceTitle => 'رصيد الكروت';
+
+  @override
+  String get walletVouchersSummary =>
+      'يُدفع منه ثمن كروت دفتر التي تُباع في نقطة البيع.';
+
+  @override
+  String get walletVouchersNotReady => 'بيع الكروت غير جاهز بعد لدى دفتر.';
+
+  @override
+  String get walletVouchersTestMode =>
+      'وضع تجريبي: الكروت المباعة الآن ليست حقيقية.';
+
+  @override
+  String get walletVouchersAllocateButton => 'تحويل إلى رصيد الكروت';
+
+  @override
+  String get walletVouchersAllocateTitle => 'تحويل إلى رصيد الكروت';
+
+  @override
+  String get walletVouchersAllocateIntro =>
+      'يُخصم المبلغ من المحفظة ويُضاف إلى رصيد الكروت، ومنه يُدفع ثمن كل كرت يبيعه الكاشير.';
+
+  @override
+  String walletVouchersAllocateAvailable(String balance) {
+    return 'رصيد المحفظة: $balance';
+  }
+
+  @override
+  String walletVouchersAllocateCurrent(String balance) {
+    return 'رصيد الكروت: $balance';
+  }
+
+  @override
+  String get walletVouchersAllocateAmountLabel => 'المبلغ';
+
+  @override
+  String walletVouchersAllocateAfter(String balance) {
+    return 'يصبح رصيد الكروت $balance';
+  }
+
+  @override
+  String get walletVouchersAllocateTooMuch => 'المبلغ أكبر من رصيد المحفظة.';
+
+  @override
+  String get walletVouchersAllocateAll => 'كامل الرصيد';
+
+  @override
+  String walletVouchersAllocateConfirm(String amount) {
+    return 'تحويل $amount';
+  }
+
+  @override
+  String walletVouchersAllocateDone(String amount) {
+    return 'حُوِّل $amount إلى رصيد الكروت.';
+  }
+
+  @override
+  String get walletHistoryVouchersTab => 'رصيد الكروت';
+
+  @override
+  String get walletHistoryEmptyVouchers => 'لا توجد حركات على رصيد الكروت بعد.';
+
+  @override
+  String get integrationProviderPointyName => 'كروت دفتر';
+
+  @override
+  String get integrationProviderPointyTagline =>
+      'كروت الهدايا والألعاب والاتصالات من دفتر، يُدفع ثمنها من رصيد الكروت في المحفظة.';
+
+  @override
+  String get integrationEnableTitle => 'البيع في نقطة البيع';
+
+  @override
+  String get integrationEnableOnHint => 'تظهر قائمة الكروت في نقطة البيع.';
+
+  @override
+  String get integrationEnableOffHint =>
+      'لا يحتاج إلى حساب أو كلمة مرور، فعّله فقط.';
+
+  @override
+  String get integrationEnabledToast => 'تم التفعيل';
+
+  @override
+  String get integrationDisabledToast => 'تم الإيقاف';
+
+  @override
+  String get integrationSettingsAction => 'الإعدادات';
+
+  @override
+  String get integrationStatusEnabled => 'مفعّل';
+
+  @override
+  String get integrationStatusNotEnabled => 'غير مفعّل';
+
+  @override
+  String get integrationVoucherBalanceLabel => 'رصيد الكروت';
+
+  @override
+  String get integrationRefreshBalance => 'تحديث الرصيد';
+
+  @override
+  String get voucherPricingBelowCostBadge => 'أقل من التكلفة';
+
+  @override
+  String voucherPricingBelowCostBannerTitle(int count) {
+    return '$count بطاقة متوقفة عن البيع';
+  }
+
+  @override
+  String get voucherPricingBelowCostBannerBody =>
+      'سعرك لهذه البطاقات أصبح أقل مما تدفعه للشركة، فلا تُباع حتى تعدّل سعرها أو تستخدم تسعير الشركة.';
+
+  @override
+  String get voucherPricingBelowCostShowOnly => 'عرض هذه البطاقات فقط';
+
+  @override
+  String get voucherPricingBelowCostShowAll => 'عرض كل البطاقات';
+
+  @override
+  String get voucherPricingUseCompanyPricing => 'استخدام تسعير الشركة';
+
+  @override
+  String get voucherPricingUseCompanyPricingDone =>
+      'طُبّق تسعير الشركة على البطاقات المتوقفة';
+
+  @override
+  String get smartNotificationBelowCostTitle =>
+      'بطاقات متوقفة لأن سعرك أقل من التكلفة';
+
+  @override
+  String smartNotificationBelowCostMessage(int count, String cards) {
+    return 'سعرك لـ $count بطاقة أصبح أقل مما تدفعه للشركة، فلا يمكن بيعها الآن: $cards';
+  }
+
+  @override
+  String get smartNotificationBelowCostEditAction => 'تعديل الأسعار';
+
+  @override
+  String get smartNotificationBelowCostCompanyAction => 'استخدام تسعير الشركة';
+
+  @override
+  String get smartNotificationBelowCostCompanyDone =>
+      'طُبّق تسعير الشركة على البطاقات المتوقفة';
 }

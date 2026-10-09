@@ -1,0 +1,21 @@
+{
+ "results": [
+  {
+   "fulfillment": 43,
+   "order_line": 43,
+   "provider": "pointy",
+   "kind": "airtime",
+   "subscriber_ref": "+223•••••444",
+   "option_label": "أورنج مالي · 2,000 فرنك أفريقي",
+   "outcome": "refused",
+   "status": "pending",
+   "needs_attention": false,
+   "error_code": "unavailable",
+   "error_detail": "service_unavailable: directory_unavailable",
+   "provider_reference": "",
+   "balance_after": null,
+   "receipt": {}
+  }
+ ],
+ "balance": 35.21
+}

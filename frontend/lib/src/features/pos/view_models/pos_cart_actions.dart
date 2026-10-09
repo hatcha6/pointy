@@ -7,6 +7,7 @@ part of 'pos_view_model.dart';
 const _activeLineAddSources = {
   'product_tile',
   'variant_picker',
+  'voucher_menu',
   'camera_scanner',
 };
 
@@ -533,6 +534,66 @@ extension PosCartActions on PosViewModel {
     _touchActiveSaleSession();
     _notifyChanged();
     unawaited(refreshDiscountPreview());
+  }
+
+  /// Puts a priced airtime top-up or bill payment in the cart.
+  ///
+  /// Like a provider top-up, the line is an ordinary service-product line —
+  /// the menu's service variant — carrying the server's own quote: its option
+  /// code, the number or account it is for, and the sealed price checkout
+  /// opens. The price shown here is display; the server charges its own again.
+  /// It never merges: each one is its own purchase.
+  ///
+  /// Says whether the line went in. It does not while a sale is being checked
+  /// out, nor for a quote that cannot be sold: the screen then keeps what the
+  /// cashier built and says so, instead of clearing it and claiming success.
+  bool addServiceLine({
+    required ServiceQuote quote,
+    required int variantId,
+    required String title,
+    bool testMode = false,
+  }) {
+    if (_isCheckingOut || !quote.isUsable) {
+      return false;
+    }
+    final source = quote.kind == ServiceKind.airtime
+        ? 'voucher_menu_airtime'
+        : 'voucher_menu_bill';
+    final line = CartLine.create(
+      variant: ProductVariant(
+        id: variantId > 0 ? variantId : quote.serviceVariantId,
+        productId: 0,
+        sku: '',
+        unitPrice: quote.price,
+        productName: title,
+        displayName: title,
+        fullName: title,
+        isService: true,
+        isDefault: true,
+      ),
+      quantity: 1,
+      integration: CartLineIntegration(
+        provider: integrationProviderKeyToJson(IntegrationProviderKey.pointy),
+        subscriberRef: quote.subscriberRef,
+        optionCode: quote.optionCode,
+        optionLabel: quote.optionLabel,
+        quote: quote.quote,
+        quotedAt: DateTime.now(),
+        quoteRequest: quote.request?.toJson(),
+        testMode: testMode,
+      ),
+    );
+    _cart.add(line);
+    _trackCartLineAdded(
+      line,
+      addedQuantity: 1,
+      previousQuantity: 0,
+      source: source,
+    );
+    _touchActiveSaleSession();
+    _notifyChanged();
+    unawaited(refreshDiscountPreview());
+    return true;
   }
 
   /// Switches the unit a cart line is sold in (used from the cart). Changes the

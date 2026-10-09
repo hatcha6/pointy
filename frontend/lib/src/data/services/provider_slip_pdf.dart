@@ -37,7 +37,7 @@ pw.Widget pdfRollProviderSlip(
 
   List<pw.Widget> redeemLines(pw.Alignment alignment) => [
     if (slip.pin.isNotEmpty) ...[
-      _aligned(pw.Text(receiptPinLabel, style: detail), alignment),
+      _aligned(pw.Text(slip.pinLabel, style: detail), alignment),
       _unbroken(slip.pin, fontSize: compact ? 14 : 16, alignment: alignment),
     ],
     if (slip.dial.isNotEmpty) ...[
@@ -296,7 +296,7 @@ pw.Widget pdfPageProviderSlip(ReceiptProviderSlip slip) {
       ],
       if (slip.pin.isNotEmpty) ...[
         pw.SizedBox(height: 3),
-        pw.Text(receiptPinLabel, style: muted),
+        pw.Text(slip.pinLabel, style: muted),
         // Scaled down rather than wrapped, as on the roll: a PIN broken over
         // two lines is a PIN typed wrong.
         pw.FittedBox(

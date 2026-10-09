@@ -453,6 +453,14 @@ Start the relay server:
 make relay-run RELAY_ADMIN_TOKEN=local-admin
 ```
 
+The relay's operator console (Arabic web UI, passkey sign-in) is described in
+`relay/README.md` under "Operator console". To try it locally:
+
+```sh
+make relay-console-preview
+relay/console-ui/scripts/dev-relay.sh invite "Your name"
+```
+
 Start Django and the on-prem connector in separate terminals:
 
 ```sh
@@ -689,6 +697,40 @@ seconds against somebody else's portal.
 Preview with `make frontend-recharge-preview`
 (`?screen=expired|active|expiring|empty-history|notfound|idle|first-use`, and for
 LNET `lnet-lines|lnet-single|lnet-expired|lnet-low-float|lnet-notfound|lnet-idle`).
+
+### Selling «كروت دفتر» at the till
+
+The «كروت دفتر» quick-access chip (`system_key = vouchers:pointy`) opens the
+company's own voucher menu in the catalog's place: its category tabs, then each
+brand as a gift card (card art, price, promotion and featured stickers, the
+flags of the countries it sells for). A brand opens a sheet with its countries
+and denominations; the card picked goes into the invoice as an ordinary line
+named «<brand> - <country> · <denomination>» and is bought once the invoice is
+paid. Typing a search falls back to the product grid. Preview with
+`make frontend-voucher-menu-preview`
+(`?screen=board|menu|menu-dark|sheet|sheet-countries|cashier|manager|empty|error|loading`),
+and capture it headlessly with
+`POINTY_CAPTURE_SCREENS=1 flutter test test/screens/voucher_menu_capture_test.dart --update-goldens`.
+
+Every country's flag ships inside the app (`frontend/assets/flags/`, 96x64), so
+the menu and the airtime/bill screens never download one; a code the app has
+no flag for shows the code itself. After the operator set in `ops/catalog/flags`
+changes, re-bake them with `make frontend-bake-flags`.
+
+The same menu also sells two things that are not cards: **direct top-up**
+(airtime sent to a phone number in another country) and **bill payments**
+(electricity, water, television, internet, paid abroad). They are cards in a
+«خدمات جديدة» strip above the brands and two tabs after «الكل» —
+«الشحن المباشر» (a guided form on one screen: country, number, amount) and
+«دفع الفواتير» (one card per type of bill, each opening a five-step dialog:
+country, company, the number on the bill, amount, summary). The server prices
+everything: the till shows its quote, and a priced line is an ordinary invoice
+line that is performed when the invoice is paid, with the result and the
+receipt printed in Arabic. Preview with `make frontend-services-preview`
+(`?screen=strip|airtime|airtime-ready|bills|bill:electricity:ng:summary|bill:tv:ml:amount|bill:water|empty|error|loading`,
+`-dark` for the dark palette, `&scale=1.3` for enlarged text), and capture it
+headlessly with
+`POINTY_CAPTURE_SCREENS=1 flutter test test/screens/services_capture_test.dart`.
 
 ### LNET: top-ups done on the provider's website
 

@@ -15,6 +15,7 @@ Error codes are contract; the Arabic wording lives in the Flutter layer.
 
 from __future__ import annotations
 
+import re
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -23,13 +24,13 @@ from decimal import Decimal
 from apps.integrations import switches
 
 # --- error codes ------------------------------------------------------------
-ERROR_NOT_CONFIGURED = "not_configured"      # credentials missing
-ERROR_UNAVAILABLE = "unavailable"            # provider is planned, not built
-ERROR_UNREACHABLE = "unreachable"            # network/DNS/timeout
-ERROR_UNAUTHORIZED = "unauthorized"          # credentials rejected
-ERROR_NOT_FOUND = "not_found"                # no such card/line
-ERROR_PROVIDER_ERROR = "provider_error"      # provider said no, with a message
-ERROR_UNEXPECTED = "unexpected_response"     # we did not recognise the reply
+ERROR_NOT_CONFIGURED = "not_configured"  # credentials missing
+ERROR_UNAVAILABLE = "unavailable"  # provider is planned, not built
+ERROR_UNREACHABLE = "unreachable"  # network/DNS/timeout
+ERROR_UNAUTHORIZED = "unauthorized"  # credentials rejected
+ERROR_NOT_FOUND = "not_found"  # no such card/line
+ERROR_PROVIDER_ERROR = "provider_error"  # provider said no, with a message
+ERROR_UNEXPECTED = "unexpected_response"  # we did not recognise the reply
 ERROR_INSUFFICIENT_FLOAT = "insufficient_float"  # the agency float cannot cover it
 #: We sent a write and do not know whether it happened. Never an ordinary
 #: failure: a charge may have left the float, so the only safe reaction is to
@@ -66,6 +67,30 @@ ERROR_PROFILE_MISMATCH = "profile_mismatch"
 #: ``apps.integrations.switches``). Nothing was sent, and nothing will be until
 #: it is switched back on — not a fault a shop or a retry can fix.
 ERROR_SWITCHED_OFF = "switched_off"
+#: The provider's price moved above the most the shop agreed to pay before the
+#: order reached it, and it refused rather than charge more. Definite: nothing
+#: was bought. Its detail names the new price, which is the shop's cost and goes
+#: only to a reader who may see cost (:func:`without_figures`).
+ERROR_PRICE_CHANGED = "price_changed"
+
+#: A code word, and optionally what follows ``": "`` — ``price_changed: the relay
+#: now charges 99.00``. The word is the part any reader may have.
+_CODE_WORD_DETAIL = re.compile(r"([a-z][a-z0-9_]{2,40})(?:: .*)?", re.DOTALL)
+
+
+def without_figures(detail) -> str:
+    """``detail`` as a reader who may not see the shop's costs may have it.
+
+    A driver writes a refusal as a code word, then — after ``": "`` — whatever
+    explains it, and what explains a price or a balance is a figure of the
+    shop's own money (``insufficient_balance: voucher balance 12.00 below 99.00``).
+    Such a detail is cut back to its code word, which the till words in Arabic.
+    Any other text — a provider's own message — is not a code word followed by
+    figures and is returned as it is.
+    """
+    text = str(detail or "")
+    found = _CODE_WORD_DETAIL.fullmatch(text.strip())
+    return found.group(1) if found else text
 
 
 @dataclass(frozen=True)
@@ -144,13 +169,13 @@ class PurchaseEntry:
     account made with no Pointy sale behind it is cash that went somewhere.
     """
 
-    reference: str = ""          # the provider's own id for the purchase
+    reference: str = ""  # the provider's own id for the purchase
     cost: Decimal | None = None  # what the agency paid, in LYD
     months: int = 0
     at: datetime | None = None
     package_name: str = ""
     operator_name: str = ""
-    is_ours: bool = False        # operator_name matches this account
+    is_ours: bool = False  # operator_name matches this account
     #: What was bought, in the provider's own code, when the log names it.
     #: Two different things can cost the same — a 10-dinar Libyana card and a
     #: 10-dinar Almadar card both draw 9.70 — so where both sides know it,
@@ -262,8 +287,8 @@ class SubscriberProfile:
     """
 
     subscriber_ref: str
-    display_name: str = ""       # masked by HD Box; present for providers that share it
-    phone: str = ""              # likewise
+    display_name: str = ""  # masked by HD Box; present for providers that share it
+    phone: str = ""  # likewise
     package_name: str = ""
     device_model: str = ""
     status: str = ""
@@ -322,9 +347,9 @@ class RechargeOption:
     sale at a cost the shop did not actually pay.
     """
 
-    code: str                    # stable within a lookup, e.g. "renew:12"
-    kind: str                    # RECHARGE_RENEW or RECHARGE_TOPUP
-    label: str                   # the provider's own wording
+    code: str  # stable within a lookup, e.g. "renew:12"
+    kind: str  # RECHARGE_RENEW or RECHARGE_TOPUP
+    label: str  # the provider's own wording
     cost: Decimal
     months: int = 0
     package_id: str = ""
@@ -417,15 +442,54 @@ class RechargeResult:
 
     ok: bool
     indeterminate: bool = False
-    reference: str = ""                 # the provider's id for the purchase
+    reference: str = ""  # the provider's id for the purchase
     balance_after: Decimal | None = None
     receipt: dict = field(default_factory=dict)
     error_code: str = ""
     error_detail: str = ""
+    #: What the provider actually took for it, when it says and it may differ
+    #: from the cost the sale was rung up at. The relay charges its current
+    #: price when that is not higher than the quote — a promotion that started
+    #: since the shelf was read makes the card cheaper — and the sale's cost
+    #: must then say what was really spent (``recharge._record``).
+    actual_cost: Decimal | None = None
 
     @property
     def is_definite_failure(self) -> bool:
         return not self.ok and not self.indeterminate
+
+
+# --- what became of one attempt, read back (stable codes) -------------------
+#: The provider performed it: the card was bought and its code is in hand.
+ATTEMPT_CHARGED = "charged"
+#: The provider definitely did not: refused, or failed and refunded.
+ATTEMPT_REFUSED = "refused"
+#: The provider has never heard of this attempt.
+ATTEMPT_ABSENT = "absent"
+#: Nothing can be said yet: still being worked on, or the read failed.
+ATTEMPT_UNKNOWN = "unknown"
+
+
+@dataclass(frozen=True)
+class AttemptOutcome:
+    """One write read back by the key it was sent under.
+
+    For a provider that makes a write idempotent on a key we choose (the
+    relay), this settles an attempt whose answer was lost, by identity rather
+    than by matching a purchase log on cost and time — see
+    :meth:`IntegrationProvider.attempt_outcome`.
+    """
+
+    state: str
+    reference: str = ""
+    receipt: dict = field(default_factory=dict)
+    actual_cost: Decimal | None = None
+    balance_after: Decimal | None = None
+    #: When the provider performed it, when it says: the float was drawn then,
+    #: and ``float_ledger.drawn`` dates the draw by it.
+    at: datetime | None = None
+    error_code: str = ""
+    error_detail: str = ""
 
 
 @dataclass(frozen=True)
@@ -461,6 +525,17 @@ class VoucherItem:
     #: What the provider recommends charging the customer.
     suggested_price: Decimal | None = None
     face_amount: Decimal | None = None
+    # --- what only the company's own shelf says (defaults leave Qareeb as it
+    # was): see ``IntegrationVoucher`` for each.
+    #: Listed but not sellable right now (the relay's ``available: false``).
+    #: Qareeb lists only what it has, so its items are always available.
+    available: bool = True
+    country: str = ""
+    face_currency: str = ""
+    rank: int = 0
+    badge: str = ""
+    promo_ends_at: datetime | None = None
+    regular_price: Decimal | None = None
 
 
 @dataclass(frozen=True)
@@ -485,6 +560,24 @@ class VoucherBrand:
     #: the rest are behind one call per brand. An empty ``items`` with this
     #: False is "not asked", never "sold out", and must not be read as either.
     items_known: bool = False
+    # --- what only the company's own shelf says: see ``IntegrationVoucherBrand``.
+    rank: int = 0
+    featured: bool = False
+    badge: str = ""
+    category_key: str = ""
+    category_rank: int = 0
+    redeem_hint: str = ""
+    aliases: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class VoucherCountry:
+    """A store region the shelf's cards are sold for, as the provider names it."""
+
+    code: str
+    name: str
+    #: The flag picture's path, for :meth:`IntegrationProvider.voucher_logo`.
+    flag_path: str = ""
 
 
 @dataclass(frozen=True)
@@ -493,6 +586,17 @@ class VoucherCatalogResult:
     brands: tuple[VoucherBrand, ...] = ()
     error_code: str = ""
     error_detail: str = ""
+    #: The regions the brands' cards name, in the provider's order.
+    countries: tuple[VoucherCountry, ...] = ()
+    #: The provider's own name for this edition of its shelf (the relay's
+    #: ETag), so the next read can ask "has it changed?" instead of reading it
+    #: all again.
+    version: str = ""
+    #: The provider said the shelf is unchanged since ``version``: there is
+    #: nothing to write, and ``brands`` is empty because nothing was sent.
+    not_modified: bool = False
+    #: The provider is selling test cards (the relay's test supplier).
+    test_mode: bool = False
 
 
 @dataclass(frozen=True)
@@ -507,6 +611,108 @@ class VoucherLogo:
     data: bytes = b""
     #: Where the bytes came from, for the record.
     url: str = ""
+    error_code: str = ""
+    error_detail: str = ""
+
+
+@dataclass(frozen=True)
+class ServiceCountry:
+    """A country the company's direct top-up and bill payments reach.
+
+    ``operators`` and ``billers`` are plain dicts in the shape the shop mirrors
+    (``providers.pointy_services``): a driver has already dropped every one it
+    could not read, and what is left is bounded text and numbers.
+    """
+
+    code: str
+    name: str
+    #: The Latin spelling, for the search box only; blank when none is sent.
+    name_en: str = ""
+    dial: tuple[str, ...] = ()
+    currency: str = ""
+    currency_name: str = ""
+    #: The flag's picture path, for :meth:`IntegrationProvider.voucher_logo`.
+    flag_path: str = ""
+    #: 1-based rank among the popular countries; 0 when not one of them.
+    popular: int = 0
+    operators: tuple[dict, ...] = ()
+    billers: tuple[dict, ...] = ()
+
+
+@dataclass(frozen=True)
+class ServicesDirectoryResult:
+    """The whole directory of direct top-up and bill payments, or "unchanged"."""
+
+    ok: bool
+    countries: tuple[ServiceCountry, ...] = ()
+    #: Countries the provider lists that this driver could not read. The mirror
+    #: keeps whatever it holds of them rather than dropping them with the rest.
+    skipped: tuple[str, ...] = ()
+    #: ``{"code", "name"[, "name_en"]}`` of the countries the provider says it
+    #: does not reach, so a screen can say so rather than "no results".
+    unsupported: tuple[dict, ...] = ()
+    #: The provider's name for this edition (the relay's ``ETag``, quoted), so the
+    #: next read can ask "has it changed?".
+    version: str = ""
+    #: The directory's own ``version`` field, for the tills.
+    edition: str = ""
+    not_modified: bool = False
+    test_mode: bool = False
+    #: The provider can sell services at all / has the exchange rate its prices
+    #: come from. Either false leaves nothing sellable.
+    configured: bool = True
+    priced: bool = True
+    generated_at: str = ""
+    #: The company's margin rule as the relay publishes it (display only).
+    pricing: dict | None = None
+    error_code: str = ""
+    error_detail: str = ""
+
+
+@dataclass(frozen=True)
+class ServiceDetectResult:
+    """The network the provider detects for a phone number.
+
+    ``ok`` says the provider *answered about this number* — an operator, or its
+    own "none found" / "not a number" in ``reason``. A fault (unreachable,
+    refused, unreadable) is ``error_code``, and is the only thing telemetry
+    counts as a failure: a mistyped number is not a broken provider.
+    """
+
+    ok: bool
+    operator: dict | None = None
+    #: ``{"e164", "national", "country"}`` as the provider normalized it.
+    phone: dict | None = None
+    #: ``not_detected`` or ``invalid_phone``; blank when an operator was found.
+    reason: str = ""
+    error_code: str = ""
+    error_detail: str = ""
+
+
+@dataclass(frozen=True)
+class ServiceQuoteResult:
+    """The exact price of one top-up or bill payment, or why there is none.
+
+    A refusal in the provider's own words (``refusal``, with its ``min`` / ``max``
+    / ``reason`` in ``refusal_data``) is an answer, not a fault: ``error_code``
+    stays blank, so telemetry does not count an amount out of range as the
+    provider being down.
+    """
+
+    ok: bool
+    #: What the shop's voucher balance pays, and what the provider suggests the
+    #: customer pays, in dinars.
+    cost: Decimal | None = None
+    price: Decimal | None = None
+    receive_amount: str = ""
+    receive_currency: str = ""
+    approximate: bool = False
+    #: The number a top-up goes to, as the relay read what was typed (E.164) —
+    #: asked about only when the request carried a phone. The shop does not
+    #: normalize numbers itself; this is the number the line is sold and sent to.
+    phone: str = ""
+    refusal: str = ""
+    refusal_data: dict = field(default_factory=dict)
     error_code: str = ""
     error_detail: str = ""
 
@@ -576,10 +782,31 @@ class IntegrationProvider:
     #: reads it as the provider being down.
     history_kinds: tuple[str, ...] = (HISTORY_PURCHASES, HISTORY_STATUSES)
 
+    #: The provider can read a write back by the key it was sent under
+    #: (:meth:`attempt_outcome`). Reconciliation then settles a lost answer by
+    #: identity and never by matching a purchase log.
+    reads_attempts: bool = False
+
     def __init__(self, account):
         self.account = account
         #: Set by the telemetry wrapper for the duration of one call.
         self._call = None
+        #: The fulfillment the next write (or read-back) is for, when its caller
+        #: says (:meth:`bind`). A driver that needs more than the arguments
+        #: carry reads it; every other driver never looks.
+        self.fulfillment = None
+
+    def bind(self, fulfillment) -> "IntegrationProvider":
+        """Say which fulfillment the next ``recharge`` / ``attempt_outcome`` is for.
+
+        ``provider_for()`` builds a driver per call, so this is the driver's for
+        that call. It is how the company's direct services learn where an order
+        goes: an option code names the operator but not its country, and the
+        country is on the fulfillment (``package_id``) — so is what the
+        customer pays, the ceiling of what the shop may be charged.
+        """
+        self.fulfillment = fulfillment
+        return self
 
     def _note(self, step: str) -> None:
         """Say how far this call got, for telemetry. Never fails.
@@ -666,7 +893,9 @@ class IntegrationProvider:
         """
         return PaymentReportPage(ok=False, error_code=ERROR_UNAVAILABLE)
 
-    def offers(self, card_no: str, *, resolved: "CardInfo | None" = None) -> OfferResult:
+    def offers(
+        self, card_no: str, *, resolved: "CardInfo | None" = None
+    ) -> OfferResult:
         """What can be bought for this card, priced as of now. Must never raise.
 
         ``resolved`` is the ``CardInfo`` a caller already holds from its own
@@ -690,7 +919,14 @@ class IntegrationProvider:
         """
         return ProfileResult(ok=False, error_code=ERROR_UNAVAILABLE)
 
-    def recharge(self, card_no: str, option_code: str, *, expected_cost=None):
+    def recharge(
+        self,
+        card_no: str,
+        option_code: str,
+        *,
+        expected_cost=None,
+        attempt_key: str = "",
+    ):
         """Actually buy the top-up. Spends real money. Must never raise.
 
         Callers must go through :mod:`apps.integrations.recharge`, never here
@@ -701,10 +937,45 @@ class IntegrationProvider:
         provider whose live price has moved since the quote must refuse rather
         than silently spend a different amount of the shop's money.
 
+        ``attempt_key`` names this one attempt, stable for as long as it is
+        unsettled (``recharge.attempt_key``). A provider that is idempotent on
+        a key of ours sends it, so a replay can never buy twice; one that is
+        not ignores it.
+
         A voucher provider is handed an empty ``card_no``: a card sold off the
         shelf belongs to nobody until the customer scratches it.
         """
         return RechargeResult(ok=False, error_code=ERROR_UNAVAILABLE)
+
+    def attempt_outcome(
+        self, attempt_key: str, *, option_code: str = ""
+    ) -> AttemptOutcome:
+        """What became of the write sent under ``attempt_key``. Must never raise.
+
+        Only for a driver that ``reads_attempts``; every other answers
+        ``unknown``, which leaves the attempt to the purchase-log matching of
+        :mod:`apps.integrations.reconciliation`.
+
+        ``option_code`` is what the attempt was a write *of*, for a driver whose
+        slip names more than the provider's answer does (the company's direct
+        top-up prints the network by its Arabic name, which only the shop knows).
+        """
+        return AttemptOutcome(state=ATTEMPT_UNKNOWN, error_code=ERROR_UNAVAILABLE)
+
+    # --- services (direct top-up, bill payments) -----------------------------
+    def services_directory(self, etag: str = "") -> ServicesDirectoryResult:
+        """Every country with its operators and billers, as of now, or "unchanged"
+        against ``etag`` (the ``version`` of the last read). Must never raise."""
+        return ServicesDirectoryResult(ok=False, error_code=ERROR_UNAVAILABLE)
+
+    def service_detect(self, country: str, phone: str) -> ServiceDetectResult:
+        """The operator the provider detects for ``phone`` in ``country``. Must never raise."""
+        return ServiceDetectResult(ok=False, error_code=ERROR_UNAVAILABLE)
+
+    def service_quote(self, request: dict) -> ServiceQuoteResult:
+        """The exact price of one service (``request`` names the operator or biller and
+        the amount). Spends nothing. Must never raise."""
+        return ServiceQuoteResult(ok=False, error_code=ERROR_UNAVAILABLE)
 
     # --- vouchers ----------------------------------------------------------
     def voucher_catalog(self) -> VoucherCatalogResult:
@@ -770,11 +1041,14 @@ class SwitchedOffProvider(IntegrationProvider):
     charges wherever it is shown.
     """
 
-    def __init__(self, account, driver_cls: type[IntegrationProvider] = PlannedProvider):
+    def __init__(
+        self, account, driver_cls: type[IntegrationProvider] = PlannedProvider
+    ):
         super().__init__(account)
         self.key = account.provider
         self._offline = driver_cls(account)
         self.history_kinds = self._offline.history_kinds
+        self.reads_attempts = self._offline.reads_attempts
 
     def quote(self, option_code: str):
         return self._offline.quote(option_code)
@@ -800,15 +1074,40 @@ class SwitchedOffProvider(IntegrationProvider):
     def payment_report_page(self, *, offset: int = 0) -> PaymentReportPage:
         return PaymentReportPage(ok=False, error_code=ERROR_SWITCHED_OFF)
 
-    def offers(self, card_no: str, *, resolved: "CardInfo | None" = None) -> OfferResult:
+    def offers(
+        self, card_no: str, *, resolved: "CardInfo | None" = None
+    ) -> OfferResult:
         return OfferResult(ok=False, error_code=ERROR_SWITCHED_OFF)
 
     def subscriber_profile(self, card_no: str, *, resolved: "CardInfo | None" = None):
         return ProfileResult(ok=False, error_code=ERROR_SWITCHED_OFF)
 
-    def recharge(self, card_no: str, option_code: str, *, expected_cost=None):
+    def recharge(
+        self,
+        card_no: str,
+        option_code: str,
+        *,
+        expected_cost=None,
+        attempt_key: str = "",
+    ):
         # Definite, not indeterminate: nothing left the machine.
         return RechargeResult(ok=False, error_code=ERROR_SWITCHED_OFF)
+
+    def attempt_outcome(
+        self, attempt_key: str, *, option_code: str = ""
+    ) -> AttemptOutcome:
+        # Not asked, so not known: the attempt stays as it is until the
+        # provider is back on.
+        return AttemptOutcome(state=ATTEMPT_UNKNOWN, error_code=ERROR_SWITCHED_OFF)
+
+    def services_directory(self, etag: str = "") -> ServicesDirectoryResult:
+        return ServicesDirectoryResult(ok=False, error_code=ERROR_SWITCHED_OFF)
+
+    def service_detect(self, country: str, phone: str) -> ServiceDetectResult:
+        return ServiceDetectResult(ok=False, error_code=ERROR_SWITCHED_OFF)
+
+    def service_quote(self, request: dict) -> ServiceQuoteResult:
+        return ServiceQuoteResult(ok=False, error_code=ERROR_SWITCHED_OFF)
 
     def voucher_catalog(self) -> VoucherCatalogResult:
         return VoucherCatalogResult(ok=False, error_code=ERROR_SWITCHED_OFF)
@@ -906,15 +1205,19 @@ def in_parallel(calls):
     calls = list(calls)
     if len(calls) < 2:
         return [call() for call in calls]
+    from apps.integrations import relay_link
+
     identity = _current_identity()
     # Read here, where the ORM may be used: each worker's provider_for() is
-    # answered from this rather than from a query of its own.
+    # answered from this rather than from a query of its own — the operator's
+    # switches, and the relay link a relay-hosted driver calls through.
     switched_off = switches.switched_off_providers()
+    link = relay_link.current()
     with ThreadPoolExecutor(
         max_workers=len(calls), thread_name_prefix="integration"
     ) as pool:
         futures = [
-            pool.submit(_isolated, call, identity, switched_off) for call in calls
+            pool.submit(_isolated, call, identity, switched_off, link) for call in calls
         ]
         return [future.result() for future in futures]
 
@@ -925,16 +1228,18 @@ def _current_identity() -> dict:
     return context.current_identity()
 
 
-def _isolated(call, identity: dict, switched_off: frozenset[str]):
+def _isolated(call, identity: dict, switched_off: frozenset[str], link=None):
     from django.db import close_old_connections
 
     from apps.analytics import buffer, context
+    from apps.integrations import relay_link
 
     try:
         with (
             context.request_identity(identity),
             buffer.held(),
             switches.pinned(switched_off),
+            relay_link.pinned(link),
         ):
             return call()
     finally:

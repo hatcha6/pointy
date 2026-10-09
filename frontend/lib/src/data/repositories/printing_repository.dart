@@ -1202,8 +1202,14 @@ class PrintingRepository {
         {'label': 'النقد الفعلي', 'value': formatMoney(cash.closingCash!)},
       if (cash.cashVariance != null)
         {
-          'label': 'الفرق',
-          'value': formatMoney(cash.cashVariance!),
+          // Named, not signed: a bare "-12.00" reads the same as "12.00"
+          // on a till slip, so the label carries the direction.
+          'label': cash.cashVariance! < -0.005
+              ? 'العجز'
+              : cash.cashVariance! > 0.005
+              ? 'الزيادة'
+              : 'الفرق',
+          'value': formatMoney(cash.cashVariance!.abs()),
           'emphasize': true,
         },
     ];

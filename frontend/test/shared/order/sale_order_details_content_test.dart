@@ -6,6 +6,8 @@ import 'package:pointy_frontend/src/data/models/sale_order.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
 import 'package:pointy_frontend/src/shared/order/sale_order_details_content.dart';
 
+import '../../support/test_fonts.dart';
+
 Widget _wrap(Widget child) {
   return MaterialApp(
     locale: const Locale('ar'),
@@ -360,6 +362,10 @@ SaleOrder _rechargeInvoice(SaleLineIntegration integration) {
 
 void _rechargeInvoiceTests() {
   group('a recharge line on the invoice', () {
+    // The real font: the test one is twice as wide as Arabic, and every phone
+    // width would overflow on it.
+    setUpAll(loadAppFonts);
+
     testWidgets('an unanswered write says so, and says not to retry', (
       tester,
     ) async {
@@ -444,5 +450,64 @@ void _rechargeInvoiceTests() {
       expect(find.textContaining('إيصال المزوّد'), findsOneWidget);
       expect(find.textContaining('2026-10-20'), findsOneWidget);
     });
+
+    for (final (name, size, scale) in const [
+      ('a till', Size(1366, 768), 1.0),
+      ('a phone', Size(360, 640), 1.0),
+      ('a small phone with text a third bigger', Size(360, 640), 1.3),
+    ]) {
+      testWidgets('$name shows a meter\'s token whole, without overflow', (
+        tester,
+      ) async {
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        await tester.pumpWidget(
+          MediaQuery(
+            data: MediaQueryData(
+              size: size,
+              textScaler: TextScaler.linear(scale),
+            ),
+            child: _wrap(
+              SingleChildScrollView(
+                child: SaleOrderDetailsContent(
+                  order: _rechargeInvoice(
+                    const SaleLineIntegration(
+                      provider: 'pointy',
+                      kind: 'bill',
+                      subscriberRef: '04223568280',
+                      optionLabel: 'كهرباء إيكيجا (مسبقة الدفع)',
+                      status: 'confirmed',
+                      providerReference: '558032',
+                      receipt: {
+                        'pin': '2737-6032-5315-7183-0856-4410',
+                        'pin_label': 'رمز الشحن',
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull);
+        final token = find.text('2737-6032-5315-7183-0856-4410');
+        expect(token, findsOneWidget);
+        final text = tester.state<EditableTextState>(
+          find.descendant(
+            of: find.byType(SelectableText),
+            matching: find.byType(EditableText),
+          ),
+        );
+        expect(
+          text.renderEditable.size.height,
+          lessThan(text.renderEditable.preferredLineHeight * 1.5),
+          reason: 'on one line, whatever the width',
+        );
+      });
+    }
   });
 }

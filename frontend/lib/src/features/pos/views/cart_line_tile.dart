@@ -7,6 +7,8 @@ import '../../../shared/date_formatters.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/order/order.dart';
 import '../../../shared/units.dart';
+import 'direct_services/service_test_mode_banner.dart';
+import 'direct_services/service_texts.dart';
 
 class CartLineTile extends StatelessWidget {
   const CartLineTile({
@@ -75,6 +77,10 @@ class CartLineTile extends StatelessWidget {
   bool get _showsUnitRow =>
       onSwitchUnit != null || (!line.isBaseUnit && line.unitLabel.isNotEmpty);
 
+  /// A service added while the relay was in test mode says so on its line: the
+  /// sale will send nothing real and pay nothing.
+  bool get _showsTestMark => line.integration?.testMode == true;
+
   /// Whether there is anything to SAY about this line's money.
   ///
   /// Doing — repricing — is no longer in here: it moved onto the per-unit
@@ -98,13 +104,30 @@ class CartLineTile extends StatelessWidget {
       title: line.variant.productLabel,
       subtitle: recharge == null
           ? line.variant.variantLabel
+          : recharge.isAirtime
+          // Airtime sent to a phone abroad, or a bill paid abroad: its own
+          // words, not the «card» of a subscriber's top-up.
+          ? l10n.posAirtimeCartSubtitle(
+              ltrIsolated(recharge.subscriberRef),
+              recharge.optionLabel,
+            )
+          : recharge.isBill
+          ? l10n.posBillCartSubtitle(
+              ltrIsolated(recharge.subscriberRef),
+              recharge.optionLabel,
+            )
           : l10n.rechargeCartLineSubtitle(
               ltrIsolated(recharge.subscriberRef),
               recharge.months > 0
                   ? l10n.rechargeMonths(recharge.months)
                   : recharge.optionLabel,
             ),
-      detail: recharge == null ? line.variant.sku : null,
+      // A service line held in an invoice says how old its price is.
+      detail: recharge == null
+          ? line.variant.sku
+          : (recharge.isDirectService
+                ? serviceQuoteAgeText(l10n, recharge.quotedAt)
+                : null),
       // Effective unit price reflects the selected unit and any modifier deltas.
       unitPriceLabel: l10n.unitPriceEach(formatMoney(line.unitPrice)),
       // Tap the per-unit price to change it. A pencil on a row of its own cost
@@ -119,7 +142,10 @@ class CartLineTile extends StatelessWidget {
       incrementTooltip: l10n.addOneTooltip,
       decrementTooltip: l10n.removeOneTooltip,
       removeTooltip: l10n.removeCartLineTooltip,
-      onIncrement: onAdd,
+      // A line whose quantity is not the cashier's to raise — a provider card
+      // (one card, one line) or a serialized article — shows `+` disabled
+      // rather than a button the cart would silently ignore.
+      onIncrement: line.allowsQuantityEdit ? onAdd : null,
       onDecrement: onRemove,
       onRemove: onDelete,
       // Every line's quantity is tap-to-type editable so the cashier can enter a
@@ -136,13 +162,26 @@ class CartLineTile extends StatelessWidget {
         !hasNoteRow &&
         !_showsUnitRow &&
         !_showsMoneyRow &&
-        !_showsIdentityRow) {
+        !_showsIdentityRow &&
+        !_showsTestMark) {
       content = tile;
     } else {
       content = Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           tile,
+          if (_showsTestMark)
+            const Padding(
+              padding: EdgeInsetsDirectional.only(
+                start: 12,
+                end: 12,
+                bottom: 8,
+              ),
+              child: Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: ServiceTestModeMark(),
+              ),
+            ),
           if (_showsIdentityRow)
             _CartLineIdentity(line: line, onPickBatch: onPickBatch),
           if (_showsUnitRow || _showsMoneyRow)

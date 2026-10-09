@@ -18,6 +18,7 @@ String integrationProviderName(
     IntegrationProviderKey.hdbox => l10n.integrationProviderHdboxName,
     IntegrationProviderKey.lnet => l10n.integrationProviderLnetName,
     IntegrationProviderKey.qareeb => l10n.integrationProviderQareebName,
+    IntegrationProviderKey.pointy => l10n.integrationProviderPointyName,
     IntegrationProviderKey.unknown => l10n.integrationProviderUnknownName,
   };
 }
@@ -44,6 +45,7 @@ String integrationProviderTagline(
     IntegrationProviderKey.hdbox => l10n.integrationProviderHdboxTagline,
     IntegrationProviderKey.lnet => l10n.integrationProviderLnetTagline,
     IntegrationProviderKey.qareeb => l10n.integrationProviderQareebTagline,
+    IntegrationProviderKey.pointy => l10n.integrationProviderPointyTagline,
     IntegrationProviderKey.unknown => l10n.integrationProviderUnknownTagline,
   };
 }
@@ -166,7 +168,20 @@ IconData integrationProviderIcon(IntegrationProviderKey key) {
     IntegrationProviderKey.hdbox => Icons.live_tv_outlined,
     IntegrationProviderKey.lnet => Icons.router_outlined,
     IntegrationProviderKey.qareeb => Icons.confirmation_number_outlined,
+    IntegrationProviderKey.pointy => Icons.card_giftcard_outlined,
     IntegrationProviderKey.unknown => Icons.extension_outlined,
+  };
+}
+
+/// What a provider's balance row is called: the agency's float at a
+/// provider, or — for «كروت دفتر» — the wallet's voucher balance.
+String integrationBalanceLabel(
+  IntegrationProviderKey key,
+  AppLocalizations l10n,
+) {
+  return switch (key) {
+    IntegrationProviderKey.pointy => l10n.integrationVoucherBalanceLabel,
+    _ => l10n.integrationBalanceLabel,
   };
 }
 
@@ -197,6 +212,7 @@ String integrationErrorText(String code, AppLocalizations l10n) {
     IntegrationErrorCode.providerError => l10n.integrationErrorProviderError,
     // Its own message because it is the one failure a shop can fix itself,
     // and the fix is a different screen from "try again".
+    IntegrationErrorCode.priceChanged => l10n.posServiceReasonPriceChanged,
     IntegrationErrorCode.insufficientFloat =>
       l10n.integrationErrorInsufficientFloat,
     // Not a failure at all: a write went out and nobody knows what it did.
@@ -224,6 +240,8 @@ String integrationCapabilityLabel(String code, AppLocalizations l10n) {
     IntegrationCapability.recharge => l10n.integrationCapabilityRecharge,
     IntegrationCapability.vouchers => l10n.integrationCapabilityVouchers,
     IntegrationCapability.profiles => l10n.integrationCapabilityProfiles,
+    IntegrationCapability.airtime => l10n.integrationCapabilityAirtime,
+    IntegrationCapability.bills => l10n.integrationCapabilityBills,
     _ => code,
   };
 }
@@ -287,9 +305,10 @@ class IntegrationProviderLogo extends StatelessWidget {
   final double aspectRatio;
 
   /// Marks that are a whole app tile already — Qareeb's is its orange app
-  /// icon. Those fill the box.
+  /// icon, Daftar's its own. Those fill the box.
   static bool _isTile(IntegrationProviderKey key) =>
-      key == IntegrationProviderKey.qareeb;
+      key == IntegrationProviderKey.qareeb ||
+      key == IntegrationProviderKey.pointy;
 
   @override
   Widget build(BuildContext context) {

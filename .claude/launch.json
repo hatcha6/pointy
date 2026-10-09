@@ -2,6 +2,14 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "relay-console",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "relay/console-ui/scripts/dev-relay.sh"
+      ],
+      "port": 8191
+    },
+    {
       "name": "backend",
       "runtimeExecutable": "make",
       "runtimeArgs": [
@@ -434,6 +442,24 @@
         "WEB_PORT=8093"
       ],
       "port": 8093
+    },
+    {
+      "name": "voucher-menu-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": [
+        "frontend-voucher-menu-preview",
+        "WEB_PORT=8094"
+      ],
+      "port": 8094
+    },
+    {
+      "name": "services-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": [
+        "frontend-services-preview",
+        "WEB_PORT=8096"
+      ],
+      "port": 8096
     }
   ]
 }

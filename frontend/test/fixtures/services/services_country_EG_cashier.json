@@ -1,0 +1,350 @@
+{
+ "available": true,
+ "error_code": "",
+ "country": {
+  "code": "EG",
+  "name": "مصر",
+  "name_en": "Egypt",
+  "dial": [
+   "20"
+  ],
+  "currency": "EGP",
+  "currency_name": "جنيه مصري",
+  "popular": 4
+ },
+ "airtime": {
+  "operators": [
+   {
+    "id": 120,
+    "logo": "https://s3.amazonaws.com/rld-operator/e4c9d9ce-9ebb-40b2-8d50-f6a8ecf9e618-size-3.png",
+    "mode": "fixed",
+    "name": "اتصالات مصر",
+    "name_en": "Etisalat Egypt",
+    "approximate": false,
+    "popular_amount": "15",
+    "amount_currency": "EGP",
+    "receive_currency": "EGP",
+    "amounts": [
+     {
+      "amount": "5",
+      "receive": "5",
+      "receive_currency": "EGP",
+      "price": "1.75",
+      "exceeds_float": false
+     },
+     {
+      "amount": "6",
+      "receive": "6",
+      "receive_currency": "EGP",
+      "price": "2.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "7",
+      "receive": "7",
+      "receive_currency": "EGP",
+      "price": "2.50",
+      "exceeds_float": false
+     },
+     {
+      "amount": "8",
+      "receive": "8",
+      "receive_currency": "EGP",
+      "price": "2.75",
+      "exceeds_float": false
+     },
+     {
+      "amount": "9",
+      "receive": "9",
+      "receive_currency": "EGP",
+      "price": "3.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "10",
+      "receive": "10",
+      "receive_currency": "EGP",
+      "price": "3.25",
+      "exceeds_float": false
+     },
+     {
+      "amount": "15",
+      "receive": "15",
+      "receive_currency": "EGP",
+      "price": "5.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "25",
+      "receive": "25",
+      "receive_currency": "EGP",
+      "price": "8.25",
+      "exceeds_float": false
+     },
+     {
+      "amount": "30",
+      "receive": "30",
+      "receive_currency": "EGP",
+      "price": "9.75",
+      "exceeds_float": false
+     },
+     {
+      "amount": "35",
+      "receive": "35",
+      "receive_currency": "EGP",
+      "price": "11.50",
+      "exceeds_float": false
+     },
+     {
+      "amount": "40",
+      "receive": "40",
+      "receive_currency": "EGP",
+      "price": "13.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "45",
+      "receive": "45",
+      "receive_currency": "EGP",
+      "price": "14.75",
+      "exceeds_float": false
+     },
+     {
+      "amount": "50",
+      "receive": "50",
+      "receive_currency": "EGP",
+      "price": "16.50",
+      "exceeds_float": false
+     },
+     {
+      "amount": "55",
+      "receive": "55",
+      "receive_currency": "EGP",
+      "price": "18.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "60",
+      "receive": "60",
+      "receive_currency": "EGP",
+      "price": "19.50",
+      "exceeds_float": false
+     },
+     {
+      "amount": "65",
+      "receive": "65",
+      "receive_currency": "EGP",
+      "price": "21.25",
+      "exceeds_float": false
+     },
+     {
+      "amount": "70",
+      "receive": "70",
+      "receive_currency": "EGP",
+      "price": "22.75",
+      "exceeds_float": false
+     },
+     {
+      "amount": "75",
+      "receive": "75",
+      "receive_currency": "EGP",
+      "price": "24.50",
+      "exceeds_float": false
+     },
+     {
+      "amount": "80",
+      "receive": "80",
+      "receive_currency": "EGP",
+      "price": "26.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "85",
+      "receive": "85",
+      "receive_currency": "EGP",
+      "price": "27.75",
+      "exceeds_float": false
+     },
+     {
+      "amount": "90",
+      "receive": "90",
+      "receive_currency": "EGP",
+      "price": "29.25",
+      "exceeds_float": false
+     },
+     {
+      "amount": "95",
+      "receive": "95",
+      "receive_currency": "EGP",
+      "price": "31.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "100",
+      "receive": "100",
+      "receive_currency": "EGP",
+      "price": "32.50",
+      "exceeds_float": false
+     },
+     {
+      "amount": "105",
+      "receive": "105",
+      "receive_currency": "EGP",
+      "price": "34.25",
+      "exceeds_float": false
+     },
+     {
+      "amount": "110",
+      "receive": "110",
+      "receive_currency": "EGP",
+      "price": "35.75",
+      "exceeds_float": false
+     },
+     {
+      "amount": "115",
+      "receive": "115",
+      "receive_currency": "EGP",
+      "price": "37.50",
+      "exceeds_float": false
+     },
+     {
+      "amount": "125",
+      "receive": "125",
+      "receive_currency": "EGP",
+      "price": "40.75",
+      "exceeds_float": false
+     },
+     {
+      "amount": "200",
+      "receive": "200",
+      "receive_currency": "EGP",
+      "price": "65.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "250",
+      "receive": "250",
+      "receive_currency": "EGP",
+      "price": "81.25",
+      "exceeds_float": false
+     }
+    ]
+   },
+   {
+    "id": 118,
+    "max": "5543",
+    "min": "170",
+    "logo": "https://s3.amazonaws.com/rld-operator/f671e67d-5e9b-48df-be2c-dbbfabb52948-size-3.png",
+    "mode": "range",
+    "name": "أورنج مصر",
+    "name_en": "Orange (Mobinil) Egypt",
+    "approximate": false,
+    "popular_amount": null,
+    "amount_currency": "EGP",
+    "receive_currency": "EGP",
+    "amounts": [
+     {
+      "amount": "200",
+      "receive": "200",
+      "receive_currency": "EGP",
+      "price": "46.50",
+      "exceeds_float": false
+     },
+     {
+      "amount": "500",
+      "receive": "500",
+      "receive_currency": "EGP",
+      "price": "116.25",
+      "exceeds_float": false
+     },
+     {
+      "amount": "1000",
+      "receive": "1000",
+      "receive_currency": "EGP",
+      "price": "232.25",
+      "exceeds_float": false
+     },
+     {
+      "amount": "2000",
+      "receive": "2000",
+      "receive_currency": "EGP",
+      "price": "464.50",
+      "exceeds_float": false
+     }
+    ]
+   },
+   {
+    "id": 119,
+    "max": "200",
+    "min": "8",
+    "logo": "https://s3.amazonaws.com/rld-operator/164ce4fc-8cff-4d09-9bd6-18ce94e830d9-size-2.png",
+    "mode": "range",
+    "name": "فودافون مصر",
+    "name_en": "Vodafone Egypt",
+    "approximate": false,
+    "popular_amount": null,
+    "amount_currency": "EGP",
+    "receive_currency": "EGP",
+    "amounts": [
+     {
+      "amount": "50",
+      "receive": "50",
+      "receive_currency": "EGP",
+      "price": "14.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "100",
+      "receive": "100",
+      "receive_currency": "EGP",
+      "price": "27.75",
+      "exceeds_float": false
+     },
+     {
+      "amount": "200",
+      "receive": "200",
+      "receive_currency": "EGP",
+      "price": "58.25",
+      "exceeds_float": false
+     }
+    ]
+   },
+   {
+    "id": 1216,
+    "max": "437",
+    "min": "88",
+    "logo": "https://s3.amazonaws.com/rld-portal-avatar-prd/0515b3ea-4e01-41f5-bcfb-73e3fdadc5c7.png",
+    "mode": "range",
+    "name": "وي مصر",
+    "name_en": "WE Telecom Egypt",
+    "approximate": false,
+    "popular_amount": null,
+    "amount_currency": "EGP",
+    "receive_currency": "EGP",
+    "amounts": [
+     {
+      "amount": "100",
+      "receive": "100",
+      "receive_currency": "EGP",
+      "price": "32.75",
+      "exceeds_float": false
+     },
+     {
+      "amount": "200",
+      "receive": "200",
+      "receive_currency": "EGP",
+      "price": "65.25",
+      "exceeds_float": false
+     },
+     {
+      "amount": "437",
+      "receive": "437",
+      "receive_currency": "EGP",
+      "price": "149.25",
+      "exceeds_float": false
+     }
+    ]
+   }
+  ]
+ }
+}

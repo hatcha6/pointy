@@ -140,6 +140,12 @@ class IntegrationAccount(SecretStorageMixin, TimeStampedModel):
         spec = self.spec
         if spec is None:
             return False
+        if spec.relay_hosted:
+            # The relay link is the credential: a shop that is not linked has
+            # nothing to buy through, and must never see the provider's chip.
+            from . import relay_link
+
+            return relay_link.current() is not None
         for field in spec.fields:
             if field in spec.optional_fields:
                 continue
@@ -665,6 +671,28 @@ class IntegrationVoucherBrand(TimeStampedModel):
     #: collapsed brands to spend its per-brand reads on, stalest first.
     items_synced_at = models.DateTimeField(blank=True, null=True)
 
+    # --- the company's own shelf (``catalog.POINTY``) ---------------------------
+    # The relay publishes OUR order and grouping, not a wholesaler's, so these
+    # are kept as it says them and the till's menu reads them back. Blank or
+    # zero for a provider that publishes none (Qareeb). ``db_default`` on every
+    # one: the previous release, still serving while a live update overlaps,
+    # inserts brands without naming them.
+    #: Display order across the whole shelf; the relay puts featured brands
+    #: first. Lower is earlier.
+    rank = models.IntegerField(default=0, db_default=0)
+    featured = models.BooleanField(default=False, db_default=False)
+    #: A short label the till pins on the brand's card («الأكثر مبيعاً»).
+    badge = models.CharField(max_length=64, blank=True, default="", db_default="")
+    #: Our category, by key and as named, with its own display order.
+    category_key = models.CharField(max_length=64, blank=True, default="", db_default="")
+    category_name = models.CharField(max_length=160, blank=True, default="", db_default="")
+    category_rank = models.IntegerField(default=0, db_default=0)
+    #: How a customer redeems the card, printed beneath its code.
+    redeem_hint = models.TextField(blank=True, default="", db_default="")
+    #: Other names a cashier may type for the brand ("iTunes", "Apple"); each
+    #: becomes an alias of its product, so the search finds «آيتونز».
+    aliases = models.JSONField(default=list, blank=True, db_default=[])
+
     class Meta:
         ordering = ["name"]
         constraints = [
@@ -706,12 +734,34 @@ class IntegrationVoucher(TimeStampedModel):
     #: that actually listed the brand's items may set this False — a brand
     #: whose items were simply not asked about keeps what it last knew.
     is_available = models.BooleanField(default=True)
+    #: On the provider's list at all, sellable or not. Qareeb lists only what
+    #: it has, so for it this moves with ``is_available``; the relay lists a
+    #: card it cannot sell right now as ``available: false``, which the till
+    #: shows greyed — and a card it stopped listing is withdrawn, not shown.
+    is_listed = models.BooleanField(default=True, db_default=True)
     variant = models.OneToOneField(
         "catalog.ProductVariant",
         on_delete=models.SET_NULL,
         related_name="voucher",
         blank=True,
         null=True,
+    )
+
+    # --- the company's own shelf (``catalog.POINTY``); see the brand's note ----
+    #: Which store region the card redeems in (ISO 3166-1 alpha-2, plus ``WW``
+    #: worldwide and ``EU``). Blank for a card with none — a local one.
+    country = models.CharField(max_length=8, blank=True, default="", db_default="")
+    #: What ``face_amount`` is written in ("USD"): a label, never arithmetic.
+    face_currency = models.CharField(max_length=8, blank=True, default="", db_default="")
+    #: Display order within its brand. Lower is earlier.
+    rank = models.IntegerField(default=0, db_default=0)
+    #: The running promotion's label («عرض»); blank when none is running.
+    badge = models.CharField(max_length=64, blank=True, default="", db_default="")
+    promo_ends_at = models.DateTimeField(blank=True, null=True)
+    #: What the customer pays when no promotion runs — the till strikes it
+    #: through beside a promotional price.
+    regular_price = models.DecimalField(
+        max_digits=12, decimal_places=2, blank=True, null=True
     )
 
     class Meta:
@@ -724,6 +774,161 @@ class IntegrationVoucher(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.brand.name} {self.label}"
+
+    @property
+    def has_promo(self) -> bool:
+        """A promotion is running on this card, whatever it lowered.
+
+        Usually it says so (a badge, an end), but a promotion that only cuts
+        the customer's price shows in that price alone.
+        """
+        if self.badge or self.promo_ends_at is not None:
+            return True
+        return (
+            self.regular_price is not None
+            and self.suggested_price is not None
+            and self.suggested_price < self.regular_price
+        )
+
+
+class IntegrationVoucherCountry(TimeStampedModel):
+    """A store region the company's cards are sold for, as the relay names it.
+
+    iTunes US is not iTunes UK: a card names its region and the till shows it
+    with a flag. The flag is an operator-uploaded picture rather than an emoji
+    because emoji flags do not render on the Windows tills, and it is kept
+    here, small and inline, so the menu never waits on a download.
+    """
+
+    account = models.ForeignKey(
+        IntegrationAccount, on_delete=models.CASCADE, related_name="voucher_countries"
+    )
+    code = models.CharField(max_length=8)
+    #: The Arabic short name the till shows and prints («الولايات المتحدة»).
+    name = models.CharField(max_length=120)
+    #: The relay's own order.
+    rank = models.IntegerField(default=0)
+    #: The picture the relay names for it now (``sha256:<hex>``), or blank.
+    flag_path = models.CharField(max_length=80, blank=True)
+    #: That picture as the menu serves it: a PNG no larger than 96 px.
+    flag = models.BinaryField(blank=True, null=True, editable=False)
+    #: The ``flag_path`` whose picture ``flag`` is. A content-addressed path
+    #: never changes its picture, so a path already in is never fetched again.
+    flag_source = models.CharField(max_length=80, blank=True)
+    #: When ``flag_path`` was last asked for and did not come, so a missing
+    #: picture is asked for again an hour later rather than every sweep.
+    flag_checked_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ["rank", "code"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["account", "code"], name="integrations_unique_voucher_country"
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.account.provider}:{self.code} {self.name}"
+
+
+class IntegrationServiceCountry(TimeStampedModel):
+    """A country the company's direct top-up and bill payments reach, as last read.
+
+    The relay publishes one directory — every country with the operators that
+    can be topped up there and the billers that can be paid — and the shop keeps
+    a copy of it here, one row per country, so the till's screens read their own
+    database and never wait on the relay (``services_sync`` writes it,
+    ``services_menu`` reads it). Only a phone-number check and a price quote
+    ever go to the relay live.
+
+    The rows say what the relay said: operators and billers keep their Arabic
+    ``name`` and Reloadly's Latin ``name_en`` side by side (the till shows the
+    first and searches both), prices as the relay priced them (``unit_price``
+    is what the shop's voucher balance pays, ``retail_price`` what the relay
+    suggests the customer pays), in ``payload``. The counts and ``bill_types``
+    are derived from it at write time, so the menu is built without opening a
+    single operator.
+    """
+
+    account = models.ForeignKey(
+        IntegrationAccount, on_delete=models.CASCADE, related_name="service_countries"
+    )
+    code = models.CharField(max_length=8)
+    #: The Arabic name the till shows («مالي»).
+    name = models.CharField(max_length=120)
+    #: The Latin spelling, when the relay sends one: for the search box to also
+    #: find "Mali", never to be shown.
+    name_en = models.CharField(max_length=120, blank=True, default="")
+    #: Calling codes, longest-prefix matched against what a cashier types
+    #: (``["223"]``; a country sharing a code lists its own extension, ``["1868"]``).
+    dial = models.JSONField(default=list, blank=True)
+    #: What the country's operators take amounts in (``XOF``), and the everyday
+    #: Arabic word for it («فرنك أفريقي») — blank until the relay says.
+    currency = models.CharField(max_length=8, blank=True, default="")
+    currency_name = models.CharField(max_length=120, blank=True, default="")
+    #: 1-based rank in the relay's popular list; 0 when not in it.
+    popular = models.IntegerField(default=0)
+    #: Display order: the popular countries first, then the relay's own order.
+    rank = models.IntegerField(default=0)
+    #: The flag, exactly as the voucher countries keep theirs: the relay's
+    #: picture path (``sha256:<hex>``), the PNG (≤ 96 px) made from it, and which
+    #: path that PNG is. See :mod:`apps.integrations.voucher_flags`.
+    flag_path = models.CharField(max_length=80, blank=True)
+    flag = models.BinaryField(blank=True, null=True, editable=False)
+    flag_source = models.CharField(max_length=80, blank=True)
+    flag_checked_at = models.DateTimeField(blank=True, null=True)
+    #: How many operators / billers the till can sell here. Billers of a kind
+    #: the shop does not offer (tolls, "other") are not counted.
+    airtime_count = models.PositiveIntegerField(default=0)
+    bills_count = models.PositiveIntegerField(default=0)
+    #: Offered billers by kind: ``{"electricity": 3, "water": 1}``.
+    bill_types = models.JSONField(default=dict, blank=True)
+    #: ``{"airtime": {"operators": [...]}, "bills": {"billers": [...]}}`` — a
+    #: key is left out when the country has none of it.
+    payload = models.JSONField(default=dict, blank=True)
+    #: A digest of everything above that came from the relay, so a sweep can
+    #: tell which countries actually changed without comparing their payloads.
+    version = models.CharField(max_length=32, blank=True)
+    synced_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ["rank", "code"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["account", "code"], name="integrations_unique_service_country"
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.account.provider}:{self.code} {self.name}"
+
+
+class IntegrationServiceLogo(TimeStampedModel):
+    """One operator's logo, copied from the relay into the shop's own storage.
+
+    The relay names a picture by its hash (``sha256:<hex>``) and serves its own
+    copy; this holds the small PNG made from it, so tills read logos from the
+    shop's backend alone (see :mod:`apps.integrations.services_logos`).
+    """
+
+    account = models.ForeignKey(
+        IntegrationAccount, on_delete=models.CASCADE, related_name="service_logos"
+    )
+    path = models.CharField(max_length=80)
+    picture = models.BinaryField(blank=True, null=True, editable=False)
+    #: When the relay was last asked for ``path`` and it did not come (a missing
+    #: picture is asked for again an hour later).
+    checked_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["account", "path"], name="integrations_unique_service_logo"
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.account.provider}:{self.path}"
 
 
 class ProviderPayment(TimeStampedModel):
@@ -799,3 +1004,53 @@ class ProviderPayment(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.provider}:{self.reference}"
+
+
+class IntegrationPriceRule(TimeStampedModel):
+    """Where the shop prices «كروت دفتر» differently from the company.
+
+    ``default`` (shop-wide), ``service`` (``service_key`` ``airtime`` or
+    ``bill:<type>``, optionally one ``country``) or ``variant`` (one card).
+    Services carry ``markup_percent`` on what the shop pays; cards a fixed
+    ``price``. See :mod:`apps.integrations.pricing_rules`.
+    """
+
+    class Scope(models.TextChoices):
+        DEFAULT = "default", "default"
+        SERVICE = "service", "service"
+        VARIANT = "variant", "variant"
+
+    class Mode(models.TextChoices):
+        COMPANY = "company", "company"
+        CUSTOM = "custom", "custom"
+
+    account = models.ForeignKey(
+        IntegrationAccount, on_delete=models.CASCADE, related_name="price_rules"
+    )
+    scope = models.CharField(max_length=16, choices=Scope.choices)
+    service_key = models.CharField(max_length=64, blank=True, default="")
+    country = models.CharField(max_length=8, blank=True, default="")
+    variant = models.ForeignKey(
+        "catalog.ProductVariant",
+        on_delete=models.CASCADE,
+        related_name="integration_price_rules",
+        blank=True,
+        null=True,
+    )
+    mode = models.CharField(max_length=16, choices=Mode.choices, default=Mode.COMPANY)
+    markup_percent = models.DecimalField(max_digits=7, decimal_places=2, blank=True, null=True)
+    price = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["account", "variant"],
+                condition=models.Q(variant__isnull=False),
+                name="integrations_unique_variant_price_rule",
+            ),
+            models.UniqueConstraint(
+                fields=["account", "scope", "service_key", "country"],
+                condition=models.Q(variant__isnull=True),
+                name="integrations_unique_service_price_rule",
+            ),
+        ]

@@ -306,6 +306,83 @@ curl \
   http://127.0.0.1:8091/v1/installations/<installation-id>/subscription
 ```
 
+### Operator console (web)
+
+`/console/` is the company's web UI for everything the operator CLI does over
+the admin API: shops (create, rename, subscription, diagnostics download),
+wallets and their statements, Dafa top-ups, card/top-up/bill purchases, the
+voucher catalog (view, publish with images, history), supplier offers and the
+supplier comparison, pricing settings, the direct top-up/bills directory and
+quotes, SMS usage/log/config, license keys, fleet channels and rollouts, update
+bundles (fetched by URL or uploaded), the integration kill switch, the alert
+channel, and who can sign in. Only host-side commands (`server`, `migrate`,
+`provision` against the database, `gen-token`) stay CLI-only. It is Arabic,
+right-to-left, works on a phone (lists become cards, dialogs become sheets),
+and is embedded in the relay binary (`internal/console/dist`, built from
+`relay/console-ui`).
+
+**Off until `POINTY_RELAY_CONSOLE_ORIGIN` is set** to the console's public origin,
+e.g. `https://relay.example.com`. Passkeys are bound to that host name: changing
+it later means every operator registers again, so use the stable domain, not a
+platform-generated one.
+
+Security model:
+
+- **Passkeys only.** Operators sign in with Face ID / Touch ID / Windows Hello /
+  a security key (WebAuthn, user verification required). There are no
+  passwords. Sessions are server-side (Postgres), sent in an `HttpOnly`,
+  `SameSite=Strict`, `__Host-` cookie; they end after 30 minutes idle and 12
+  hours in all.
+- **The browser never holds the admin token.** The console forwards a signed-in
+  operator's request to the unchanged `/v1` admin handlers, adding the token on
+  the server. Only admin routes are forwarded, and the browser's cookie is
+  never passed on.
+- **The actor is the operator.** Every forwarded write has its `actor`
+  overwritten with the signed-in operator's name, so the audit trail names a
+  real person.
+- **A passkey tap per money or security action.** Hand-made wallet movements,
+  confirming or rejecting a top-up, changing the bank accounts shops transfer
+  to, settling a purchase, publishing the catalog or pricing, provisioning,
+  minting license keys, uploading or fetching an update bundle, setting a
+  channel's version or rollout, pinning a shop's version, and
+  inviting/disabling operators each need a fresh passkey tap bound to that
+  exact request (method, path, body hash). A tap for 50 cannot run a request
+  for 5000, and cannot be replayed. The rules are in
+  `internal/console/stepup.go`; add new money flows there. A bundle upload is
+  too big to travel inside the step-up, so its tap rides in headers
+  (`X-Pointy-Step-Up-Challenge`, `-Credential`, `X-Pointy-Body-SHA256`): the
+  browser hashes the file first, and the console hashes the bytes on their way
+  to the store, which publishes nothing that does not match.
+- **Every change is audited** (`relay_console_audit`) with its request, minus
+  secret-looking fields (headers, tokens, passwords), and shown in the
+  console's activity log. A shop's diagnostics download is audited too.
+- CSRF: a custom header on every call plus an `Origin` check plus `SameSite`.
+  CSP allows only the console's own scripts; the page cannot be framed.
+
+The first operator is invited from the CLI; after that, operators invite each
+other from the console:
+
+```sh
+pointy-relay console invite --name "Hatem"   # one-time link, 24 h
+pointy-relay console operators               # who can sign in, devices, sessions
+pointy-relay console disable <operator-id>   # locks them out now
+```
+
+The link works once and carries its token in the `#fragment`, so it never
+reaches a server log. The same command with an existing name adds another
+device.
+
+Local development:
+
+```sh
+make relay-console-preview        # build the app, run a throwaway relay on :8191
+relay/console-ui/scripts/dev-relay.sh invite "Your name"
+make relay-console-dev            # live-reload app on :5173 (relay origin :5173)
+```
+
+The preview relay uses its own database (`relay_console_dev`) and Redis db, and
+runs suppliers in test mode whatever `relay/.env` holds.
+
 ### Operator CLI
 
 The operator CLI wraps the whole admin API for day-to-day fleet management.
@@ -361,14 +438,14 @@ pointy-relay subscription extend  <id> --days 365        # set end 1 year out, a
 
 `subscription set` is the human one-liner: `--months N` (or `--days N`, or
 `--until <RFC3339>`) activates the subscription for that span and turns remote
-access on, while `--ai`/`--no-ai`, `--sms`/`--no-sms` (plus
-`--sms-monthly-limit N`) and `--remote`/`--no-remote` flip the add-ons — all in
-a single audited change.
+access on, while `--ai`/`--no-ai` and `--remote`/`--no-remote` flip the add-ons
+— all in a single audited change. SMS is not part of a subscription: shops pay
+for it by the part from their SMS balance.
 
 For explicit field-by-field control, `subscription update` takes the id as the
 first argument (or `--installation-id`) plus any of `--relay-enabled`,
-`--subscription-active`, `--ai-enabled`, `--sms-enabled`,
-`--sms-monthly-limit`, `--subscription-ends-at`, `--clear-subscription-end`. Provision a new installation remotely with
+`--subscription-active`, `--ai-enabled`, `--subscription-ends-at`,
+`--clear-subscription-end`. Provision a new installation remotely with
 `pointy-relay installations provision --shop-name '...' --relay-enabled` (the
 one-time connector and access tokens print once).
 
@@ -500,6 +577,64 @@ provider back on.
 API (admin token): `GET /v1/fleet/integrations` lists every switch;
 `PUT /v1/fleet/integrations/{provider}` with `{"disabled": true, "reason": "…"}`
 throws one.
+
+### Alerts to the company's phones (ntfy)
+
+The relay pushes operational alerts to one [ntfy](https://ntfy.sh) topic the
+company's phones subscribe to (the ntfy app on Android/iOS, or the web):
+
+- **Low balances**, read every 15 minutes: Reloadly (USD), BN Plus dinar
+  wallet (LYD), OpenRouter (USD) and Serper (search credits). Sent once when a
+  balance reaches its floor, again every 12 hours while it stays there, and once
+  when it is topped back up. A balance unreadable 4 times running (a revoked
+  key) is alerted too.
+- **A card supplier refusing the company's account** (out of balance, bad
+  credentials) during a purchase: urgent, at most once an hour per supplier.
+- **Every shop wallet payment's result**, only once it is known: paid or
+  failed, with amount, shop, method, invoice and masked payer. A payment that
+  arrived with the wrong amount is a failure sent urgently (reconcile by hand).
+  Starts and cancellations are not sent. Test-mode payments are marked `[TEST]`
+  and sent quietly.
+
+- **Every bank transfer a shop sends**, the moment its receipt arrives: the
+  one alert that asks for work. Tapping it opens the transfer's review page.
+
+When the console is served (`POINTY_RELAY_CONSOLE_ORIGIN`), every alert carries
+a link: tapping it on the phone opens the page it is about (the top-up, the
+suppliers' balances).
+
+Several relay instances never double-send: balance alerts are claimed through
+the control store (`relay_alert_marks`), and payment alerts fire on the store's
+one applied state change.
+
+```bash
+pointy-relay alerts setup     # generate the topic once; prints the subscribe link
+pointy-relay alerts test      # send a test notification
+pointy-relay alerts status    # show the topic again
+pointy-relay alerts rotate    # new topic: every subscribed phone is cut off
+```
+
+The topic is generated on the relay and stored in the control store, so every
+instance picks it up within a minute without a redeploy. On the public server
+**the topic name is the password**: anyone who knows it can read the alerts,
+so keep it private, and `rotate` it if a phone is lost.
+
+Floors and server (environment; an empty floor stops watching that balance):
+
+| Variable | Default |
+|---|---|
+| `POINTY_RELAY_NTFY_SERVER` | `https://ntfy.sh` |
+| `POINTY_RELAY_NTFY_TOKEN` | empty (for a self-hosted server or reserved topic) |
+| `POINTY_RELAY_ALERTS_PREFIX` | empty, e.g. `[staging]` to tell relays apart |
+| `POINTY_RELAY_ALERT_BALANCE_INTERVAL` | `15m` |
+| `POINTY_RELAY_ALERT_RELOADLY_FLOOR` | `50` USD |
+| `POINTY_RELAY_ALERT_BNPLUS_FLOOR` | `500` LYD |
+| `POINTY_RELAY_ALERT_OPENROUTER_FLOOR` | `3` USD |
+| `POINTY_RELAY_ALERT_SERPER_FLOOR` | `300` credits |
+| `POINTY_RELAY_OPENROUTER_MANAGEMENT_KEY` | empty: reads what is left under the API key's own limit; set it to read the whole account's credits |
+
+API (admin token): `GET /v1/alerts`, `POST /v1/alerts/topic` (generate or
+rotate), `POST /v1/alerts/test`.
 
 ## Relay-Hosted AI
 
@@ -752,7 +887,7 @@ Pointy feature (invoice SMS, debt reminder, recall, consignment, month-end, ...)
   -> on-prem Django: queues the message, renders its local copy from its catalog
   -> Pointy Relay: POST /v1/sms/send   (X-Pointy-Relay-Token: ptr1...)
        configured -> identity -> body -> burst limit
-       -> idempotency (replay) -> monthly brake -> kind -> approved template id
+       -> idempotency (replay) -> kind -> approved template id
        -> count the message's SMS parts -> ledger row (pending) + parts x 0.150
           held from the shop's SMS balance (one step)
        -> Resala POST /messages/send-template -> ledger (sent|failed; failed is refunded,
@@ -822,17 +957,15 @@ the `MARGIN` between them; and a send that cost the company more than the shop
 paid logs an **ERROR** (`an sms cost the company more than the shop paid for
 it; raise POINTY_RELAY_SMS_PRICE`).
 
-The old `sms_enabled` flag no longer decides anything; it stays on the
-installation only because old rows and tools carry it. What remains is the
-operator's **monthly brake**: a shop's own `sms_monthly_limit` when above 0,
-otherwise `POINTY_RELAY_SMS_MONTHLY_LIMIT` (default `0` = no brake), over the
-calendar month in Libya (UTC+2), answering `429 monthly_limit`. A short per-shop
-burst limit (`POINTY_RELAY_SMS_RATE_LIMIT`, `60/minute`) answers
-`429 rate_limited` with `Retry-After`.
+SMS is not a subscription add-on and has no monthly allowance: the SMS balance
+is the only thing that limits sending. (The old `sms_enabled` and
+`sms_monthly_limit` columns are no longer read or written; a later release
+drops them.) The usage block still reports `"limit": 0, "remaining": -1` for
+shop backends from before the SMS balance. A short per-shop burst limit
+(`POINTY_RELAY_SMS_RATE_LIMIT`, `60/minute`) answers `429 rate_limited` with
+`Retry-After`.
 
 ```sh
-pointy-relay subscription set <id> --sms-monthly-limit 2000      # brake one shop
-pointy-relay subscription set <id> --sms-monthly-limit 0         # back to the relay default
 pointy-relay wallet credit <id> --account sms --amount 1.5 --reason 'ten free messages'
 pointy-relay wallet show <id> --account sms                      # the shop's SMS statement
 ```
@@ -918,8 +1051,6 @@ sends later.
 - `POINTY_RELAY_SMS_TEST_MODE` — `true` sends everything in Resala test mode.
 - `POINTY_RELAY_SMS_PRICE` — what one SMS part costs a shop, from its SMS
   balance (`0.150`; up to three decimals). A message pays it once per part.
-- `POINTY_RELAY_SMS_MONTHLY_LIMIT` — the operator's monthly brake for shops
-  whose own `sms_monthly_limit` is 0 (`0` = none: the balance limits sending).
 - `POINTY_RELAY_SMS_RATE_LIMIT` — per-shop burst limit (`60/minute`; also
   `N/second|hour|day` or `N/<duration>`; `0` disables).
 - `POINTY_RELAY_SMS_REQUEST_TIMEOUT` — one Resala call (`20s`).
@@ -1076,6 +1207,8 @@ The money sits in two accounts:
   `POINTY_RELAY_PLAN_DAYS`);
 - the **SMS balance** — money the owner moves there from the main wallet, which
   every message is paid from (see *Relay-Hosted SMS*).
+- the **voucher balance** — money the owner moves there from the main wallet,
+  which every card the till sells is paid from (see *Company Card Shop*).
 
 The payment gateway is **[Dafa](https://dafa.ly)**: one API for every Libyan
 payment method, on one company workspace. The API key lives only in relay env.
@@ -1149,7 +1282,7 @@ do not list it.
 ### The ledger
 
 `relay_wallet_entries` holds one signed row per movement, in one `account`
-(`main` or `sms`), with the balance it left: `topup` (+, only from a paid
+(`main`, `sms` or `vouchers`), with the balance it left: `topup` (+, only from a paid
 top-up, main only), `charge` (−, for a `service`), `refund` (+, gives a charge
 back), `transfer` (the shop moving its own money: − out of one account, + into
 the other, both in one step with one reference) and `adjustment` (either sign,
@@ -1196,12 +1329,42 @@ its balance and pay in, since paying in may be how it renews):
 | `GET /v1/wallet/topups/{id}` | one top-up (what the app polls; reads an open bank-card payment back from Dafa, at most every 3s); another shop's is `404` |
 | `POST /v1/wallet/topups/{id}/confirm` | `{otp}` → `200 {top_up}` paid, or a refusal below |
 | `POST /v1/wallet/topups/{id}/cancel` | an OTP top-up the owner backs out of; bank cards cannot be called off |
+| `POST /v1/wallet/topups/bank-transfer` | multipart: `amount, idempotency_key, requested_by, channel (lypay\|onepay), payer_bank, payer_account, payer_iban, to_account?` and the `receipt` file (JPEG/PNG/WebP/PDF, 10 MB) → `201 {top_up (status review), next_action: bank_transfer}`; a replayed key answers `200` with the same top-up |
 
 Public: `POST /v1/wallet/dafa/webhook/{top-up id}?token=…` (Dafa's webhook).
 
 Admin (bearer token): `GET /v1/wallet/admin/wallets?account=`, `GET|POST /v1/wallet/admin/entries` (`account` in the query or body),
-`GET /v1/wallet/admin/topups`, `POST /v1/wallet/admin/topups/{id or DFW-ref}/check`,
-`POST /v1/wallet/admin/topups/{id}/confirm`, `GET /v1/wallet/admin/config`.
+`GET /v1/wallet/admin/topups?status=`, `GET /v1/wallet/admin/topups/{id}` (with the
+receiving `account` and the other top-ups that sent the same receipt),
+`GET /v1/wallet/admin/topups/{id}/receipt`, `POST /v1/wallet/admin/topups/{id or DFW-ref}/check`,
+`POST /v1/wallet/admin/topups/{id}/confirm` (for a bank transfer: optional
+`amount` actually received and statement reference),
+`POST /v1/wallet/admin/topups/{id}/reject` (`{reason}`, shown to the shop),
+`GET|PUT /v1/wallet/admin/bank-accounts`, `GET /v1/wallet/admin/config`.
+
+### Bank transfers (LYPay and OnePay)
+
+A shop can also fill its wallet by transferring to one of the company's own
+accounts: with LYPay to its IBAN, or with OnePay to its bank and account
+number. The app shows the account (each number copies with one tap, and the
+holder's name is spelled out to check against what the payer's app shows), the
+shop gives the account it sent from (bank, account number, IBAN — remembered
+for next time) and attaches the receipt: a file, or straight from the till's
+paired phone (screenshot, photo or the bank's PDF).
+
+The top-up waits in `review` until an operator finds the money on the
+company's statement. **The receipt never credits anything**: it is what makes
+the transfer quick to find, and the same receipt sent behind two top-ups is
+flagged on the second. The operator confirms (crediting what actually
+arrived, which may differ from what the shop declared) or rejects with a
+reason; the shop's app shows the verdict live, and the shop's backend raises a
+notification when nobody was watching. Each submission sends an ntfy alert
+that opens the review page.
+
+The receiving accounts are set in the console (**Wallets → حسابات استلام
+التحويلات**), never in configuration or code: the repository is public.
+Without an account, transfers are not offered. Receipts are kept in
+`relay_wallet_receipts` by their SHA-256.
 
 Error `code`s: `topups_unconfigured` (503), `invalid_amount` (422, with
 `min_amount`/`max_amount`), `unsupported_method`, `method_unavailable`,
@@ -1254,6 +1417,368 @@ pointy-relay wallet debit <installation-id> --amount 150 --service remote_access
 pointy-relay wallet refund <installation-id> --amount 150 --service remote_access --reference <entry-id> --reason '...'
 pointy-relay wallet config                                 # key environment, methods, bounds, webhook base (no key)
 ```
+
+## Company Card Shop (BN Plus and Reloadly)
+
+Shops sell the **company's own prepaid cards** — local (Libyana, Almadar, …) and
+international (iTunes, PlayStation, Google Play, …) — bought from a wholesaler
+with the **company's** account. BN Plus (`portal.bn-plusli.ly`, dinars) is the
+first supplier and the only one for the Libyan cards; Reloadly (dollars) is the
+second, for international cards it sells identically. The merchant credentials
+live only in relay env, like the Resala and Dafa keys. A shop pays from its
+**voucher balance**, which the owner fills from the main wallet exactly like the
+SMS balance.
+
+```text
+Operator: catalog.json + logos -> pointy-relay vouchers catalog push
+Shop backend (every 5 min):  GET /v1/vouchers/catalog   (ETag -> 304 when unchanged)
+Invoice issued at the till:  POST /v1/vouchers/purchases {item, idempotency_key, max_unit_price}
+  -> claim + hold the price from the voucher balance (one step, per-shop lock)
+  -> BN Plus POST /api/merchant/buy-card {card_id, quantity}   (one attempt, never retried)
+  <- codes      -> succeeded (charge stands)            201 {purchase{codes}, balance}
+  <- refused    -> failed, refunded at once             502 {code, purchase}
+  <- unknown    -> held: the reconciler reads BN Plus    202 {purchase{held}}
+```
+
+**The catalog is ours.** The operator writes one JSON document: our categories
+(the till's tabs), brands in our order (`featured` first, then `sort`), items
+per store region (`country`: ISO code, `WW` worldwide, `EU`) and denomination,
+the shop's price (`price`) and the customer's (`retail_price`), at most two
+decimals, and time-boxed promotions (`promo`: a lower `price` = a better margin
+for the shop, a lower `retail_price` = a deal for the customer, plus a badge).
+Each brand carries two logos — `display` card art for the till, `print`
+monochrome for thermal slips — and each region a flag. Images are stored by
+their SHA-256, so a new logo is a new reference and every cache refreshes.
+A wholesaler's own groups and names are never shown; each item maps to a
+supplier's card in its `supplier` block (`{"key": "bnplus", "card_id": 12,
+"max_cost": "10.30"}`) or, for a card more than one supplier sells, in a
+`suppliers` list (see *Several suppliers per item*). Every push is validated
+(unknown fields, duplicate keys, a retail price below cost, a promotion selling
+below cost, missing images) and kept as a version; pushing the current one
+again is a no-op.
+
+**Money.** A purchase holds `unit_price × quantity` from the voucher balance in
+the same step as its claim, then calls BN Plus once. Codes are never stored on
+the relay: the shop's backend keeps them, and a replay or a late settlement
+reads them back from BN Plus's order. A failure BN Plus states without naming an
+order (a 4xx or `success: false`), or a call that never connected, is refunded
+at once. Anything else — a timeout after sending, a 5xx, an unreadable answer,
+a refusal that names an order, fewer codes than bought — is **held**: the
+reconciler (every minute) reads the order BN Plus named, or finds the purchase
+in BN Plus's order history (same card, same quantity, within minutes of the
+claim, an order no other purchase holds) and keeps the charge; not there after
+15 minutes, it is refunded; unreadable for two days, it logs an ERROR for the
+operator (`vouchers resolve`). A shop that quoted a price lower than today's is
+refused `409 price_changed`, except within 30 minutes after a promotion it saw
+ended. An item whose BN Plus card is out of stock, no longer listed, or priced
+above its `max_cost` shows `available: false` and is refused `item_unavailable`.
+
+### Several suppliers per item
+
+An item lists its supplier as one `supplier` block, or the same card at up to
+four suppliers (one entry each) as a `suppliers` list; exactly one of the two.
+
+```json
+"suppliers": [
+  {"key": "bnplus",   "card_id": 123, "max_cost": "520.00"},
+  {"key": "reloadly", "product_id": 13441, "amount": "50", "max_cost": "515.00"}
+]
+```
+
+* BN Plus: `card_id`. Reloadly: the gift card `product_id` and the `amount`, the
+  card's face value in the product's own currency (the order's `unitPrice`; a
+  RANGE product sells any amount in its bounds). Its ref is `<product_id>/<amount>`.
+* **`max_cost` is dinars for every supplier**: BN Plus quotes dinars; Reloadly's
+  dollar price is converted with the `usd_rate` setting (plus the funding fee).
+* At purchase the relay buys from the **cheapest in dinars at that moment**, ties
+  to the supplier listed first. A supplier is considered when the relay is
+  configured for it, it sells the card (the card is in its last read offers and in
+  stock; a supplier whose offers were never read is unknown: allowed, but tried
+  after every supplier whose price is known — except Reloadly, which is never
+  priced blind) and its price in dinars is within the entry's `max_cost`. With no
+  `usd_rate`, Reloadly is out (`rate_unset`).
+* The first candidate is called. When it **definitely** sold nothing (the card is
+  out of stock, its balance or credentials failed, it refused, it was not
+  reachable), the purchase is re-pointed at the next candidate and that one is
+  tried. An answer that leaves it open whether anything was bought holds the
+  purchase, exactly as with one supplier: the next supplier is **not** tried.
+* The relay stops offering what the account cannot pay for: the offer sync also
+  reads the company's balance at Reloadly, and a Reloadly card whose cost in
+  dinars is above that balance (read within the last two hours) is dropped, with
+  the balance in the reason. A $0 account is never sent a request while another
+  supplier can sell the card.
+* A supplier that just failed in a way that will repeat (its balance is empty, its
+  credentials are refused, it is unreachable, it timed out or answered 5xx) is
+  skipped for five minutes, in this node's memory, whenever another supplier can
+  sell the card; one ERROR line says so when it opens, a sale closes it, and it is
+  still tried when it is the only candidate. A card that is merely out of stock or
+  refused does not open it.
+* Offers have an age: those older than three sync intervals (never under two
+  hours) are no more known than offers never read (Reloadly's are not sold), a
+  failed sync is a WARN naming the supplier and old offers an ERROR, and an empty
+  answer from a supplier that had ten or more offers is not believed: they are
+  kept, with an ERROR.
+* Card sales do not depend on the stored settings document parsing: one that does
+  not (a field a rolling update just added) is taken as "no dollar rate", Reloadly
+  is unpriced, BN Plus goes on selling, and the log says so once per version; the
+  settings admin route and `vouchers settings` say loudly that it cannot be read.
+* A relay wired to the Reloadly sandbox (`POINTY_RELAY_RELOADLY_SANDBOX`) still
+  executes against it but never passes for production: the shop view says
+  `test_mode`, every card purchase is a test purchase and its statement entries
+  are marked test (`VoucherConfig.SandboxMode()`, which services ask too).
+* The reconciler reads up to 500 held purchases a round, oldest first, and leaves
+  one it cannot check at all (its supplier is not configured here, its records
+  cannot be read, or it holds two paid orders) alone for a minute, then two, four,
+  up to half an hour; a changed row is asked about at once. Every order a supplier
+  holds under a purchase's reference is weighed together: one paid order settles
+  it even if a failed one is listed first; two paid ones hold it with an ERROR.
+* What the shop pays (`unit_price`) never depends on the supplier, only the
+  company's margin does. An item is `available` when at least one supplier can
+  sell it; the operator's `catalog show` / `compare` say who is bought from first.
+* Reloadly orders are placed with the purchase's id as their `customIdentifier`,
+  so a lost answer is found again exactly (the reconciler asks Reloadly for that
+  reference, never guesses by card and time), and the codes are read back from the
+  order by its transaction id. A card or PIN comes back as `code`; a second part
+  the customer needs (a PIN beside a card number, a redemption link beside a PIN)
+  rides in `serial`. Reloadly prices only the cards the current catalog names
+  (a RANGE product's price depends on the amount), by the same offer sync.
+
+### API
+
+Shop (installation token, identity only): `GET /v1/vouchers/catalog`,
+`GET /v1/vouchers/images/{sha256}`, `POST /v1/vouchers/purchases`,
+`GET /v1/vouchers/purchases/{idempotency key}`, and
+`POST /v1/wallet/vouchers/allocations {amount, idempotency_key, requested_by}`
+(main → voucher balance; at least one dinar, two decimals). `GET /v1/wallet`
+carries `vouchers: {balance, configured, test_mode}`.
+
+Error `code`s: `vouchers_unconfigured` (503), `unknown_item` (404),
+`item_unavailable` / `price_changed` (with `unit_price`) / `in_flight` (409),
+`insufficient_balance` (402, with `balance` and `amount`), `invalid_quantity`
+(422), `rate_limited` (429), and on a failed purchase (502)
+`supplier_out_of_stock`, `supplier_credit` (the company's wallet at the supplier
+is empty — ERROR log), `supplier_unauthorized` (its credentials — ERROR log),
+`supplier_refused`, `supplier_unreachable` (with several suppliers, the code of
+the last one tried; the purchase's detail names each).
+
+Admin (bearer token), under `/v1/vouchers/admin/`: `config`, `catalog` (GET the
+current one with what shops see and each item's supply; PUT to publish
+`{document, actor, note}`), `catalogs` (history), `settings` (the pricing knobs
+of direct top-up and bill payments — dollar rate, funding fee, markups, retail
+step, popular countries: GET the current ones, the demo defaults with
+`"stored": false` before the first; PUT the settings' fields plus `note` and
+`actor` to publish a new version; `settings/history` lists the versions, newest
+first), `images` (POST one PNG, JPEG
+or WebP), `offers` (+ `offers/sync`), `purchases` (`?kind=card|airtime|bill`),
+`purchases/{id}/check`,
+`purchases/{id}/resolve` (`{outcome: refund|found, supplier_order_id, reason}`),
+`bnplus/{wallets|groups|companies|cards|orders|order}` (BN Plus read with the
+company's credentials) and `reloadly/balance` (the gift card balance at Reloadly).
+`catalog` lists, per item, every supplier with its offer, its cost in dinars at
+the stored settings, whether it can sell now and its rank; `offers` carries each
+offer's cost in dinars.
+
+### Configuration
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `POINTY_RELAY_BNPLUS_EMAIL` / `_PASSWORD` / `_TOKEN` | empty | the company's BN Plus merchant credentials; all three or none (half a set warns and stays off) |
+| `POINTY_RELAY_BNPLUS_BASE_URL` | `https://portal.bn-plusli.ly` | `/api/merchant` is appended |
+| `POINTY_RELAY_BNPLUS_REQUEST_TIMEOUT` | `45s` | one BN Plus call |
+| `POINTY_RELAY_RELOADLY_CLIENT_ID` / `_CLIENT_SECRET` | empty | the company's Reloadly API pair; both or none (half a set warns and stays off). Turns Reloadly on as a card supplier |
+| `POINTY_RELAY_RELOADLY_SANDBOX` | `false` | `true` uses Reloadly's SANDBOX hosts: fake money, a different catalog, sandbox keys only (the startup log says `SANDBOX` loudly, and everything the relay sells is marked test) |
+| `POINTY_RELAY_RELOADLY_REQUEST_TIMEOUT` | `45s` | one Reloadly purchase call (the relay's per-call limit is the larger of this and the BN Plus one) |
+| `POINTY_RELAY_RELOADLY_DIRECTORY_INTERVAL` | `15m` | how often the countries, operators and billers of direct top-up and bill payments are read from Reloadly again; `0` reads them once |
+| `POINTY_RELAY_SERVICES_SETTLE_WAIT` | `20s` | how long a bill payment Reloadly accepted is waited for before the order is left held for the reconciler |
+| `POINTY_RELAY_VOUCHERS_TEST_MODE` | `false` | fake `TEST-` codes from a built-in supplier; balances still charged (`make relay-run` turns it on). Direct top-up and bills then fill their orders from a fake too; their directory is Reloadly's when it is configured, else an embedded fixture |
+| `POINTY_RELAY_VOUCHERS_SYNC_INTERVAL` | `30m` | how often the suppliers' prices and stock are read (BN Plus: everything it sells; Reloadly: the cards the catalog names) |
+| `POINTY_RELAY_VOUCHERS_RATE_LIMIT` | `30/minute` | purchases per shop |
+
+### Operator CLI
+
+```sh
+pointy-relay vouchers catalog example > catalog.json   # a starter document
+pointy-relay vouchers bnplus companies                  # find the cards to map
+pointy-relay vouchers bnplus cards --branch 7           #   ... and their card_id
+pointy-relay vouchers catalog check catalog.json        # validate, images included
+pointy-relay vouchers catalog push catalog.json --note 'October promotions'
+pointy-relay vouchers catalog show                      # what shops see, with each supplier's price beside ours
+pointy-relay vouchers settings show                     # pricing of top-up and bills; marks the demo defaults nobody decided
+pointy-relay vouchers settings set --usd-rate 9.71 --note 'October rate'   # flags override the published settings
+pointy-relay vouchers settings set --dry-run --airtime-shop-markup 3       # preview, publishes nothing
+pointy-relay vouchers settings history                  # every published version, newest first
+pointy-relay vouchers offers --sync                     # every supplier's price (and dinars) and stock per card, now
+pointy-relay vouchers compare --brand playstation       # items with 2+ suppliers: each cost in dinars, winner, saving, shop margin
+pointy-relay vouchers bnplus wallets                    # the company's dinar and dollar balances there
+pointy-relay vouchers reloadly balance                  # the company's gift card balance at Reloadly (USD)
+pointy-relay vouchers purchases --held                  # purchases still being found out
+pointy-relay vouchers purchases --kind airtime          # only direct top-ups (card | airtime | bill)
+pointy-relay services directory --country ML            # operators, billers, amounts and prices as shops read them
+pointy-relay services status                            # read when? stale? a reading rejected? sandbox? (then: directory --refresh --accept)
+pointy-relay services quote --kind airtime --operator 289 --amount 5000   # one price, and how Reloadly is ordered
+pointy-relay services names --missing                   # names with no Arabic spelling yet (shown in Latin until added)
+pointy-relay services balance                           # the company's balance at Reloadly, per product
+pointy-relay vouchers resolve <purchase> --refund --reason 'BN Plus confirmed no order'
+pointy-relay wallet show <installation-id> --account vouchers
+```
+
+DingConnect would fit the same `vouchers.Supplier` interface (a key in an item's
+supplier block); it is not built. A supplier may also implement two optional
+interfaces: `RefFinder` (look an order up by the reference it was placed with —
+Reloadly) and `WantedOffers` (price only the cards the catalog names — Reloadly).
+
+### Pricing settings (direct top-up and bill payments)
+
+The company also sells credit sent straight to a phone number abroad and bill
+payments, bought from Reloadly in dollars. What they cost a shop and what its
+customer is asked are dinar prices worked out from the dollar cost by knobs the
+operator publishes (`vouchers settings`; every version is kept, the newest is
+current, and the relay re-reads them every five seconds):
+
+```text
+cost_lyd     = cost_usd * usd_rate * (1 + funding_percent/100)
+shop price   = round UP to 0.01 of cost_lyd * (1 + shop_markup_percent/100)
+retail price = round UP to retail_step of cost_lyd * (1 + retail_markup_percent/100),
+               never below shop price + min_shop_margin; at most two decimals
+```
+
+```json
+{"usd_rate": "9.71", "funding_percent": "0",
+ "airtime": {"shop_markup_percent": "2", "retail_markup_percent": "5.5", "order_mode": "usd", "usd_buffer_percent": "0.5"},
+ "bills":   {"shop_markup_percent": "2", "retail_markup_percent": "5.5", "order_mode": "auto", "usd_buffer_percent": "0.5"},
+ "retail_step": "0.25", "min_shop_margin": "0.10", "popular": ["NE", "ML", "NG"]}
+```
+
+Every number is a string. `usd_rate` (dinars the company really pays for a
+dollar) has no default: **without it Reloadly cannot be priced and every Reloadly
+card, top-up and bill is unavailable** (`rate_unset`). Every other knob starts at
+a **demonstration default that nobody has decided** (shop 2 %, retail 5.5 %, step
+0.25, margin 0.10, a list of twenty popular countries); `settings show` and
+`settings set` mark each knob still at its default. Unknown fields and bad
+numbers are refused, all problems at once. A blank value restores a knob's
+default; `--usd-rate ''` unsets the rate and so takes Reloadly off the shelves.
+
+**In which currency Reloadly is ordered** (`order_mode`, `usd_buffer_percent`).
+Reloadly pays its commission (about 5 % on a typical operator) on an order placed in
+dollars and forfeits it on one placed in the recipient's own currency (Orange Mali:
+4 dollars cost 3.80; 2,000 CFA francs cost exactly their dollar value). The customer
+always picks a local amount; what the company orders is its setting: airtime `usd`
+(the default) orders dollars, rounded up from the local amount at Reloadly's own rate
+plus the buffer so the recipient never receives less than asked; airtime `local` orders
+the exact local amount and forgoes the commission. Bills `auto` (the default) orders
+dollars only for a prepaid *range* biller without an invoice and only where that is
+cheaper — a payment that must be exact (an invoice, a fixed plan, anything postponed)
+stays in the local currency; bills `local` is exact everywhere. An amount whose dollar
+order falls outside the operator's dollar limits is ordered in the local currency
+instead of being refused. These knobs are demo defaults like the rest, for the owner
+to confirm.
+
+### Direct top-up and bill payments (services)
+
+The company's shelf also sells **direct top-up** (credit sent straight to a phone
+number abroad) and **bill payments** (electricity, water, TV, internet), bought from
+Reloadly with the same account and client as the gift cards and paid from the same
+voucher balance. They are **on** when Reloadly is configured or the vouchers are in
+test mode. The design and the wire format are in `DIRECT_TOPUP_PLAN.md` (2.3 to 2.5);
+the code is `internal/services` (directory, quotes, orders, the Reloadly executor, the
+Arabic name tables) and `internal/relay/services*.go` (the HTTP layer and the
+reconciler).
+
+```text
+Shop backend (every 5 min):  GET  /v1/services/directory     countries, operators, billers, priced (ETag -> 304)
+Till, as the cashier types:  POST /v1/services/detect        {country, phone} -> the operator (the number is in the body, never in a URL)
+                             POST /v1/services/quote         {kind, operator_id | biller_id, amount, amount_currency} -> exact price
+Invoice issued:              POST /v1/services/orders        {kind, ..., idempotency_key, max_unit_price}
+  -> claim + hold the price from the voucher balance (one step, per-shop lock)
+  -> Reloadly POST /topups | /pay   (one attempt, never retried; customIdentifier / referenceId = the purchase id)
+  <- delivered  -> succeeded                                 201 {purchase{receipt}, balance}
+  <- refused    -> failed, refunded at once                  502 {code, purchase}
+  <- anything else, or a bill still PROCESSING -> held       202 {purchase{held}}; the reconciler reads Reloadly
+GET /v1/vouchers/purchases/{key} (alias GET /v1/services/orders/{key}) reads any kind back, with its receipt.
+```
+
+* **The directory** is built from Reloadly (`/countries`, all pages of `/operators`,
+  `/billers`) in the background, kept in memory, and the last good copy stands when a
+  reading fails. v1 sells plain airtime only (no bundle, data, combo or PIN product; ACTIVE)
+  and every biller. Names are Arabic (`internal/services/names_ar.json`); `name_en` is
+  Reloadly's spelling, for search only; an untranslated name is shown in Latin and listed
+  by `services names --missing`. A range operator or biller shows 3 to 6 round tiles worth
+  roughly 1.25 to 60 dollars, always including the most popular amount. Prices are put on
+  at render time from the pricing settings, and the ETag is the hash of the priced view, so
+  a new rate, a new order mode, a new flag or a changed operator all move it.
+* **Left out on purpose.** A country the relay has no Arabic name for (the card shop's
+  table `vouchers.CountryName`, plus `extraCountryNamesAR`) is never offered: of Reloadly's
+  list that is Israel only, and the drop is logged once per reading that changed anything
+  and shown by `services status`. A fixed bill plan whose English description contains a
+  word of `hiddenPlanWords` (`internal/services/normalize.go`, default `Charme`: Canal+'s
+  adult-content plans) is not offered either, so it cannot be quoted or ordered; edit that
+  one list to change what is hidden.
+* **The relay reads the phone number, and checks its length.** A number must have the national
+  length of its country (Mali 8 digits, Nigeria 10, Côte d'Ivoire and Benin 10 with their leading
+  0, ...: `nationalShapes`); one digit short or long is `422 invalid_phone` before anything is
+  charged. An airtime quote may carry `country` and `phone` as
+  typed; the answer adds `phone: {e164, national, country}` (Côte d'Ivoire and Benin keep their
+  leading 0, elsewhere a trunk 0 goes), and an unreadable number is `422 invalid_phone`. The
+  shop never re-implements these rules, and the `e164` it gets back reads as the same number
+  in quote, order and detect.
+* **Fresh and sane.** The directory is replaced whenever any row it is made of changed at
+  Reloadly (commission, fee, rate, limits), so a quote follows the supplier. Quotes and orders
+  are refused (`409 service_unavailable`, reason `stale`) once the last good reading is older
+  than three refresh intervals (at least 45 minutes; an interval of 0 reads once and never goes
+  stale). A reading with no country, none of a kind
+  the directory has, or fewer than half of them is rejected and the directory in use stays
+  (`services status` says so; `services directory --refresh --accept` believes it).
+* **Sandbox is not test mode.** With `POINTY_RELAY_RELOADLY_SANDBOX=true` orders really go to
+  Reloadly's sandbox, and everything a shop sees says test: the directory's `test_mode`, the
+  purchase row and statement entry, and `receipt.test_mode: "true"`.
+* **A bill is waited for a day.** A payment may stay processing at the biller for up to 24 hours,
+  so a held bill that Reloadly's history does not list is refunded only after 25 hours (a top-up:
+  15 minutes), with an hourly WARN meanwhile; the 48-hour ERROR (`vouchers resolve`) is said
+  hourly too. Several orders under one identifier: a SUCCESSFUL one wins over a failed twin, two
+  SUCCESSFUL ones stay held for a person.
+* **An order** is checked against the directory (operator, number or account, invoice,
+  amount, price), claimed on the ledger as a purchase of kind `airtime` or `bill`
+  (`item` = `airtime:289:5000:XOF`, `target` = the masked number `+223•••••456`,
+  `details` = what was ordered and in which currency, never the number), and placed once.
+  The ledger's supplier order id is `airtime:<id>` / `bill:<id>`: Reloadly numbers top-ups,
+  payments and gift cards separately, and the ledger allows one purchase per (supplier, order id).
+  A key reused for a different order (another item, number or kind) is refused `409
+  idempotency_key_reused`; the same order replays the first answer without calling Reloadly.
+  "The same number" is judged in full: the ledger keeps `target_digest` in the order's details,
+  the first 16 hex digits of an HMAC-SHA256 of the shop, the number or account, the invoice and
+  the currency under a secret derived from the admin token (`pointy-relay-service-target/v1`,
+  the way the node-proxy token is: stable across restarts and instances, not in the database).
+  A number cannot be recovered from it without that key. Rotating the admin token replaces the
+  key; orders placed before are then judged by their mask (never refused as another order).
+  An amount may have no more decimals than its currency (whole CFA francs, yen, won...; two
+  for the rest): `422 invalid_amount`. Receipt amounts are Reloadly's text as written.
+* **Receipts are never stored.** The slip's fields (transaction id, operator reference, the
+  amount the recipient received, a prepaid meter's token) are read from Reloadly by
+  transaction id on every read; `receipt_pending: true` while they cannot be. The order
+  currency and amount (`order_currency`, `order_amount`) ride in the receipt and the ledger
+  details so a statement is auditable.
+* **Privacy.** A customer's phone number or account is in a request body only; the relay
+  keeps the masked form, and every supplier sentence that is logged, stored or returned is
+  redacted of the number and account it echoes.
+* **Bills** are accepted first and settle later: the order waits `POINTY_RELAY_SERVICES_SETTLE_WAIT`
+  for Reloadly's final status, then stays held (a payment may stay PROCESSING up to a day) and is
+  never refunded before Reloadly says FAILED or REFUNDED.
+* **Errors**: `services_unconfigured` / `services_unpriced` / `services_unavailable` (503),
+  `unknown_operator` / `unknown_biller` / `operator_not_detected` (404),
+  `invalid_phone` / `invalid_account` / `invalid_invoice` / `invoice_required` / `invalid_amount` /
+  `amount_out_of_range` (with `min`, `max`) / `amount_not_offered` (422), `price_changed` (with
+  `unit_price`) / `in_flight` / `idempotency_key_reused` / `service_unavailable` (with `reason`:
+  `rate_unset`, `directory_unavailable`, `cost_unknown`) (409), `insufficient_balance` (402), and
+  the supplier codes of the card shop on a failed order (502).
+* **Admin** (bearer token) under `/v1/services/admin/`: `config`, `directory?country=ML,NE&refresh=1`,
+  `quote`, `names`, `balance`.
+* **Tests.** `go test ./internal/services ./internal/relay` runs everything against fakes of
+  Reloadly and the file store; the ledger scenario also runs on PostgreSQL with
+  `POINTY_RELAY_E2E_DATABASE_URL` (a dedicated database). An opt-in end-to-end run against
+  Reloadly's SANDBOX (fake money, about twelve dollars) builds the sandbox directory, detects a
+  number, and places a top-up and bills through the HTTP handlers:
+  `set -a; . ops/catalog/.reloadly.env; set +a; RELOADLY_SANDBOX_CLIENT_ID=$RELOADLY_CLIENT_ID
+  RELOADLY_SANDBOX_CLIENT_SECRET=$RELOADLY_CLIENT_SECRET go test ./internal/relay -run TestSandboxServices -v`.
 
 ## State
 

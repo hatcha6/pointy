@@ -130,29 +130,66 @@ extension PosCheckoutActions on PosViewModel {
     return _discountPreview?.lossLines ?? const [];
   }
 
+  /// Whether [order] sold a line a provider has to perform.
+  bool _soldProviderLines(SaleOrder order) =>
+      _integrationsRepository != null &&
+      order.lines.any((line) => line.integration != null);
+
   /// Perform the recharges this sale just sold, if it sold any.
   ///
   /// Never throws and never blocks the sale from being reported as complete:
   /// a top-up that could not be performed is a line to chase, not a sale to
   /// undo. Calling it twice cannot double-charge — the server allows each
-  /// line one attempt, ever.
+  /// line one attempt, ever — so a call that could not be made is made once
+  /// more. If that fails too, the answer is not "nothing happened": it is
+  /// unknown, for every provider line, and the cashier is told so.
   Future<List<IntegrationChargeResult>> _performSoldRecharges(
     SaleOrder order,
   ) async {
     final repository = _integrationsRepository;
     if (repository == null) return const [];
-    final hasRecharge = order.lines.any((line) => line.integration != null);
-    if (!hasRecharge) return const [];
+    final lines = [
+      for (final line in order.lines)
+        if (line.integration != null) line,
+    ];
+    if (lines.isEmpty) return const [];
 
-    final result = await repository.charge(orderId: order.id);
-    return switch (result) {
-      Ok<List<IntegrationChargeResult>>(value: final rows) => rows,
-      // The sale stands. Nothing was necessarily charged and nothing may be
-      // retried blindly; reconciliation and the notification feed take it
-      // from here.
-      Error<List<IntegrationChargeResult>>() => const [],
-    };
+    var unanswered = false;
+    for (var attempt = 0; attempt < 2; attempt++) {
+      final result = await repository.charge(orderId: order.id);
+      switch (result) {
+        case Ok<List<IntegrationChargeResult>>(value: final rows):
+          // After a call whose answer never came, "nothing left to perform"
+          // proves nothing: the first call may have performed it all.
+          return rows.isEmpty && unanswered ? _unknownCharges(lines) : rows;
+        case Error<List<IntegrationChargeResult>>():
+          unanswered = true;
+          if (attempt == 0 && _chargeRetryDelay > Duration.zero) {
+            await Future<void>.delayed(_chargeRetryDelay);
+          }
+      }
+    }
+    return _unknownCharges(lines);
   }
+
+  /// The answer for lines whose provider call never came back: not charged,
+  /// not refused — unknown, which is the one state that must not be retried
+  /// and must not be refunded until somebody has looked.
+  List<IntegrationChargeResult> _unknownCharges(List<SaleOrderLine> lines) => [
+    for (final line in lines)
+      IntegrationChargeResult(
+        fulfillment: null,
+        orderLine: line.id,
+        provider: line.integration!.provider,
+        kind: line.integration!.kind,
+        subscriberRef: line.integration!.subscriberRef,
+        optionLabel: line.integration!.optionLabel,
+        outcome: 'unknown',
+        status: 'submitted',
+        needsAttention: true,
+        errorCode: 'indeterminate',
+      ),
+  ];
 
   Future<SaleCheckoutOutcome> checkoutCurrentSale({
     required List<SaleCheckoutPaymentDraft> payments,
@@ -215,11 +252,13 @@ extension PosCheckoutActions on PosViewModel {
     // Auto-print only carries a sale that clears the shop's floor; below it the
     // POS showed the print box instead, so a tick there is the whole answer.
     // A card is the exception: its receipt IS the thing sold — the PIN is on
-    // it — so it prints whatever the floor says.
+    // it — so it prints whatever the floor says. Airtime sent and a bill paid
+    // are the same: the receipt is the customer's only proof of it, and a
+    // prepaid meter's token is on it.
     final shouldPrintInvoice =
         cartWouldAutoPrintReceipt(saleType: saleType) ||
         _printInvoiceAfterPayment ||
-        cartSnapshot.any((line) => line.isVoucher);
+        cartSnapshot.any((line) => line.isVoucher || line.isDirectService);
     PrinterConfig? invoicePrinterConfig;
     // No printer on this till does receipts. Said as that after the sale, not
     // as a failed print: it is fixed in the device's printer settings, and
@@ -346,7 +385,16 @@ extension PosCheckoutActions on PosViewModel {
           _applySoldQuantities(cartSnapshot);
         }
         _completeActiveSaleSessionCheckout();
-        _isCheckingOut = false;
+        // A sale that sold something a provider performs keeps the till busy
+        // until the provider has answered: the cart is already cleared, and
+        // the customer is waiting for the result, not for the next sale.
+        final waitsForProviders = _soldProviderLines(result.value);
+        if (waitsForProviders) {
+          _isChargingProviders = true;
+          _providerChargeStartedAt = DateTime.now();
+        } else {
+          _isCheckingOut = false;
+        }
         _notifyChanged();
         unawaited(
           _analyticsEngine?.trackPerformance(
@@ -399,15 +447,25 @@ extension PosCheckoutActions on PosViewModel {
         // is called, so it cannot live inside the checkout transaction. The
         // sale is therefore always recorded, even when the provider refuses —
         // which is the right way round, because the customer has paid.
-        final recharges = await _performSoldRecharges(result.value);
-        if (hasProviderLines && shouldPrintInvoice) {
-          printStatus = receiptPrinterMissing
-              ? InvoicePrintStatus.noPrinter
-              : await _printAfterProviders(
-                  result.value,
-                  invoicePrinterConfig,
-                  recharges,
-                );
+        var recharges = const <IntegrationChargeResult>[];
+        try {
+          recharges = await _performSoldRecharges(result.value);
+          if (hasProviderLines && shouldPrintInvoice) {
+            printStatus = receiptPrinterMissing
+                ? InvoicePrintStatus.noPrinter
+                : await _printAfterProviders(
+                    result.value,
+                    invoicePrinterConfig,
+                    recharges,
+                  );
+          }
+        } finally {
+          if (waitsForProviders) {
+            _isChargingProviders = false;
+            _providerChargeStartedAt = null;
+            _isCheckingOut = false;
+            _notifyChanged();
+          }
         }
         return SaleCheckoutOutcome.success(
           result.value,

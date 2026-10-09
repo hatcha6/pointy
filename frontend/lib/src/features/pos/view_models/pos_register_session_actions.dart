@@ -112,6 +112,7 @@ extension PosRegisterSessionActions on PosViewModel {
         _activeRegisterSession = null;
         _availableRegisterSession = null;
         _resetSaleSessions();
+        resetServiceState();
         _products = [];
         _isClosingRegisterSession = false;
         _notifyChanged();
@@ -210,6 +211,13 @@ extension PosRegisterSessionActions on PosViewModel {
   /// the cashier taps "continue selling". A brand-new drawer still starts
   /// clean; see [startRegisterSession].
   void _activateRegisterSession(RegisterSession session) {
+    // A different drawer is a different shift: what the last one left on the
+    // services — a half-typed number, their customers — is not this one's.
+    final previous = _serviceShiftId;
+    if (previous != null && previous != session.id) {
+      resetServiceState();
+    }
+    _serviceShiftId = session.id;
     _activeRegisterSession = session;
     _availableRegisterSession = null;
   }

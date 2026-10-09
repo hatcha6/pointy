@@ -1,0 +1,21 @@
+{
+ "results": [
+  {
+   "fulfillment": 17,
+   "order_line": 17,
+   "provider": "pointy",
+   "kind": "airtime",
+   "subscriber_ref": "+223•••••456",
+   "option_label": "أورنج مالي · 2,000 فرنك أفريقي",
+   "outcome": "refused",
+   "status": "pending",
+   "needs_attention": false,
+   "error_code": "provider_error",
+   "error_detail": "price_changed: the relay now charges 38.57",
+   "provider_reference": "",
+   "balance_after": null,
+   "receipt": {}
+  }
+ ],
+ "balance": 43.38
+}

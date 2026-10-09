@@ -215,10 +215,17 @@ def default_source_account():
     return routed_account(MoneyAccount.Kind.CASH)
 
 
+#: The company's own cards' float is the shop's voucher balance in its Daftar
+#: wallet: named as the owner knows it, with no login to tell it apart by.
+RELAY_FLOAT_NAME = "رصيد كروت دفتر"
+
+
 def _float_account_name(account) -> str:
     from . import catalog
 
     spec = catalog.spec_for(account.provider)
+    if spec is not None and spec.relay_hosted:
+        return RELAY_FLOAT_NAME
     label = account.account_label or account.username or account.provider
     provider = spec.key.upper() if spec else account.provider
     return f"رصيد {provider} — {label}"[:120]

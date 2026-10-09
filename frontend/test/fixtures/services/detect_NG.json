@@ -1,0 +1,59 @@
+{
+ "detected": true,
+ "reason": "",
+ "operator": {
+  "id": 341,
+  "name": "إم تي إن نيجيريا",
+  "name_en": "MTN Nigeria",
+  "logo": "https://s3.amazonaws.com/rld-operator/cc553249-f52a-4b86-9dc4-68dda963b1b3-size-3.png",
+  "mode": "range",
+  "amount_currency": "NGN",
+  "receive_currency": "NGN",
+  "approximate": false,
+  "min": "50",
+  "max": "200000",
+  "popular_amount": null,
+  "amounts": [
+   {
+    "amount": "2000",
+    "receive": "2000",
+    "receive_currency": "NGN",
+    "price": "16.25",
+    "exceeds_float": false
+   },
+   {
+    "amount": "5000",
+    "receive": "5000",
+    "receive_currency": "NGN",
+    "price": "40.25",
+    "exceeds_float": false
+   },
+   {
+    "amount": "10000",
+    "receive": "10000",
+    "receive_currency": "NGN",
+    "price": "80.50",
+    "exceeds_float": false
+   },
+   {
+    "amount": "20000",
+    "receive": "20000",
+    "receive_currency": "NGN",
+    "price": "160.75",
+    "exceeds_float": false
+   },
+   {
+    "amount": "50000",
+    "receive": "50000",
+    "receive_currency": "NGN",
+    "price": "401.50",
+    "exceeds_float": false
+   }
+  ]
+ },
+ "phone": {
+  "e164": "+234•••••••567",
+  "national": "•••••••567",
+  "country": "NG"
+ }
+}

@@ -170,6 +170,11 @@ WIPED_MODELS = (
     # products go with the catalog; the next sweep reads the shelf again.
     "integrations.integrationvoucher",
     "integrations.integrationvoucherbrand",
+    # The store regions the company's own shelf names, with their flags.
+    "integrations.integrationvouchercountry",
+    # The directory of direct top-up and bill payments as last read: the next
+    # sweep reads it again.
+    "integrations.integrationservicecountry",
     # The provider's own payments report as last mirrored — the agency's
     # trade, read back. The next sweep reads it again from the top; the
     # account's claim to have covered it is cleared with it (see
@@ -281,10 +286,12 @@ WIPED_MODELS = (
     "treasury.moneytransfer",
     "treasury.cardsettlementline",
     "treasury.cardsettlement",
-    # wallet — the shop's copy of its wallet top-ups and the expenses they
-    # became. The wallet itself (balance, ledger) lives on the relay and a shop
-    # reset never touches it; a top-up first seen again after the reset is
-    # already paid and is not booked into the fresh books a second time.
+    # wallet — the shop's copy of its wallet top-ups and spending, and what
+    # they were booked as. The wallet itself (balance, ledger) lives on the
+    # relay and a shop reset never touches it; a top-up first seen again after
+    # the reset is already paid and is not booked into the fresh books a
+    # second time.
+    "wallet.walletspend",
     "wallet.wallettopup",
 )
 

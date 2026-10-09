@@ -1,0 +1,16 @@
+{
+ "ok": true,
+ "kind": "airtime",
+ "option_code": "air:289:2000:XOF",
+ "option_label": "أورنج مالي · 2,000 فرنك أفريقي",
+ "subscriber_ref": "+223•••••456",
+ "price": "40.75",
+ "receive": {
+  "amount": "2000",
+  "currency": "XOF"
+ },
+ "approximate": false,
+ "quote": "<base64/opaque, 420 chars>",
+ "service_variant_id": 1,
+ "exceeds_float": false
+}

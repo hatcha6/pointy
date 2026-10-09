@@ -30,7 +30,9 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
+	"pointy/relay/internal/alerts"
 	"pointy/relay/internal/artifacts"
+	"pointy/relay/internal/bnplus"
 	"pointy/relay/internal/connector"
 	"pointy/relay/internal/control"
 	"pointy/relay/internal/discovery"
@@ -97,8 +99,16 @@ func run(args []string) error {
 		return runSMS(args[1:])
 	case "wallet":
 		return runWallet(args[1:])
+	case "vouchers":
+		return runVouchers(args[1:])
+	case "services":
+		return runServices(args[1:])
 	case "integrations":
 		return runIntegrations(args[1:])
+	case "alerts":
+		return runAlerts(args[1:])
+	case "console":
+		return runConsole(args[1:])
 	case "artifacts":
 		return runArtifacts(args[1:])
 	case "migrate":
@@ -397,11 +407,6 @@ func runServer(args []string) error {
 		envString("POINTY_RELAY_SMS_PRICE", "0.150"),
 		"what one SMS part costs a shop, in dinars (up to three decimals), paid from its SMS balance; a message longer than one SMS (70 Arabic letters, 67 per part beyond) pays once per part, as Resala bills",
 	)
-	smsMonthlyLimit := flags.Int(
-		"sms-monthly-limit",
-		envInt("POINTY_RELAY_SMS_MONTHLY_LIMIT", 0),
-		"operator's brake: per-installation SMS cap per calendar month (UTC+2) when the installation sets none; 0 = none (the SMS balance limits sending)",
-	)
 	smsRateLimit := flags.String(
 		"sms-rate-limit",
 		envString("POINTY_RELAY_SMS_RATE_LIMIT", "60/minute"),
@@ -437,6 +442,76 @@ func runServer(args []string) error {
 		envDuration("POINTY_RELAY_DAFA_REQUEST_TIMEOUT", 20*time.Second),
 		"timeout for one Dafa call",
 	)
+	bnplusBaseURL := flags.String(
+		"bnplus-base-url",
+		envString("POINTY_RELAY_BNPLUS_BASE_URL", bnplus.DefaultBaseURL),
+		"BN Plus merchant portal (portal.bn-plusli.ly); the API root /api/merchant is appended",
+	)
+	bnplusEmail := flags.String(
+		"bnplus-email",
+		envString("POINTY_RELAY_BNPLUS_EMAIL", ""),
+		"the company's BN Plus merchant e-mail (Api-Email); with the password and token it turns BN Plus on",
+	)
+	bnplusPassword := flags.String(
+		"bnplus-password",
+		envString("POINTY_RELAY_BNPLUS_PASSWORD", ""),
+		"the company's BN Plus merchant password (Api-Password)",
+	)
+	bnplusToken := flags.String(
+		"bnplus-token",
+		envString("POINTY_RELAY_BNPLUS_TOKEN", ""),
+		"the company's BN Plus merchant bearer token",
+	)
+	bnplusRequestTimeout := flags.Duration(
+		"bnplus-request-timeout",
+		envDuration("POINTY_RELAY_BNPLUS_REQUEST_TIMEOUT", 45*time.Second),
+		"timeout for one BN Plus call (a purchase waits on BN Plus's own suppliers for the codes)",
+	)
+	reloadlyClientID := flags.String(
+		"reloadly-client-id",
+		envString("POINTY_RELAY_RELOADLY_CLIENT_ID", ""),
+		"the company's Reloadly API client id; with the secret it turns Reloadly on as a card supplier (and for direct top-up and bills)",
+	)
+	reloadlyClientSecret := flags.String(
+		"reloadly-client-secret",
+		envString("POINTY_RELAY_RELOADLY_CLIENT_SECRET", ""),
+		"the company's Reloadly API client secret",
+	)
+	reloadlySandbox := flags.Bool(
+		"reloadly-sandbox",
+		envBool("POINTY_RELAY_RELOADLY_SANDBOX", false),
+		"use Reloadly's SANDBOX hosts (fake money, a different catalog): sandbox keys only work there and live keys only on the live hosts",
+	)
+	reloadlyRequestTimeout := flags.Duration(
+		"reloadly-request-timeout",
+		envDuration("POINTY_RELAY_RELOADLY_REQUEST_TIMEOUT", 45*time.Second),
+		"timeout for one Reloadly purchase call",
+	)
+	servicesDirectoryInterval := flags.Duration(
+		"reloadly-directory-interval",
+		envDuration("POINTY_RELAY_RELOADLY_DIRECTORY_INTERVAL", defaultServicesDirectoryInterval),
+		"how often the countries, operators and billers of direct top-up and bill payments are read from Reloadly again; 0 reads them once",
+	)
+	servicesSettleWait := flags.Duration(
+		"services-settle-wait",
+		envDuration("POINTY_RELAY_SERVICES_SETTLE_WAIT", defaultServicesSettleWait),
+		"how long a bill payment Reloadly accepted is waited for before it is left held for the reconciler",
+	)
+	vouchersTestMode := flags.Bool(
+		"vouchers-test-mode",
+		envBool("POINTY_RELAY_VOUCHERS_TEST_MODE", false),
+		"sell every card from the built-in test supplier: fake TEST- codes, no supplier called, voucher balances still charged",
+	)
+	vouchersSyncInterval := flags.Duration(
+		"vouchers-sync-interval",
+		envDuration("POINTY_RELAY_VOUCHERS_SYNC_INTERVAL", 30*time.Minute),
+		"how often supplier offers (price, stock) are read; 0 disables",
+	)
+	vouchersRateLimit := flags.String(
+		"vouchers-rate-limit",
+		envString("POINTY_RELAY_VOUCHERS_RATE_LIMIT", "30/minute"),
+		"per-installation card purchase limit, e.g. 30/minute; 0 disables",
+	)
 	walletMethods := flags.String(
 		"wallet-methods",
 		envString("POINTY_RELAY_WALLET_METHODS", ""),
@@ -446,6 +521,16 @@ func runServer(args []string) error {
 		"public-url",
 		envString("POINTY_RELAY_PUBLIC_URL", ""),
 		"the relay's public origin (https://...), where Dafa's payment webhook reaches it; empty derives it per request",
+	)
+	consoleOrigin := flags.String(
+		"console-origin",
+		envString("POINTY_RELAY_CONSOLE_ORIGIN", ""),
+		"the operator console's origin (https://relay.example.com); passkeys bind to its host name, so use the stable domain. Empty turns the console off",
+	)
+	consoleTrustForwardedFor := flags.Bool(
+		"console-trust-forwarded-for",
+		envBool("POINTY_RELAY_CONSOLE_TRUST_FORWARDED_FOR", false),
+		"take the console caller's address from the load balancer's X-Forwarded-For hop (on by default in the paas profile)",
 	)
 	walletTopUpMin := flags.String(
 		"wallet-topup-min",
@@ -607,6 +692,51 @@ func runServer(args []string) error {
 		envString("POINTY_RELAY_SERPER_IMAGE_COUNTRY", "us"),
 		"Serper image search country code (gl)",
 	)
+	openRouterManagementKey := flags.String(
+		"openrouter-management-key",
+		envString("POINTY_RELAY_OPENROUTER_MANAGEMENT_KEY", ""),
+		"OpenRouter management key, used ONLY to read the account's credits for the low-balance alert; empty reads what is left under the API key's own limit",
+	)
+	ntfyServer := flags.String(
+		"ntfy-server",
+		envString("POINTY_RELAY_NTFY_SERVER", alerts.DefaultServer),
+		"ntfy server the company's alerts are published to (the topic is set with `pointy-relay alerts setup`)",
+	)
+	ntfyToken := flags.String(
+		"ntfy-token",
+		envString("POINTY_RELAY_NTFY_TOKEN", ""),
+		"optional ntfy access token, for a self-hosted server or a reserved topic",
+	)
+	alertsPrefix := flags.String(
+		"alerts-prefix",
+		envString("POINTY_RELAY_ALERTS_PREFIX", ""),
+		"text before every alert title, e.g. [staging], to tell two relays apart on one phone",
+	)
+	alertBalanceInterval := flags.Duration(
+		"alert-balance-interval",
+		envDuration("POINTY_RELAY_ALERT_BALANCE_INTERVAL", 15*time.Minute),
+		"how often provider balances are read for the low-balance alerts",
+	)
+	alertReloadlyFloor := flags.String(
+		"alert-reloadly-floor",
+		envString("POINTY_RELAY_ALERT_RELOADLY_FLOOR", "50"),
+		"alert when the Reloadly balance is at or under this many USD (empty: not watched)",
+	)
+	alertBNPlusFloor := flags.String(
+		"alert-bnplus-floor",
+		envString("POINTY_RELAY_ALERT_BNPLUS_FLOOR", "500"),
+		"alert when the BN Plus dinar wallet is at or under this many LYD (empty: not watched)",
+	)
+	alertOpenRouterFloor := flags.String(
+		"alert-openrouter-floor",
+		envString("POINTY_RELAY_ALERT_OPENROUTER_FLOOR", "3"),
+		"alert when OpenRouter credits are at or under this many USD (empty: not watched)",
+	)
+	alertSerperFloor := flags.String(
+		"alert-serper-floor",
+		envString("POINTY_RELAY_ALERT_SERPER_FLOOR", "300"),
+		"alert when Serper search credits are at or under this many (empty: not watched)",
+	)
 	imageSearchRequestTimeout := flags.Duration(
 		"image-search-request-timeout",
 		envDuration("POINTY_RELAY_IMAGE_SEARCH_REQUEST_TIMEOUT", 8*time.Second),
@@ -623,7 +753,6 @@ func runServer(args []string) error {
 		Templates:            *smsTemplates,
 		TestMode:             *smsTestMode,
 		Price:                *smsPrice,
-		MonthlyLimit:         *smsMonthlyLimit,
 		RateLimit:            *smsRateLimit,
 		RequestTimeout:       *smsRequestTimeout,
 		MaxVariableRunes:     *smsMaxVariableRunes,
@@ -653,6 +782,26 @@ func runServer(args []string) error {
 	if err != nil {
 		return err
 	}
+	voucherSettingValues := voucherSettings{
+		BNPlusBaseURL:        *bnplusBaseURL,
+		BNPlusEmail:          *bnplusEmail,
+		BNPlusPassword:       *bnplusPassword,
+		BNPlusToken:          *bnplusToken,
+		ReloadlyClientID:     *reloadlyClientID,
+		ReloadlyClientSecret: *reloadlyClientSecret,
+		ReloadlySandbox:      *reloadlySandbox,
+		ReloadlyTimeout:      *reloadlyRequestTimeout,
+		RequestTimeout:       *bnplusRequestTimeout,
+		TestMode:             *vouchersTestMode,
+		SyncInterval:         *vouchersSyncInterval,
+		RateLimit:            *vouchersRateLimit,
+	}
+	voucherConfig, bnplusCredentials, voucherWarnings, err := buildVoucherConfig(voucherSettingValues)
+	if err != nil {
+		return err
+	}
+	reloadlyCredentials, reloadlyWarnings := buildReloadlyConfig(voucherSettingValues)
+	voucherWarnings = append(voucherWarnings, reloadlyWarnings...)
 	profile := strings.ToLower(strings.TrimSpace(*platform))
 	if profile == "paas" {
 		// A PaaS host (e.g. JPaaS) sits behind the platform load balancer,
@@ -666,6 +815,10 @@ func runServer(args []string) error {
 		}
 		if !operatorProvided(flags, "connector", "POINTY_RELAY_CONNECTOR_ADDR") {
 			*connectorAddr = "0.0.0.0:8092"
+		}
+		if !operatorProvided(flags, "console-trust-forwarded-for", "POINTY_RELAY_CONSOLE_TRUST_FORWARDED_FOR") {
+			// Behind the platform load balancer every peer is the balancer.
+			*consoleTrustForwardedFor = true
 		}
 		if !operatorProvided(flags, "allow-insecure-http", "POINTY_RELAY_ALLOW_INSECURE_HTTP") {
 			// The load balancer terminates public HTTPS and forwards plain HTTP
@@ -738,6 +891,9 @@ func runServer(args []string) error {
 	}
 	for _, warning := range walletWarnings {
 		logger.Warn("relay wallet: " + warning)
+	}
+	for _, warning := range voucherWarnings {
+		logger.Warn("relay vouchers: " + warning)
 	}
 	if profile == "paas" {
 		logger.Info(
@@ -994,6 +1150,48 @@ func runServer(args []string) error {
 		walletRequestTimeout = 20 * time.Second
 	}
 	walletConfig.HTTPClient = &http.Client{Timeout: walletRequestTimeout + 5*time.Second, Transport: outboundTransport}
+	// BN Plus likewise; a purchase can wait on BN Plus's own suppliers.
+	attachVoucherSuppliers(&voucherConfig, bnplusCredentials,
+		&http.Client{Timeout: voucherConfig.RequestTimeout + 10*time.Second, Transport: outboundTransport})
+	// Reloadly likewise; its own purchase timeout is the same as the relay's.
+	if err := attachReloadlySupplier(&voucherConfig, reloadlyCredentials,
+		&http.Client{Timeout: max(voucherConfig.RequestTimeout, reloadlyCredentials.PurchaseTimeout) + 10*time.Second, Transport: outboundTransport}); err != nil {
+		return err
+	}
+
+	// The company's alert channel; built after the suppliers so their clients
+	// can be watched, and before the wallet config is handed out so every
+	// top-up path (requests, webhook, reconciler) announces payments.
+	alertNotifier, balanceWatcher, err := buildAlerts(alertSettings{
+		Server:                  *ntfyServer,
+		Token:                   *ntfyToken,
+		Prefix:                  *alertsPrefix,
+		ConsoleOrigin:           *consoleOrigin,
+		BalanceInterval:         *alertBalanceInterval,
+		ReloadlyFloor:           *alertReloadlyFloor,
+		BNPlusFloor:             *alertBNPlusFloor,
+		OpenRouterFloor:         *alertOpenRouterFloor,
+		SerperFloor:             *alertSerperFloor,
+		OpenRouterAPIKey:        *openRouterAPIKey,
+		OpenRouterBaseURL:       *openRouterBaseURL,
+		OpenRouterManagementKey: *openRouterManagementKey,
+		SerperAPIKey:            *serperAPIKey,
+		SerperBaseURL:           *serperBaseURL,
+	}, store, voucherConfig, &http.Client{Timeout: 30 * time.Second, Transport: outboundTransport}, logger)
+	if err != nil {
+		return err
+	}
+	walletConfig.Alerts = alertNotifier
+	if balanceWatcher.Enabled() {
+		go balanceWatcher.Run(ctx)
+	}
+
+	servicesService := buildServices(voucherConfig, servicesSettings{
+		DirectoryInterval: *servicesDirectoryInterval,
+		RequestTimeout:    reloadlyCredentials.PurchaseTimeout,
+		SettleWait:        *servicesSettleWait,
+		TargetKey:         deriveServicesTargetKey(*adminToken),
+	}, logger)
 
 	baseHTTPHandler := relayserver.HTTPServer{
 		Store:                         store,
@@ -1028,10 +1226,16 @@ func runServer(args []string) error {
 			Token:         strings.TrimSpace(*fulusToken),
 			WebhookSecret: strings.TrimSpace(*fulusWebhookSecret),
 		},
-		SMS:               smsConfig,
-		Wallet:            walletConfig,
-		OpenRouterAPIKey:  strings.TrimSpace(*openRouterAPIKey),
-		OpenRouterBaseURL: strings.TrimSpace(*openRouterBaseURL),
+		SMS:                  smsConfig,
+		Wallet:               walletConfig,
+		Alerts:               alertNotifier,
+		Vouchers:             voucherConfig,
+		VoucherCache:         &relayserver.VoucherCatalogCache{},
+		VoucherSettingsCache: &relayserver.VoucherSettingsCache{},
+		Services:             servicesService,
+		ServiceLogos:         relayserver.NewServiceLogos(),
+		OpenRouterAPIKey:     strings.TrimSpace(*openRouterAPIKey),
+		OpenRouterBaseURL:    strings.TrimSpace(*openRouterBaseURL),
 		AIModelTiers: map[string]string{
 			"fast":     strings.TrimSpace(*aiModelFast),
 			"smart":    strings.TrimSpace(*aiModelSmart),
@@ -1063,14 +1267,39 @@ func runServer(args []string) error {
 	if adminHTTPListener != nil {
 		publicHTTPHandler.RouteMode = relayserver.RoutePublic
 	}
+	var adminHTTPHandler http.Handler
+	if adminHTTPListener != nil {
+		adminOnly := baseHTTPHandler
+		adminOnly.RouteMode = relayserver.RouteAdmin
+		adminHTTPHandler = adminOnly
+	}
+	// The operator console lives wherever the admin routes are served.
+	var publicHandler http.Handler = publicHTTPHandler
+	if origin := strings.TrimSpace(*consoleOrigin); origin != "" {
+		wrapped, err := buildConsole(consoleSettings{
+			Origin:                        origin,
+			AdminToken:                    *adminToken,
+			Store:                         store,
+			RateLimiter:                   rateLimiter,
+			TrustForwardedFor:             *consoleTrustForwardedFor,
+			RequireAdminClientCertificate: *requireAdminClientCert,
+			Logger:                        logger,
+		}, adminHTTPHandler, publicHandler)
+		if err != nil {
+			return err
+		}
+		if adminHTTPHandler != nil {
+			adminHTTPHandler = wrapped
+		} else {
+			publicHandler = wrapped
+		}
+	}
 	httpServer := &http.Server{
-		Handler:           publicHTTPHandler,
+		Handler:           publicHandler,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	var adminHTTPServer *http.Server
-	if adminHTTPListener != nil {
-		adminHTTPHandler := baseHTTPHandler
-		adminHTTPHandler.RouteMode = relayserver.RouteAdmin
+	if adminHTTPHandler != nil {
 		adminHTTPServer = &http.Server{
 			Handler:           adminHTTPHandler,
 			ReadHeaderTimeout: 5 * time.Second,
@@ -1119,7 +1348,6 @@ func runServer(args []string) error {
 			"relay sms configured",
 			"templates", len(smsConfig.Templates),
 			"test_mode", smsConfig.TestMode,
-			"monthly_limit_default", smsConfig.MonthlyLimit,
 			"rate_limit", smsConfig.RateLimit.String(),
 		)
 	}
@@ -1194,6 +1422,53 @@ func runServer(args []string) error {
 		if sold, ok := walletConfig.Plans[plan]; ok {
 			logger.Info("relay wallet sells a plan", "plan", plan, "price", sold.Price, "days", sold.Days)
 		}
+	}
+
+	// The card shop: purchases whose outcome was left open are read back from
+	// the supplier and settled, and what each supplier sells (price, stock) is
+	// read on a schedule so the catalog never offers a card it cannot buy.
+	if voucherStore, ok := store.(control.VoucherStore); ok && voucherConfig.Configured() {
+		reconciler := &relayserver.VoucherReconciler{
+			Server:   baseHTTPHandler,
+			Store:    voucherStore,
+			Interval: time.Minute,
+			Logger:   logger,
+		}
+		go reconciler.Run(ctx)
+		if len(voucherConfig.Suppliers) > 0 && voucherConfig.SyncInterval > 0 {
+			offerSync := &relayserver.VoucherOfferSync{
+				Config:   voucherConfig,
+				Store:    voucherStore,
+				Interval: voucherConfig.SyncInterval,
+				Logger:   logger,
+			}
+			go offerSync.Run(ctx)
+		}
+		suppliers := make([]string, 0, len(voucherConfig.Suppliers))
+		for key := range voucherConfig.Suppliers {
+			suppliers = append(suppliers, key)
+		}
+		logger.Info(
+			"relay vouchers configured",
+			"suppliers", strings.Join(suppliers, ","),
+			"test_mode", voucherConfig.TestMode,
+			"rate_limit", voucherConfig.RateLimit.String(),
+			"sync_interval", voucherConfig.SyncInterval.String(),
+			"reloadly", reloadlyStartupMode(voucherConfig.Reloadly),
+		)
+	}
+
+	// Direct top-up and bill payments: the directory is read now and kept fresh;
+	// their held orders are settled by the voucher reconciler above, which reads
+	// every kind of purchase.
+	if servicesService.Configured() {
+		go servicesService.Run(ctx)
+		logger.Info(
+			"relay services configured",
+			"mode", servicesStartupMode(voucherConfig),
+			"directory_interval", servicesDirectoryInterval.String(),
+			"settle_wait", servicesSettleWait.String(),
+		)
 	}
 
 	select {
@@ -1768,8 +2043,6 @@ func runProvision(args []string) error {
 	relayEnabled := flags.Bool("relay-enabled", false, "enable remote relay access")
 	subscriptionActive := flags.Bool("subscription-active", false, "mark the relay subscription active")
 	aiEnabled := flags.Bool("ai-enabled", false, "enable AI entitlement for this installation")
-	smsEnabled := flags.Bool("sms-enabled", false, "legacy: no longer gates SMS, which is paid per message from the shop's SMS balance")
-	smsMonthlyLimit := flags.Int("sms-monthly-limit", 0, "operator's brake: SMS cap per calendar month; 0 uses the relay default")
 	subscriptionEndsAt := flags.String(
 		"subscription-ends-at",
 		"",
@@ -1778,10 +2051,6 @@ func runProvision(args []string) error {
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
-	if *smsMonthlyLimit < 0 {
-		return usageError("--sms-monthly-limit must be 0 or positive")
-	}
-
 	var endsAt *time.Time
 	if strings.TrimSpace(*subscriptionEndsAt) != "" {
 		parsed, err := time.Parse(time.RFC3339, *subscriptionEndsAt)
@@ -1804,8 +2073,6 @@ func runProvision(args []string) error {
 		RelayEnabled:       relayEnabled,
 		SubscriptionActive: subscriptionActive,
 		AIEnabled:          *aiEnabled,
-		SMSEnabled:         *smsEnabled,
-		SMSMonthlyLimit:    *smsMonthlyLimit,
 		SubscriptionEndsAt: endsAt,
 	})
 	if err != nil {
@@ -1846,8 +2113,6 @@ func runSubscriptionUpdate(args []string) error {
 	relayEnabled := flags.String("relay-enabled", "", "optional true/false relay entitlement")
 	subscriptionActive := flags.String("subscription-active", "", "optional true/false subscription state")
 	aiEnabled := flags.String("ai-enabled", "", "optional true/false AI entitlement")
-	smsEnabled := flags.String("sms-enabled", "", "legacy true/false: no longer gates SMS, which is paid per message from the shop's SMS balance")
-	smsMonthlyLimit := flags.String("sms-monthly-limit", "", "optional operator's brake: SMS cap per calendar month; 0 = relay default")
 	subscriptionEndsAt := flags.String("subscription-ends-at", "", "optional RFC3339 subscription end time")
 	clearEnd := flags.Bool("clear-subscription-end", false, "clear subscription end time")
 	asJSON := flags.Bool("json", false, "print the raw JSON response")
@@ -1863,8 +2128,6 @@ func runSubscriptionUpdate(args []string) error {
 		RelayEnabled:         *relayEnabled,
 		SubscriptionActive:   *subscriptionActive,
 		AIEnabled:            *aiEnabled,
-		SMSEnabled:           *smsEnabled,
-		SMSMonthlyLimit:      *smsMonthlyLimit,
 		SubscriptionEndsAt:   *subscriptionEndsAt,
 		ClearSubscriptionEnd: *clearEnd,
 	})
@@ -1920,9 +2183,6 @@ func runSubscriptionSet(args []string) error {
 	until := flags.String("until", "", "explicit RFC3339 subscription end (alternative to --months/--days)")
 	aiOn := flags.Bool("ai", false, "enable the AI add-on")
 	aiOff := flags.Bool("no-ai", false, "disable the AI add-on")
-	smsOn := flags.Bool("sms", false, "legacy: no longer gates SMS, which is paid per message from the shop's SMS balance")
-	smsOff := flags.Bool("no-sms", false, "disable the relay-hosted SMS add-on")
-	smsMonthlyLimit := flags.String("sms-monthly-limit", "", "operator's brake: SMS cap per calendar month; 0 = relay default")
 	remoteOn := flags.Bool("remote", false, "enable remote access (implied when a length is set)")
 	remoteOff := flags.Bool("no-remote", false, "disable remote access")
 	asJSON := flags.Bool("json", false, "print the raw JSON response")
@@ -1932,9 +2192,6 @@ func runSubscriptionSet(args []string) error {
 	}
 	if *aiOn && *aiOff {
 		return usageError("--ai and --no-ai are mutually exclusive")
-	}
-	if *smsOn && *smsOff {
-		return usageError("--sms and --no-sms are mutually exclusive")
 	}
 	if *remoteOn && *remoteOff {
 		return usageError("--remote and --no-remote are mutually exclusive")
@@ -1968,16 +2225,8 @@ func runSubscriptionSet(args []string) error {
 	case *aiOff:
 		options.AIEnabled = "false"
 	}
-	switch {
-	case *smsOn:
-		options.SMSEnabled = "true"
-	case *smsOff:
-		options.SMSEnabled = "false"
-	}
-	options.SMSMonthlyLimit = strings.TrimSpace(*smsMonthlyLimit)
-	if endsAt == "" && options.RelayEnabled == "" && options.AIEnabled == "" &&
-		options.SMSEnabled == "" && options.SMSMonthlyLimit == "" {
-		return usageError("nothing to set: pass a length (--months/--days/--until) and/or --ai/--no-ai/--sms/--no-sms/--sms-monthly-limit/--remote/--no-remote")
+	if endsAt == "" && options.RelayEnabled == "" && options.AIEnabled == "" {
+		return usageError("nothing to set: pass a length (--months/--days/--until) and/or --ai/--no-ai/--remote/--no-remote")
 	}
 	options.Reason = defaultReason(*reason, subscriptionSetReason(*months, *days, *until, options))
 
@@ -2034,19 +2283,6 @@ func subscriptionSetReason(months, days int, until string, options subscriptionU
 		parts = append(parts, "AI on")
 	case "false":
 		parts = append(parts, "AI off")
-	}
-	switch options.SMSEnabled {
-	case "true":
-		parts = append(parts, "SMS on")
-	case "false":
-		parts = append(parts, "SMS off")
-	}
-	switch strings.TrimSpace(options.SMSMonthlyLimit) {
-	case "":
-	case "0":
-		parts = append(parts, "SMS cap = relay default")
-	default:
-		parts = append(parts, "SMS cap "+strings.TrimSpace(options.SMSMonthlyLimit)+"/month")
 	}
 	if options.RelayEnabled == "false" {
 		parts = append(parts, "remote off")
@@ -2248,14 +2484,9 @@ func runInstallationsProvision(args []string) error {
 	relayEnabled := flags.Bool("relay-enabled", false, "enable remote relay access immediately")
 	subscriptionActive := flags.Bool("subscription-active", false, "mark the relay subscription active immediately")
 	aiEnabled := flags.Bool("ai-enabled", false, "enable the AI entitlement immediately")
-	smsEnabled := flags.Bool("sms-enabled", false, "legacy: no longer gates SMS, which is paid per message from the shop's SMS balance")
-	smsMonthlyLimit := flags.Int("sms-monthly-limit", 0, "operator's brake: SMS cap per calendar month; 0 uses the relay default")
 	subscriptionEndsAt := flags.String("subscription-ends-at", "", "optional RFC3339 subscription end time")
 	if err := flags.Parse(args); err != nil {
 		return err
-	}
-	if *smsMonthlyLimit < 0 {
-		return usageError("--sms-monthly-limit must be 0 or positive")
 	}
 	body := map[string]any{
 		"business_id":         strings.TrimSpace(*businessID),
@@ -2263,8 +2494,6 @@ func runInstallationsProvision(args []string) error {
 		"relay_enabled":       *relayEnabled,
 		"subscription_active": *subscriptionActive,
 		"ai_enabled":          *aiEnabled,
-		"sms_enabled":         *smsEnabled,
-		"sms_monthly_limit":   *smsMonthlyLimit,
 	}
 	if ends := strings.TrimSpace(*subscriptionEndsAt); ends != "" {
 		if _, err := time.Parse(time.RFC3339, ends); err != nil {
@@ -2954,8 +3183,6 @@ type installationView struct {
 	RelayEnabled             bool    `json:"relay_enabled"`
 	SubscriptionActive       bool    `json:"subscription_active"`
 	AIEnabled                bool    `json:"ai_enabled"`
-	SMSEnabled               bool    `json:"sms_enabled"`
-	SMSMonthlyLimit          int     `json:"sms_monthly_limit"`
 	RelayActive              bool    `json:"relay_active"`
 	SubscriptionEndsAt       *string `json:"subscription_ends_at"`
 	LastConnectorConnectedAt *string `json:"last_connector_connected_at"`
@@ -3000,17 +3227,16 @@ func renderInstallationTable(response installationListResponse) error {
 		return nil
 	}
 	writer := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
-	fmt.Fprintln(writer, "ID\tSHOP\tRELAY\tSUB\tAI\tSMS\tENDS\tLAST SEEN")
+	fmt.Fprintln(writer, "ID\tSHOP\tRELAY\tSUB\tAI\tENDS\tLAST SEEN")
 	for _, installation := range response.Installations {
 		fmt.Fprintf(
 			writer,
-			"%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+			"%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 			installation.ID,
 			dashIfEmpty(installation.ShopName),
 			onOff(installation.RelayEnabled),
 			onOff(installation.SubscriptionActive),
 			onOff(installation.AIEnabled),
-			onOff(installation.SMSEnabled),
 			formatTimeField(installation.SubscriptionEndsAt),
 			formatTimeField(installation.LastConnectorConnectedAt),
 		)
@@ -3032,8 +3258,6 @@ func renderInstallationDetail(installation installationView) error {
 		{"subscription", onOff(installation.SubscriptionActive)},
 		{"relay active", onOff(installation.RelayActive)},
 		{"ai enabled", onOff(installation.AIEnabled)},
-		{"sms enabled", onOff(installation.SMSEnabled)},
-		{"sms monthly limit", smsMonthlyLimitLabel(installation.SMSMonthlyLimit)},
 		{"subscription ends", formatTimeField(installation.SubscriptionEndsAt)},
 		{"last connector seen", formatTimeField(installation.LastConnectorConnectedAt)},
 		{"connector cert expires", formatTimeField(installation.CertificateExpiresAt)},
@@ -3043,14 +3267,6 @@ func renderInstallationDetail(installation installationView) error {
 		fmt.Fprintf(writer, "%s\t%s\n", row[0], row[1])
 	}
 	return writer.Flush()
-}
-
-// smsMonthlyLimitLabel shows a shop's SMS cap; 0 defers to the relay default.
-func smsMonthlyLimitLabel(limit int) string {
-	if limit <= 0 {
-		return "relay default"
-	}
-	return strconv.Itoa(limit) + "/month"
 }
 
 func renderInstallationStatus(status installationStatusView) error {
@@ -3370,8 +3586,6 @@ type subscriptionUpdateOptions struct {
 	RelayEnabled         string
 	SubscriptionActive   string
 	AIEnabled            string
-	SMSEnabled           string
-	SMSMonthlyLimit      string
 	SubscriptionEndsAt   string
 	ClearSubscriptionEnd bool
 }
@@ -3409,20 +3623,6 @@ func subscriptionUpdateBody(options subscriptionUpdateOptions) (map[string]any, 
 		body["ai_enabled"] = value
 		changeCount++
 	}
-	if value, ok, err := optionalBoolFlag("sms-enabled", options.SMSEnabled); err != nil {
-		return nil, err
-	} else if ok {
-		body["sms_enabled"] = value
-		changeCount++
-	}
-	if raw := strings.TrimSpace(options.SMSMonthlyLimit); raw != "" {
-		limit, err := strconv.Atoi(raw)
-		if err != nil || limit < 0 {
-			return nil, fmt.Errorf("sms-monthly-limit must be a whole number, 0 or more (0 = relay default)")
-		}
-		body["sms_monthly_limit"] = limit
-		changeCount++
-	}
 	if strings.TrimSpace(options.SubscriptionEndsAt) != "" {
 		if options.ClearSubscriptionEnd {
 			return nil, fmt.Errorf("subscription-ends-at cannot be combined with clear-subscription-end")
@@ -3455,8 +3655,6 @@ func provisionedInstallationOutput(provisioned control.ProvisionedInstallation) 
 			"subscription_active":               installation.SubscriptionActive,
 			"subscription_ends_at":              installation.SubscriptionEndsAt,
 			"ai_enabled":                        installation.AIEnabled,
-			"sms_enabled":                       installation.SMSEnabled,
-			"sms_monthly_limit":                 installation.SMSMonthlyLimit,
 			"created_at":                        installation.CreatedAt,
 			"updated_at":                        installation.UpdatedAt,
 			"last_connector_connected_at":       installation.LastConnectorConnectedAt,

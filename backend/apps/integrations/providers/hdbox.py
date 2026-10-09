@@ -417,7 +417,9 @@ class HdBoxProvider(IntegrationProvider):
         return OfferResult(ok=True, options=tuple(options))
 
     # --- the write path ----------------------------------------------------
-    def recharge(self, card_no: str, option_code: str, *, expected_cost=None):
+    def recharge(
+        self, card_no: str, option_code: str, *, expected_cost=None, attempt_key: str = ""
+    ):
         """Buy months on a card. Spends the agency float.
 
         Every field is taken from the renew form the server just rendered

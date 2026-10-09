@@ -1,0 +1,16 @@
+{
+ "ok": true,
+ "kind": "bill",
+ "option_code": "bill:5:1000:NGN",
+ "option_label": "كهرباء إيكيجا (مسبقة الدفع) · 1,000 نيرة نيجيرية",
+ "subscriber_ref": "••••••••280",
+ "price": "28.00",
+ "receive": {
+  "amount": "1000",
+  "currency": "NGN"
+ },
+ "approximate": false,
+ "quote": "<base64/opaque, 504 chars>",
+ "service_variant_id": 2,
+ "exceeds_float": false
+}

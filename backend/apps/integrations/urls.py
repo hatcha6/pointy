@@ -12,6 +12,21 @@ from .portal_views import (
     IntegrationPortalPaymentRecordView,
     IntegrationPortalPaymentsView,
 )
+from .pricing_views import (
+    PricingCardsBulkView,
+    PricingCardsView,
+    PricingCardView,
+    PricingView,
+)
+from .services_views import (
+    ServicesCountryView,
+    ServicesDetectView,
+    ServicesDirectoryView,
+    ServicesFlagsView,
+    ServicesLogoView,
+    ServicesQuoteView,
+    ServicesRecentView,
+)
 from .views import (
     IntegrationAccountView,
     IntegrationCardView,
@@ -28,6 +43,7 @@ from .views import (
     IntegrationVerificationConfirmView,
     IntegrationVerificationSendView,
     IntegrationVerificationView,
+    IntegrationVoucherMenuView,
     IntegrationVoucherView,
 )
 
@@ -46,6 +62,47 @@ urlpatterns = [
         "vouchers/<int:product_id>/",
         IntegrationVoucherView.as_view(),
         name="integrations-vouchers",
+    ),
+    # Till-facing: the company's own cards («كروت دفتر»), for the voucher menu
+    # the till shows in place of the grid.
+    path(
+        "vouchers/menu/",
+        IntegrationVoucherMenuView.as_view(),
+        name="integrations-voucher-menu",
+    ),
+    # Till-facing: the company's direct top-up and bill payments («الشحن
+    # المباشر», «دفع الفواتير»). Before the provider routes below, so "services"
+    # is never read as a provider key.
+    path(
+        "services/directory/",
+        ServicesDirectoryView.as_view(),
+        name="integrations-services-directory",
+    ),
+    path(
+        "services/countries/<str:code>/",
+        ServicesCountryView.as_view(),
+        name="integrations-services-country",
+    ),
+    path("services/flags/", ServicesFlagsView.as_view(), name="integrations-services-flags"),
+    path(
+        "services/logos/<str:digest>/",
+        ServicesLogoView.as_view(),
+        name="integrations-services-logo",
+    ),
+    path("services/detect/", ServicesDetectView.as_view(), name="integrations-services-detect"),
+    path("services/quote/", ServicesQuoteView.as_view(), name="integrations-services-quote"),
+    path("services/recent/", ServicesRecentView.as_view(), name="integrations-services-recent"),
+    path("pointy/pricing/", PricingView.as_view(), name="integrations-pricing"),
+    path("pointy/pricing/cards/", PricingCardsView.as_view(), name="integrations-pricing-cards"),
+    path(
+        "pointy/pricing/cards/bulk/",
+        PricingCardsBulkView.as_view(),
+        name="integrations-pricing-cards-bulk",
+    ),
+    path(
+        "pointy/pricing/cards/<int:variant_id>/",
+        PricingCardView.as_view(),
+        name="integrations-pricing-card",
     ),
     path("<str:provider>/", IntegrationAccountView.as_view(), name="integrations-account"),
     path("<str:provider>/probe/", IntegrationProbeView.as_view(), name="integrations-probe"),

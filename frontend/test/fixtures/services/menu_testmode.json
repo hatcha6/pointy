@@ -1,0 +1,91 @@
+{
+  "available": true,
+  "provider": "pointy",
+  "error_code": "",
+  "balance": "219.84",
+  "balance_at": "2026-10-08T12:29:54.686259+00:00",
+  "categories": [
+    {
+      "key": "gift_cards",
+      "name": "بطاقات الهدايا"
+    }
+  ],
+  "countries": [
+    {
+      "code": "US",
+      "name": "الولايات المتحدة",
+      "flag": "<base64/opaque, 5556 chars>"
+    }
+  ],
+  "brands": [
+    {
+      "key": "itunes",
+      "name": "آيتونز",
+      "category": "gift_cards",
+      "featured": true,
+      "badge": "",
+      "has_promo": false,
+      "redeem_hint": "App Store ← الحساب ← استرداد بطاقة هدية",
+      "items": [
+        {
+          "variant_id": 3,
+          "key": "itunes-us-5",
+          "label": "5 دولار",
+          "name": "الولايات المتحدة · 5 دولار",
+          "country": "US",
+          "face_value": "5",
+          "face_currency": "USD",
+          "price": "66.00",
+          "regular_price": "66.00",
+          "badge": "",
+          "promo_ends_at": null,
+          "available": true,
+          "exceeds_float": false
+        }
+      ],
+      "product": "<product JSON omitted>"
+    }
+  ],
+  "services": [
+    {
+      "key": "airtime",
+      "kind": "airtime",
+      "available": true,
+      "variant_id": 1,
+      "countries": 124,
+      "providers": 404,
+      "test_mode": true
+    },
+    {
+      "key": "bill:electricity",
+      "kind": "bill",
+      "bill_type": "electricity",
+      "available": true,
+      "variant_id": 2,
+      "countries": 5,
+      "providers": 25,
+      "test_mode": true
+    },
+    {
+      "key": "bill:water",
+      "kind": "bill",
+      "bill_type": "water",
+      "available": true,
+      "variant_id": 2,
+      "countries": 1,
+      "providers": 1,
+      "test_mode": true
+    },
+    {
+      "key": "bill:tv",
+      "kind": "bill",
+      "bill_type": "tv",
+      "available": true,
+      "variant_id": 2,
+      "countries": 1,
+      "providers": 2,
+      "test_mode": true
+    }
+  ],
+  "test_mode": true
+}

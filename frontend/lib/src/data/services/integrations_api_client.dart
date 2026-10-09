@@ -5,6 +5,7 @@ import '../models/integration_provider.dart';
 import '../models/integration_recent_search.dart';
 import '../models/portal_payment.dart';
 import '../models/voucher_availability.dart';
+import '../models/voucher_menu.dart';
 import 'api_session.dart';
 
 /// REST access to the resale-provider endpoints (apps.integrations):
@@ -228,6 +229,12 @@ class IntegrationsApiClient {
     );
   }
 
+  /// How long the till waits for the charge call. The shop backend itself
+  /// waits up to 80 seconds for the relay to perform a service, so the till
+  /// must wait longer: giving up first would report as lost a charge that is
+  /// in fact being performed.
+  static const Duration chargeTimeout = Duration(seconds: 95);
+
   /// Perform the recharges a sale has already sold. Spends the agency float.
   ///
   /// Safe to call more than once for the same order: the server allows each
@@ -240,6 +247,7 @@ class IntegrationsApiClient {
     final response = await _session.post(
       'integrations/fulfillments/charge/',
       body: {'order': ?orderId, 'fulfillment': ?fulfillmentId},
+      timeout: chargeTimeout,
     );
     _session.throwApiException(
       response,
@@ -328,6 +336,18 @@ class IntegrationsApiClient {
     return VoucherAvailability.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
+  }
+
+  // --- the «كروت دفتر» menu ---------------------------------------------------
+  /// The company's own cards for the till's voucher menu: categories, brands
+  /// with their system products, and every card with its price.
+  Future<VoucherMenu> fetchVoucherMenu() async {
+    final response = await _session.get('integrations/vouchers/menu/');
+    _session.throwApiException(response, 'Loading the voucher menu failed');
+    final decoded = _session.decodedBody(response);
+    return decoded is Map<String, Object?>
+        ? VoucherMenu.fromJson(decoded)
+        : VoucherMenu.empty;
   }
 
   // --- payments made on the provider's own website ---------------------------

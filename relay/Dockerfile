@@ -1,5 +1,15 @@
 # syntax=docker/dockerfile:1
 
+# The operator console's web app (relay/console-ui), built first so the Go
+# binary embeds it (internal/console/dist).
+FROM node:22.12.0-alpine AS console
+
+WORKDIR /src/relay/console-ui
+COPY relay/console-ui/package.json relay/console-ui/package-lock.json ./
+RUN npm ci --ignore-scripts --no-audit --no-fund
+COPY relay/console-ui/ ./
+RUN npm run build
+
 FROM golang:1.25-alpine AS build
 
 # Build version, injected into the binary so the connector heartbeat + `version`
@@ -12,6 +22,7 @@ COPY relay/go.mod relay/go.sum ./
 RUN go mod download
 
 COPY relay/ ./
+COPY --from=console /src/relay/internal/console/dist ./internal/console/dist
 RUN CGO_ENABLED=0 GOOS=linux go build \
     -trimpath \
     -ldflags="-s -w -X main.version=${POINTY_VERSION}" \

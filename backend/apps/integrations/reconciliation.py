@@ -29,6 +29,12 @@ Matching is conservative. A provider entry is only claimed when its cost and
 card match, no other fulfillment has already claimed it, and it did not happen
 *before* the sale. When in doubt it leaves the row pending: a false confirm
 would quietly assert that a customer got what they paid for.
+
+The company's own relay (``catalog.ProviderSpec.relay_hosted``) needs none of
+that: every purchase is made under a key of ours, so a sale whose answer was
+lost is read back by that key (:func:`settle_attempts`) — every two minutes,
+since a customer is waiting on its code (:func:`settle_relay_attempts`), and
+again here nightly. Its rows are never matched against a log.
 """
 
 from __future__ import annotations
@@ -40,10 +46,13 @@ from decimal import Decimal
 from django.db import transaction
 from django.utils import timezone
 
-from . import switches
-from .fulfillment import fulfillment_kind
+from apps.core.state_version import bump
+
+from . import catalog, switches
+from .fulfillment import fulfillment_kind, retire_withdrawn
 from .models import IntegrationAccount, IntegrationFulfillment, ProviderPayment
 from .providers import provider_for
+from .providers.base import ATTEMPT_ABSENT, ATTEMPT_CHARGED, ATTEMPT_REFUSED
 from .services import probe_account
 
 logger = logging.getLogger(__name__)
@@ -102,6 +111,11 @@ def reconcile_account(
     now = now or timezone.now()
     since = now - timedelta(days=lookback_days)
 
+    # A sale that was given back owes the provider nothing: retire what a void
+    # from before voids withdrew their own fulfillments left chargeable, or it is
+    # reported below as a customer who paid and got nothing.
+    retire_withdrawn(account)
+
     # Refresh the provider's own balance first: every figure below is compared
     # against it, and a stale one would invent drift that is not there.
     probe_account(account)
@@ -116,8 +130,10 @@ def reconcile_account(
         ).order_by("created_at")
         # A card nobody ever sent for cannot have been bought for this sale:
         # anything in the log that matches it is somebody else's card, and
-        # "confirming" on it would hand the customer a PIN already sold.
-        if fulfillment_kind(row) != "voucher"
+        # "confirming" on it would hand the customer a PIN already sold. The
+        # company's top-ups and bill payments have no log to match against
+        # either: only an ordinary recharge is proved by the provider's own.
+        if fulfillment_kind(row) == "recharge"
     ]
 
     driver = provider_for(account)
@@ -210,6 +226,10 @@ def _resolve_submitted(account, driver, *, since, now) -> dict:
         .select_related("order_line")
         .order_by("created_at")
     )
+    if _settles_by_attempt(account, driver):
+        # Read back by identity, never matched against a log: see
+        # ``settle_attempts``.
+        return settle_attempts(driver, rows, now=now)
     settled = {"confirmed": 0, "retryable": 0, "unknown": [], "checked": len(rows)}
     if not rows:
         return settled
@@ -273,6 +293,192 @@ def _resolve_submitted(account, driver, *, since, now) -> dict:
 
             settled["unknown"].append(_fulfillment_brief(row))
     return settled
+
+
+# --- attempts a provider reads back by key (the company's relay) ----------------------
+#: A sent attempt goes back to retryable only once it is this old, and only on
+#: the provider's word. Longer than a purchase waits for its own answer
+#: (``providers.pointy``): a settle must never meet an attempt whose request is
+#: still out, or that request's late answer would be written over the next one.
+ATTEMPT_SETTLE_AFTER = timedelta(minutes=2)
+
+
+def _settles_by_attempt(account, driver) -> bool:
+    """Whether this account's sent writes are read back rather than matched.
+
+    Decided by the catalog as well as the driver, so a relay-hosted provider
+    the operator switched off — whose stand-in driver reads nothing — is left
+    unsettled rather than matched against a purchase log it does not have.
+    """
+    spec = account.spec
+    return bool(getattr(driver, "reads_attempts", False)) or bool(
+        spec is not None and spec.relay_hosted
+    )
+
+
+def settle_relay_attempts(*, now=None) -> dict:
+    """Every two minutes: settle the relay purchases whose answer was lost.
+
+    A card the customer paid for is waiting on this, so it runs far more often
+    than the nightly sweep — and costs one query when there is nothing to do.
+    An account the owner switched off since is still settled: the sale stands.
+    """
+    now = now or timezone.now()
+    relay_keys = [spec.key for spec in catalog.PROVIDERS if spec.relay_hosted]
+    sent = IntegrationFulfillment.objects.filter(
+        status=IntegrationFulfillment.Status.SUBMITTED, provider__in=relay_keys
+    )
+    account_ids = set(sent.values_list("account_id", flat=True))
+    results = []
+    if not account_ids:
+        return {"accounts": results}
+    for account in switches.running(
+        IntegrationAccount.objects.filter(pk__in=account_ids)
+    ):
+        if not account.is_configured:
+            continue
+        rows = list(
+            sent.filter(account=account)
+            .select_related("order_line")
+            .order_by("created_at")
+        )
+        try:
+            settled = settle_attempts(provider_for(account), rows, now=now)
+        except Exception:  # pragma: no cover - a driver bug must not stop the sweep
+            logger.exception(
+                "settling relay purchases crashed for %s", account.provider
+            )
+            continue
+        results.append({"provider": account.provider, **settled})
+    return {"accounts": results}
+
+
+def settle_attempts(driver, rows, *, now) -> dict:
+    """Settle sent attempts by reading each back under its own key.
+
+    Identity, never inference: the provider says what it did with exactly this
+    attempt, so nothing is matched on cost and time and no other sale's card
+    can be handed over. Three honest endings, as for a log:
+
+    **Charged** — CONFIRMED, with the code on the receipt the customer is
+    reprinted, and the cost corrected to what was charged.
+
+    **Refused, or never heard of** — back to PENDING, which re-arms the one
+    attempt the row is allowed (under a new key), once the attempt is older
+    than ``ATTEMPT_SETTLE_AFTER``.
+
+    **Anything else** — still being bought, the code not read back yet, the
+    read failed: left as it is, and asked again next time.
+
+    One row that cannot be settled — a driver bug, a row the database will not
+    give — is left as it is and does not stop the others: a customer is waiting
+    on every one of them.
+    """
+    settled = {"confirmed": 0, "retryable": 0, "unknown": [], "checked": len(rows)}
+    for row in rows:
+        try:
+            ending = _settle_attempt(driver, row, now=now)
+        except Exception:  # noqa: BLE001 - one row must not abort the run
+            logger.exception("settling the attempt of fulfillment %s crashed", row.pk)
+            ending = None
+        if ending is None:
+            settled["unknown"].append(_fulfillment_brief(row))
+        else:
+            settled[ending] += 1
+    return settled
+
+
+def _settle_attempt(driver, row, *, now) -> str | None:
+    """``confirmed`` or ``retryable`` when this row's attempt was settled, else ``None``."""
+    from . import recharge
+
+    # The driver is told which fulfillment it reads back, so a service's slip is
+    # written for the country the sale named instead of a search of the directory.
+    driver.bind(row)
+    outcome = driver.attempt_outcome(
+        recharge.attempt_key(row), option_code=row.option_code
+    )
+    if outcome.state == ATTEMPT_CHARGED and _confirm_attempt(row, outcome, now=now):
+        return "confirmed"
+    old_enough = (
+        row.submitted_at is None or row.submitted_at <= now - ATTEMPT_SETTLE_AFTER
+    )
+    if (
+        outcome.state in (ATTEMPT_REFUSED, ATTEMPT_ABSENT)
+        and old_enough
+        and _rearm_attempt(row, outcome, now=now)
+    ):
+        return "retryable"
+    return None
+
+
+def _locked_attempt(row):
+    """``row`` locked, if it is still the sent attempt it was when it was read."""
+    return (
+        IntegrationFulfillment.objects.select_for_update()
+        .select_related("account", "order_line")
+        .filter(
+            pk=row.pk,
+            status=IntegrationFulfillment.Status.SUBMITTED,
+            attempt_count=row.attempt_count,
+        )
+        .first()
+    )
+
+
+def _confirm_attempt(row, outcome, *, now) -> bool:
+    from . import recharge
+
+    with transaction.atomic():
+        locked = _locked_attempt(row)
+        if locked is None:
+            return False
+        locked.status = IntegrationFulfillment.Status.CONFIRMED
+        # When the provider performed it: the float was drawn then.
+        locked.confirmed_at = outcome.at or now
+        locked.provider_reference = (outcome.reference or "")[:64]
+        locked.provider_receipt = outcome.receipt or {}
+        locked.last_error_code = ""
+        locked.last_error = ""
+        fields = [
+            "status",
+            "confirmed_at",
+            "provider_reference",
+            "provider_receipt",
+            "last_error_code",
+            "last_error",
+            "updated_at",
+        ]
+        fields += recharge.apply_actual_cost(locked, outcome.actual_cost)
+        locked.save(update_fields=fields)
+        _note_balance(locked.account, outcome.balance_after, now=now)
+        bump("integrations")
+    return True
+
+
+def _rearm_attempt(row, outcome, *, now) -> bool:
+    with transaction.atomic():
+        locked = _locked_attempt(row)
+        if locked is None:
+            return False
+        locked.status = IntegrationFulfillment.Status.PENDING
+        # Why, when the provider said: the till offers "try again" with it.
+        locked.last_error_code = (outcome.error_code or "")[:32]
+        locked.last_error = outcome.error_detail or ""
+        locked.save(
+            update_fields=["status", "last_error_code", "last_error", "updated_at"]
+        )
+        _note_balance(locked.account, outcome.balance_after, now=now)
+        bump("integrations")
+    return True
+
+
+def _note_balance(account, balance, *, now) -> None:
+    if balance is None:
+        return
+    account.balance = balance
+    account.balance_at = now
+    account.save(update_fields=["balance", "balance_at", "updated_at"])
 
 
 def _confirm(row, entry, *, now) -> bool:

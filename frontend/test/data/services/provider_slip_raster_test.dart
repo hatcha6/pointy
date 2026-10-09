@@ -157,6 +157,151 @@ void main() {
     });
   });
 
+  group('a «كروت دفتر» card', () {
+    // One of each brand on the shelf, titled as the invoice names the line
+    // (brand - country · face value), with the steps the shop's mirror holds
+    // and a code of the length the brand's own cards have. None of them is
+    // dialled: each is redeemed in the brand's own store, so the code beside
+    // the PIN is the PIN itself.
+    const cards = [
+      (
+        'libyana',
+        'ليبيانا - 10 دينار',
+        '4028551190372264',
+        'اتصل بالرقم 120 متبوعاً بالرقم السري',
+      ),
+      (
+        'almadar',
+        'المدار الجديد - 5 دينار',
+        '7302918455610827',
+        'اطلب *112* ثم الرقم السري ثم #',
+      ),
+      ('ltt', 'ليبيا للاتصالات والتقنية - 20 دينار', '5519402837', ''),
+      (
+        'playstation',
+        'بلايستيشن - تركيا · 1000 ليرة تركية',
+        'QW4P-7ZM2-KD93',
+        'PlayStation Store ← استرداد الرموز',
+      ),
+      (
+        'xbox',
+        'إكس بوكس - الولايات المتحدة · 150 دولار',
+        '7BKQ9-3MXD4-HV6TF-8RW2P-YC5N7',
+        'redeem.microsoft.com أو Microsoft Store ← استرداد رمز',
+      ),
+      (
+        'steam',
+        'ستيم - عالمي · 10 دولار',
+        'A7K2M-9QXD4-HV6TF',
+        'Steam ← الألعاب ← تفعيل رمز محفظة ستيم',
+      ),
+      (
+        'roblox',
+        'روبلوكس - الإمارات · 50 درهم',
+        'M7KQ-93XD-4HV6-TF8R',
+        'roblox.com/redeem',
+      ),
+      (
+        'nintendo',
+        'نينتندو - الولايات المتحدة · 35 دولار',
+        'XK4M-9QXD-4HV6-TF8R',
+        'Nintendo eShop ← إدخال رمز',
+      ),
+      (
+        'apple',
+        'آيتونز - الولايات المتحدة · 50 دولار',
+        'XK4M9QXD4HV6TF8R',
+        'App Store ← صورة الحساب ← استرداد بطاقة الهدايا أو الرمز',
+      ),
+      (
+        'amazon',
+        'أمازون - الولايات المتحدة · 40 دولار',
+        'KQ4M-9QXD4H-V6TF',
+        'amazon.com/redeem',
+      ),
+      (
+        'netflix',
+        'نتفليكس - الإمارات · 200 درهم',
+        '40917728331',
+        'netflix.com/redeem',
+      ),
+    ];
+
+    for (final (key, title, code, steps) in cards) {
+      test('$key opens on its logo beside the provider\'s mark', () async {
+        final slip = receiptProviderSlip(
+          title: title,
+          kind: 'voucher',
+          status: 'confirmed',
+          logo: _logo(key),
+          providerLogo: _logo('pointy'),
+          printed: {
+            'code': code,
+            'serial': '439882298872854',
+            if (steps.isNotEmpty) 'instructions': steps,
+          },
+        );
+        expect(slip.logo, isNotEmpty);
+        expect(slip.providerLogo, isNotEmpty);
+        expect(slip.dial, isEmpty);
+        expect(slip.qrCaption, receiptScanToCopyPin);
+        expect(slip.rows, [
+          'الرقم التسلسلي: 439882298872854',
+          if (steps.isNotEmpty) 'طريقة الشحن: $steps',
+        ]);
+        for (final (paper, width) in [(576, '80'), (384, '58')]) {
+          final raster = await draw(
+            slip,
+            paperDots: paper,
+            name: 'daftar-$key-$width',
+          );
+          expect(_readCode(raster), code, reason: '$key on $width mm');
+          // A long code gets a line of its own and its QR code under it: the
+          // slip grows, but never past about 7 cm on 80 mm paper.
+          expect(raster.height, lessThan(paper == 576 ? 560 : 680));
+        }
+      });
+    }
+  });
+
+  // POINTY_SLIP_DUMP=<dir> with POINTY_SLIP_LOGOS=<dir> holding a slips.json
+  // (a real shop's shelf exported by the catalog tooling: a sample card per
+  // brand, its logo as <key>.png): the slip of every brand, to look at.
+  final shelf = File('${Platform.environment['POINTY_SLIP_LOGOS']}/slips.json');
+  test(
+    'dumps a slip for every brand of a real shelf',
+    skip:
+        Platform.environment['POINTY_SLIP_DUMP'] == null || !shelf.existsSync(),
+    () async {
+      final cards = (jsonDecode(shelf.readAsStringSync()) as List)
+          .cast<Map<String, dynamic>>();
+      for (final card in cards) {
+        final key = card['key'] as String;
+        final slip = receiptProviderSlip(
+          title: card['title'] as String,
+          kind: 'voucher',
+          status: 'confirmed',
+          logo: _logo(key),
+          providerLogo: _logo('pointy'),
+          printed: {
+            'code': card['code'] as String,
+            'serial': '439882298872854',
+            if ((card['steps'] as String).isNotEmpty)
+              'instructions': card['steps'] as String,
+          },
+        );
+        for (final (paper, width) in [(576, '80'), (384, '58')]) {
+          final raster = await draw(
+            slip,
+            paperDots: paper,
+            name: 'shelf-$key-$width',
+          );
+          expect(raster.height, greaterThan(100), reason: key);
+        }
+      }
+    },
+  );
+
   test('a top-up opens on its provider and pairs its facts', () async {
     final raster = await draw(topUp, name: 'hdbox-80');
     expect(raster.qr, isNull);
@@ -275,6 +420,24 @@ String _logo(String name) {
     y2: 80,
     color: img.ColorRgb8(0, 0, 0),
   );
+  // A dot row spelling the name (FNV-1a, so stable across runs): two stand-ins
+  // for different names are never the same picture, as two real logos are not.
+  var hash = 0x811C9DC5;
+  for (final unit in name.codeUnits) {
+    hash = ((hash ^ unit) * 0x01000193) & 0xFFFFFFFF;
+  }
+  for (var bit = 0; bit < 16; bit++) {
+    if (hash & (1 << bit) != 0) {
+      img.fillRect(
+        mark,
+        x1: 4 + bit * 7,
+        y1: 110,
+        x2: 8 + bit * 7,
+        y2: 114,
+        color: img.ColorRgb8(0, 0, 0),
+      );
+    }
+  }
   return base64Encode(img.encodePng(mark));
 }
 

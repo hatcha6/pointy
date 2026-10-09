@@ -1,0 +1,16 @@
+{
+ "ok": true,
+ "kind": "airtime",
+ "option_code": "air:289:5000:XOF",
+ "option_label": "أورنج مالي · 5,000 فرنك أفريقي",
+ "subscriber_ref": "+223•••••456",
+ "price": "97.00",
+ "receive": {
+  "amount": "5000",
+  "currency": "XOF"
+ },
+ "approximate": false,
+ "quote": "gAAAAABqx4QlggZYAYZwa3EuND4ejrEw3xceBvorv_KHvRLH6Jyg99-8cIoWY87dJ2ZE1eBB0adgIn_l-DswF8gHE8Eyq_WnJ-2tR8LmQAz-5F-oCKy1rgPKZp9c4itypo8WlGrzUc0bCSJCwvVolXpmCTInI368P2nKofrPaYMGALOZZ6m027Iao_F5udo7r5_R_zGKq9GtOGM0eB60xuh0uAQIEzWT_liAbFmwZCt6gy1ja7dfchtFHEXQQINfDJ-QURIp55vx7qbTirP1VUHCr_cAtQQaHf7la6UgJxJPg4bSGIf-bWJNajHfGhWNh3lpRRLf8-wpKwaZlgrJlLj33KNC2m4gIP9ZFuKjidxf2ZFp-2oFtdOTYCiz_lr1eKc54XyCXYBHeYrvjctaCyUgyMnNlr3BKA==",
+ "service_variant_id": 1,
+ "exceeds_float": false
+}

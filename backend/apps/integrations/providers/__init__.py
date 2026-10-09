@@ -1,6 +1,6 @@
 """Importing this package registers every driver with the registry in ``base``."""
 
-from . import hdbox, lnet, qareeb  # noqa: F401
+from . import hdbox, lnet, pointy, qareeb  # noqa: F401
 from .base import (  # noqa: F401
     CardInfo,
     IntegrationProvider,

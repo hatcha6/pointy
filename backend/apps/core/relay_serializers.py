@@ -11,7 +11,6 @@ class RelayInstallationStatusSerializer(serializers.Serializer):
     relay_enabled = serializers.BooleanField()
     subscription_active = serializers.BooleanField()
     ai_enabled = serializers.BooleanField()
-    sms_enabled = serializers.BooleanField()
     subscription_ends_at = serializers.DateTimeField(allow_null=True)
     # The plans paid from the Daftar wallet, and when each plan stops whoever
     # pays for it (null: not running, or included with no end).

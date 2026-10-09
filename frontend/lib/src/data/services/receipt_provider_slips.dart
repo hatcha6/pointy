@@ -15,6 +15,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import '../../shared/printing/print_qr_code.dart';
+import '../models/provider_receipt_fields.dart';
 
 /// Labels the renderers print around a slip's PIN and its dial string.
 const String receiptPinLabel = 'الرقم السري';
@@ -29,6 +30,7 @@ class ReceiptProviderSlip {
     required this.title,
     this.notice = '',
     this.pin = '',
+    this.pinLabel = receiptPinLabel,
     this.dial = '',
     this.qrData,
     this.qrCaption = '',
@@ -55,8 +57,13 @@ class ReceiptProviderSlip {
   /// nothing that could pass for a card someone can use.
   final String notice;
 
-  /// A card's PIN: the line the customer must read at arm's length.
+  /// A card's PIN, or a bill's token: the line the customer must read at
+  /// arm's length.
   final String pin;
+
+  /// What the line above is called on the slip: «الرقم السري» for a card, the
+  /// server's own wording («رمز الشحن») for a bill's token.
+  final String pinLabel;
 
   /// What to dial to redeem the card, exactly as written, when its operator
   /// redeems by dialling (Almadar's `*112*PIN#`, Libyana's `120PIN`).
@@ -81,6 +88,7 @@ class ReceiptProviderSlip {
       other.title == title &&
       other.notice == notice &&
       other.pin == pin &&
+      other.pinLabel == pinLabel &&
       other.dial == dial &&
       other.qrData == qrData &&
       other.qrCaption == qrCaption &&
@@ -93,6 +101,7 @@ class ReceiptProviderSlip {
     title,
     notice,
     pin,
+    pinLabel,
     dial,
     qrData,
     qrCaption,
@@ -103,7 +112,7 @@ class ReceiptProviderSlip {
 
   @override
   String toString() =>
-      'ReceiptProviderSlip($title, notice: $notice, pin: $pin, dial: $dial, '
+      'ReceiptProviderSlip($title, notice: $notice, pin: $pin ($pinLabel), dial: $dial, '
       'qr: $qrData ($qrCaption), rows: $rows, logo: ${logo.length} chars, '
       'provider logo: ${providerLogo.length} chars)';
 }
@@ -170,11 +179,7 @@ List<ReceiptProviderSlip> receiptProviderSlipsFromPayload(
         subscriberRef: _text(raw['subscriber_ref']),
         reference: _text(raw['reference']),
         months: int.tryParse(_text(raw['months'])) ?? 0,
-        printed: {
-          if (printed is Map)
-            for (final entry in printed.entries)
-              entry.key.toString(): _text(entry.value),
-        },
+        printed: providerReceiptFromJson(printed),
         printQrCodes: printQrCodes,
         logo: _text(raw['receipt_logo']),
         providerLogo: _text(raw['provider_logo']),
@@ -203,6 +208,10 @@ ReceiptProviderSlip receiptProviderSlip({
 }) {
   String field(String key) => (printed[key] ?? '').trim();
   final isVoucher = kind == 'voucher';
+  // Airtime sent abroad, a bill paid abroad: the server sends the slip ready
+  // made — its title, its `[label, value]` rows, a token and what to call it —
+  // so new wording never needs a new till.
+  final isDirectService = kind == 'airtime' || kind == 'bill';
   // Whatever became of it, the slip opens on the logo the customer knows it
   // by: the card's brand, or the provider who topped their line up — and a
   // card carries its provider's mark as well, never the same picture twice.
@@ -219,8 +228,30 @@ ReceiptProviderSlip receiptProviderSlip({
         // again — a second attempt may be a second charge.
         'submitted' => 'تنبيه: لم تتأكد العملية بعد — لا تُعِد المحاولة',
         'cancelled' => 'أُلغيت العملية',
-        _ => isVoucher ? 'لم يتم إصدار الكرت' : 'لم تتم عملية الشحن',
+        _ =>
+          isVoucher
+              ? 'لم يتم إصدار الكرت'
+              : (isDirectService ? 'لم تتم العملية' : 'لم تتم عملية الشحن'),
       },
+    );
+  }
+
+  if (isDirectService) {
+    return ReceiptProviderSlip(
+      title: field('title').isNotEmpty ? field('title') : title,
+      logo: slipLogo,
+      providerLogo: mark,
+      notice: field('notice'),
+      pin: field('pin'),
+      pinLabel: field('pin_label').isNotEmpty
+          ? field('pin_label')
+          : receiptPinLabel,
+      rows: [
+        for (final row in providerReceiptRows(printed))
+          row.length > 1
+              ? '${row.first}: ${row.sublist(1).join(' ')}'
+              : row.first,
+      ],
     );
   }
 

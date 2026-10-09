@@ -12,6 +12,7 @@ library;
 
 import 'integration_provider.dart';
 import 'money_position.dart';
+import 'provider_receipt_fields.dart';
 
 double? _toDouble(Object? value) {
   if (value == null) return null;
@@ -881,6 +882,7 @@ class IntegrationChargeResult {
     this.providerReference = '',
     this.balanceAfter,
     this.receipt = const {},
+    this.testMode = false,
   });
 
   final int? fulfillment;
@@ -909,8 +911,18 @@ class IntegrationChargeResult {
   /// The provider's own printed slip, if it gave us one.
   final Map<String, String> receipt;
 
+  /// Bought from the relay's test supplier: nothing was really sent or paid.
+  /// Said by the answer itself (`test_mode`, on the result or on its slip) when
+  /// the server says so; the till also knows from what it sold.
+  final bool testMode;
+
   bool get isCharged => outcome == 'charged';
   bool get isVoucher => kind == 'voucher';
+
+  /// Airtime sent to a phone, or a bill paid: «كروت دفتر»' direct services.
+  bool get isAirtime => kind == 'airtime';
+  bool get isBill => kind == 'bill';
+  bool get isDirectService => isAirtime || isBill;
 
   /// A card's PIN, once it was bought. Empty for everything else.
   String get voucherCode => receipt['code'] ?? '';
@@ -932,11 +944,11 @@ class IntegrationChargeResult {
       errorDetail: json['error_detail']?.toString() ?? '',
       providerReference: json['provider_reference']?.toString() ?? '',
       balanceAfter: double.tryParse(json['balance_after']?.toString() ?? ''),
-      receipt: {
-        for (final entry
-            in (json['receipt'] as Map<String, Object?>? ?? const {}).entries)
-          entry.key: entry.value?.toString() ?? '',
-      },
+      receipt: providerReceiptFromJson(json['receipt']),
+      testMode:
+          json['test_mode'] == true ||
+          (json['receipt'] is Map &&
+              (json['receipt'] as Map)['test_mode'] == true),
     );
   }
 }

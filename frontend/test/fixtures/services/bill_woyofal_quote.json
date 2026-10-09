@@ -1,0 +1,16 @@
+{
+ "ok": true,
+ "kind": "bill",
+ "option_code": "bill:26:2000:XOF",
+ "option_label": "ووفال السنغال (كهرباء مسبقة الدفع) · 2,000 فرنك أفريقي",
+ "subscriber_ref": "••••••••789",
+ "price": "40.50",
+ "receive": {
+  "amount": "2000",
+  "currency": "XOF"
+ },
+ "approximate": false,
+ "quote": "<base64/opaque, 524 chars>",
+ "service_variant_id": 2,
+ "exceeds_float": false
+}

@@ -50,7 +50,12 @@ void main() {
   testWidgets('the price is tappable with no cost to display', (tester) async {
     await tester.pumpWidget(
       harness(
-        CartLineTile(line: line(), onAdd: null, onRemove: null, onEditPrice: () {}),
+        CartLineTile(
+          line: line(),
+          onAdd: null,
+          onRemove: null,
+          onEditPrice: () {},
+        ),
       ),
     );
 
@@ -69,12 +74,7 @@ void main() {
   testWidgets('cost and margin appear once cost is revealed', (tester) async {
     await tester.pumpWidget(
       harness(
-        CartLineTile(
-          line: line(),
-          onAdd: null,
-          onRemove: null,
-          unitCost: 6,
-        ),
+        CartLineTile(line: line(), onAdd: null, onRemove: null, unitCost: 6),
       ),
     );
 
@@ -82,14 +82,18 @@ void main() {
     // findRichText, because cost and margin are one Text.rich run: two
     // separate chips wrapped the row onto a second line on a narrow cart.
     expect(
-      find.textContaining(l10n.cartLineCostLabel('6.00 د.ل'),
-          findRichText: true),
+      find.textContaining(
+        l10n.cartLineCostLabel('6.00 د.ل'),
+        findRichText: true,
+      ),
       findsOneWidget,
     );
     // 10.00 sale − 6.00 cost.
     expect(
-      find.textContaining(l10n.cartLineMarginLabel('4.00 د.ل'),
-          findRichText: true),
+      find.textContaining(
+        l10n.cartLineMarginLabel('4.00 د.ل'),
+        findRichText: true,
+      ),
       findsOneWidget,
     );
   });
@@ -122,10 +126,7 @@ void main() {
     );
 
     final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
-    expect(
-      find.textContaining(l10n.cartLineRepricedBadge),
-      findsOneWidget,
-    );
+    expect(find.textContaining(l10n.cartLineRepricedBadge), findsOneWidget);
     // "changed" without "from what" is not something a manager can check.
     expect(find.textContaining('10.00'), findsOneWidget);
   });

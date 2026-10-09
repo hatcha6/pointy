@@ -1,0 +1,527 @@
+{
+ "available": true,
+ "error_code": "",
+ "country": {
+  "code": "ML",
+  "name": "مالي",
+  "name_en": "Mali",
+  "dial": [
+   "223"
+  ],
+  "currency": "XOF",
+  "currency_name": "فرنك أفريقي",
+  "popular": 2
+ },
+ "airtime": {
+  "operators": [
+   {
+    "id": 289,
+    "max": "32800",
+    "min": "1967",
+    "logo": "https://s3.amazonaws.com/rld-operator/846891a6-4f91-4688-9b54-51ad7cce9e97-size-3.png",
+    "mode": "range",
+    "name": "أورنج مالي",
+    "name_en": "Orange Mali",
+    "approximate": false,
+    "popular_amount": null,
+    "amount_currency": "XOF",
+    "receive_currency": "XOF",
+    "amounts": [
+     {
+      "amount": "2000",
+      "receive": "2000",
+      "receive_currency": "XOF",
+      "price": "38.75",
+      "exceeds_float": false,
+      "cost": "37.45"
+     },
+     {
+      "amount": "5000",
+      "receive": "5000",
+      "receive_currency": "XOF",
+      "price": "97.00",
+      "exceeds_float": false,
+      "cost": "93.63"
+     },
+     {
+      "amount": "10000",
+      "receive": "10000",
+      "receive_currency": "XOF",
+      "price": "193.75",
+      "exceeds_float": false,
+      "cost": "187.25"
+     },
+     {
+      "amount": "20000",
+      "receive": "20000",
+      "receive_currency": "XOF",
+      "price": "387.50",
+      "exceeds_float": false,
+      "cost": "374.50"
+     }
+    ]
+   },
+   {
+    "id": 684,
+    "max": "100000",
+    "min": "100",
+    "logo": "https://s3.amazonaws.com/rld-operator/dc92eb39-23e9-4604-807a-6b63a80ba92d-size-1.png",
+    "mode": "range",
+    "name": "تيليسل مالي",
+    "name_en": "Telecel Mali",
+    "approximate": false,
+    "popular_amount": null,
+    "amount_currency": "XOF",
+    "receive_currency": "XOF",
+    "amounts": [
+     {
+      "amount": "1000",
+      "receive": "1000",
+      "receive_currency": "XOF",
+      "price": "19.50",
+      "exceeds_float": false,
+      "cost": "18.71"
+     },
+     {
+      "amount": "2000",
+      "receive": "2000",
+      "receive_currency": "XOF",
+      "price": "38.75",
+      "exceeds_float": false,
+      "cost": "37.42"
+     },
+     {
+      "amount": "5000",
+      "receive": "5000",
+      "receive_currency": "XOF",
+      "price": "97.00",
+      "exceeds_float": false,
+      "cost": "93.55"
+     },
+     {
+      "amount": "10000",
+      "receive": "10000",
+      "receive_currency": "XOF",
+      "price": "193.75",
+      "exceeds_float": false,
+      "cost": "187.10"
+     },
+     {
+      "amount": "20000",
+      "receive": "20000",
+      "receive_currency": "XOF",
+      "price": "387.25",
+      "exceeds_float": false,
+      "cost": "374.19"
+     }
+    ]
+   },
+   {
+    "id": 631,
+    "max": "100000",
+    "min": "100",
+    "logo": "https://s3.amazonaws.com/rld-operator/4f5dde4a-ae29-407b-b4c6-3f187314fe19-size-3.png",
+    "mode": "range",
+    "name": "ماليتيل مالي",
+    "name_en": "Malitel Mali",
+    "approximate": false,
+    "popular_amount": null,
+    "amount_currency": "XOF",
+    "receive_currency": "XOF",
+    "amounts": [
+     {
+      "amount": "1000",
+      "receive": "1000",
+      "receive_currency": "XOF",
+      "price": "19.50",
+      "exceeds_float": false,
+      "cost": "18.71"
+     },
+     {
+      "amount": "2000",
+      "receive": "2000",
+      "receive_currency": "XOF",
+      "price": "38.75",
+      "exceeds_float": false,
+      "cost": "37.42"
+     },
+     {
+      "amount": "5000",
+      "receive": "5000",
+      "receive_currency": "XOF",
+      "price": "97.00",
+      "exceeds_float": false,
+      "cost": "93.55"
+     },
+     {
+      "amount": "10000",
+      "receive": "10000",
+      "receive_currency": "XOF",
+      "price": "193.75",
+      "exceeds_float": false,
+      "cost": "187.10"
+     },
+     {
+      "amount": "20000",
+      "receive": "20000",
+      "receive_currency": "XOF",
+      "price": "387.25",
+      "exceeds_float": false,
+      "cost": "374.19"
+     }
+    ]
+   }
+  ]
+ },
+ "bills": {
+  "billers": [
+   {
+    "id": 29,
+    "max": "310000",
+    "min": "1000",
+    "mode": "range",
+    "name": "Energie Du Mali (EDM)",
+    "type": "electricity",
+    "name_en": "Energie Du Mali (EDM)",
+    "service": "prepaid",
+    "suggested": [
+     {
+      "amount": "1000",
+      "price": "20.25",
+      "exceeds_float": false,
+      "cost": "19.49"
+     },
+     {
+      "amount": "2000",
+      "price": "40.50",
+      "exceeds_float": false,
+      "cost": "38.97"
+     },
+     {
+      "amount": "5000",
+      "price": "101.00",
+      "exceeds_float": false,
+      "cost": "97.42"
+     },
+     {
+      "amount": "10000",
+      "price": "201.75",
+      "exceeds_float": false,
+      "cost": "194.84"
+     },
+     {
+      "amount": "20000",
+      "price": "403.25",
+      "exceeds_float": false,
+      "cost": "389.68"
+     }
+    ],
+    "amount_currency": "XOF",
+    "requires_invoice": false
+   },
+   {
+    "id": 28,
+    "mode": "fixed",
+    "name": "StarTimes Mali",
+    "type": "tv",
+    "plans": [
+     {
+      "id": 39,
+      "amount": "400",
+      "description": "Smart (400/1JOUR)",
+      "description_en": "Smart (400/1JOUR)",
+      "price": "11.50",
+      "exceeds_float": false,
+      "cost": "10.91"
+     },
+     {
+      "id": 38,
+      "amount": "1500",
+      "description": "Smart (1500/7JOUR)",
+      "description_en": "Smart (1500/7JOUR)",
+      "price": "35.50",
+      "exceeds_float": false,
+      "cost": "34.09"
+     },
+     {
+      "id": 37,
+      "amount": "4500",
+      "description": "Smart (4500/30JOURS)",
+      "description_en": "Smart (4500/30JOURS)",
+      "price": "100.75",
+      "exceeds_float": false,
+      "cost": "97.31"
+     },
+     {
+      "id": 36,
+      "amount": "9000",
+      "description": "Smart (9000/60JOURS)",
+      "description_en": "Smart (9000/60JOURS)",
+      "price": "198.75",
+      "exceeds_float": false,
+      "cost": "192.14"
+     },
+     {
+      "id": 42,
+      "amount": "12000",
+      "description": "English (12000/30JOURS)",
+      "description_en": "English (12000/30JOURS)",
+      "price": "264.25",
+      "exceeds_float": false,
+      "cost": "255.35"
+     },
+     {
+      "id": 35,
+      "amount": "13500",
+      "description": "Smart (13500/90JOURS)",
+      "description_en": "Smart (13500/90JOURS)",
+      "price": "297.00",
+      "exceeds_float": false,
+      "cost": "286.96"
+     },
+     {
+      "id": 48,
+      "amount": "15000",
+      "description": "Max (15000/30JOURS)",
+      "description_en": "Max (15000/30JOURS)",
+      "price": "329.50",
+      "exceeds_float": false,
+      "cost": "318.57"
+     },
+     {
+      "id": 41,
+      "amount": "24000",
+      "description": "English (24000/60JOURS)",
+      "description_en": "English (24000/60JOURS)",
+      "price": "525.75",
+      "exceeds_float": false,
+      "cost": "508.23"
+     },
+     {
+      "id": 47,
+      "amount": "30000",
+      "description": "Max (30000/60JOURS)",
+      "description_en": "Max (30000/60JOURS)",
+      "price": "656.50",
+      "exceeds_float": false,
+      "cost": "634.66"
+     },
+     {
+      "id": 40,
+      "amount": "36000",
+      "description": "English (36000/90JOURS)",
+      "description_en": "English (36000/90JOURS)",
+      "price": "787.25",
+      "exceeds_float": false,
+      "cost": "761.10"
+     },
+     {
+      "id": 46,
+      "amount": "45000",
+      "description": "Max (45000/90JOURS)",
+      "description_en": "Max (45000/90JOURS)",
+      "price": "983.50",
+      "exceeds_float": false,
+      "cost": "950.76"
+     }
+    ],
+    "name_en": "StarTimes Mali",
+    "service": "prepaid",
+    "amount_currency": "XOF",
+    "requires_invoice": false
+   },
+   {
+    "id": 27,
+    "mode": "fixed",
+    "name": "كانال بلس مالي",
+    "type": "tv",
+    "plans": [
+     {
+      "id": 3,
+      "amount": "10000",
+      "description": "كانال بلس أكسيس إنجليش بيسك – شهر",
+      "description_en": "Canalplus Acces English Basic (10000/1MOIS)",
+      "price": "220.75",
+      "exceeds_float": false,
+      "cost": "213.21"
+     },
+     {
+      "id": 9,
+      "amount": "15000",
+      "description": "كانال بلس إيفازيون إنجليش بيسك – شهر",
+      "description_en": "Canalplus Evasion English Basic (15000/1MOIS)",
+      "price": "329.50",
+      "exceeds_float": false,
+      "cost": "318.57"
+     },
+     {
+      "id": 5,
+      "amount": "18000",
+      "description": "كانال بلس أكسيس إنجليش بلس – شهر",
+      "description_en": "Canalplus Acces English Plus (18000/1MOIS)",
+      "price": "395.00",
+      "exceeds_float": false,
+      "cost": "381.79"
+     },
+     {
+      "id": 21,
+      "amount": "20000",
+      "description": "كانال بلس أكسيس بلس إنجليش بيسك – شهر",
+      "description_en": "Canalplus Access + English Basic (20000/1MOIS)",
+      "price": "438.50",
+      "exceeds_float": false,
+      "cost": "423.94"
+     },
+     {
+      "id": 11,
+      "amount": "23000",
+      "description": "كانال بلس إيفازيون إنجليش بلس – شهر",
+      "description_en": "Canalplus Evasion English Plus (23000/1MOIS)",
+      "price": "504.00",
+      "exceeds_float": false,
+      "cost": "487.15"
+     },
+     {
+      "id": 27,
+      "amount": "25000",
+      "description": "كانال بلس إيفازيون بلس إنجليش بيسك – شهر",
+      "description_en": "Canalplus Evasion + English Basic (25000/1MOIS)",
+      "price": "547.50",
+      "exceeds_float": false,
+      "cost": "529.30"
+     },
+     {
+      "id": 17,
+      "amount": "26000",
+      "description": "كانال بلس إيسنسيال بلس إنجليش بلس – شهر",
+      "description_en": "Canalplus Essentiel + English Plus (26000/1MOIS)",
+      "price": "569.50",
+      "exceeds_float": false,
+      "cost": "550.37"
+     },
+     {
+      "id": 23,
+      "amount": "28000",
+      "description": "كانال بلس أكسيس بلس إنجليش بلس – شهر",
+      "description_en": "Canalplus Access + English Plus (28000/1MOIS)",
+      "price": "613.00",
+      "exceeds_float": false,
+      "cost": "592.52"
+     },
+     {
+      "id": 4,
+      "amount": "30000",
+      "description": "كانال بلس أكسيس إنجليش بيسك – 3 أشهر",
+      "description_en": "Canalplus Acces English Basic (30000/3MOIS)",
+      "price": "656.50",
+      "exceeds_float": false,
+      "cost": "634.66"
+     },
+     {
+      "id": 10,
+      "amount": "45000",
+      "description": "كانال بلس إيفازيون إنجليش بيسك – 3 أشهر",
+      "description_en": "Canalplus Evasion English Basic (45000/3MOIS)",
+      "price": "983.50",
+      "exceeds_float": false,
+      "cost": "950.76"
+     },
+     {
+      "id": 33,
+      "amount": "53000",
+      "description": "تو كانال بلس إنجليش بلس – شهر",
+      "description_en": "Tout Canalplus English Plus (53000/1MOIS)",
+      "price": "1157.75",
+      "exceeds_float": false,
+      "cost": "1119.34"
+     },
+     {
+      "id": 6,
+      "amount": "54000",
+      "description": "كانال بلس أكسيس إنجليش بلس – 3 أشهر",
+      "description_en": "Canalplus Acces English Plus (54000/3MOIS)",
+      "price": "1179.75",
+      "exceeds_float": false,
+      "cost": "1140.41"
+     },
+     {
+      "id": 22,
+      "amount": "60000",
+      "description": "كانال بلس أكسيس بلس إنجليش بيسك – 3 أشهر",
+      "description_en": "Canalplus Access + English Basic (60000/3MOIS)",
+      "price": "1310.50",
+      "exceeds_float": false,
+      "cost": "1266.85"
+     },
+     {
+      "id": 12,
+      "amount": "69000",
+      "description": "كانال بلس إيفازيون إنجليش بلس – 3 أشهر",
+      "description_en": "Canalplus Evasion English Plus (69000/3MOIS)",
+      "price": "1506.50",
+      "exceeds_float": false,
+      "cost": "1456.50"
+     },
+     {
+      "id": 28,
+      "amount": "75000",
+      "description": "كانال بلس إيفازيون بلس إنجليش بيسك – 3 أشهر",
+      "description_en": "Canalplus Evasion + English Basic (75000/3MOIS)",
+      "price": "1637.25",
+      "exceeds_float": false,
+      "cost": "1582.94"
+     },
+     {
+      "id": 18,
+      "amount": "78000",
+      "description": "كانال بلس إيسنسيال بلس إنجليش بلس – 3 أشهر",
+      "description_en": "Canalplus Essentiel + English Plus (78000/3MOIS)",
+      "price": "1702.75",
+      "exceeds_float": false,
+      "cost": "1646.16"
+     },
+     {
+      "id": 24,
+      "amount": "84000",
+      "description": "كانال بلس أكسيس بلس إنجليش بلس – 3 أشهر",
+      "description_en": "Canalplus Access + English Plus (84000/3MOIS)",
+      "price": "1833.50",
+      "exceeds_float": false,
+      "cost": "1772.59"
+     },
+     {
+      "id": 30,
+      "amount": "99000",
+      "description": "كانال بلس إيفازيون بلس إنجليش بلس – 3 أشهر",
+      "description_en": "Canalplus Evasion + English Plus (99000/3MOIS)",
+      "price": "2160.50",
+      "exceeds_float": false,
+      "cost": "2088.68"
+     },
+     {
+      "id": 32,
+      "amount": "135000",
+      "description": "تو كانال بلس إنجليش بيسك – 3 أشهر",
+      "description_en": "Tout Canalplus English Basic (135000/3MOIS)",
+      "price": "2945.25",
+      "exceeds_float": false,
+      "cost": "2847.30"
+     },
+     {
+      "id": 34,
+      "amount": "159000",
+      "description": "تو كانال بلس إنجليش بلس – 3 أشهر",
+      "description_en": "Tout Canalplus English Plus (159000/3MOIS)",
+      "price": "3468.25",
+      "exceeds_float": false,
+      "cost": "3353.05"
+     }
+    ],
+    "name_en": "Canal+ Mali",
+    "service": "prepaid",
+    "amount_currency": "XOF",
+    "requires_invoice": false
+   }
+  ]
+ }
+}

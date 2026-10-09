@@ -1,0 +1,21 @@
+{
+ "results": [
+  {
+   "fulfillment": 30,
+   "order_line": 30,
+   "provider": "pointy",
+   "kind": "airtime",
+   "subscriber_ref": "+223•••••456",
+   "option_label": "أورنج مالي · 2,000 فرنك أفريقي",
+   "outcome": "refused",
+   "status": "pending",
+   "needs_attention": false,
+   "error_code": "unreachable",
+   "error_detail": "relay control request failed: [Errno 61] Connection refused",
+   "provider_reference": "",
+   "balance_after": null,
+   "receipt": {}
+  }
+ ],
+ "balance": 540.98
+}

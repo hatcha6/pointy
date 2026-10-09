@@ -1,0 +1,16 @@
+{
+ "ok": true,
+ "kind": "bill",
+ "option_code": "bill:24:1000:XOF::2024-•••833",
+ "option_label": "فاتورة مياه السنغال (سين إيو) · 1,000 فرنك أفريقي",
+ "subscriber_ref": "•••••456",
+ "price": "24.50",
+ "receive": {
+  "amount": "1000",
+  "currency": "XOF"
+ },
+ "approximate": false,
+ "quote": "<base64/opaque, 524 chars>",
+ "service_variant_id": 2,
+ "exceeds_float": false
+}

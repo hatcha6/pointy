@@ -679,6 +679,29 @@ CELERY_BEAT_SCHEDULE = {
         "task": "integrations.sync_voucher_catalogs",
         "schedule": crontab(minute=10, hour="*/6"),
     },
+    # Every five minutes: the company's own shelf («كروت دفتر») from the relay
+    # — our categories, order, promotions and the wholesaler's stock. One
+    # conditional read (ETag); an unchanged shelf answers 304 and writes
+    # nothing, so the tills' catalogs stay warm between real changes.
+    "integrations.sync-relay-vouchers": {
+        "task": "integrations.sync_relay_vouchers",
+        "schedule": timedelta(minutes=5),
+    },
+    # Every five minutes: the company's direct top-up and bill-payment directory
+    # (countries, networks, billers and their prices) from the relay — the same
+    # one conditional read as the shelf above, its own lock. The till's service
+    # screens read this copy and never wait on the relay.
+    "integrations.sync-relay-services": {
+        "task": "integrations.sync_relay_services",
+        "schedule": timedelta(minutes=5),
+    },
+    # Every two minutes: a «كروت دفتر» purchase whose answer was lost is read
+    # back from the relay by its key and settled — the customer who paid is
+    # waiting on the card's code. One query when nothing is unsettled.
+    "integrations.settle-relay-vouchers": {
+        "task": "integrations.settle_relay_vouchers",
+        "schedule": timedelta(minutes=2),
+    },
     # Half-hourly: mirror each provider's account-wide payments report (LNET).
     # It prints ten rows a page over the agency's whole life, so read live it
     # only ever showed the last day — this is what a line's history at the

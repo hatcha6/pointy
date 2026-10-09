@@ -28,6 +28,7 @@ from . import catalog
 from . import payment_report
 from . import quotes
 from . import recharge
+from . import relay_link
 from . import switches
 from .models import IntegrationAccount, IntegrationFulfillment, IntegrationSearch
 from .providers import provider_for
@@ -147,7 +148,10 @@ class IntegrationAccountView(APIView):
         # only be a credential sitting in the database doing nothing.
         if not spec.is_available:
             return Response(
-                {"detail": "provider not available", "blocked_reason": spec.blocked_reason},
+                {
+                    "detail": "provider not available",
+                    "blocked_reason": spec.blocked_reason,
+                },
                 status=status.HTTP_409_CONFLICT,
             )
         # Switched off for the fleet: nothing is connected to it until it is
@@ -162,8 +166,27 @@ class IntegrationAccountView(APIView):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
+        # The company's own provider has no credential but the relay link: a
+        # shop that is not linked cannot switch it on (switching it off, or
+        # changing a setting of a switched-off one, is always allowed).
+        if spec.relay_hosted and relay_link.current() is None:
+            existing = IntegrationAccount.objects.filter(provider=provider).first()
+            stays_on = existing.is_active if existing is not None else True
+            if data.get("is_active", stays_on):
+                return Response(
+                    {
+                        "detail": "this shop is not linked to the relay",
+                        "error_code": ERROR_NOT_CONFIGURED,
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+
         account, _ = IntegrationAccount.objects.get_or_create(provider=provider)
-        previous_login = (account.username, account.password, account.resolved_base_url())
+        previous_login = (
+            account.username,
+            account.password,
+            account.resolved_base_url(),
+        )
         if "base_url" in data:
             account.base_url = data["base_url"].strip()
         if "username" in data:
@@ -180,7 +203,11 @@ class IntegrationAccountView(APIView):
                 account.set_secret(field, value)
         # A login a driver kept (Qareeb's bearer token) belongs to the
         # credentials that made it. New ones make it somebody else's.
-        if (account.username, account.password, account.resolved_base_url()) != previous_login:
+        if (
+            account.username,
+            account.password,
+            account.resolved_base_url(),
+        ) != previous_login:
             account.forget_session()
 
         # Settings are the shop's commercial arrangement, not credentials, so
@@ -189,9 +216,7 @@ class IntegrationAccountView(APIView):
         # margin on every sale until somebody noticed in a profit report.
         rejected = _apply_settings(account, spec, data.get("settings") or {})
         if rejected:
-            return Response(
-                {"settings": rejected}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"settings": rejected}, status=status.HTTP_400_BAD_REQUEST)
         account.save()
         _after_account_change(account)
 
@@ -543,9 +568,7 @@ class IntegrationCardView(APIView):
                         account,
                         prices=prices,
                         with_cost=with_cost,
-                        quote=_sealed_quote(
-                            driver, account, resolved_card_no, option
-                        ),
+                        quote=_sealed_quote(driver, account, resolved_card_no, option),
                     )
                     for option in offers.options
                 ],
@@ -730,8 +753,7 @@ class IntegrationPricesView(APIView):
                 "markup_kind": account.markup_kind,
                 "markup_value": account.markup_value,
                 "options": [
-                    option_price_payload(row)
-                    for row in account.option_prices.all()
+                    option_price_payload(row) for row in account.option_prices.all()
                 ],
             }
         )
@@ -821,6 +843,17 @@ class IntegrationFloatView(APIView):
             )
         if account is None:
             return Response({"detail": "provider not configured"}, status=409)
+        if account.spec.relay_hosted:
+            # Filled only by moving money in from the Daftar wallet, which
+            # books the move itself (``apps.wallet.books``). A top-up written
+            # here as well would count the same money into the float twice.
+            return Response(
+                {
+                    "detail": "this float is filled from the wallet",
+                    "error_code": "filled_from_wallet",
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
 
         serializer = TopUpWriteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -953,7 +986,15 @@ class IntegrationChargeView(APIView):
         if error:
             return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
 
-        results = [charge_payload(recharge.charge(row.pk, user=request.user)) for row in rows]
+        # A refusal's detail can name what the provider charges the shop: only
+        # for a reader who may see cost (``serializers.charge_payload``).
+        with_cost = user_has_full_visibility(request.user)
+        results = [
+            charge_payload(
+                recharge.charge(row.pk, user=request.user), with_cost=with_cost
+            )
+            for row in rows
+        ]
         accounts = {row.account_id for row in rows}
         balance = None
         if len(accounts) == 1:
@@ -983,8 +1024,10 @@ def _verifiable_account(provider: str):
     """``(account, spec, response)`` — the account a verification step acts on."""
     spec = catalog.spec_for(provider)
     if spec is None:
-        return None, None, Response(
-            {"detail": "unknown provider"}, status=status.HTTP_404_NOT_FOUND
+        return (
+            None,
+            None,
+            Response({"detail": "unknown provider"}, status=status.HTTP_404_NOT_FOUND),
         )
     if switches.is_switched_off(provider):
         return None, spec, Response({"ok": False, "error_code": ERROR_SWITCHED_OFF})
@@ -1107,8 +1150,12 @@ class IntegrationProfilesView(APIView):
     def _account(self, provider: str):
         spec = catalog.spec_for(provider)
         if spec is None:
-            return None, None, Response(
-                {"detail": "unknown provider"}, status=status.HTTP_404_NOT_FOUND
+            return (
+                None,
+                None,
+                Response(
+                    {"detail": "unknown provider"}, status=status.HTTP_404_NOT_FOUND
+                ),
             )
         if catalog.CAPABILITY_PROFILES not in spec.capabilities:
             return None, spec, Response({"ok": False, "error_code": ERROR_UNAVAILABLE})
@@ -1116,7 +1163,11 @@ class IntegrationProfilesView(APIView):
             return None, spec, Response({"ok": False, "error_code": ERROR_SWITCHED_OFF})
         account = IntegrationAccount.objects.filter(provider=provider).first()
         if account is None or not account.is_configured:
-            return None, spec, Response({"ok": False, "error_code": ERROR_NOT_CONFIGURED})
+            return (
+                None,
+                spec,
+                Response({"ok": False, "error_code": ERROR_NOT_CONFIGURED}),
+            )
         return account, spec, None
 
     def get(self, request, provider: str):
@@ -1132,7 +1183,8 @@ class IntegrationProfilesView(APIView):
                 "error_detail": result.error_detail,
                 "chosen": chosen,
                 "profiles": [
-                    profile_payload(profile, chosen=chosen) for profile in result.profiles
+                    profile_payload(profile, chosen=chosen)
+                    for profile in result.profiles
                 ],
             }
         )
@@ -1156,7 +1208,11 @@ class IntegrationProfilesView(APIView):
                     }
                 )
             match = next(
-                (profile for profile in result.profiles if profile.profile_id == chosen),
+                (
+                    profile
+                    for profile in result.profiles
+                    if profile.profile_id == chosen
+                ),
                 None,
             )
             if match is None:
@@ -1174,6 +1230,26 @@ class IntegrationProfilesView(APIView):
         # login is acting as another one.
         probe_account(account)
         return Response({"ok": True, "provider": _provider_payload(spec)})
+
+
+# --- the till's «كروت دفتر» menu ---------------------------------------------------
+class IntegrationVoucherMenuView(APIView):
+    """The company's own cards, as the till's voucher menu shows them.
+
+    Read from the shop's mirror of the shelf, so opening it never waits on the
+    relay (see :mod:`.voucher_menu`). Till work: ``use_integrations``, with the
+    cards' cost only for the reporting roles.
+    """
+
+    permission_classes = [IsAuthenticated, HasPointyPermission]
+    permission_map = {"GET": USE}
+
+    def get(self, request):
+        from .voucher_menu import menu_payload
+
+        return Response(
+            menu_payload(request, with_cost=user_has_full_visibility(request.user))
+        )
 
 
 # --- the till's "is this card still in stock?" ------------------------------------

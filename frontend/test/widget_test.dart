@@ -3785,7 +3785,7 @@ void main() {
       scrollable: summaryScrollable,
     );
     expect(find.text('ملخص النقد'), findsOneWidget);
-    expect(find.text('فرق -0.25 د.ل'), findsWidgets);
+    expect(find.text('عجز 0.25 د.ل'), findsWidgets);
 
     await tester.tap(_tabText('المبيعات'));
     await tester.pumpAndSettle(const Duration(seconds: 1));

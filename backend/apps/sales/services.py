@@ -27,7 +27,7 @@ from apps.discounts.services import (
     persist_applied_discounts,
 )
 from apps.catalog.services import preload_line_variants
-from apps.integrations.fulfillment import persist_fulfillment
+from apps.integrations.fulfillment import cancel_unperformed, persist_fulfillment
 from apps.catalog.units import quantize_quantity
 from apps.inventory import tracking
 from apps.inventory.models import StockLedgerEntry, StockMovement, StockUnit
@@ -788,6 +788,14 @@ def checkout_loss_lines(
                 max((unit.stock_value for unit in named), default=Decimal("0.00"))
                 * unit_factor
             )
+        # A top-up, a bill payment or a provider's card costs what the provider
+        # quoted for THIS line (the cost the sale will record as the line's
+        # ``unit_cost``), never what the warehouse thinks the service product is
+        # worth, which is nothing: left to the warehouse this guard is blind to
+        # every provider line, and the preview that warns the cashier with it.
+        integration = line_data.get("integration")
+        if integration and integration.get("cost") is not None:
+            unit_cost = money(integration["cost"])
         if quantity <= 0 or unit_cost <= 0:
             continue
 
@@ -1085,31 +1093,76 @@ def validate_quotation_sells_no_provider_work(lines_data):
         )
 
 
-def validate_voucher_lines(lines_data):
-    """A provider card is sold one to a line, and only while the provider has it.
+def integration_quantity_problems(lines_data):
+    """The lines of provider work that are not exactly one of the base unit.
 
-    One to a line because one line is one purchase from the provider, with one
-    PIN on the receipt beneath it and one at-most-once guard around it. Only
-    while listed because a card the provider no longer has would be paid for
-    here and fail behind the customer's back; the till hides it within
-    minutes, and this catches the sale rung up in those minutes.
+    One line is one order to the provider, whatever its quantity says:
+    ``persist_fulfillment`` writes ONE fulfillment per line and the provider is
+    sent ONE top-up, bill payment or card. A quantity of 2 therefore bills the
+    customer twice for one top-up, and 0.001 charges a thousandth of a price
+    the shop pays in full — so a line that carries provider work is sold one,
+    in its base unit, or not at all. A card's refusal keeps its own code.
     """
     problems = []
     for line_data in lines_data:
-        resolved = line_data.get("integration") or {}
-        voucher = resolved.get("voucher")
-        if voucher is None:
+        resolved = line_data.get("integration")
+        if not resolved:
+            continue
+        one = Decimal(line_data.get("quantity") or 0) == 1
+        base_unit = Decimal(line_data.get("unit_factor", 1)) == 1
+        if one and base_unit:
             continue
         variant = line_data["variant"]
-        if Decimal(line_data.get("quantity") or 0) != 1:
-            problems.append(
-                {
-                    "variant_id": variant.pk,
-                    "product_name": variant.product.name,
-                    "code": "voucher_quantity",
-                }
-            )
-        elif not (voucher.is_available and voucher.brand.is_listed):
+        problems.append(
+            {
+                "variant_id": variant.pk,
+                "product_name": variant.product.name,
+                "code": (
+                    "voucher_quantity"
+                    if resolved.get("voucher") is not None
+                    else "integration_quantity"
+                ),
+            }
+        )
+    return problems
+
+
+def validate_integration_line_quantities(lines_data):
+    """Refuse a cart whose provider lines are not one each (see
+    :func:`integration_quantity_problems`). The discount preview refuses the
+    same lines as the checkout does, so a till is told as it rings them up."""
+    problems = integration_quantity_problems(lines_data)
+    if problems:
+        raise serializers.ValidationError(
+            {
+                "detail": (
+                    "A top-up, a bill payment or a provider card is sold "
+                    "one to a line."
+                ),
+                "code": problems[0]["code"],
+                "variants": problems,
+            }
+        )
+
+
+def validate_voucher_lines(lines_data):
+    """Provider work is sold one to a line, and a card only while the provider has it.
+
+    One to a line because one line is one purchase from the provider, with one
+    PIN or receipt on the slip beneath it and one at-most-once guard around it
+    (:func:`integration_quantity_problems`). A card only while listed because
+    one the provider no longer has would be paid for here and fail behind the
+    customer's back; the till hides it within minutes, and this catches the
+    sale rung up in those minutes.
+    """
+    problems = integration_quantity_problems(lines_data)
+    refused = {problem["variant_id"] for problem in problems}
+    for line_data in lines_data:
+        voucher = (line_data.get("integration") or {}).get("voucher")
+        variant = line_data["variant"]
+        if voucher is None or variant.pk in refused:
+            continue
+        if not (voucher.is_available and voucher.brand.is_listed):
             problems.append(
                 {
                     "variant_id": variant.pk,
@@ -1121,8 +1174,9 @@ def validate_voucher_lines(lines_data):
         raise serializers.ValidationError(
             {
                 "detail": (
-                    "A provider card is sold one to a line, and only while "
-                    "the provider has it in stock."
+                    "A top-up, a bill payment or a provider card is sold "
+                    "one to a line, and a card only while the provider has "
+                    "it in stock."
                 ),
                 "code": problems[0]["code"],
                 "variants": problems,
@@ -2641,7 +2695,16 @@ def create_order_adjustment(
         created_by=created_by,
     )
 
+    given_back_in_full = []
     for line, quantity in lines:
+        # Asked before this adjustment's own row is written: what the line could
+        # still give back, as of the lock the caller holds on it. Only a service
+        # line can owe a provider anything (every provider product is one), so a
+        # sale of goods costs this no query at all.
+        if line.variant.product.is_service and Decimal(str(quantity)) >= Decimal(
+            str(line.returnable_quantity)
+        ):
+            given_back_in_full.append(line.pk)
         discount_total = line_refund_discount(line, quantity)
         OrderAdjustmentLine.objects.create(
             adjustment=adjustment,
@@ -2651,6 +2714,13 @@ def create_order_adjustment(
             unit_price=line.unit_price,
             discount_total=discount_total,
         )
+        if line.variant.product.is_service:
+            # Labor, fees, a top-up, a bill, a provider's card: nothing was taken
+            # off a shelf, so nothing goes back onto one — the sale side skips them
+            # the same way (``prepare_sale_stock_adjustments``). Booked back at the
+            # line's cost, a voided 5,000 francs top-up valued the ONE variant every
+            # top-up shares at 93.63, and the next, cheaper one read as sold at a loss.
+            continue
         # A serialized line returns *that* article — the handset with that IMEI,
         # not "one of those" — which is also what stops the same one being
         # returned twice (§6.4).
@@ -2668,6 +2738,10 @@ def create_order_adjustment(
             created_by=created_by,
             tracked_plan=tracked_plan,
         )
+    # A top-up, bill payment or card the provider has not been sent for owes
+    # nothing now that the customer has their money back: it must not stay
+    # chargeable, alarming or counted against the float.
+    cancel_unperformed(given_back_in_full)
 
     # One negative payment per original tender so each method's ledger and the
     # cash drawer are reduced by exactly their share of the refund — and, when

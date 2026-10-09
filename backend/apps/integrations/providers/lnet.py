@@ -854,7 +854,9 @@ class LnetProvider(IntegrationProvider):
         )
 
     # --- the write path ----------------------------------------------------
-    def recharge(self, card_no: str, option_code: str, *, expected_cost=None):
+    def recharge(
+        self, card_no: str, option_code: str, *, expected_cost=None, attempt_key: str = ""
+    ):
         """Pay money onto a line. Spends the agency float.
 
         Two writes, and the boundary between them is the whole risk. Step one

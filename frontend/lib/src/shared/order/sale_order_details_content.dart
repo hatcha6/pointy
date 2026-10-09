@@ -1000,7 +1000,15 @@ class _RechargeDetails extends StatelessWidget {
     final facts = <String>[
       // A card off a shelf has no card number of its own; its PIN is below.
       if (recharge.subscriberRef.isNotEmpty)
-        l10n.invoiceRechargeCard(ltrIsolated(recharge.subscriberRef)),
+        recharge.isDirectService
+            ? (recharge.kind == 'airtime'
+                  ? l10n.posServicesInvoiceAirtimeTarget(
+                      ltrIsolated(recharge.subscriberRef),
+                    )
+                  : l10n.posServicesInvoiceBillTarget(
+                      ltrIsolated(recharge.subscriberRef),
+                    ))
+            : l10n.invoiceRechargeCard(ltrIsolated(recharge.subscriberRef)),
       if (recharge.subscriberLabel.isNotEmpty)
         l10n.invoiceRechargeFor(recharge.subscriberLabel),
       if (recharge.optionLabel.isNotEmpty) recharge.optionLabel,
@@ -1061,6 +1069,34 @@ class _RechargeDetails extends StatelessWidget {
               style: theme.textTheme.bodySmall?.copyWith(
                 color: colors.mutedInk,
               ),
+            ),
+          ],
+          // A prepaid meter's token, selectable, for the customer who comes
+          // back having lost the receipt it was printed on.
+          if (recharge.isDirectService &&
+              recharge.isConfirmed &&
+              (receipt['pin'] ?? '').trim().isNotEmpty) ...[
+            const SizedBox(height: 4),
+            // The label, then the token: side by side when they fit, the token
+            // on a line of its own when they do not — and always whole.
+            Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text(
+                  '${(receipt['pin_label'] ?? '').trim().isNotEmpty ? receipt['pin_label']!.trim() : l10n.posServicesInvoiceToken}: ',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colors.mutedInk,
+                  ),
+                ),
+                PointyFittedToken(
+                  code: receipt['pin']!.trim(),
+                  style: (theme.textTheme.titleSmall ?? const TextStyle())
+                      .copyWith(
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.5,
+                      ),
+                ),
+              ],
             ),
           ],
           // A card's PIN, selectable, for the customer who comes back having

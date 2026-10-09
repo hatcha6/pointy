@@ -1,9 +1,11 @@
 import base64
 import hashlib
+import http.client
 import json
 import logging
 import ssl
 import time
+import uuid
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone as datetime_timezone
 from decimal import Decimal, InvalidOperation
@@ -24,10 +26,43 @@ logger = logging.getLogger(__name__)
 
 
 class RelayControlError(RuntimeError):
-    def __init__(self, message, *, status_code=None, body=None):
+    def __init__(self, message, *, status_code=None, body=None, request_sent=None):
         super().__init__(message)
         self.status_code = status_code
         self.body = body
+        # Only said by the calls that need to know (a voucher purchase spends
+        # money): ``False`` — the request never reached the relay, so nothing
+        # happened; ``True`` — it was sent and no answer could be read, so
+        # anything may have happened. ``None`` everywhere else.
+        self.request_sent = request_sent
+
+
+@dataclass(frozen=True)
+class RelayAnswer:
+    """One relay response as it came: status, headers, body.
+
+    For the calls whose status means more than "it worked" — a ``304`` that
+    says nothing changed, a ``202`` that says the outcome is not known yet —
+    and whose headers matter (an ``ETag``).
+    """
+
+    status: int
+    headers: dict
+    body: bytes
+
+    def header(self, name):
+        return self.headers.get(name.lower(), "")
+
+    def json(self):
+        """The body as JSON; raises ``RelayControlError`` when it is not."""
+        if not self.body:
+            return {}
+        try:
+            return json.loads(self.body.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise RelayControlError(
+                "relay control returned invalid JSON", status_code=self.status
+            ) from exc
 
 
 # --- relay transport cooldown -------------------------------------------------
@@ -427,6 +462,48 @@ class RelayControlClient:
             "POST", "/v1/wallet/topups", body=body, relay_token=access_token, timeout=timeout
         )
 
+    def create_wallet_bank_transfer(
+        self,
+        *,
+        access_token,
+        fields,
+        receipt,
+        receipt_name,
+        receipt_type,
+        timeout=None,
+    ):
+        """Send a bank transfer the shop made to the company's account, with its
+        receipt. The relay keeps it for an operator to find on the company's
+        statement; nothing is credited until they do. ``fields`` are the form's
+        text fields (amount, idempotency_key, channel, the payer's bank,
+        account and IBAN); the same key returns the same top-up on a retry."""
+        boundary = f"pointy-{uuid.uuid4().hex}"
+        parts = []
+        for name, value in fields.items():
+            parts.append(
+                f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n'.encode()
+                + str(value).encode("utf-8")
+                + b"\r\n"
+            )
+        safe_name = "".join(ch for ch in str(receipt_name) if ch.isascii() and ch not in '"\\\r\n') or "receipt"
+        parts.append(
+            (
+                f'--{boundary}\r\nContent-Disposition: form-data; name="receipt"; filename="{safe_name}"\r\n'
+                f"Content-Type: {receipt_type}\r\n\r\n"
+            ).encode()
+            + receipt
+            + b"\r\n"
+        )
+        parts.append(f"--{boundary}--\r\n".encode())
+        return self._request(
+            "POST",
+            "/v1/wallet/topups/bank-transfer",
+            raw_body=b"".join(parts),
+            content_type=f"multipart/form-data; boundary={boundary}",
+            relay_token=access_token,
+            timeout=timeout,
+        )
+
     def get_wallet_topup(self, *, access_token, topup_id, timeout=None):
         """One top-up — what the app polls while the payer pays. For a bank card
         the relay reads the payment back from the gateway on the way."""
@@ -475,6 +552,190 @@ class RelayControlClient:
             relay_token=access_token,
             timeout=timeout,
         )
+
+    def allocate_wallet_vouchers(
+        self, *, access_token, amount, idempotency_key, requested_by="", timeout=None
+    ):
+        """Move money from the main wallet into the voucher balance, which every
+        «كروت دفتر» card is paid from. Both sides move in one step on the relay,
+        and a retried key returns the first transfer — like the SMS balance."""
+        return self._request(
+            "POST",
+            "/v1/wallet/vouchers/allocations",
+            body={
+                "amount": str(amount),
+                "idempotency_key": idempotency_key,
+                "requested_by": requested_by,
+            },
+            relay_token=access_token,
+            timeout=timeout,
+        )
+
+    # --- the company's voucher shop («كروت دفتر») ----------------------------
+    def get_voucher_catalog(self, *, access_token, etag="", timeout=None):
+        """The shelf the shop sells from: ``(payload, etag)``, or ``(None, etag)``
+        when ``etag`` still names the current edition (the relay's ``304``).
+
+        Conditional so the shop can ask every few minutes: an unchanged shelf
+        costs one small round trip and is never parsed or written again.
+        """
+        headers = {"If-None-Match": etag} if etag else None
+        answer = self._exchange(
+            "GET",
+            "/v1/vouchers/catalog",
+            relay_token=access_token,
+            headers=headers,
+            timeout=timeout,
+        )
+        if answer.status == 304:
+            return None, answer.header("ETag") or etag
+        return answer.json(), answer.header("ETag")
+
+    def get_voucher_image(self, *, access_token, digest, timeout=None, max_bytes=5 * 1024 * 1024):
+        """One catalog picture by its content hash: ``(bytes, content type)``.
+
+        ``digest`` is the bare hex, checked by the caller; it only ever names a
+        picture on the relay, never another address.
+        """
+        answer = self._exchange(
+            "GET",
+            f"/v1/vouchers/images/{quote(str(digest), safe='')}",
+            relay_token=access_token,
+            accept="*/*",
+            timeout=timeout,
+            max_bytes=max_bytes,
+        )
+        return answer.body, answer.header("Content-Type")
+
+    def create_voucher_purchase(
+        self,
+        *,
+        access_token,
+        item,
+        idempotency_key,
+        max_unit_price=None,
+        quantity=1,
+        requested_by="",
+        timeout=None,
+    ):
+        """Buy a card. Spends the shop's voucher balance: ``(status, payload)``.
+
+        Sent once and never retried here — not even on a timeout: the key makes
+        a replay safe on the relay's side, but whether to replay is the at-most-
+        once guard's decision (``apps.integrations.recharge``), never a
+        transport's. ``201``/``200`` answered, ``202`` not known yet; every
+        other status raises ``RelayControlError`` with the relay's body, and a
+        failure to get any answer says whether the request ever left
+        (``request_sent``).
+        """
+        body = {
+            "item": item,
+            "quantity": int(quantity),
+            "idempotency_key": idempotency_key,
+        }
+        if max_unit_price is not None:
+            body["max_unit_price"] = str(max_unit_price)
+        if requested_by:
+            body["requested_by"] = requested_by
+        answer = self._exchange(
+            "POST",
+            "/v1/vouchers/purchases",
+            body=body,
+            relay_token=access_token,
+            timeout=timeout,
+        )
+        return answer.status, answer.json()
+
+    def get_voucher_purchase(self, *, access_token, idempotency_key, timeout=None):
+        """A purchase read back by the key it was made under: ``{purchase,
+        balance}``. ``404`` (raised) means the relay never recorded it."""
+        answer = self._exchange(
+            "GET",
+            f"/v1/vouchers/purchases/{quote(str(idempotency_key), safe='')}",
+            relay_token=access_token,
+            timeout=timeout,
+        )
+        return answer.json()
+
+    # --- the company's direct top-up and bill payments (same shop, same balance) ----
+    def get_services_directory(
+        self, *, access_token, etag="", timeout=None, max_bytes=16 * 1024 * 1024
+    ):
+        """Every country with its operators and billers: ``(payload, etag)``, or
+        ``(None, etag)`` when ``etag`` still names the current edition (``304``).
+
+        Conditional like :meth:`get_voucher_catalog`, so the shop can ask every
+        few minutes and an unchanged directory is never parsed or written again.
+        The answer is bounded: it comes from the relay, but nothing on the wire
+        is allowed to be as big as memory.
+        """
+        headers = {"If-None-Match": etag} if etag else None
+        answer = self._exchange(
+            "GET",
+            "/v1/services/directory",
+            relay_token=access_token,
+            headers=headers,
+            timeout=timeout,
+            max_bytes=max_bytes,
+        )
+        if answer.status == 304:
+            return None, answer.header("ETag") or etag
+        return answer.json(), answer.header("ETag")
+
+    def post_service_detect(self, *, access_token, country, phone, timeout=None):
+        """The operator the relay detects for a phone number: the decoded answer.
+
+        Spends nothing, but a POST all the same: a customer's number belongs in
+        the body of a request, never in its address, where every access log
+        between here and the supplier would keep it. The relay's refusals
+        (``operator_not_detected``, ``invalid_phone``) are raised with their
+        status and body for the driver to word.
+        """
+        answer = self._exchange(
+            "POST",
+            "/v1/services/detect",
+            body={"country": country, "phone": phone},
+            relay_token=access_token,
+            timeout=timeout,
+        )
+        return answer.json()
+
+    def quote_service(self, *, access_token, payload, timeout=None):
+        """The exact price of one top-up or bill payment: the decoded answer.
+
+        Answered from the relay's own directory (no supplier is called), and it
+        charges nothing. A top-up's request may carry the number as typed
+        (``country`` and ``phone``); the answer then says how the relay read it
+        (``phone``: ``e164``, ``national``, ``country``), in the body of the
+        request and the answer and in no address.
+        """
+        answer = self._exchange(
+            "POST",
+            "/v1/services/quote",
+            body=payload,
+            relay_token=access_token,
+            timeout=timeout,
+        )
+        return answer.json()
+
+    def create_service_order(self, *, access_token, payload, timeout=None):
+        """Send a top-up or a bill payment. Spends the shop's voucher balance:
+        ``(status, payload)``.
+
+        Exactly :meth:`create_voucher_purchase`'s contract: sent once and never
+        retried here, ``201``/``200`` answered, ``202`` not known yet, every
+        other status raised with the relay's body, and a failure to get any
+        answer says whether the request ever left (``request_sent``) — the
+        difference between "nothing happened" and "anything may have".
+        """
+        answer = self._exchange(
+            "POST",
+            "/v1/services/orders",
+            body=payload,
+            relay_token=access_token,
+            timeout=timeout,
+        )
+        return answer.status, answer.json()
 
     def purchase_wallet_plan(
         self, *, access_token, plan, periods, idempotency_key, requested_by="", timeout=None
@@ -590,13 +851,26 @@ class RelayControlClient:
             raise RelayControlError(f"relay AI request failed: {exc.reason}") from exc
 
     def _request(
-        self, method, path, *, body=None, admin=False, relay_token="", enrollment_token="", timeout=None
+        self,
+        method,
+        path,
+        *,
+        body=None,
+        admin=False,
+        relay_token="",
+        enrollment_token="",
+        timeout=None,
+        raw_body=None,
+        content_type="",
     ):
         data = None
         headers = {"Accept": "application/json"}
         if body is not None:
             data = json.dumps(body).encode("utf-8")
             headers["Content-Type"] = "application/json"
+        elif raw_body is not None:
+            data = raw_body
+            headers["Content-Type"] = content_type
         if admin:
             headers["Authorization"] = f"Bearer {self.config.admin_token}"
         if relay_token:
@@ -641,6 +915,82 @@ class RelayControlClient:
         except json.JSONDecodeError as exc:
             raise RelayControlError("relay control returned invalid JSON") from exc
 
+    def _exchange(
+        self,
+        method,
+        path,
+        *,
+        body=None,
+        relay_token="",
+        headers=None,
+        accept="application/json",
+        timeout=None,
+        max_bytes=None,
+    ):
+        """One request, answered as a :class:`RelayAnswer` (2xx and ``304``).
+
+        Unlike ``_request`` it tells the two transport failures apart, because
+        for a purchase they are opposite facts. ``urlopen`` raises ``URLError``
+        only while it connects and sends — the relay never received the whole
+        request, so nothing was done (``request_sent=False``). A failure once
+        the request is out (no answer before the timeout, a dropped
+        connection, a cut-off body) surfaces raw, and then anything may have
+        happened (``request_sent=True``).
+        """
+        data = None
+        request_headers = {"Accept": accept}
+        if body is not None:
+            data = json.dumps(body).encode("utf-8")
+            request_headers["Content-Type"] = "application/json"
+        if relay_token:
+            request_headers["X-Pointy-Relay-Token"] = relay_token
+        request_headers.update(headers or {})
+
+        url = urljoin(self.config.control_url.rstrip("/") + "/", path.lstrip("/"))
+        http_request = request.Request(url, data=data, headers=request_headers, method=method)
+        try:
+            with request.urlopen(
+                http_request,
+                timeout=timeout or self.config.timeout_seconds,
+                context=self._ssl_context,
+            ) as response:
+                content = response.read() if max_bytes is None else response.read(max_bytes + 1)
+                status_code = response.status
+                answer_headers = {key.lower(): value for key, value in response.headers.items()}
+        except error.HTTPError as exc:
+            if exc.code == 304:
+                clear_relay_transport_cooldown()
+                return RelayAnswer(
+                    status=304,
+                    headers={key.lower(): value for key, value in (exc.headers or {}).items()},
+                    body=b"",
+                )
+            # Answered: the transport is fine, only the request was refused.
+            detail = exc.read().decode("utf-8", errors="replace")
+            raise RelayControlError(
+                f"relay control returned {exc.code}: {detail}",
+                status_code=exc.code,
+                body=detail,
+                request_sent=True,
+            ) from exc
+        except error.URLError as exc:
+            note_relay_transport_failure()
+            raise RelayControlError(
+                f"relay control request failed: {exc.reason}", request_sent=False
+            ) from exc
+        except (TimeoutError, OSError, http.client.HTTPException) as exc:
+            note_relay_transport_failure()
+            raise RelayControlError(
+                f"relay control request failed after it was sent: {exc}",
+                request_sent=True,
+            ) from exc
+        clear_relay_transport_cooldown()
+        if max_bytes is not None and len(content) > max_bytes:
+            raise RelayControlError(
+                "relay control answered more than expected", status_code=status_code
+            )
+        return RelayAnswer(status=status_code, headers=answer_headers, body=content)
+
     def _build_ssl_context(self):
         parsed = urlparse(self.config.control_url)
         if parsed.scheme != "https":
@@ -681,7 +1031,6 @@ def relay_status_payload(installation):
             "relay_enabled": False,
             "subscription_active": False,
             "ai_enabled": False,
-            "sms_enabled": False,
             "subscription_ends_at": None,
             "remote_access_paid_until": None,
             "ai_paid_until": None,
@@ -707,7 +1056,6 @@ def relay_status_payload(installation):
         "relay_enabled": installation.relay_enabled,
         "subscription_active": installation.subscription_active,
         "ai_enabled": installation.ai_enabled,
-        "sms_enabled": installation.sms_enabled,
         "subscription_ends_at": installation.subscription_ends_at,
         "remote_access_paid_until": installation.remote_access_paid_until,
         "ai_paid_until": installation.ai_paid_until,
@@ -781,9 +1129,8 @@ def relay_ai_available(installation=None):
 
 
 def sms_prepaid(installation):
-    """Whether the relay sells SMS from the SMS balance (it reported a price —
-    of one SMS part). A relay from before the SMS balance reports none and
-    still gates on the flag."""
+    """Whether the relay has reported what one SMS part costs (it always
+    does once synced; before that nothing can be sent)."""
     return installation is not None and installation.sms_price > 0
 
 
@@ -791,8 +1138,8 @@ def sms_affordable(installation, segments):
     """Whether the mirrored SMS balance pays for a message of ``segments`` SMS
     parts. The relay charges per part — an Arabic text past 70 letters goes out
     as several — and holds them all before sending, so a balance that covers a
-    short message may not cover a long one. Always true against a relay that
-    does not sell by the part."""
+    short message may not cover a long one. Before the relay has reported a
+    price this says yes: ``relay_sms_available`` already refuses then."""
     if not sms_prepaid(installation):
         return True
     return installation.sms_balance >= installation.sms_price * max(int(segments or 1), 1)
@@ -801,28 +1148,20 @@ def sms_affordable(installation, segments):
 def relay_sms_available(installation=None):
     """Whether this shop can send SMS right now.
 
-    SMS is prepaid: its SMS balance must pay for at least one more SMS part,
-    the relay's check at claim time for the shortest message (a longer one is
-    checked against its own parts when it is queued). Against a relay from
-    before the SMS balance it is the old entitlement — an active, unexpired
-    subscription plus the SMS flag. The relay remains the authority; this
-    mirror only keeps a shop that cannot send from queueing messages that would
-    all be refused.
+    SMS is prepaid and not part of the subscription: the SMS balance must pay
+    for at least one more SMS part, the relay's check at claim time for the
+    shortest message (a longer one is checked against its own parts when it is
+    queued). Until the relay has reported a price nothing can be sent. The
+    relay remains the authority; this mirror only keeps a shop that cannot send
+    from queueing messages that would all be refused.
     """
     if installation is None:
         installation = RelayInstallation.load()
     if installation is None:
         return False
-    if sms_prepaid(installation):
-        return installation.sms_balance >= installation.sms_price
-    if not installation.sms_enabled or not installation.subscription_active:
+    if not sms_prepaid(installation):
         return False
-    if (
-        installation.subscription_ends_at is not None
-        and installation.subscription_ends_at <= timezone.now()
-    ):
-        return False
-    return True
+    return installation.sms_balance >= installation.sms_price
 
 
 def _relay_decimal(value):
@@ -889,7 +1228,6 @@ def _persist_provisioned(provisioned, *, public_api_url, connector_address, shop
         relay_enabled=bool(relay_installation.get("relay_enabled", False)),
         subscription_active=bool(relay_installation.get("subscription_active", False)),
         ai_enabled=bool(relay_installation.get("ai_enabled", False)),
-        sms_enabled=bool(relay_installation.get("sms_enabled", False)),
         subscription_ends_at=parse_relay_datetime(relay_installation.get("subscription_ends_at")),
         last_synced_at=timezone.now(),
     )
@@ -1021,7 +1359,6 @@ def sync_relay_installation(installation, *, client=None, timeout=None, push_sho
     installation.relay_enabled = bool(relay_installation.get("relay_enabled", False))
     installation.subscription_active = bool(relay_installation.get("subscription_active", False))
     installation.ai_enabled = bool(relay_installation.get("ai_enabled", False))
-    installation.sms_enabled = bool(relay_installation.get("sms_enabled", False))
     installation.subscription_ends_at = parse_relay_datetime(
         relay_installation.get("subscription_ends_at")
     )
@@ -1052,7 +1389,6 @@ def sync_relay_installation(installation, *, client=None, timeout=None, push_sho
             "relay_enabled",
             "subscription_active",
             "ai_enabled",
-            "sms_enabled",
             "integrations_disabled",
             "subscription_ends_at",
             "remote_access_paid_until",
@@ -1116,7 +1452,6 @@ def _entitlement_snapshot(installation):
         installation.relay_enabled,
         installation.subscription_active,
         installation.ai_enabled,
-        installation.sms_enabled,
         installation.subscription_ends_at,
         installation.remote_access_paid_until,
         installation.ai_paid_until,

@@ -46,6 +46,8 @@ from dataclasses import dataclass, field
 
 from django.conf import settings
 
+from .masking import mask_numbers
+
 logger = logging.getLogger(__name__)
 
 EVENT_NAME = "integration.call"
@@ -66,6 +68,14 @@ OP_VERIFY = "verify"
 OP_PROFILES = "profiles"
 #: Reading one page of the agency's account-wide payments report.
 OP_PAYMENTS = "payments"
+#: Reading a write back by the key it was sent under (the relay's purchases).
+OP_OUTCOME = "outcome"
+#: The company's direct top-up and bill payments: reading the directory of
+#: countries, operators and billers, detecting a number's network, pricing one.
+#: (Sending one is a ``recharge`` like any other.)
+OP_SERVICES = "services"
+OP_SERVICE_DETECT = "service_detect"
+OP_SERVICE_QUOTE = "service_quote"
 
 #: The methods worth a row. ``recharge`` is the money one and is treated apart.
 OPERATIONS = {
@@ -75,9 +85,13 @@ OPERATIONS = {
     "subscriber_profile": OP_PROFILE,
     "purchase_history": OP_HISTORY,
     "payment_report_page": OP_PAYMENTS,
+    "attempt_outcome": OP_OUTCOME,
     "recharge": OP_RECHARGE,
     "voucher_catalog": OP_VOUCHERS,
     "voucher_brand": OP_VOUCHER_BRAND,
+    "services_directory": OP_SERVICES,
+    "service_detect": OP_SERVICE_DETECT,
+    "service_quote": OP_SERVICE_QUOTE,
     "profiles": OP_PROFILES,
     "start_verification": OP_VERIFY,
     "send_verification_code": OP_VERIFY,
@@ -108,6 +122,10 @@ STEP_DONE = "done"
 
 #: Seconds a repeated read failure for one account is folded into a count.
 DEFAULT_FAILURE_WINDOW_SECONDS = 300.0
+#: Seconds a purchase still being read back (not yet bought, its receipt not yet
+#: given) is folded into a count. It is asked again every two minutes until it
+#: settles, and one stuck for a day is one fact, not seven hundred rows.
+DEFAULT_PENDING_WINDOW_SECONDS = 3600.0
 
 
 def _setting(name, default):
@@ -178,7 +196,10 @@ class CallReport:
         if self.provider_reference:
             attributes["provider_reference"] = self.provider_reference[:64]
         if self.detail:
-            attributes["detail"] = self.detail[:200]
+            # Whatever a driver put here, a customer's number is not in it: rows
+            # leave the shop (see the module note), and an error message may
+            # repeat the request it was a reply to.
+            attributes["detail"] = mask_numbers(self.detail)[:200]
         attributes.update(self.extra)
         return attributes
 
@@ -199,18 +220,19 @@ class _FailureThrottle:
     multiply rows the way keying on a message would.
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        setting: str = "POINTY_INTEGRATION_TELEMETRY_FAILURE_WINDOW",
+        default: float = DEFAULT_FAILURE_WINDOW_SECONDS,
+    ):
         self._lock = threading.Lock()
         self._seen: dict[tuple, tuple[float, int]] = {}
+        self._setting = setting
+        self._default = default
 
     @property
     def window(self) -> float:
-        return float(
-            _setting(
-                "POINTY_INTEGRATION_TELEMETRY_FAILURE_WINDOW",
-                DEFAULT_FAILURE_WINDOW_SECONDS,
-            )
-        )
+        return float(_setting(self._setting, self._default))
 
     def take(self, key) -> int | None:
         """``None`` to suppress, otherwise how many were folded into this one."""
@@ -231,12 +253,18 @@ class _FailureThrottle:
 
 
 _failures = _FailureThrottle()
+_pending = _FailureThrottle(
+    "POINTY_INTEGRATION_TELEMETRY_PENDING_WINDOW", DEFAULT_PENDING_WINDOW_SECONDS
+)
 
 
 def reset():
     """Test seam: forget what has been throttled."""
-    global _failures
+    global _failures, _pending
     _failures = _FailureThrottle()
+    _pending = _FailureThrottle(
+        "POINTY_INTEGRATION_TELEMETRY_PENDING_WINDOW", DEFAULT_PENDING_WINDOW_SECONDS
+    )
 
 
 def record(report: CallReport, *, user=None) -> None:
@@ -278,6 +306,18 @@ def _record(report: CallReport, user) -> None:
         folded = _failures.take(
             (report.account_id, report.operation, report.error_code, report.step)
         )
+        if folded is None:
+            return
+        if folded:
+            metrics["suppressed_repeats"] = folded
+    elif (
+        report.operation == OP_OUTCOME and attributes.get("attempt_state") == "unknown"
+    ):
+        # An attempt read back and found still unsettled — being bought, or bought
+        # and its receipt not given yet. Settlement asks again every two minutes,
+        # so one that sticks would otherwise write a row per ask for as long as it
+        # does. The first is a row; the repeats within the window are a count.
+        folded = _pending.take((report.account_id, OP_OUTCOME, "unknown"))
         if folded is None:
             return
         if folded:
@@ -348,6 +388,11 @@ def _wrap(method, operation):
             self._call = previous
         report.duration_ms = int((time.monotonic() - started) * 1000)
         _read_outcome(report, result)
+        if getattr(result, "not_modified", False) is True:
+            # A conditional read that found nothing new (the relay's shelf,
+            # polled every few minutes): no event, and a row for each would
+            # bury the ones that are.
+            return result
         record(report)
         return result
 
@@ -367,6 +412,12 @@ def _read_outcome(report: CallReport, result) -> None:
             report.detail = detail
     elif report.step == STEP_START:
         report.step = STEP_DONE
+    # What became of a read-back attempt, so a purchase that stays unsettled can
+    # be told from one that settled (``record`` folds the former).
+    if report.operation == OP_OUTCOME:
+        state = getattr(result, "state", "") or ""
+        if state:
+            report.extra["attempt_state"] = state
     # A write that came back indeterminate carries its reference when it got
     # one; that is the handle reconciliation will need.
     reference = getattr(result, "reference", "") or ""

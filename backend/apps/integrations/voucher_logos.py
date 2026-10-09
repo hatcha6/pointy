@@ -285,19 +285,22 @@ def _due(account, kind: _Kind):
     """Listed brands with a product whose ``kind`` of logo is due, never-asked first."""
     now = timezone.now()
     checked = kind.checked_at
+    due = Q(**{f"{checked}__isnull": True}) | (
+        ~Q(**{kind.source: F(kind.path)})
+        & Q(**{f"{checked}__lt": now - LOGO_RETRY_AFTER})
+    )
+    spec = spec_for(account.provider)
+    if not (spec is not None and spec.relay_hosted):
+        # The company's shelf names a picture by its hash, so a path already
+        # in never changes picture and is not asked for again; anybody
+        # else's may, and is re-read now and then.
+        due |= Q(**{f"{checked}__lt": now - LOGO_MAX_AGE})
     return (
         IntegrationVoucherBrand.objects.filter(
             account=account, is_listed=True, product__isnull=False
         )
         .exclude(**{kind.path: ""})
-        .filter(
-            Q(**{f"{checked}__isnull": True})
-            | Q(**{f"{checked}__lt": now - LOGO_MAX_AGE})
-            | (
-                ~Q(**{kind.source: F(kind.path)})
-                & Q(**{f"{checked}__lt": now - LOGO_RETRY_AFTER})
-            )
-        )
+        .filter(due)
         .defer("print_logo")
         .order_by(F(checked).asc(nulls_first=True), "pk")
     )

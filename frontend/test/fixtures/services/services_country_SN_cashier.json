@@ -1,0 +1,283 @@
+{
+ "available": true,
+ "error_code": "",
+ "country": {
+  "code": "SN",
+  "name": "السنغال",
+  "name_en": "Senegal",
+  "dial": [
+   "221"
+  ],
+  "currency": "XOF",
+  "currency_name": "فرنك أفريقي",
+  "popular": 6
+ },
+ "airtime": {
+  "operators": [
+   {
+    "id": 430,
+    "max": "100000",
+    "min": "100",
+    "logo": "https://s3.amazonaws.com/rld-operator/ae23274e-d6fa-4994-9b7e-1923bd964d5c-size-3.png",
+    "mode": "range",
+    "name": "إكسبريسو السنغال",
+    "name_en": "Expresso Senegal",
+    "approximate": false,
+    "popular_amount": null,
+    "amount_currency": "XOF",
+    "receive_currency": "XOF",
+    "amounts": [
+     {
+      "amount": "1000",
+      "receive": "1000",
+      "receive_currency": "XOF",
+      "price": "19.25",
+      "exceeds_float": false
+     },
+     {
+      "amount": "2000",
+      "receive": "2000",
+      "receive_currency": "XOF",
+      "price": "38.25",
+      "exceeds_float": false
+     },
+     {
+      "amount": "5000",
+      "receive": "5000",
+      "receive_currency": "XOF",
+      "price": "95.75",
+      "exceeds_float": false
+     },
+     {
+      "amount": "10000",
+      "receive": "10000",
+      "receive_currency": "XOF",
+      "price": "191.25",
+      "exceeds_float": false
+     },
+     {
+      "amount": "20000",
+      "receive": "20000",
+      "receive_currency": "XOF",
+      "price": "382.50",
+      "exceeds_float": false
+     }
+    ]
+   },
+   {
+    "id": 428,
+    "max": "32800",
+    "min": "2000",
+    "logo": "https://s3.amazonaws.com/rld-operator/c91875db-f946-4e5c-8cd1-7be080cca6c0-size-3.png",
+    "mode": "range",
+    "name": "أورنج السنغال",
+    "name_en": "Orange Senegal",
+    "approximate": false,
+    "popular_amount": null,
+    "amount_currency": "XOF",
+    "receive_currency": "XOF",
+    "amounts": [
+     {
+      "amount": "2000",
+      "receive": "2000",
+      "receive_currency": "XOF",
+      "price": "38.25",
+      "exceeds_float": false
+     },
+     {
+      "amount": "5000",
+      "receive": "5000",
+      "receive_currency": "XOF",
+      "price": "95.75",
+      "exceeds_float": false
+     },
+     {
+      "amount": "10000",
+      "receive": "10000",
+      "receive_currency": "XOF",
+      "price": "191.25",
+      "exceeds_float": false
+     },
+     {
+      "amount": "20000",
+      "receive": "20000",
+      "receive_currency": "XOF",
+      "price": "382.50",
+      "exceeds_float": false
+     }
+    ]
+   },
+   {
+    "id": 429,
+    "max": "100000",
+    "min": "100",
+    "logo": "https://s3.amazonaws.com/rld-operator/16e7d38d-63f0-42b1-80be-619af2cef742-size-3.png",
+    "mode": "range",
+    "name": "فري السنغال",
+    "name_en": "Free Senegal",
+    "approximate": false,
+    "popular_amount": null,
+    "amount_currency": "XOF",
+    "receive_currency": "XOF",
+    "amounts": [
+     {
+      "amount": "1000",
+      "receive": "1000",
+      "receive_currency": "XOF",
+      "price": "19.25",
+      "exceeds_float": false
+     },
+     {
+      "amount": "2000",
+      "receive": "2000",
+      "receive_currency": "XOF",
+      "price": "38.25",
+      "exceeds_float": false
+     },
+     {
+      "amount": "5000",
+      "receive": "5000",
+      "receive_currency": "XOF",
+      "price": "95.75",
+      "exceeds_float": false
+     },
+     {
+      "amount": "10000",
+      "receive": "10000",
+      "receive_currency": "XOF",
+      "price": "191.25",
+      "exceeds_float": false
+     },
+     {
+      "amount": "20000",
+      "receive": "20000",
+      "receive_currency": "XOF",
+      "price": "382.50",
+      "exceeds_float": false
+     }
+    ]
+   }
+  ]
+ },
+ "bills": {
+  "billers": [
+   {
+    "id": 23,
+    "max": "310000",
+    "min": "1000",
+    "mode": "range",
+    "name": "فاتورة كهرباء السنغال (سينيلك)",
+    "type": "electricity",
+    "name_en": "Facture Sen-Elec Senegal",
+    "service": "postpaid",
+    "suggested": [
+     {
+      "amount": "1000",
+      "price": "24.50",
+      "exceeds_float": false
+     },
+     {
+      "amount": "2000",
+      "price": "46.25",
+      "exceeds_float": false
+     },
+     {
+      "amount": "5000",
+      "price": "111.75",
+      "exceeds_float": false
+     },
+     {
+      "amount": "10000",
+      "price": "220.75",
+      "exceeds_float": false
+     },
+     {
+      "amount": "20000",
+      "price": "438.50",
+      "exceeds_float": false
+     }
+    ],
+    "amount_currency": "XOF",
+    "requires_invoice": true
+   },
+   {
+    "id": 26,
+    "max": "310000",
+    "min": "1000",
+    "mode": "range",
+    "name": "ووفال السنغال (كهرباء مسبقة الدفع)",
+    "type": "electricity",
+    "name_en": "Woyofal Senegal",
+    "service": "prepaid",
+    "suggested": [
+     {
+      "amount": "1000",
+      "price": "20.25",
+      "exceeds_float": false
+     },
+     {
+      "amount": "2000",
+      "price": "40.50",
+      "exceeds_float": false
+     },
+     {
+      "amount": "5000",
+      "price": "101.00",
+      "exceeds_float": false
+     },
+     {
+      "amount": "10000",
+      "price": "201.75",
+      "exceeds_float": false
+     },
+     {
+      "amount": "20000",
+      "price": "403.25",
+      "exceeds_float": false
+     }
+    ],
+    "amount_currency": "XOF",
+    "requires_invoice": false
+   },
+   {
+    "id": 24,
+    "max": "310000",
+    "min": "1000",
+    "mode": "range",
+    "name": "فاتورة مياه السنغال (سين إيو)",
+    "type": "water",
+    "name_en": "Facture Sen-Eau Senegal",
+    "service": "postpaid",
+    "suggested": [
+     {
+      "amount": "1000",
+      "price": "24.50",
+      "exceeds_float": false
+     },
+     {
+      "amount": "2000",
+      "price": "46.25",
+      "exceeds_float": false
+     },
+     {
+      "amount": "5000",
+      "price": "111.75",
+      "exceeds_float": false
+     },
+     {
+      "amount": "10000",
+      "price": "220.75",
+      "exceeds_float": false
+     },
+     {
+      "amount": "20000",
+      "price": "438.50",
+      "exceeds_float": false
+     }
+    ],
+    "amount_currency": "XOF",
+    "requires_invoice": true
+   }
+  ]
+ }
+}

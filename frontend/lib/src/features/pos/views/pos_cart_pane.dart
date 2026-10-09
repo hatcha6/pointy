@@ -23,6 +23,9 @@ import '../../../shared/responsive/responsive.dart';
 import '../../settings/views/integration_presentation.dart';
 import '../../treasury/view_models/bank_routing.dart';
 import '../view_models/pos_view_model.dart';
+import 'direct_services/service_charge_issue_dialog.dart';
+import 'direct_services/service_delivered_dialog.dart';
+import 'direct_services/service_requote_dialog.dart';
 import '../../../shared/tutor/anchors.dart';
 import '../../../shared/tutor/tutor_target.dart';
 import '../../../data/models/cart_line.dart';
@@ -159,6 +162,20 @@ class PosCartPane extends StatelessWidget {
       }
     }
 
+    // An airtime or bill line priced a while ago — a held invoice — is priced
+    // again before the customer is asked to pay: a price that moved is the
+    // cashier's to decide, not something to find out from a refused charge.
+    final requoted = await viewModel.requoteServiceLines();
+    if (!context.mounted) {
+      return;
+    }
+    if (requoted.isNotEmpty) {
+      await resolveServiceRequotes(context, viewModel, requoted);
+      // Stop here whatever was decided: the total the customer is about to be
+      // asked for has either changed or been left on purpose.
+      return;
+    }
+
     // Force one live preview so loss warnings and coupon validation are as
     // fresh as the network allows — but its failure must never dead-end the
     // sale: the checkout itself recomputes discounts server-side.
@@ -240,6 +257,11 @@ class PosCartPane extends StatelessWidget {
       return;
     }
 
+    // The lines are gone from the cart once the sale is made: whether any was
+    // added while the relay was in test mode is told to the dialog from here.
+    final soldInTestMode = viewModel.cart.any(
+      (line) => line.integration?.testMode == true,
+    );
     final outcome = await viewModel.checkoutCurrentSale(
       payments: payment.payments,
       saleType: payment.saleType,
@@ -288,8 +310,24 @@ class PosCartPane extends StatelessWidget {
     // than a clean charge is told to the cashier in a dialog rather than a
     // snackbar: one of these states means money may have moved and nobody
     // knows, which is not something to let scroll past.
-    if (outcome.isSuccess && outcome.recharges.any((row) => !row.isCharged)) {
-      await _showRechargeOutcomeDialog(context, outcome.recharges);
+    // Airtime and bills have their own words: not the card and agency ones of
+    // a subscriber's top-up, which would send the cashier looking for a card.
+    final cardRows = outcome.recharges
+        .where((row) => !row.isDirectService)
+        .toList(growable: false);
+    final unperformedServices = outcome.recharges
+        .where((row) => row.isDirectService && !row.isCharged)
+        .toList(growable: false);
+    if (outcome.isSuccess && cardRows.any((row) => !row.isCharged)) {
+      await _showRechargeOutcomeDialog(context, cardRows);
+      if (!context.mounted) return;
+    }
+    if (outcome.isSuccess && unperformedServices.isNotEmpty) {
+      await showServiceChargeIssueDialog(
+        context,
+        unperformedServices,
+        receiptNumber: outcome.order?.receiptNumber,
+      );
       if (!context.mounted) return;
     }
     // A card's PIN is the thing that was sold. It is printed on the receipt;
@@ -304,6 +342,19 @@ class PosCartPane extends StatelessWidget {
         unprintedCards.isNotEmpty &&
         outcome.printStatus != InvoicePrintStatus.printed) {
       await _showVoucherCodesDialog(context, unprintedCards);
+      if (!context.mounted) return;
+    }
+    // Airtime sent and bills paid used to be a snackbar only. Say what was
+    // done, whatever the printer did: a bill's token is the thing bought.
+    final delivered = outcome.recharges
+        .where((row) => row.isDirectService && row.isCharged)
+        .toList(growable: false);
+    if (outcome.isSuccess && delivered.isNotEmpty) {
+      await showServiceDeliveredDialog(
+        context,
+        delivered,
+        testMode: soldInTestMode,
+      );
       if (!context.mounted) return;
     }
 

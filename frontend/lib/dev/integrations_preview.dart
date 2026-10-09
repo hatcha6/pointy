@@ -187,8 +187,17 @@ class _FakeIntegrationsRepository extends IntegrationsRepository {
     if (scenario == 'error') {
       return Error(Exception('load failed'));
     }
-    return Ok([_hdbox(scenario), _lnet(), _qareeb()]);
+    return Ok([
+      _pointy(enabled: _pointyOn),
+      _hdbox(scenario),
+      _lnet(),
+      _qareeb(),
+    ]);
   }
+
+  /// «كروت دفتر» starts switched on wherever HD Box is connected, off in the
+  /// bare catalog; the switch flips it like the real backend would.
+  late bool _pointyOn = scenario != 'catalog' && scenario != 'unconfigured';
 
   @override
   Future<Result<IntegrationProvider>> saveCredentials(
@@ -196,6 +205,10 @@ class _FakeIntegrationsRepository extends IntegrationsRepository {
     IntegrationCredentialsDraft draft,
   ) async {
     await Future<void>.delayed(const Duration(milliseconds: 250));
+    if (providerKey == 'pointy') {
+      _pointyOn = draft.isActive ?? _pointyOn;
+      return Ok(_pointy(enabled: _pointyOn));
+    }
     return Ok(_hdbox('connected'));
   }
 
@@ -296,6 +309,38 @@ class _FakeIntegrationsRepository extends IntegrationsRepository {
       isConfigurable: true,
       switchedOff: scenario == 'switched_off',
       account: scenario == 'catalog' ? null : account,
+    );
+  }
+
+  /// The company's own cards: no login, one switch, the voucher balance.
+  static IntegrationProvider _pointy({required bool enabled}) {
+    return IntegrationProvider(
+      key: IntegrationProviderKey.pointy,
+      availability: IntegrationAvailability.available,
+      capabilities: const [
+        IntegrationCapability.balance,
+        IntegrationCapability.vouchers,
+      ],
+      settings: const [
+        IntegrationSetting(
+          key: IntegrationSettingKey.lowBalanceThreshold,
+          kind: 'amount',
+          value: '50',
+          defaultValue: '50',
+          minimum: 0,
+          maximum: 1000000,
+        ),
+      ],
+      isConfigurable: true,
+      account: IntegrationAccount(
+        provider: IntegrationProviderKey.pointy,
+        isConfigured: true,
+        isActive: enabled,
+        balance: 345.5,
+        balanceAt: DateTime(2026, 10, 7, 9, 30),
+        lastCheckedAt: DateTime(2026, 10, 7, 9, 30),
+        lastConnectedAt: DateTime(2026, 10, 7, 9, 30),
+      ),
     );
   }
 

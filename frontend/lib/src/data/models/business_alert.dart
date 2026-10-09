@@ -57,6 +57,15 @@ enum BusinessAlertType {
   /// Card takings the processor (Moamalat) should already have paid into the
   /// bank, with no settlement recorded against them.
   cardSettlementOverdue,
+
+  /// «كروت دفتر» cards the shop priced itself that the company's cost has
+  /// overtaken: blocked from sale until the owner fixes them.
+  belowCostCards,
+
+  /// The company's verdict on a bank transfer the shop sent to fill its
+  /// wallet: credited, or rejected with the reason its team wrote.
+  walletTransferConfirmed,
+  walletTransferRejected,
   unknown,
 }
 
@@ -238,12 +247,16 @@ BusinessAlertType _typeFromCode(String code) {
     'employees.payroll_ready' => BusinessAlertType.payrollReady,
     'operations.backend_error' => BusinessAlertType.operationsError,
     'integrations.low_float' => BusinessAlertType.lowProviderFloat,
-    'integrations.unperformed_recharge' => BusinessAlertType.unperformedRecharge,
+    'integrations.unperformed_recharge' =>
+      BusinessAlertType.unperformedRecharge,
     'integrations.unresolved_recharge' => BusinessAlertType.unresolvedRecharge,
     'integrations.offbook_recharge' => BusinessAlertType.offbookRecharge,
     'integrations.float_drift' => BusinessAlertType.providerFloatDrift,
     'treasury.card_settlement_overdue' =>
       BusinessAlertType.cardSettlementOverdue,
+    'integrations.below_cost_cards' => BusinessAlertType.belowCostCards,
+    'wallet.transfer_confirmed' => BusinessAlertType.walletTransferConfirmed,
+    'wallet.transfer_rejected' => BusinessAlertType.walletTransferRejected,
     _ => BusinessAlertType.unknown,
   };
 }
@@ -282,6 +295,10 @@ int _sortScore(BusinessAlertType type) {
     // Beside out-of-stock, because that is what an empty float is: a shelf
     // the till cannot sell from, and one nobody can see by looking at it.
     BusinessAlertType.lowProviderFloat => 12,
+    // Cards the till cannot sell, and nobody sees by looking at the shelf.
+    BusinessAlertType.belowCostCards => 13,
+    // Money the owner sent that did not arrive in the wallet: they act on it.
+    BusinessAlertType.walletTransferRejected => 14,
     BusinessAlertType.printFailures => 15,
     BusinessAlertType.stalePrintAgents => 18,
     BusinessAlertType.suspectedCashierActivity => 19,
@@ -304,6 +321,7 @@ int _sortScore(BusinessAlertType type) {
     BusinessAlertType.operationsError => 35,
     BusinessAlertType.expiringDiscounts => 60,
     BusinessAlertType.unclaimedPayouts => 62,
+    BusinessAlertType.walletTransferConfirmed => 64,
     BusinessAlertType.unknown => 100,
   };
 }
@@ -348,6 +366,9 @@ String _primaryLabel(BusinessAlertType type, Map<String, Object?> payload) {
       payload['provider']?.toString() ?? '',
     BusinessAlertType.cardSettlementOverdue =>
       payload['account']?.toString() ?? '',
+    BusinessAlertType.walletTransferConfirmed ||
+    BusinessAlertType.walletTransferRejected =>
+      payload['invoice_no']?.toString() ?? '',
     BusinessAlertType.stockPositionUntrusted ||
     BusinessAlertType.lowProfitMargin ||
     // Shop-wide counts rather than one row: there is no single article to
@@ -355,6 +376,7 @@ String _primaryLabel(BusinessAlertType type, Map<String, Object?> payload) {
     BusinessAlertType.missingIdentifiers ||
     BusinessAlertType.openCustodyClaims ||
     BusinessAlertType.unclaimedPayouts ||
+    BusinessAlertType.belowCostCards ||
     BusinessAlertType.unknown => '',
   };
 }
@@ -372,11 +394,11 @@ String _secondaryLabel(BusinessAlertType type, Map<String, Object?> payload) {
     BusinessAlertType.suspectedCashierActivity =>
       payload['rule_title']?.toString() ?? '',
     BusinessAlertType.operationsError => payload['source']?.toString() ?? '',
-    BusinessAlertType.lowProviderFloat => payload['threshold']?.toString() ?? '',
+    BusinessAlertType.lowProviderFloat =>
+      payload['threshold']?.toString() ?? '',
     BusinessAlertType.unperformedRecharge ||
     BusinessAlertType.unresolvedRecharge ||
-    BusinessAlertType.offbookRecharge =>
-      payload['card_no']?.toString() ?? '',
+    BusinessAlertType.offbookRecharge => payload['card_no']?.toString() ?? '',
     BusinessAlertType.providerFloatDrift =>
       payload['direction']?.toString() ?? '',
     _ => '',
@@ -392,6 +414,14 @@ String _detailLabel(BusinessAlertType type, Map<String, Object?> payload) {
     BusinessAlertType.operationsError => payload['message']?.toString() ?? '',
     BusinessAlertType.lowProviderFloat =>
       payload['account_label']?.toString() ?? '',
+    // The team's reason, word for word: it is what the owner acts on.
+    BusinessAlertType.walletTransferRejected =>
+      payload['reason']?.toString() ?? '',
+    // A few of the cards' names, so the alert says which without a list screen.
+    BusinessAlertType.belowCostCards => [
+      for (final name in (payload['cards'] as List?) ?? const [])
+        name.toString(),
+    ].join('، '),
     _ => '',
   };
 }
@@ -425,6 +455,10 @@ DateTime? _occurredAt(BusinessAlertType type, Map<String, Object?> payload) {
     ),
     BusinessAlertType.unresolvedRecharge => _dateTimeFromJson(
       payload['sent_at'],
+    ),
+    BusinessAlertType.walletTransferConfirmed ||
+    BusinessAlertType.walletTransferRejected => _dateTimeFromJson(
+      payload['decided_at'],
     ),
     // The day the money should have reached the bank.
     BusinessAlertType.cardSettlementOverdue => _dateTimeFromJson(

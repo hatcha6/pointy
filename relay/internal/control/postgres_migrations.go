@@ -555,6 +555,257 @@ CREATE INDEX IF NOT EXISTS relay_sms_messages_provider_message_idx
 	WHERE provider_message_id <> '';
 `,
 	},
+	{
+		version: 20,
+		name:    "voucher shop",
+		sql: `
+-- The company's own card shop. Every published catalog is kept (the newest is
+-- current), so a bad push can be rolled back by publishing an older one again.
+CREATE TABLE IF NOT EXISTS relay_voucher_catalogs (
+	id text PRIMARY KEY,
+	sha256 text NOT NULL,
+	document jsonb NOT NULL,
+	actor text NOT NULL DEFAULT '',
+	note text NOT NULL DEFAULT '',
+	created_at timestamptz NOT NULL
+);
+CREATE INDEX IF NOT EXISTS relay_voucher_catalogs_created_idx
+	ON relay_voucher_catalogs (created_at DESC, id DESC);
+
+-- Logos and flags, named by their SHA-256: a new image is a new name, so every
+-- cache downstream can keep one forever.
+CREATE TABLE IF NOT EXISTS relay_voucher_images (
+	sha256 text PRIMARY KEY,
+	content_type text NOT NULL,
+	data bytea NOT NULL,
+	width integer NOT NULL DEFAULT 0,
+	height integer NOT NULL DEFAULT 0,
+	created_at timestamptz NOT NULL
+);
+
+-- What each supplier sells the company, at what price, as last read.
+CREATE TABLE IF NOT EXISTS relay_voucher_offers (
+	supplier text NOT NULL,
+	ref text NOT NULL,
+	name text NOT NULL DEFAULT '',
+	group_name text NOT NULL DEFAULT '',
+	price text NOT NULL DEFAULT '',
+	currency text NOT NULL DEFAULT '',
+	in_stock boolean NOT NULL DEFAULT true,
+	synced_at timestamptz NOT NULL,
+	PRIMARY KEY (supplier, ref)
+);
+
+-- One row per purchase, claimed (and its price taken from the shop's voucher
+-- balance) before the supplier is called. Like every money table, nothing
+-- cascades from an installation.
+CREATE TABLE IF NOT EXISTS relay_voucher_purchases (
+	id text PRIMARY KEY,
+	installation_id text NOT NULL REFERENCES relay_installations(id),
+	idempotency_key text NOT NULL,
+	item_key text NOT NULL,
+	brand_key text NOT NULL DEFAULT '',
+	item_name text NOT NULL DEFAULT '',
+	quantity integer NOT NULL,
+	unit_price numeric(14, 3) NOT NULL,
+	amount numeric(14, 3) NOT NULL,
+	supplier text NOT NULL,
+	supplier_ref text NOT NULL DEFAULT '',
+	supplier_order_id text NOT NULL DEFAULT '',
+	supplier_cost text NOT NULL DEFAULT '',
+	supplier_currency text NOT NULL DEFAULT '',
+	status text NOT NULL,
+	error_code text NOT NULL DEFAULT '',
+	error_detail text NOT NULL DEFAULT '',
+	test_mode boolean NOT NULL DEFAULT false,
+	requested_by text NOT NULL DEFAULT '',
+	held_since timestamptz,
+	created_at timestamptz NOT NULL,
+	updated_at timestamptz NOT NULL,
+	completed_at timestamptz,
+	CONSTRAINT relay_voucher_purchases_key UNIQUE (installation_id, idempotency_key),
+	CONSTRAINT relay_voucher_purchases_status_check CHECK (status IN ('pending', 'succeeded', 'failed')),
+	CONSTRAINT relay_voucher_purchases_quantity_check CHECK (quantity > 0),
+	CONSTRAINT relay_voucher_purchases_amount_check CHECK (amount > 0)
+);
+-- One supplier order settles one purchase: a lost purchase found in the
+-- supplier's history can never claim an order another one already holds.
+CREATE UNIQUE INDEX IF NOT EXISTS relay_voucher_purchases_supplier_order_idx
+	ON relay_voucher_purchases (supplier, supplier_order_id)
+	WHERE supplier_order_id <> '';
+CREATE INDEX IF NOT EXISTS relay_voucher_purchases_installation_created_idx
+	ON relay_voucher_purchases (installation_id, created_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS relay_voucher_purchases_pending_idx
+	ON relay_voucher_purchases (created_at, id)
+	WHERE status = 'pending';
+`,
+	},
+	{
+		version: 21,
+		name:    "voucher purchase kinds and pricing settings",
+		sql: `
+-- Direct top-up and bill payments ride the card ledger: a purchase is a card
+-- (every row so far), airtime sent to a phone number, or a bill payment. Columns
+-- only, with defaults, so a relay still running the previous release keeps
+-- working while the fleet rolls over: it writes cards and they land as 'card'.
+--
+-- target: who the purchase was for, MASKED by the writer (a bullet-masked
+-- number such as +223, five bullets, 456); the full number or account is never
+-- stored here.
+-- details: a small JSON object of what was ordered; NULL for a card.
+ALTER TABLE relay_voucher_purchases
+	ADD COLUMN IF NOT EXISTS kind text NOT NULL DEFAULT 'card',
+	ADD COLUMN IF NOT EXISTS target text NOT NULL DEFAULT '',
+	ADD COLUMN IF NOT EXISTS details jsonb;
+
+-- The pricing knobs (the dollar rate, the markups, the retail step), published
+-- like the catalog: every version is kept and the newest is current, so a rate
+-- can be rolled back, and what was in force at any moment can be read.
+CREATE TABLE IF NOT EXISTS relay_voucher_settings (
+	id text PRIMARY KEY,
+	sha256 text NOT NULL,
+	document jsonb NOT NULL,
+	actor text NOT NULL DEFAULT '',
+	note text NOT NULL DEFAULT '',
+	created_at timestamptz NOT NULL
+);
+CREATE INDEX IF NOT EXISTS relay_voucher_settings_created_idx
+	ON relay_voucher_settings (created_at DESC, id DESC);
+`,
+	},
+	{
+		version: 22,
+		name:    "relay alert channel",
+		sql: `
+-- The company's ntfy alert channel: one row, the topic the relay publishes to.
+CREATE TABLE IF NOT EXISTS relay_alert_settings (
+	id integer PRIMARY KEY CHECK (id = 1),
+	topic text NOT NULL,
+	actor text NOT NULL DEFAULT '',
+	updated_at timestamptz NOT NULL
+);
+
+-- One row per alert condition already sent (a balance low, a gateway
+-- refusing the relay's key): claimed atomically so several relay instances
+-- send it once, and deleted when the condition ends.
+CREATE TABLE IF NOT EXISTS relay_alert_marks (
+	key text PRIMARY KEY,
+	sent_at timestamptz NOT NULL
+);
+`,
+	},
+	{
+		version: 23,
+		name:    "operator console",
+		sql: `
+-- The company's people allowed into the web console. Passkeys only: no
+-- password column exists on purpose.
+CREATE TABLE IF NOT EXISTS relay_console_operators (
+	id text PRIMARY KEY,
+	name text NOT NULL,
+	created_at timestamptz NOT NULL,
+	created_by text NOT NULL DEFAULT '',
+	disabled_at timestamptz
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS relay_console_operators_name_idx
+	ON relay_console_operators (lower(name));
+
+-- One WebAuthn credential per device; credential is the library's JSON
+-- (public key, sign counter, flags).
+CREATE TABLE IF NOT EXISTS relay_console_passkeys (
+	id text PRIMARY KEY,
+	operator_id text NOT NULL REFERENCES relay_console_operators (id) ON DELETE CASCADE,
+	label text NOT NULL DEFAULT '',
+	credential bytea NOT NULL,
+	created_at timestamptz NOT NULL,
+	last_used_at timestamptz
+);
+
+CREATE INDEX IF NOT EXISTS relay_console_passkeys_operator_idx
+	ON relay_console_passkeys (operator_id);
+
+-- Signed-in browsers, by the SHA-256 of the cookie.
+CREATE TABLE IF NOT EXISTS relay_console_sessions (
+	id_hash text PRIMARY KEY,
+	operator_id text NOT NULL REFERENCES relay_console_operators (id) ON DELETE CASCADE,
+	created_at timestamptz NOT NULL,
+	last_seen_at timestamptz NOT NULL,
+	expires_at timestamptz NOT NULL,
+	ip text NOT NULL DEFAULT '',
+	user_agent text NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS relay_console_sessions_operator_idx
+	ON relay_console_sessions (operator_id);
+
+-- Invites, WebAuthn challenges and step-up grants: taken once, atomically.
+CREATE TABLE IF NOT EXISTS relay_console_tokens (
+	kind text NOT NULL,
+	hash text NOT NULL,
+	operator_id text NOT NULL DEFAULT '',
+	subject text NOT NULL DEFAULT '',
+	payload text NOT NULL DEFAULT '',
+	expires_at timestamptz NOT NULL,
+	PRIMARY KEY (kind, hash)
+);
+
+-- Every change made through the console, by whom.
+CREATE TABLE IF NOT EXISTS relay_console_audit (
+	id bigserial PRIMARY KEY,
+	at timestamptz NOT NULL,
+	operator_id text NOT NULL,
+	operator_name text NOT NULL,
+	action text NOT NULL DEFAULT '',
+	method text NOT NULL,
+	path text NOT NULL,
+	status integer NOT NULL,
+	body text NOT NULL DEFAULT '',
+	ip text NOT NULL DEFAULT '',
+	stepped_up boolean NOT NULL DEFAULT false
+);
+
+CREATE INDEX IF NOT EXISTS relay_console_audit_operator_idx
+	ON relay_console_audit (operator_id, id DESC);
+`,
+	},
+	{
+		version: 24,
+		name:    "bank-transfer top-ups",
+		sql: `
+-- A bank transfer's details (the payer's bank, account and IBAN, and the
+-- receipt). NULL for every gateway top-up. Additive: the release before this
+-- one never names it.
+ALTER TABLE relay_wallet_topups ADD COLUMN IF NOT EXISTS transfer jsonb;
+
+-- review: waiting for an operator to find the money; rejected: turned down.
+ALTER TABLE relay_wallet_topups DROP CONSTRAINT IF EXISTS relay_wallet_topups_status_valid;
+ALTER TABLE relay_wallet_topups ADD CONSTRAINT relay_wallet_topups_status_valid
+	CHECK (status IN ('pending', 'paid', 'canceled', 'failed', 'expired', 'review', 'rejected'));
+
+-- One receipt sent behind two top-ups is the first thing an operator checks.
+CREATE INDEX IF NOT EXISTS relay_wallet_topups_receipt_idx
+	ON relay_wallet_topups ((transfer->'receipt'->>'sha256'))
+	WHERE transfer IS NOT NULL;
+
+-- Receipts by the SHA-256 of their bytes: a photo or a PDF, ten megabytes at
+-- most.
+CREATE TABLE IF NOT EXISTS relay_wallet_receipts (
+	sha256 text PRIMARY KEY,
+	content_type text NOT NULL,
+	data bytea NOT NULL,
+	created_at timestamptz NOT NULL
+);
+
+-- The company's receiving accounts, set in the console. One row.
+CREATE TABLE IF NOT EXISTS relay_wallet_bank_settings (
+	id integer PRIMARY KEY CHECK (id = 1),
+	accounts jsonb NOT NULL DEFAULT '[]',
+	updated_at timestamptz NOT NULL,
+	updated_by text NOT NULL DEFAULT ''
+);
+`,
+	},
 }
 
 // migrationsAdvisoryLockKey serializes concurrent migrators (e.g. autoscaled

@@ -165,6 +165,7 @@ from apps.messaging.views import (
 )
 from apps.notifications.views import BusinessNotificationViewSet
 from apps.wallet.views import (
+    WalletBankTransferView,
     WalletEntriesView,
     WalletPlanPurchaseView,
     WalletSettingsView,
@@ -174,6 +175,7 @@ from apps.wallet.views import (
     WalletTopUpDetailView,
     WalletTopUpListView,
     WalletView,
+    WalletVoucherAllocationView,
 )
 from apps.payments.views import CardTerminalViewSet, PaymentViewSet
 from apps.printing.views import (
@@ -568,6 +570,11 @@ urlpatterns = [
     path("api/wallet/settings/", WalletSettingsView.as_view(), name="wallet-settings"),
     path("api/wallet/topups/", WalletTopUpListView.as_view(), name="wallet-topups"),
     path(
+        "api/wallet/topups/bank-transfer/",
+        WalletBankTransferView.as_view(),
+        name="wallet-topups-bank-transfer",
+    ),
+    path(
         "api/wallet/topups/<str:relay_id>/",
         WalletTopUpDetailView.as_view(),
         name="wallet-topup-detail",
@@ -589,6 +596,12 @@ urlpatterns = [
         "api/wallet/sms/allocations/",
         WalletSmsAllocationView.as_view(),
         name="wallet-sms-allocations",
+    ),
+    # Money into the voucher balance the till's «كروت دفتر» are paid from.
+    path(
+        "api/wallet/vouchers/allocations/",
+        WalletVoucherAllocationView.as_view(),
+        name="wallet-vouchers-allocations",
     ),
     path(
         "api/wallet/subscriptions/",

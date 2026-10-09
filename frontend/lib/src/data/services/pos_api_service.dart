@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:http/http.dart' as http;
 
+import '../models/money_source.dart';
 import '../models/attachment_summary.dart';
 import '../models/password_policy.dart';
 import '../models/pos_user.dart';
@@ -133,10 +134,18 @@ import '../models/integration_provider.dart';
 import '../models/integration_recent_search.dart';
 import '../models/portal_payment.dart';
 import '../models/voucher_availability.dart';
+import '../models/voucher_menu.dart';
+import '../models/service_country_detail.dart';
+import '../models/service_kinds.dart';
+import '../models/service_quote.dart';
+import '../models/services_directory.dart';
 import '../models/messaging_gateway.dart';
 import '../models/messaging_status.dart';
 import 'crm_api_client.dart';
 import 'integrations_api_client.dart';
+import 'services_api_client.dart';
+import 'voucher_pricing_api_client.dart';
+import '../models/voucher_pricing.dart';
 import 'messaging_api_client.dart';
 import 'price_checker_api_client.dart';
 import 'surveillance_api_client.dart';
@@ -215,6 +224,8 @@ class PosApiService {
     _printing = PrintingApiClient(_session);
     _messaging = MessagingApiClient(_session);
     _integrations = IntegrationsApiClient(_session);
+    _services = ServicesApiClient(_session);
+    _pricing = VoucherPricingApiClient(_session);
     _crm = CrmApiClient(_session);
     _priceChecker = PriceCheckerApiClient(_session);
     _stockCounts = StockCountApiClient(_session);
@@ -311,6 +322,8 @@ class PosApiService {
   late final PrintingApiClient _printing;
   late final MessagingApiClient _messaging;
   late final IntegrationsApiClient _integrations;
+  late final ServicesApiClient _services;
+  late final VoucherPricingApiClient _pricing;
   late final CrmApiClient _crm;
   late final PriceCheckerApiClient _priceChecker;
   late final StockCountApiClient _stockCounts;
@@ -1152,6 +1165,8 @@ class PosApiService {
     required String method,
     required double amount,
     String cardReceiptUrl = '',
+    int? moneyAccountId,
+    MoneySource source = MoneySource.drawer,
     String? idempotencyKey,
   }) {
     return _customers.recordCustomerAccountPayment(
@@ -1159,6 +1174,8 @@ class PosApiService {
       method: method,
       amount: amount,
       cardReceiptUrl: cardReceiptUrl,
+      moneyAccountId: moneyAccountId,
+      source: source,
       idempotencyKey: idempotencyKey,
     );
   }
@@ -1191,6 +1208,9 @@ class PosApiService {
     required double amount,
     String note = '',
     BalanceDirection? settles,
+    String method = 'cash',
+    MoneySource source = MoneySource.drawer,
+    int? moneyAccountId,
     String? idempotencyKey,
   }) {
     return _balances.refund(
@@ -1199,6 +1219,9 @@ class PosApiService {
       amount: amount,
       note: note,
       settles: settles,
+      method: method,
+      source: source,
+      moneyAccountId: moneyAccountId,
       idempotencyKey: idempotencyKey,
     );
   }
@@ -1234,6 +1257,7 @@ class PosApiService {
     String reference = '',
     String notes = '',
     int? moneyAccountId,
+    MoneySource source = MoneySource.treasury,
     String? idempotencyKey,
   }) {
     return _balances.recordSupplierAccountPayment(
@@ -1243,6 +1267,7 @@ class PosApiService {
       reference: reference,
       notes: notes,
       moneyAccountId: moneyAccountId,
+      source: source,
       idempotencyKey: idempotencyKey,
     );
   }
@@ -2606,6 +2631,64 @@ class PosApiService {
   Future<VoucherAvailability> fetchVoucherAvailability(int productId) =>
       _integrations.fetchVoucherAvailability(productId);
 
+  Future<VoucherMenu> fetchVoucherMenu() => _integrations.fetchVoucherMenu();
+
+  // --- «كروت دفتر»' pricing ----------------------------------------------------
+  Future<VoucherPricing> fetchVoucherPricing() => _pricing.fetch();
+
+  Future<VoucherPricing> saveVoucherPricing(VoucherPricing pricing) =>
+      _pricing.save(pricing);
+
+  Future<CardPricePage> fetchVoucherCardPrices({
+    String search = '',
+    String brand = '',
+    int page = 1,
+    bool belowCost = false,
+  }) => _pricing.fetchCards(
+    search: search,
+    brand: brand,
+    page: page,
+    belowCost: belowCost,
+  );
+
+  Future<CardPriceRow> saveVoucherCardPrice(
+    int variantId, {
+    required PricingMode mode,
+    double? price,
+  }) => _pricing.saveCard(variantId, mode: mode, price: price);
+
+  Future<int> bulkVoucherCardPrices({
+    List<int>? variantIds,
+    String? brand,
+    required PricingMode mode,
+    double? markupPercent,
+    bool belowCost = false,
+  }) => _pricing.bulk(
+    variantIds: variantIds,
+    brand: brand,
+    mode: mode,
+    markupPercent: markupPercent,
+    belowCost: belowCost,
+  );
+
+  // --- «كروت دفتر»' direct services: airtime and bills ------------------------
+  Future<ServicesDirectory> fetchServicesDirectory() =>
+      _services.fetchDirectory();
+
+  Future<ServiceCountryDetail> fetchServiceCountry(String code) =>
+      _services.fetchCountry(code);
+
+  Future<OperatorDetection> detectServiceOperator({
+    required String country,
+    required String phone,
+  }) => _services.detect(country: country, phone: phone);
+
+  Future<ServiceQuoteOutcome> quoteService(ServiceQuoteRequest request) =>
+      _services.quote(request);
+
+  Future<List<RecentRecipient>> fetchServiceRecents(ServiceKind kind) =>
+      _services.fetchRecent(kind);
+
   Future<IntegrationPriceList> fetchIntegrationPrices(String providerKey) =>
       _integrations.fetchPrices(providerKey);
 
@@ -3121,6 +3204,7 @@ class PosApiService {
     String role = '',
     bool isPrimary = false,
     bool allowMultiple = false,
+    bool acceptDocuments = false,
   }) {
     return _companion.requestCapture(
       tillKey: tillKey,
@@ -3130,6 +3214,7 @@ class PosApiService {
       role: role,
       isPrimary: isPrimary,
       allowMultiple: allowMultiple,
+      acceptDocuments: acceptDocuments,
     );
   }
 

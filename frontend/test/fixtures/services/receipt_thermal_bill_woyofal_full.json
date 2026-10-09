@@ -1,0 +1,100 @@
+{
+ "shop": {
+  "name": "نقطة البيع",
+  "receipt_header": "",
+  "receipt_footer": "",
+  "currency_symbol": "د.ل",
+  "logo": null,
+  "logo_bytes": null,
+  "print_voucher_qr_codes": true
+ },
+ "order": {
+  "id": 2,
+  "receipt_number": "R20261008000002",
+  "public_invoice_url": "",
+  "status": "paid",
+  "sale_type": "standard",
+  "payment_status": "paid",
+  "amount_paid": "40.50",
+  "balance_due": "0.00",
+  "valid_until": null,
+  "subtotal": "40.50",
+  "discount_total": "0.00",
+  "total": "40.50",
+  "applied_discounts": [],
+  "created_at": "2026-10-08T11:55:29.110507+00:00",
+  "register_session": {
+   "id": 1,
+   "session_number": "RS-1",
+   "owner_key": "user:2"
+  },
+  "cashier": {
+   "id": 2,
+   "name": "till",
+   "full_name": "till"
+  },
+  "lines": [
+   {
+    "id": 2,
+    "product_id": 2,
+    "variant_id": 2,
+    "product_name": "دفع فاتورة",
+    "parent_product_name": "دفع فاتورة",
+    "variant_name": "دفع فاتورة",
+    "variant_display_name": "دفع فاتورة",
+    "sku": "INTEG-POINTY-BILL",
+    "barcode": "",
+    "name": "دفع فاتورة",
+    "quantity": 1.0,
+    "unit": "piece",
+    "unit_label": "قطعة",
+    "unit_price": "40.50",
+    "line_subtotal": "40.50",
+    "discount_total": "0.00",
+    "line_total": "40.50",
+    "option_values": [],
+    "modifiers": [],
+    "identifiers": [],
+    "integration": {
+     "provider": "pointy",
+     "kind": "bill",
+     "status": "confirmed",
+     "subscriber_ref": "••••••••789",
+     "option_label": "ووفال السنغال (كهرباء مسبقة الدفع) · 2,000 فرنك أفريقي",
+     "months": 0,
+     "reference": "ed05a0c0-c2f4-49f1-9c8d-63c88cab22ce",
+     "printed": {
+      "pin": "",
+      "rows": [
+       [
+        "الجهة",
+        "ووفال السنغال (كهرباء مسبقة الدفع)"
+       ],
+       [
+        "النوع",
+        "كهرباء"
+       ],
+       [
+        "رقم العدّاد",
+        "••••••••789"
+       ],
+       [
+        "المبلغ",
+        "2,010.002 فرنك أفريقي"
+       ],
+       [
+        "رقم العملية",
+        "7541"
+       ]
+      ],
+      "title": "دفع فاتورة كهرباء",
+      "notice": "تم تسديد المبلغ للجهة المذكورة، ولا يمكن استرداده.",
+      "pin_label": "رمز الشحن"
+     },
+     "receipt_logo": "<base64/opaque, 2168 chars>",
+     "provider_logo": null
+    }
+   }
+  ]
+ }
+}

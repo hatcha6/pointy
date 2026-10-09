@@ -1,0 +1,21 @@
+{
+ "results": [
+  {
+   "fulfillment": 5,
+   "order_line": 5,
+   "provider": "pointy",
+   "kind": "bill",
+   "subscriber_ref": "••••••••280",
+   "option_label": "كهرباء إيكيجا (مسبقة الدفع) · 1,000 نيرة نيجيرية",
+   "outcome": "refused",
+   "status": "pending",
+   "needs_attention": false,
+   "error_code": "provider_error",
+   "error_detail": "supplier_refused: Unable to process payment. Please try later or contact support",
+   "provider_reference": "",
+   "balance_after": 230.64,
+   "receipt": {}
+  }
+ ],
+ "balance": 230.64
+}

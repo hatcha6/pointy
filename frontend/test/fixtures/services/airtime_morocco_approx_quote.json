@@ -1,0 +1,16 @@
+{
+ "ok": true,
+ "kind": "airtime",
+ "option_code": "air:312:0.6:USD",
+ "option_label": "إنوي المغرب · 0.6 دولار أمريكي",
+ "subscriber_ref": "+212••••••678",
+ "price": "6.00",
+ "receive": {
+  "amount": "4.8",
+  "currency": "MAD"
+ },
+ "approximate": true,
+ "quote": "<base64/opaque, 420 chars>",
+ "service_variant_id": 1,
+ "exceeds_float": false
+}

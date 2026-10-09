@@ -27,6 +27,7 @@ var (
 	_ UpdateStore            = (*CachedInstallationStore)(nil)
 	_ SMSStore               = (*CachedInstallationStore)(nil)
 	_ WalletStore            = (*CachedInstallationStore)(nil)
+	_ VoucherStore           = (*CachedInstallationStore)(nil)
 )
 
 var (

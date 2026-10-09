@@ -1,0 +1,21 @@
+{
+ "results": [
+  {
+   "fulfillment": 44,
+   "order_line": 44,
+   "provider": "pointy",
+   "kind": "bill",
+   "subscriber_ref": "••••••••555",
+   "option_label": "ووفال السنغال (كهرباء مسبقة الدفع) · 1,000 فرنك أفريقي",
+   "outcome": "refused",
+   "status": "pending",
+   "needs_attention": false,
+   "error_code": "unavailable",
+   "error_detail": "service_unavailable: directory_unavailable",
+   "provider_reference": "",
+   "balance_after": null,
+   "receipt": {}
+  }
+ ],
+ "balance": 35.21
+}

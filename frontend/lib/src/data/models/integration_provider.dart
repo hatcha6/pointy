@@ -11,13 +11,24 @@
 /// a new one when the owner types it.
 library;
 
-enum IntegrationProviderKey { hdbox, lnet, qareeb, unknown }
+enum IntegrationProviderKey {
+  hdbox,
+  lnet,
+  qareeb,
+
+  /// The company itself: «كروت دفتر», its own prepaid cards, bought from the
+  /// company's wholesaler with the company's account. The shop holds no
+  /// credential for it — switching it on is the whole setup.
+  pointy,
+  unknown,
+}
 
 IntegrationProviderKey integrationProviderKeyFromJson(Object? value) {
   return switch (value?.toString()) {
     'hdbox' => IntegrationProviderKey.hdbox,
     'lnet' => IntegrationProviderKey.lnet,
     'qareeb' => IntegrationProviderKey.qareeb,
+    'pointy' => IntegrationProviderKey.pointy,
     _ => IntegrationProviderKey.unknown,
   };
 }
@@ -27,6 +38,7 @@ String integrationProviderKeyToJson(IntegrationProviderKey key) {
     IntegrationProviderKey.hdbox => 'hdbox',
     IntegrationProviderKey.lnet => 'lnet',
     IntegrationProviderKey.qareeb => 'qareeb',
+    IntegrationProviderKey.pointy => 'pointy',
     IntegrationProviderKey.unknown => '',
   };
 }
@@ -120,6 +132,14 @@ abstract final class IntegrationCapability {
   /// One login, several identities (a person, the shops they work for),
   /// each with its own wallet; the owner chooses which one Pointy buys as.
   static const profiles = 'profiles';
+
+  /// Sends airtime straight to a phone number abroad (the company card
+  /// shop's «الشحن المباشر»). Sold from the till's services tabs.
+  static const airtime = 'airtime';
+
+  /// Pays bills abroad — electricity, water, TV, internet — for a customer
+  /// (the company card shop's «دفع الفواتير»).
+  static const bills = 'bills';
 }
 
 /// Credential field keys. The form renders whatever the backend lists.
@@ -153,6 +173,10 @@ abstract final class IntegrationErrorCode {
   static const notFound = 'not_found';
   static const providerError = 'provider_error';
   static const insufficientFloat = 'insufficient_float';
+
+  /// The price moved between the quote and the charge: the server refuses to
+  /// spend any other amount than the one the customer was quoted.
+  static const priceChanged = 'price_changed';
   static const indeterminate = 'indeterminate';
   static const unexpected = 'unexpected_response';
 
@@ -395,6 +419,13 @@ class IntegrationProvider {
 
   /// Its login can act as several profiles, one of which the owner picks.
   bool get hasProfiles => capabilities.contains(IntegrationCapability.profiles);
+
+  /// Asks for no credential at all («كروت دفتر»): the card offers a switch
+  /// instead of a login form.
+  bool get needsNoCredentials => fields.isEmpty;
+
+  /// Switched on for this shop: connected, and not paused by the owner.
+  bool get isEnabled => isConfigured && (account?.isActive ?? false);
 
   static List<String> _strings(Object? value) =>
       (value as List<Object?>? ?? const [])

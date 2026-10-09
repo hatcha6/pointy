@@ -1,0 +1,16 @@
+{
+ "ok": true,
+ "kind": "bill",
+ "option_code": "bill:27:10000:XOF:3",
+ "option_label": "تلفزيون · كانال بلس أكسيس إنجليش بيسك – شهر · 10,000 فرنك أفريقي",
+ "subscriber_ref": "•••••••789",
+ "price": "220.75",
+ "receive": {
+  "amount": "10000",
+  "currency": "XOF"
+ },
+ "approximate": false,
+ "quote": "<base64/opaque, 524 chars>",
+ "service_variant_id": 2,
+ "exceeds_float": false
+}

@@ -1,0 +1,6 @@
+{
+ "ok": false,
+ "error_code": "amount_out_of_range",
+ "min": "1967",
+ "max": "32800"
+}

@@ -686,7 +686,9 @@ class QareebProvider(IntegrationProvider):
         return None if cost is None else OptionQuote(cost=cost)
 
     # --- buying one card -----------------------------------------------------
-    def recharge(self, card_no: str, option_code: str, *, expected_cost=None):
+    def recharge(
+        self, card_no: str, option_code: str, *, expected_cost=None, attempt_key: str = ""
+    ):
         """Buy one card off the shelf. Spends the agency float.
 
         ``card_no`` is ignored: a card belongs to nobody until it is sold.
