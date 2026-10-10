@@ -122,7 +122,7 @@ export function Home() {
         </Link>
       </div>
 
-      <div className="grid two">
+      <div className="grid two columns">
         <Card tight title="يحتاج انتباهك" hint={inbox.items.length ? count(inbox.items.length) : undefined} className="inbox-card">
           <div className="timeline">
             {inbox.items.slice(0, showAll ? undefined : 9).map((item) => (
@@ -141,44 +141,46 @@ export function Home() {
           </div>
         </Card>
 
-        <Card tight title="آخر الشحنات المدفوعة" actions={<Link to="/topups">الكل</Link>}>
-          <div className="timeline">
-            {(recentPaid.data ?? []).slice(0, 7).map((t) => (
-              <Link key={t.id} to={`/shops/${encodeURIComponent(t.installation_id)}?tab=topups`} className="timeline-item" style={{ color: "inherit", textDecoration: "none" }}>
-                <div className="t-icon money">
-                  <WalletIcon />
-                </div>
-                <div className="t-body">
-                  <strong>{t.shop_name || t.installation_id}</strong>
-                  <div className="t-meta">
-                    <TimeAgo value={t.paid_at ?? t.updated_at} />
+        <div className="stack">
+          <Card tight title="آخر الشحنات المدفوعة" actions={<Link to="/topups">الكل</Link>}>
+            <div className="timeline">
+              {(recentPaid.data ?? []).slice(0, 7).map((t) => (
+                <Link key={t.id} to={`/shops/${encodeURIComponent(t.installation_id)}?tab=topups`} className="timeline-item" style={{ color: "inherit", textDecoration: "none" }}>
+                  <div className="t-icon money">
+                    <WalletIcon />
                   </div>
-                </div>
-                <Money value={t.amount} />
-              </Link>
-            ))}
-            {!recentPaid.isLoading && (recentPaid.data ?? []).length === 0 && <Empty title="لا شحنات بعد" />}
-          </div>
-        </Card>
+                  <div className="t-body">
+                    <strong>{t.shop_name || t.installation_id}</strong>
+                    <div className="t-meta">
+                      <TimeAgo value={t.paid_at ?? t.updated_at} />
+                    </div>
+                  </div>
+                  <Money value={t.amount} />
+                </Link>
+              ))}
+              {!recentPaid.isLoading && (recentPaid.data ?? []).length === 0 && <Empty title="لا شحنات بعد" />}
+            </div>
+          </Card>
 
-        <Card tight title="آخر العمليات من اللوحة" actions={<Link to="/activity">السجل</Link>}>
-          <div className="timeline">
-            {(audit.data ?? []).slice(0, 8).map((e) => (
-              <div key={e.id} className="timeline-item">
-                <div className={`t-icon ${e.stepped_up ? "money" : ""}`}>
-                  <ArrowLeft />
-                </div>
-                <div className="t-body">
-                  <strong>{auditLabel(e.action, e.method, e.path)}</strong>
-                  <div className="t-meta">
-                    {e.operator_name} · <TimeAgo value={e.at} />
+          <Card tight title="آخر العمليات من اللوحة" actions={<Link to="/activity">السجل</Link>}>
+            <div className="timeline">
+              {(audit.data ?? []).slice(0, 8).map((e) => (
+                <div key={e.id} className="timeline-item">
+                  <div className={`t-icon ${e.stepped_up ? "money" : ""}`}>
+                    <ArrowLeft />
+                  </div>
+                  <div className="t-body">
+                    <strong>{auditLabel(e.action, e.method, e.path)}</strong>
+                    <div className="t-meta">
+                      {e.operator_name} · <TimeAgo value={e.at} />
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-            {!audit.isLoading && (audit.data ?? []).length === 0 && <Empty title="لا عمليات بعد" />}
-          </div>
-        </Card>
+              ))}
+              {!audit.isLoading && (audit.data ?? []).length === 0 && <Empty title="لا عمليات بعد" />}
+            </div>
+          </Card>
+        </div>
       </div>
       {entry.dialog}
     </>

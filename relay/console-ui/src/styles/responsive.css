@@ -18,6 +18,12 @@
   max-width: 320px;
 }
 
+@media (min-width: 1500px) {
+  .stacked span {
+    max-width: 460px;
+  }
+}
+
 .table td.actions-cell {
   white-space: nowrap;
   width: 1%;
@@ -28,7 +34,11 @@
   justify-content: flex-end;
 }
 
-@media (max-width: 1100px) {
+.table-wrap {
+  container-type: inline-size;
+}
+
+@container (max-width: 1000px) {
   .table .wide-only {
     display: none;
   }
@@ -445,6 +455,22 @@ textarea.code {
 
   .segmented button {
     white-space: nowrap;
+  }
+
+  /* A choice inside a form wraps onto a second line rather than hiding
+     options off the edge; filter bars keep scrolling sideways. */
+  .segmented:not(.toolbar .segmented) {
+    flex-wrap: wrap;
+  }
+
+  /* Two tiles a row; an odd last tile takes the whole row instead of
+     leaving a hole beside it. */
+  .grid.kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .grid.kpis > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
   }
 
   .tabs {

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useCompact } from "../lib/media";
 import { Empty, Skeleton } from "./ui";
 
@@ -18,8 +18,8 @@ export type Column<T> = {
   cell: (row: T) => ReactNode;
   align?: "end";
   mobile?: "title" | "trailing" | "subtitle" | "meta" | "actions" | "hide";
-  /** Hidden below 1100px when the table runs out of room, and on phones
-   *  unless `mobile` places it. */
+  /** Hidden when the table is narrower than 1000px, and on phones unless
+   *  `mobile` places it. */
   wideOnly?: boolean;
 };
 
@@ -40,7 +40,9 @@ export function DataTable<T>({
   empty?: ReactNode;
   skeletonRows?: number;
 }) {
-  const compact = useCompact();
+  const phone = useCompact();
+  const { ref, overflows } = useOverflow(phone ? null : rows);
+  const compact = phone || overflows;
   if (!loading && rows.length === 0) return <>{empty ?? <Empty title="لا شيء هنا" />}</>;
 
   if (compact) {
@@ -60,7 +62,7 @@ export function DataTable<T>({
       );
     }
     return (
-      <div className="mlist">
+      <div className="mlist" ref={ref}>
         {rows.map((row) => (
           <div
             key={rowKey(row)}
@@ -97,7 +99,7 @@ export function DataTable<T>({
   }
 
   return (
-    <div className="table-wrap">
+    <div className="table-wrap" ref={ref}>
       <table className="table">
         <thead>
           <tr>
@@ -152,6 +154,36 @@ export function DataTable<T>({
       </table>
     </div>
   );
+}
+
+/**
+ * Whether the table is wider than the room it has. A tablet, a narrow window
+ * or a split screen can leave a many-column table too little width even
+ * though the window is not a phone's; the list then reads as cards there too
+ * instead of scrolling sideways. The width the table needed is remembered, so
+ * it comes back as soon as there is that much room again.
+ */
+function useOverflow(rows: unknown) {
+  const ref = useRef<HTMLDivElement>(null);
+  const needed = useRef(0);
+  const [overflows, setOverflows] = useState(false);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || rows === null) return;
+    const check = () => {
+      if (!overflows && el.scrollWidth > el.clientWidth + 1) {
+        needed.current = el.scrollWidth;
+        setOverflows(true);
+      } else if (overflows && el.clientWidth >= needed.current) {
+        setOverflows(false);
+      }
+    };
+    check();
+    const observer = new ResizeObserver(check);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [rows, overflows]);
+  return { ref, overflows: rows !== null && overflows };
 }
 
 /** Two-line cell: a bold line and a muted one. */

@@ -141,93 +141,97 @@ function Overview({ shop, balances, onSubscription }: { shop: Installation; bala
   const [toggling, setToggling] = useState<"enable" | "disable" | null>(null);
   const online = status.data?.connector_presence?.online || status.data?.connector_online_local;
   return (
-    <div className="grid two">
-      <Card title="الاشتراك" actions={<Button size="sm" onClick={onSubscription}>تعديل</Button>}>
-        <dl className="facts">
-          <div className="fact">
-            <dt>الحالة</dt>
-            <dd>{subscriptionBadge(shop)}</dd>
-          </div>
-          <div className="fact">
-            <dt>ينتهي في</dt>
-            <dd>{shop.subscription_ends_at ? date(shop.subscription_ends_at) : shop.subscription_active ? "بلا تاريخ انتهاء" : "—"}</dd>
-          </div>
-          <div className="fact">
-            <dt>الوصول عن بعد</dt>
-            <dd>{shop.relay_active ? <Badge tone="success">يعمل</Badge> : shop.relay_enabled ? <Badge tone="warning">مفعّل بلا اشتراك</Badge> : <Badge>متوقف</Badge>}</dd>
-          </div>
-          <div className="fact">
-            <dt>المساعد الذكي</dt>
-            <dd>{shop.ai_active ? <Badge tone="success">يعمل</Badge> : shop.ai_enabled ? <Badge tone="warning">مفعّل</Badge> : <Badge>متوقف</Badge>}</dd>
-          </div>
-          <div className="fact">
-            <dt>أُنشئ</dt>
-            <dd>{date(shop.created_at)}</dd>
-          </div>
-        </dl>
-        <div className="row" style={{ marginTop: 18 }}>
-          {shop.subscription_active ? (
-            <Button size="sm" variant="danger" icon={<PauseCircle />} onClick={() => setToggling("disable")}>
-              إيقاف الاشتراك
-            </Button>
-          ) : (
-            <Button size="sm" icon={<PlayCircle />} onClick={() => setToggling("enable")}>
-              تفعيل الاشتراك
-            </Button>
-          )}
-        </div>
-      </Card>
-
-      <Card title="المحفظة" actions={<Link to={`/shops/${encodeURIComponent(shop.id)}?tab=wallet`}>الحركات</Link>}>
-        <div className="balance-big">
-          <Money value={balances.main} />
-        </div>
-        <div className="row muted" style={{ gap: 18, marginTop: 8 }}>
-          <span>
-            {accountLabels.sms}: <Money value={balances.sms} />
-          </span>
-          <span>
-            {accountLabels.vouchers}: <Money value={balances.vouchers} />
-          </span>
-        </div>
-      </Card>
-
-      <ShopBooksCard shopId={shop.id} />
-
-      <Card title="الاتصال" hint={status.isFetching ? "يُحدَّث…" : undefined}>
-        {status.isLoading ? (
-          <Skeleton height={60} />
-        ) : (
+    <div className="grid two columns">
+      <div className="stack">
+        <Card title="الاشتراك" actions={<Button size="sm" onClick={onSubscription}>تعديل</Button>}>
           <dl className="facts">
             <div className="fact">
-              <dt>الموصّل</dt>
-              <dd>
-                {online ? (
-                  <Badge tone="success" dot>
-                    <Wifi width={13} /> متصل الآن
-                  </Badge>
-                ) : (
-                  <Badge tone="neutral" dot>
-                    <WifiOff width={13} /> غير متصل
-                  </Badge>
-                )}
-              </dd>
+              <dt>الحالة</dt>
+              <dd>{subscriptionBadge(shop)}</dd>
             </div>
             <div className="fact">
-              <dt>آخر اتصال</dt>
-              <dd>
-                <TimeAgo value={status.data?.last_connector_connected_at ?? shop.last_connector_connected_at} />
-              </dd>
+              <dt>ينتهي في</dt>
+              <dd>{shop.subscription_ends_at ? date(shop.subscription_ends_at) : shop.subscription_active ? "بلا تاريخ انتهاء" : "—"}</dd>
             </div>
             <div className="fact">
-              <dt>شهادة الموصّل</dt>
-              <dd>{date(status.data?.connector_certificate_expires_at ?? shop.connector_certificate_expires_at)}</dd>
+              <dt>الوصول عن بعد</dt>
+              <dd>{shop.relay_active ? <Badge tone="success">يعمل</Badge> : shop.relay_enabled ? <Badge tone="warning">مفعّل بلا اشتراك</Badge> : <Badge>متوقف</Badge>}</dd>
+            </div>
+            <div className="fact">
+              <dt>المساعد الذكي</dt>
+              <dd>{shop.ai_active ? <Badge tone="success">يعمل</Badge> : shop.ai_enabled ? <Badge tone="warning">مفعّل</Badge> : <Badge>متوقف</Badge>}</dd>
+            </div>
+            <div className="fact">
+              <dt>أُنشئ</dt>
+              <dd>{date(shop.created_at)}</dd>
             </div>
           </dl>
-        )}
-      </Card>
+          <div className="row" style={{ marginTop: 18 }}>
+            {shop.subscription_active ? (
+              <Button size="sm" variant="danger" icon={<PauseCircle />} onClick={() => setToggling("disable")}>
+                إيقاف الاشتراك
+              </Button>
+            ) : (
+              <Button size="sm" icon={<PlayCircle />} onClick={() => setToggling("enable")}>
+                تفعيل الاشتراك
+              </Button>
+            )}
+          </div>
+        </Card>
 
-      <UpdatesCard shopId={shop.id} />
+        <Card title="المحفظة" actions={<Link to={`/shops/${encodeURIComponent(shop.id)}?tab=wallet`}>الحركات</Link>}>
+          <div className="balance-big">
+            <Money value={balances.main} />
+          </div>
+          <div className="row muted" style={{ gap: 18, marginTop: 8 }}>
+            <span>
+              {accountLabels.sms}: <Money value={balances.sms} />
+            </span>
+            <span>
+              {accountLabels.vouchers}: <Money value={balances.vouchers} />
+            </span>
+          </div>
+        </Card>
+      </div>
+
+      <div className="stack">
+        <ShopBooksCard shopId={shop.id} />
+
+        <Card title="الاتصال" hint={status.isFetching ? "يُحدَّث…" : undefined}>
+          {status.isLoading ? (
+            <Skeleton height={60} />
+          ) : (
+            <dl className="facts">
+              <div className="fact">
+                <dt>الموصّل</dt>
+                <dd>
+                  {online ? (
+                    <Badge tone="success" dot>
+                      <Wifi width={13} /> متصل الآن
+                    </Badge>
+                  ) : (
+                    <Badge tone="neutral" dot>
+                      <WifiOff width={13} /> غير متصل
+                    </Badge>
+                  )}
+                </dd>
+              </div>
+              <div className="fact">
+                <dt>آخر اتصال</dt>
+                <dd>
+                  <TimeAgo value={status.data?.last_connector_connected_at ?? shop.last_connector_connected_at} />
+                </dd>
+              </div>
+              <div className="fact">
+                <dt>شهادة الموصّل</dt>
+                <dd>{date(status.data?.connector_certificate_expires_at ?? shop.connector_certificate_expires_at)}</dd>
+              </div>
+            </dl>
+          )}
+        </Card>
+
+        <UpdatesCard shopId={shop.id} />
+      </div>
 
       <ToggleSubscription shop={shop} action={toggling} onClose={() => setToggling(null)} />
     </div>

@@ -76,14 +76,16 @@ button {
 }
 
 .num,
-.money {
+/* span.money, not .money: "money" is also a tone (notices, badges, timeline
+   icons), and those must not inherit an amount's layout. */
+span.money {
   font-variant-numeric: tabular-nums;
   direction: rtl;
   unicode-bidi: isolate;
   display: inline-block;
 }
 
-.money {
+span.money {
   font-weight: 600;
 }
 
@@ -133,7 +135,7 @@ button {
 }
 
 /* Amounts and times never break across lines. */
-.money,
+span.money,
 time,
 .nowrap {
   white-space: nowrap;

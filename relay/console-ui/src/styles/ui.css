@@ -174,6 +174,7 @@
   align-items: center;
   gap: 10px;
   width: min(460px, 100%);
+  min-width: 0;
   padding: 8px 12px;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -194,6 +195,10 @@
 
 .search-trigger span {
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 kbd {
@@ -226,8 +231,8 @@ kbd {
 
 .content {
   padding: 24px 28px 64px;
-  max-width: 1400px;
   width: 100%;
+  min-width: 0;
 }
 
 /* ---------- page parts ---------- */
@@ -280,7 +285,13 @@ kbd {
 }
 
 .grid.two {
-  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+}
+
+/* Two independent columns: each card keeps its own height instead of
+   stretching to its neighbour's. */
+.grid.two.columns {
+  align-items: start;
 }
 
 .grid.side {
@@ -396,7 +407,7 @@ a.kpi-link:hover {
 
 .facts {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
   gap: 14px 24px;
 }
 
@@ -677,7 +688,7 @@ a.kpi-link:hover {
 
 .form-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
   gap: 12px;
 }
 
@@ -714,10 +725,21 @@ a.kpi-link:hover {
 
 .segmented {
   display: inline-flex;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
   background: var(--sunken);
   border-radius: 10px;
   padding: 3px;
   gap: 2px;
+}
+
+.segmented::-webkit-scrollbar {
+  display: none;
+}
+
+.segmented button {
+  flex: none;
 }
 
 .segmented button {
