@@ -64,6 +64,19 @@ export function useInstallations() {
   });
 }
 
+/** The shop list with whether each connector is online now (one lookup per shop). */
+export function useInstallationsWithPresence() {
+  return useQuery({
+    queryKey: [...keys.installations, "presence"],
+    queryFn: () =>
+      api
+        .get<{ installations: (Installation & { connector_online?: boolean })[] }>("/v1/installations" + qs({ limit: 1000, presence: 1 }))
+        .then((r) => r.installations ?? []),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+}
+
 export function useInstallation(id: string) {
   return useQuery({
     queryKey: keys.installation(id),

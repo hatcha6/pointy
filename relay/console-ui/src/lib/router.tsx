@@ -64,6 +64,24 @@ export function useSearchParam(name: string): [string, (value: string) => void] 
   return [value, set];
 }
 
+/** Sets several query parameters in one step (an empty value removes one). */
+export function useSetSearch(): (updates: Record<string, string>) => void {
+  const { location, navigate } = useRouter();
+  return useCallback(
+    (updates: Record<string, string>) => {
+      const [path, search = ""] = location.split("?");
+      const p = new URLSearchParams(search);
+      for (const [name, value] of Object.entries(updates)) {
+        if (value) p.set(name, value);
+        else p.delete(name);
+      }
+      const s = p.toString();
+      navigate(path + (s ? "?" + s : ""), { replace: true });
+    },
+    [location, navigate],
+  );
+}
+
 /** Matches "/shops/:id" against a path; returns the params or null. */
 export function match(pattern: string, path: string): Record<string, string> | null {
   const a = pattern.split("/").filter(Boolean);

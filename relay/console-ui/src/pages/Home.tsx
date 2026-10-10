@@ -1,10 +1,16 @@
-import { AlertTriangle, ArrowLeft, CalendarClock, CreditCard, Landmark, Store, Wallet as WalletIcon } from "lucide-react";
+import { useState } from "react";
+import { ArrowDownLeft, ArrowLeft, ArrowUpRight, CalendarClock, CheckCircle2, CreditCard, Landmark, PlusCircle, Store, TrendingUp, Wallet as WalletIcon } from "lucide-react";
+import { InboxRow, useInbox } from "../components/Inbox";
 import { useConsoleAudit, useInstallations, useMe, usePurchases, useTopUps, useWallets } from "../lib/queries";
 import { Link } from "../lib/router";
 import { auditLabel } from "../lib/labels";
-import { count, daysUntil, date } from "../lib/format";
-import { Badge, Card, Empty, Money, Skeleton, TimeAgo } from "../components/ui";
-import { isExpiring } from "./Shops";
+import { count } from "../lib/format";
+import { Button, Card, Empty, Money, Skeleton, TimeAgo } from "../components/ui";
+import { Delta } from "../components/finance/charts";
+import { change, periodRange, useFinanceSummary } from "../lib/finance";
+import { draftForMonth } from "../components/finance/Recurring";
+import { useEntryDialog } from "./Finance";
+import { openPalette } from "../components/CommandPalette";
 
 function greeting(): string {
   const hour = new Date().getHours();
@@ -22,14 +28,19 @@ export function Home() {
   const recentPaid = useTopUps({ status: "paid" });
   const held = usePurchases({ held: "1" });
   const audit = useConsoleAudit({});
+  const month = periodRange("month");
+  const finance = useFinanceSummary(month.from, month.to);
+  const entry = useEntryDialog();
+  const net = Number(finance.data?.totals.net ?? 0);
 
   const shops = installations.data ?? [];
   const active = shops.filter((s) => s.subscription_active).length;
-  const expiring = shops.filter(isExpiring).sort((a, b) => (daysUntil(a.subscription_ends_at) ?? 0) - (daysUntil(b.subscription_ends_at) ?? 0));
   const mainTotal = (wallets.data?.wallets ?? []).filter((w) => w.account === "main").reduce((sum, w) => sum + Number(w.balance || 0), 0);
   const stalePending = (pending.data ?? []).filter((t) => Date.now() - new Date(t.created_at).getTime() > 15 * 60_000);
   const transfers = [...(review.data ?? [])].reverse();
-  const attention = transfers.length + stalePending.length + (held.data?.length ?? 0) + expiring.length;
+  const inbox = useInbox();
+  const [showAll, setShowAll] = useState(false);
+  const urgentCount = inbox.items.filter((i) => i.level === "urgent").length;
 
   return (
     <>
@@ -38,11 +49,43 @@ export function Home() {
           <h1>
             {greeting()}، {me.data?.operator.name.split(" ")[0]}
           </h1>
-          <p>{attention > 0 ? `${count(attention)} أمور تحتاج انتباهك.` : "كل شيء على ما يرام."}</p>
+          <p>
+            {inbox.items.length === 0
+              ? "كل شيء على ما يرام."
+              : urgentCount
+                ? `${count(urgentCount)} ${urgentCount === 1 ? "أمر عاجل" : "أمور عاجلة"} و${count(inbox.items.length - urgentCount)} غيرها تنتظرك.`
+                : `${count(inbox.items.length)} ${inbox.items.length === 1 ? "أمر ينتظرك" : "أمور تنتظرك"}.`}
+          </p>
         </div>
       </div>
 
+      <div className="quick-actions" style={{ marginBottom: 16 }}>
+        <Button variant="primary" icon={<ArrowUpRight />} onClick={() => entry.open({ direction: "expense" })}>
+          سجّل مصروفاً
+        </Button>
+        <Button icon={<ArrowDownLeft />} onClick={() => entry.open({ direction: "income" })}>
+          سجّل دخلاً
+        </Button>
+        <Button icon={<PlusCircle />} onClick={() => openPalette("credit")}>
+          رصيد لمتجر
+        </Button>
+        <Button icon={<CalendarClock />} onClick={() => openPalette("extend")}>
+          تمديد اشتراك
+        </Button>
+      </div>
+
       <div className="grid kpis" style={{ marginBottom: 16 }}>
+        <Link to="/finance" className="card kpi kpi-link">
+          <div className="kpi-label">
+            <TrendingUp /> {net < 0 ? "خسارة هذا الشهر" : "ربح هذا الشهر"}
+          </div>
+          <div className={`kpi-value ${net > 0 ? "positive" : net < 0 ? "negative" : ""}`}>
+            {finance.isLoading ? <Skeleton height={30} width={120} /> : finance.data ? <Money value={Math.abs(net)} /> : "—"}
+          </div>
+          <div className="kpi-foot">
+            {finance.data ? <Delta value={change(finance.data.totals.net, finance.data.previous.totals.net)} suffix="عن الشهر الماضي" /> : "الدخل ناقص المصروف"}
+          </div>
+        </Link>
         <Link to="/shops" className="card kpi kpi-link">
           <div className="kpi-label">
             <Store /> المتاجر الفعّالة
@@ -80,71 +123,21 @@ export function Home() {
       </div>
 
       <div className="grid two">
-        <Card tight title="يحتاج انتباهك" hint={attention ? count(attention) : undefined}>
+        <Card tight title="يحتاج انتباهك" hint={inbox.items.length ? count(inbox.items.length) : undefined} className="inbox-card">
           <div className="timeline">
-            {transfers.slice(0, 8).map((t) => (
-              <Link key={t.id} to={`/topups/${encodeURIComponent(t.id)}`} className="timeline-item" style={{ color: "inherit", textDecoration: "none" }}>
-                <div className="t-icon money">
-                  <Landmark />
-                </div>
-                <div className="t-body">
-                  <strong>
-                    تحويل مصرفي <Money value={t.amount} /> بانتظار التحقق
-                  </strong>
-                  <div className="t-meta">
-                    {t.shop_name} · <TimeAgo value={t.created_at} />
-                  </div>
-                </div>
-                <Badge tone="info">تحقّق</Badge>
-              </Link>
+            {inbox.items.slice(0, showAll ? undefined : 9).map((item) => (
+              <InboxRow key={item.id} item={item} onOpen={(i) => i.recurring && entry.open(draftForMonth(i.recurring.recurring, i.recurring.month))} />
             ))}
-            {(held.data ?? []).slice(0, 5).map((p) => (
-              <Link key={p.id} to="/purchases?held=1" className="timeline-item" style={{ color: "inherit", textDecoration: "none" }}>
-                <div className="t-icon money">
-                  <CreditCard />
-                </div>
-                <div className="t-body">
-                  <strong>
-                    {p.name} · <Money value={p.amount} />
-                  </strong>
-                  <div className="t-meta">
-                    {p.shop_name} · معلّقة <TimeAgo value={p.held_since ?? p.created_at} />
-                  </div>
-                </div>
-                <ArrowLeft width={16} className="faint" />
-              </Link>
-            ))}
-            {stalePending.slice(0, 5).map((t) => (
-              <Link key={t.id} to="/topups?status=pending" className="timeline-item" style={{ color: "inherit", textDecoration: "none" }}>
-                <div className="t-icon money">
-                  <WalletIcon />
-                </div>
-                <div className="t-body">
-                  <strong>
-                    شحن <Money value={t.amount} /> لم يكتمل
-                  </strong>
-                  <div className="t-meta">
-                    {t.shop_name} · بدأ <TimeAgo value={t.created_at} />
-                  </div>
-                </div>
-                <ArrowLeft width={16} className="faint" />
-              </Link>
-            ))}
-            {expiring.slice(0, 6).map((s) => (
-              <Link key={s.id} to={`/shops/${encodeURIComponent(s.id)}?do=extend`} className="timeline-item" style={{ color: "inherit", textDecoration: "none" }}>
-                <div className="t-icon">
-                  <CalendarClock />
-                </div>
-                <div className="t-body">
-                  <strong>{s.shop_name}</strong>
-                  <div className="t-meta">
-                    الاشتراك {(daysUntil(s.subscription_ends_at) ?? 0) < 0 ? "انتهى" : "ينتهي"} {date(s.subscription_ends_at)}
-                  </div>
-                </div>
-                <Badge tone="warning">تمديد</Badge>
-              </Link>
-            ))}
-            {attention === 0 && <Empty icon={<AlertTriangle />} title="لا شيء ينتظرك" />}
+            {inbox.items.length > 9 && (
+              <button type="button" className="inbox-more" onClick={() => setShowAll(!showAll)}>
+                {showAll ? "أقل" : `${inbox.items.length - 9} غيرها`}
+              </button>
+            )}
+            {!inbox.loading && inbox.items.length === 0 && (
+              <Empty icon={<CheckCircle2 />} title="لا شيء ينتظرك">
+                التحويلات والتحديثات والأرصدة والفواتير كلها على ما يرام.
+              </Empty>
+            )}
           </div>
         </Card>
 
@@ -187,6 +180,7 @@ export function Home() {
           </div>
         </Card>
       </div>
+      {entry.dialog}
     </>
   );
 }

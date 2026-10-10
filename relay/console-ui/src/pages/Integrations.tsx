@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Plug, PowerOff, Power } from "lucide-react";
+import { Unavailable } from "../components/Unavailable";
+import { PowerOff, Power } from "lucide-react";
 import { keys, useIntegrations } from "../lib/queries";
 import { dateTime } from "../lib/format";
-import { Badge, Button, Card, Empty, Field, Notice, Skeleton } from "../components/ui";
+import { Badge, Button, Card, Field, Notice, Skeleton } from "../components/ui";
 import { Dialog } from "../components/dialog";
 import { useAction } from "../components/guarded";
 
@@ -12,13 +13,13 @@ const providers: { id: string; name: string; detail: string }[] = [
   { id: "qareeb", name: "قريب", detail: "بطاقات وخدمات قريب" },
 ];
 
-export function Integrations() {
+export function Integrations({ embedded }: { embedded?: boolean } = {}) {
   const switches = useIntegrations();
   const [target, setTarget] = useState<{ id: string; name: string; disable: boolean } | null>(null);
   const state = new Map((switches.data ?? []).map((s) => [s.provider, s]));
   return (
     <>
-      <div className="page-head">
+      <div className="page-head" hidden={embedded}>
         <div className="titles">
           <h1>التكاملات</h1>
           <p>إيقاف تكامل هنا يوقفه في كل المتاجر خلال دقائق — مثلاً عند طلب رسمي بالتوقف. يعود بضغطة.</p>
@@ -26,7 +27,7 @@ export function Integrations() {
       </div>
       {switches.isError ? (
         <Card>
-          <Empty icon={<Plug />} title="مفاتيح التكاملات غير متاحة على هذا الخادم" />
+          <Unavailable feature="integrations" error={switches.error} onRetry={() => void switches.refetch()} />
         </Card>
       ) : (
         <div className="grid two">

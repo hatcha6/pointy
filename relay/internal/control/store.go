@@ -647,6 +647,8 @@ type fileStoreData struct {
 	AlertSettings                    *AlertSettings                            `json:"alert_settings,omitempty"`
 	Console                          *fileConsoleData                          `json:"console,omitempty"`
 	WalletBank                       *fileWalletBankData                       `json:"wallet_bank,omitempty"`
+	FinanceEntries                   map[string]FinanceEntry                   `json:"finance_entries,omitempty"`
+	FinanceRecurring                 map[string]FinanceRecurring               `json:"finance_recurring,omitempty"`
 }
 
 func NewFileStore(path string, clock Clock) (*FileStore, error) {

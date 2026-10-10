@@ -1,12 +1,13 @@
 import { useState } from "react";
+import { Unavailable } from "../components/Unavailable";
 import { BellRing, RotateCcw, Send } from "lucide-react";
 import { keys, useAlerts } from "../lib/queries";
 import { dateTime } from "../lib/format";
-import { Badge, Button, Card, CopyText, Empty, Notice, Skeleton } from "../components/ui";
+import { Badge, Button, Card, CopyText, Notice, Skeleton } from "../components/ui";
 import { useAction } from "../components/guarded";
 import { Dialog } from "../components/dialog";
 
-export function Alerts() {
+export function Alerts({ embedded }: { embedded?: boolean } = {}) {
   const alerts = useAlerts();
   const test = useAction({ success: "أُرسل تنبيه تجريبي." });
   const setup = useAction({ invalidate: [keys.alerts], success: "أُنشئت قناة التنبيهات." });
@@ -15,7 +16,7 @@ export function Alerts() {
   const data = alerts.data;
   return (
     <>
-      <div className="page-head">
+      <div className="page-head" hidden={embedded}>
         <div className="titles">
           <h1>التنبيهات</h1>
           <p>قناة ntfy التي تصل هواتف الشركة: أرصدة الموردين المنخفضة، رفض المورّدين، ونتيجة كل دفعة شحن.</p>
@@ -25,7 +26,7 @@ export function Alerts() {
         {alerts.isLoading ? (
           <Skeleton height={80} />
         ) : alerts.isError ? (
-          <Empty title="التنبيهات غير متاحة على هذا الخادم" />
+          <Unavailable feature="alerts" error={alerts.error} onRetry={() => void alerts.refetch()} />
         ) : data?.configured ? (
           <div className="stack">
             <dl className="facts">

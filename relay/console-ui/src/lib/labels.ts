@@ -114,6 +114,18 @@ export const supplier: Record<string, string> = {
   qareeb: "قريب",
 };
 
+/** Update channels by their code; an unknown one shows its code. */
+export const channel: Record<string, string> = {
+  stable: "المستقرة",
+  beta: "التجريبية",
+  canary: "المبكرة",
+};
+
+export function channelLabel(code: string | undefined | null): string {
+  const c = code || "stable";
+  return channel[c] ?? c;
+}
+
 export function label(map: Record<string, string>, key: string | undefined | null): string {
   if (!key) return "—";
   return map[key] ?? key;
@@ -124,6 +136,12 @@ export type Tone = "neutral" | "success" | "warning" | "danger" | "info" | "mone
 /** Arabic names for console audit events, matched by method and path. */
 const auditRules: [RegExp, string][] = [
   [/^POST \/v1\/wallet\/admin\/entries/, "حركة محفظة يدوية"],
+  [/^POST \/v1\/finance\/entries\/[^/]+\/void/, "إلغاء قيد في الدفتر"],
+  [/^POST \/v1\/finance\/entries\/[^/]+\/attachments/, "إرفاق إيصال بقيد"],
+  [/^POST \/v1\/finance\/attachments$/, "رفع إيصال"],
+  [/^POST \/v1\/finance\/recurring$/, "مصروف شهري جديد"],
+  [/^PATCH \/v1\/finance\/recurring\//, "تعديل مصروف شهري"],
+  [/^POST \/v1\/finance\/entries$/, "قيد في دفتر الحسابات"],
   [/^POST \/v1\/wallet\/admin\/topups\/[^/]+\/confirm/, "تأكيد شحن يدوياً"],
   [/^POST \/v1\/wallet\/admin\/topups\/[^/]+\/check/, "مراجعة شحن مع دفع"],
   [/^PATCH \/v1\/installations\/[^/]+\/subscription/, "تعديل اشتراك"],
@@ -140,6 +158,20 @@ const auditRules: [RegExp, string][] = [
   [/^PUT \/v1\/vouchers\/admin\/settings/, "نشر إعدادات التسعير"],
 ];
 
+const auditAreas: Record<string, string> = {
+  "/v1/finance/": "الدفتر",
+  "/v1/wallet/": "المحافظ",
+  "/v1/vouchers/": "البطاقات",
+  "/v1/services/": "الشحن والفواتير",
+  "/v1/installations": "المتاجر",
+  "/v1/fleet": "التحديثات",
+  "/v1/artifacts/": "حزم التحديث",
+  "/v1/sms/": "الرسائل",
+  "/v1/enrollment/": "مفاتيح الترخيص",
+  "/v1/alerts": "التنبيهات",
+  "/operators": "المشغّلين",
+};
+
 const auditActions: Record<string, string> = {
   "auth.login": "تسجيل دخول",
   "auth.logout": "تسجيل خروج",
@@ -155,5 +187,8 @@ export function auditLabel(action: string, method: string, path: string): string
   if (action && auditActions[action]) return auditActions[action];
   const key = `${method} ${path}`;
   for (const [pattern, text] of auditRules) if (pattern.test(key)) return text;
-  return `${method} ${path}`;
+  // Anything not named above still reads as Arabic: the verb and the area.
+  const verb = { POST: "إنشاء", PUT: "حفظ", PATCH: "تعديل", DELETE: "حذف", GET: "قراءة" }[method] ?? method;
+  const area = Object.entries(auditAreas).find(([prefix]) => path.startsWith(prefix))?.[1];
+  return area ? `${verb} في ${area}` : `${method} ${path}`;
 }

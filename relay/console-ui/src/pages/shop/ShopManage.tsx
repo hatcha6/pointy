@@ -1,5 +1,8 @@
+import { channelLabel } from "../../lib/labels";
 import { useEffect, useState } from "react";
-import { FileDown, Pencil, Pin, PinOff, Rocket } from "lucide-react";
+import { FileDown, Pencil, Pin, PinOff, Rocket, WifiOff } from "lucide-react";
+import { agentQuiet, updateErrorText, updateStatus, useArtifacts } from "../../lib/updates";
+import { ChannelPicker, VersionPicker } from "../../components/updates";
 import { keys, useFleet } from "../../lib/queries";
 import { fetchBlob, saveBlob } from "../../lib/files";
 import { describeError } from "../../lib/errors";
@@ -55,27 +58,45 @@ export function UpdatesCard({ shopId }: { shopId: string }) {
   const fleet = useFleet();
   const entry = fleet.data?.installations.find((f) => f.id === shopId);
   const [editing, setEditing] = useState<"channel" | "pin" | null>(null);
-  const unpin = useAction({ passkey: true, invalidate: [keys.fleet], success: "أُلغي التثبيت." });
+  const unpin = useAction({ passkey: true, invalidate: [keys.fleet], success: "أُلغي التثبيت. يتبع المتجر قناته من جديد." });
+  const status = entry ? updateStatus(entry) : null;
   return (
-    <Card title="التحديثات" actions={entry && <Badge tone="info">{entry.channel || "stable"}</Badge>}>
+    <Card title="التحديثات" actions={entry && <Badge tone="info">القناة {channelLabel(entry.channel)}</Badge>}>
       {!entry ? (
         <p className="muted">{fleet.isLoading ? "…" : "لم يبلّغ وكيل التحديث عن هذا المتجر بعد."}</p>
       ) : (
         <>
+          {agentQuiet(entry) && (
+            <div className="cc-alarm quiet" style={{ marginBottom: 12 }}>
+              <WifiOff width={15} /> وكيل التحديث لا يتصل منذ <TimeAgo value={entry.agent_last_seen_at} />. الجهاز مطفأ أو بلا إنترنت، أو توقف الوكيل.
+            </div>
+          )}
           <dl className="facts">
             <div className="fact">
-              <dt>يعمل الآن</dt>
-              <dd className="mono">{entry.current_version || "—"}</dd>
-            </div>
-            <div className="fact">
-              <dt>المخصّص له</dt>
-              <dd className="mono">
-                {entry.assigned_version || "—"} {entry.pinned_version && <Badge tone="info">مثبّت</Badge>}
+              <dt>الإصدار</dt>
+              <dd className="version-flow">
+                <span className="mono">{entry.current_version || "—"}</span>
+                {entry.assigned_version && entry.assigned_version !== entry.current_version && (
+                  <>
+                    <span className="faint">←</span>
+                    <strong className="mono">{entry.assigned_version}</strong>
+                  </>
+                )}
               </dd>
             </div>
             <div className="fact">
-              <dt>حالة آخر تحديث</dt>
-              <dd>{entry.update_status || "—"}</dd>
+              <dt>الحالة</dt>
+              <dd>
+                {status && (
+                  <Badge tone={status.tone} dot>
+                    {status.label}
+                  </Badge>
+                )}
+              </dd>
+            </div>
+            <div className="fact">
+              <dt>يتبع</dt>
+              <dd>{entry.pinned_version ? <Badge tone="warning">مثبّت على {entry.pinned_version}</Badge> : `القناة ${channelLabel(entry.channel)}`}</dd>
             </div>
             <div className="fact">
               <dt>آخر ظهور للوكيل</dt>
@@ -84,10 +105,19 @@ export function UpdatesCard({ shopId }: { shopId: string }) {
               </dd>
             </div>
           </dl>
-          {entry.update_error && <p className="faint" style={{ marginTop: 10, fontSize: 12.5 }}>{entry.update_error}</p>}
+          {status?.progress !== undefined && (
+            <div className="progress" style={{ marginTop: 10 }}>
+              <div style={{ width: `${status.progress}%` }} />
+            </div>
+          )}
+          {entry.update_error && (
+            <p className="update-error" dir="auto" title={entry.update_error}>
+              {updateErrorText(entry.update_error)}
+            </p>
+          )}
           <div className="row" style={{ marginTop: 16 }}>
             <Button size="sm" icon={<Rocket />} onClick={() => setEditing("channel")}>
-              القناة
+              تغيير القناة
             </Button>
             {entry.pinned_version ? (
               <Button
@@ -106,26 +136,29 @@ export function UpdatesCard({ shopId }: { shopId: string }) {
           </div>
         </>
       )}
-      <UpdateDialog shopId={shopId} mode={editing} current={entry?.channel ?? "stable"} onClose={() => setEditing(null)} />
+      <UpdateDialog shopId={shopId} mode={editing} current={entry?.channel ?? "stable"} running={entry?.current_version} onClose={() => setEditing(null)} />
     </Card>
   );
 }
 
-function UpdateDialog({ shopId, mode, current, onClose }: { shopId: string; mode: "channel" | "pin" | null; current: string; onClose: () => void }) {
+function UpdateDialog({ shopId, mode, current, running, onClose }: { shopId: string; mode: "channel" | "pin" | null; current: string; running?: string; onClose: () => void }) {
   const [value, setValue] = useState("");
+  const artifacts = useArtifacts();
+  const fleet = useFleet();
   const run = useAction({ passkey: true, invalidate: [keys.fleet], success: mode === "pin" ? "ثُبّت الإصدار." : "تغيّرت القناة." });
   useEffect(() => {
     setValue(mode === "channel" ? current : "");
   }, [mode, current]);
   if (!mode) return null;
   const channel = mode === "channel";
+  const target = fleet.data?.channels.find((c) => c.channel === value);
   return (
     <Dialog
       open
       onClose={onClose}
       busy={run.busy}
       title={channel ? "قناة التحديث" : "تثبيت إصدار"}
-      subtitle={channel ? "يتبع المتجر إصدار هذه القناة ونسبة نشرها." : "يبقى المتجر على هذا الإصدار مهما تغيّرت قناته."}
+      subtitle={channel ? "يتبع المتجر إصدار هذه القناة ونسبة نشرها." : "يبقى المتجر على هذا الإصدار مهما تغيّرت قناته — للرجوع بمتجر واحد، أو لإبقائه على إصدار مجرّب."}
       icon={channel ? <Rocket /> : <Pin />}
       footer={
         <>
@@ -133,13 +166,13 @@ function UpdateDialog({ shopId, mode, current, onClose }: { shopId: string; mode
             variant="primary"
             size="lg"
             loading={run.busy}
-            disabled={!value.trim()}
+            disabled={!value.trim() || (channel && value === current)}
             onClick={async () => {
               const body = channel ? { channel: value.trim() } : { pinned_version: value.trim() };
               if (await run.run("PATCH", `/v1/installations/${encodeURIComponent(shopId)}/update`, body)) onClose();
             }}
           >
-            حفظ
+            {channel ? "حفظ" : value ? `ثبّت على ${value}` : "اختر إصداراً"}
           </Button>
           <Button size="lg" onClick={onClose} disabled={run.busy}>
             إلغاء
@@ -149,19 +182,12 @@ function UpdateDialog({ shopId, mode, current, onClose }: { shopId: string; mode
     >
       <div className="form">
         {channel ? (
-          <Field label="القناة">
-            <div className="chips">
-              {["stable", "beta", "canary"].map((c) => (
-                <button type="button" key={c} className={`chip ${value === c ? "on" : ""}`} onClick={() => setValue(c)}>
-                  <span className="mono">{c}</span>
-                </button>
-              ))}
-              <input className="input mono" style={{ width: 160, height: 32 }} placeholder="قناة أخرى" value={value} onChange={(e) => setValue(e.target.value)} />
-            </div>
+          <Field label="القناة" help={target ? `هذه القناة على ${target.target_version || "—"} الآن.` : value ? "لم يُنشر على هذه القناة شيء بعد: يبقى المتجر على إصداره." : undefined}>
+            <ChannelPicker value={value} onChange={setValue} />
           </Field>
         ) : (
-          <Field label="الإصدار" htmlFor="pinv" help="مثال: 0.8.1">
-            <input id="pinv" className="input mono" value={value} onChange={(e) => setValue(e.target.value)} autoFocus />
+          <Field label="الإصدار" help="فقط الإصدارات التي حزمتها على الخادم.">
+            <VersionPicker bundles={artifacts.data?.bundles ?? []} loading={artifacts.isLoading} value={value} onChange={setValue} channels={fleet.data?.channels} current={running} />
           </Field>
         )}
         <PasskeyHint />

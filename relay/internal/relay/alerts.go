@@ -247,3 +247,37 @@ func walletTopUpAlert(topUp control.WalletTopUp, event, detail string) (alerts.M
 	message.Click = "/topups/" + url.PathEscape(topUp.ID)
 	return message, true
 }
+
+// handleActiveAlerts serves GET /v1/alerts/active: the conditions the alert
+// channel marked and has not seen end (a supplier balance still at or under
+// its floor, a balance that cannot be read), for the console's home page.
+// Marks exist only where the channel is set up; "watching" says so.
+func (s HTTPServer) handleActiveAlerts(w http.ResponseWriter, r *http.Request) {
+	store, ok := s.Store.(control.AlertStore)
+	if !ok {
+		writeJSON(w, http.StatusOK, map[string]any{"watching": false, "alerts": []any{}})
+		return
+	}
+	settings, err := store.AlertSettings(r.Context())
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	type activeAlert struct {
+		Kind   string    `json:"kind"`
+		Source string    `json:"source"`
+		Since  time.Time `json:"since"`
+	}
+	out := []activeAlert{}
+	for _, kind := range []string{"balance_low", "balance_unreadable"} {
+		marks, err := store.ListAlertMarks(r.Context(), kind+":")
+		if err != nil {
+			writeStoreError(w, err)
+			return
+		}
+		for _, mark := range marks {
+			out = append(out, activeAlert{Kind: kind, Source: strings.TrimPrefix(mark.Key, kind+":"), Since: mark.SentAt})
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"watching": s.Alerts != nil && settings.Topic != "", "alerts": out})
+}

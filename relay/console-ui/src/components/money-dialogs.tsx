@@ -107,6 +107,7 @@ export function WalletEntryDialog({ open, onClose, installationId, shopName, mod
       open={open}
       onClose={onClose}
       busy={action.busy}
+      dirty={!!amount.trim() || !!note.trim() || !!reference.trim()}
       title={titles[mode]}
       subtitle={shopName}
       icon={icons[mode]}

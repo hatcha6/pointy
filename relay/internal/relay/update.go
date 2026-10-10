@@ -333,6 +333,10 @@ func (s HTTPServer) handleAdminArtifact(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
+	if r.URL.Path == "/v1/artifacts" {
+		s.handleAdminArtifactList(w, r, store)
+		return
+	}
 	version := strings.TrimPrefix(r.URL.Path, "/v1/artifacts/")
 	if fetchVersion, isFetch := strings.CutSuffix(version, "/fetch"); isFetch {
 		s.handleAdminArtifactFetch(w, r, store, fetchVersion)
@@ -364,6 +368,25 @@ func (s HTTPServer) handleAdminArtifact(w http.ResponseWriter, r *http.Request) 
 	default:
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 	}
+}
+
+// handleAdminArtifactList serves GET /v1/artifacts: the bundles the relay can
+// serve, newest first, and the downloads it is running or ran since it started
+// — so the console offers versions to pick instead of asking for one typed.
+func (s HTTPServer) handleAdminArtifactList(w http.ResponseWriter, r *http.Request, store *artifacts.Store) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	bundles, err := store.List()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "artifact listing failed"})
+		return
+	}
+	if bundles == nil {
+		bundles = []artifacts.Meta{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"bundles": bundles, "fetches": store.Fetches()})
 }
 
 type artifactFetchRequest struct {
@@ -435,6 +458,15 @@ func (s HTTPServer) handleInstallationUpdateConfig(w http.ResponseWriter, r *htt
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
 		return
+	}
+	// A pin to a version with no bundle would hold the shop silently — past
+	// its channel too — until someone noticed. Refused before anything
+	// changes, like a channel target with no bundle.
+	if req.PinnedVersion != nil {
+		if v := strings.TrimSpace(*req.PinnedVersion); v != "" && !s.artifactPresent(v) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "no artifact uploaded for that version", "code": "no_artifact"})
+			return
+		}
 	}
 	installation, err := s.Store.GetInstallation(r.Context(), id)
 	if err != nil {

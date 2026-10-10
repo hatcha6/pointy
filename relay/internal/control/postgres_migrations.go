@@ -806,6 +806,98 @@ CREATE TABLE IF NOT EXISTS relay_wallet_bank_settings (
 );
 `,
 	},
+	{
+		version: 25,
+		name:    "company books",
+		sql: `
+-- What the company earned and spent outside what the relay records on its
+-- own: the server bill, salaries, a subscription paid in cash. Never edited
+-- or deleted; a mistake is voided with its reason and entered again.
+CREATE TABLE IF NOT EXISTS relay_finance_entries (
+	id text PRIMARY KEY,
+	direction text NOT NULL,
+	category text NOT NULL,
+	amount numeric(14, 3) NOT NULL,
+	currency text NOT NULL DEFAULT 'LYD',
+	original_amount numeric(14, 3) NOT NULL,
+	rate numeric(16, 6) NOT NULL DEFAULT 1,
+	occurred_on date NOT NULL,
+	counterparty text NOT NULL DEFAULT '',
+	note text NOT NULL DEFAULT '',
+	installation_id text NOT NULL DEFAULT '',
+	reference text NOT NULL DEFAULT '',
+	idempotency_key text NOT NULL,
+	actor text NOT NULL DEFAULT '',
+	created_at timestamptz NOT NULL,
+	voided_at timestamptz,
+	voided_by text NOT NULL DEFAULT '',
+	void_reason text NOT NULL DEFAULT '',
+	CONSTRAINT relay_finance_entries_idempotency_key_key UNIQUE (idempotency_key),
+	CONSTRAINT relay_finance_entries_direction_valid CHECK (direction IN ('income', 'expense')),
+	CONSTRAINT relay_finance_entries_amount_positive CHECK (amount > 0 AND original_amount > 0 AND rate > 0)
+);
+
+CREATE INDEX IF NOT EXISTS relay_finance_entries_occurred_idx
+	ON relay_finance_entries (occurred_on DESC, created_at DESC);
+
+-- The tracked roll-up reads paid top-ups and finished purchases by when they
+-- settled.
+CREATE INDEX IF NOT EXISTS relay_wallet_topups_paid_idx
+	ON relay_wallet_topups (paid_at) WHERE status = 'paid';
+CREATE INDEX IF NOT EXISTS relay_wallet_entries_created_idx
+	ON relay_wallet_entries (created_at) WHERE kind IN ('charge', 'refund');
+`,
+	},
+	{
+		version: 26,
+		name:    "company books: receipts and monthly lines",
+		sql: `
+-- The invoice or receipt behind a line (refs into relay_wallet_receipts), and
+-- the monthly line that wrote it.
+ALTER TABLE relay_finance_entries ADD COLUMN IF NOT EXISTS attachments jsonb NOT NULL DEFAULT '[]';
+ALTER TABLE relay_finance_entries ADD COLUMN IF NOT EXISTS recurring_id text NOT NULL DEFAULT '';
+ALTER TABLE relay_finance_entries ADD COLUMN IF NOT EXISTS recurring_month text NOT NULL DEFAULT '';
+CREATE INDEX IF NOT EXISTS relay_finance_entries_recurring_idx
+	ON relay_finance_entries (recurring_id) WHERE recurring_id <> '';
+
+-- Rent, the server bill, a salary: a line the books need every month.
+CREATE TABLE IF NOT EXISTS relay_finance_recurring (
+	id text PRIMARY KEY,
+	direction text NOT NULL,
+	category text NOT NULL,
+	amount numeric(14, 3) NOT NULL,
+	currency text NOT NULL DEFAULT 'LYD',
+	rate numeric(16, 6) NOT NULL DEFAULT 1,
+	day_of_month integer NOT NULL,
+	mode text NOT NULL DEFAULT 'auto',
+	counterparty text NOT NULL DEFAULT '',
+	note text NOT NULL DEFAULT '',
+	installation_id text NOT NULL DEFAULT '',
+	start_month text NOT NULL,
+	end_month text NOT NULL DEFAULT '',
+	skipped jsonb NOT NULL DEFAULT '[]',
+	active boolean NOT NULL DEFAULT true,
+	actor text NOT NULL DEFAULT '',
+	created_at timestamptz NOT NULL,
+	updated_at timestamptz NOT NULL,
+	stopped_at timestamptz,
+	stopped_by text NOT NULL DEFAULT '',
+	CONSTRAINT relay_finance_recurring_direction_valid CHECK (direction IN ('income', 'expense')),
+	CONSTRAINT relay_finance_recurring_mode_valid CHECK (mode IN ('auto', 'confirm')),
+	CONSTRAINT relay_finance_recurring_day_valid CHECK (day_of_month BETWEEN 1 AND 28),
+	CONSTRAINT relay_finance_recurring_amount_positive CHECK (amount > 0 AND rate > 0)
+);
+`,
+	},
+	{
+		version: 27,
+		name:    "supplier offer price history",
+		sql: `
+-- What a supplier charged before its last price change, kept across syncs.
+ALTER TABLE relay_voucher_offers ADD COLUMN IF NOT EXISTS previous_price text NOT NULL DEFAULT '';
+ALTER TABLE relay_voucher_offers ADD COLUMN IF NOT EXISTS price_changed_at timestamptz;
+`,
+	},
 }
 
 // migrationsAdvisoryLockKey serializes concurrent migrators (e.g. autoscaled

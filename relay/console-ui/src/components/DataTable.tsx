@@ -120,7 +120,23 @@ export function DataTable<T>({
                 </tr>
               ))
             : rows.map((row) => (
-                <tr key={rowKey(row)} className={onRowClick ? "clickable" : ""} onClick={onRowClick ? () => onRowClick(row) : undefined}>
+                <tr
+                  key={rowKey(row)}
+                  className={onRowClick ? "clickable" : ""}
+                  onClick={onRowClick ? () => onRowClick(row) : undefined}
+                  // A row that opens something is reachable by Tab and opened by Enter.
+                  tabIndex={onRowClick ? 0 : undefined}
+                  onKeyDown={
+                    onRowClick
+                      ? (e) => {
+                          if ((e.key === "Enter" || e.key === " ") && e.target === e.currentTarget) {
+                            e.preventDefault();
+                            onRowClick(row);
+                          }
+                        }
+                      : undefined
+                  }
+                >
                   {columns.map((c) => (
                     <td
                       key={c.key}

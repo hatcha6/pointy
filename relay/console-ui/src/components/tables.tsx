@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { BadgeCheck, CreditCard, Landmark, RefreshCw, Receipt, Wallet as WalletIcon } from "lucide-react";
 import { useRouter } from "../lib/router";
-import { dateTime } from "../lib/format";
 import {
   account as accountLabels,
   bankName,
@@ -72,6 +71,7 @@ export function TopUpsTable({ topUps, loading, showShop = true }: { topUps: TopU
     else toast.error("دفع لا تُظهرها مدفوعة بعد.", "إن رأيتها مدفوعة في لوحة دفع فاستخدم «تأكيد».");
   }
 
+  const late = (t: TopUp) => t.status === "pending" && Date.now() - new Date(t.created_at).getTime() > 15 * 60_000;
   const columns: Column<TopUp>[] = [
     ...(showShop
       ? [
@@ -79,70 +79,70 @@ export function TopUpsTable({ topUps, loading, showShop = true }: { topUps: TopU
             key: "shop",
             header: "المتجر",
             mobile: "title",
-            cell: (t: TopUp) => <Stacked title={t.shop_name || t.installation_id} sub={t.requested_by} />,
+            cell: (t: TopUp) => (
+              <Stacked
+                title={t.shop_name || t.installation_id}
+                sub={
+                  <>
+                    <TimeAgo value={t.created_at} />
+                    {t.requested_by ? ` · ${t.requested_by}` : ""}
+                  </>
+                }
+              />
+            ),
           } as Column<TopUp>,
         ]
-      : []),
+      : [{ key: "when", header: "الوقت", mobile: "title", cell: (t: TopUp) => <TimeAgo value={t.created_at} /> } as Column<TopUp>]),
     {
       key: "amount",
       header: "المبلغ",
       align: "end",
-      mobile: showShop ? "trailing" : "title",
-      cell: (t) => <Money value={t.amount} />,
+      mobile: "trailing",
+      cell: (t) => (
+        <div className="amount-cell">
+          <Money value={t.amount} />
+          {t.transfer?.declared_amount && t.transfer.declared_amount !== t.amount && <span className="faint">أعلن {t.transfer.declared_amount}</span>}
+        </div>
+      ),
     },
     {
       key: "status",
       header: "الحالة",
-      mobile: showShop ? "subtitle" : "trailing",
+      mobile: "subtitle",
       cell: (t) => {
         const status = topUpStatus[t.status] ?? { label: t.status, tone: "neutral" as const };
+        const note = t.error_detail || (t.confirmed_by ? `أكّده ${t.confirmed_by.replace(/^operator:/, "")}` : "");
         return (
-          <div className="row" style={{ gap: 6 }}>
-            <Badge tone={status.tone} dot>
-              {status.label}
-            </Badge>
-            <TestBadge on={t.test_mode} />
+          <div className="status-cell">
+            <div className="row" style={{ gap: 6 }}>
+              <Badge tone={late(t) ? "warning" : status.tone} dot>
+                {late(t) ? "متأخر" : status.label}
+              </Badge>
+              <TestBadge on={t.test_mode} />
+            </div>
+            {note && (
+              <span className="faint status-note" title={note}>
+                {note}
+              </span>
+            )}
           </div>
         );
       },
     },
-    { key: "when", header: "الوقت", cell: (t) => <TimeAgo value={t.created_at} /> },
     {
       key: "method",
       header: "الطريقة",
       cell: (t) =>
         t.transfer ? (
-          <Stacked title={`تحويل · ${label(transferChannel, t.transfer.channel)}`} sub={`${bankName(t.transfer.payer_bank)} ${t.transfer.payer_account}`} mono />
+          <Stacked title={`تحويل · ${label(transferChannel, t.transfer.channel)}`} sub={`${bankName(t.transfer.payer_bank)} · ${t.invoice_no ?? ""}`} />
         ) : (
-          <Stacked title={label(methodLabels, t.method)} sub={t.payer_hint} mono />
+          <Stacked title={label(methodLabels, t.method)} sub={<span className="mono">{t.invoice_no || t.payer_hint || t.id.slice(0, 8)}</span>} />
         ),
-    },
-    {
-      key: "number",
-      header: "الرقم",
-      wideOnly: true,
-      mobile: "meta",
-      cell: (t) => (
-        <span className="mono" title={dateTime(t.created_at)}>
-          {t.invoice_no || t.id.slice(0, 8)}
-        </span>
-      ),
-    },
-    {
-      key: "detail",
-      header: "ملاحظة",
-      mobile: "subtitle",
-      wideOnly: true,
-      cell: (t) =>
-        t.error_detail ? (
-          <span className="faint">{t.error_detail}</span>
-        ) : t.confirmed_by ? (
-          <span className="faint">أكّده {t.confirmed_by.replace(/^operator:/, "")}</span>
-        ) : null,
     },
     {
       key: "actions",
       header: "",
+      align: "end",
       mobile: "actions",
       cell: (t) =>
         t.status === "review" ? (
@@ -150,11 +150,11 @@ export function TopUpsTable({ topUps, loading, showShop = true }: { topUps: TopU
             تحقّق
           </Button>
         ) : !t.transfer && (t.status === "pending" || t.status === "failed" || t.status === "expired") ? (
-          <div className="row">
-            <Button size="sm" icon={<RefreshCw />} loading={check.busy && checking === t.id} title="اسأل دفع عنها الآن" onClick={() => void runCheck(t)}>
+          <div className="row-actions">
+            <Button size="sm" variant="ghost" icon={<RefreshCw />} loading={check.busy && checking === t.id} title="اسأل دفع عنها الآن" onClick={() => void runCheck(t)}>
               مراجعة
             </Button>
-            <Button size="sm" variant="money" icon={<BadgeCheck />} onClick={() => setConfirming(t)}>
+            <Button size="sm" variant="ghost" icon={<BadgeCheck />} title="رأيتها مدفوعة في لوحة دفع" onClick={() => setConfirming(t)}>
               تأكيد
             </Button>
           </div>

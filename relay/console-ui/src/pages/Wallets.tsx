@@ -1,17 +1,13 @@
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Search, Wallet2 } from "lucide-react";
-import { api } from "../lib/api";
+import { Search, Settings2, Wallet2 } from "lucide-react";
 import { useInstallations, useWallets } from "../lib/queries";
-import { useRouter, useSearchParam } from "../lib/router";
+import { Link, useRouter, useSearchParam } from "../lib/router";
 import { matches } from "../lib/search";
 import { money } from "../lib/format";
 import { account as accountLabels } from "../lib/labels";
 import { Card, Empty, Money, Segmented, Skeleton } from "../components/ui";
 import { DataTable, Stacked, type Column } from "../components/DataTable";
 import { PageHeader } from "../components/PageHeader";
-import { ConfigList, testOrLive, yesNo } from "../components/ConfigList";
-import { BankAccountsCard } from "../components/BankAccountsCard";
 
 type Row = { id: string; name: string; main: number; sms: number; vouchers: number };
 type Sort = "main" | "sms" | "vouchers" | "name";
@@ -23,7 +19,6 @@ export function Wallets() {
   const [query, setQuery] = useSearchParam("q");
   const [sort, setSort] = useSearchParam("sort");
   const order = (sort || "main") as Sort;
-  const config = useQuery({ queryKey: ["wallet", "config"], queryFn: () => api.get<Record<string, unknown>>("/v1/wallet/admin/config"), retry: false });
 
   const { rows, totals } = useMemo(() => {
     const byShop = new Map<string, Row>();
@@ -92,34 +87,11 @@ export function Wallets() {
             empty={<Empty icon={<Wallet2 />} title="لا محافظ بعد" />}
           />
         </Card>
-        <BankAccountsCard />
-        <Card title="بوابة الدفع (دفع)" hint="لا يظهر هنا أي مفتاح">
-          {config.isLoading ? (
-            <Skeleton height={80} />
-          ) : config.isError ? (
-            <Empty title="الإعداد غير متاح" />
-          ) : (
-            <ConfigList
-              data={config.data}
-              hide={["plans"]}
-              fields={{
-                test_mode: { label: "الوضع", render: testOrLive },
-                key_environment: { label: "بيئة المفتاح" },
-                api_key_set: { label: "المفتاح مضبوط", render: yesNo },
-                dafa_base_url: { label: "عنوان دفع" },
-                public_url: { label: "العنوان العام للخادم" },
-                webhook_base: { label: "عنوان الإشعارات" },
-                min: { label: "أقل شحنة", render: (v) => money(String(v)) },
-                max: { label: "أكبر شحنة", render: (v) => money(String(v)) },
-                quick_amounts: { label: "مبالغ سريعة" },
-                methods: { label: "طرق الدفع" },
-                sms_price: { label: "سعر جزء الرسالة", render: (v) => money(String(v)) },
-                rate_limit: { label: "حد الطلبات" },
-                request_timeout: { label: "مهلة الطلب" },
-                store_supports_wallets: { label: "المخزن يدعم المحافظ", render: yesNo },
-              }}
-            />
-          )}
+        <Card>
+          <div className="moved-note">
+            <Settings2 width={16} />
+            حسابات استلام التحويلات وإعداد بوابة الدفع في <Link to="/settings?section=bank">الإعدادات</Link>.
+          </div>
         </Card>
       </div>
     </>

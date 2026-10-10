@@ -10,6 +10,7 @@ import { Dialog } from "../../components/dialog";
 import { PasskeyHint } from "../../components/guarded";
 import { useToast } from "../../components/toast";
 import { useCatalog } from "./Catalog";
+import { diffCatalog, type CatalogDiff } from "../../lib/catalogDiff";
 
 const IMAGE_PREFIX = "sha256:";
 
@@ -114,6 +115,9 @@ export function PublishCatalogDialog({ open, onClose }: { open: boolean; onClose
       }
     : null;
 
+  const diff = parsed.doc ? diffCatalog(current.data?.catalog?.document as Record<string, unknown> | undefined, parsed.doc) : null;
+  const removing = diff ? diff.itemsRemoved.length + diff.brandsRemoved.length : 0;
+
   async function publish() {
     if (!parsed.doc || missing.length) return;
     setBusy(true);
@@ -165,13 +169,14 @@ export function PublishCatalogDialog({ open, onClose }: { open: boolean; onClose
       onClose={onClose}
       busy={busy}
       wide
+      dirty={files.length > 0 || (mode === "edit" && text !== JSON.stringify(current.data?.catalog?.document ?? null, null, 2))}
       title="نشر نسخة من الكتالوج"
       subtitle="تُرفع الصور أولاً ثم يُنشر الكتالوج دفعة واحدة. كل نسخة تبقى في السجل."
       icon={<Upload />}
       footer={
         <>
           <Button variant="primary" size="lg" loading={busy} disabled={!parsed.doc || missing.length > 0} onClick={publish}>
-            انشر الكتالوج
+            {diff?.empty ? "انشر (لا تغيير)" : removing ? `انشر — يحذف ${removing}` : "انشر الكتالوج"}
           </Button>
           <Button size="lg" onClick={onClose} disabled={busy}>
             إلغاء
@@ -234,6 +239,8 @@ export function PublishCatalogDialog({ open, onClose }: { open: boolean; onClose
           </Field>
         )}
 
+        {diff && <CatalogChanges diff={diff} />}
+
         {parsed.error && (
           <Notice tone="danger" icon={<TriangleAlert />}>
             {parsed.error}
@@ -290,5 +297,49 @@ export function PublishCatalogDialog({ open, onClose }: { open: boolean; onClose
         <PasskeyHint />
       </div>
     </Dialog>
+  );
+}
+
+const fieldNames: Record<string, string> = { price: "سعر المتجر", retail_price: "سعر الزبون", active: "الظهور" };
+
+/** What this version changes, before the tap: removals first, they cost the most. */
+function CatalogChanges({ diff }: { diff: CatalogDiff }) {
+  const [all, setAll] = useState(false);
+  if (diff.empty) {
+    return (
+      <Notice tone="info" icon={<FileJson />}>
+        هذه النسخة مطابقة للمنشورة: لن يتغير شيء عند المتاجر.
+      </Notice>
+    );
+  }
+  const lines: { tone: "danger" | "success" | "info"; text: string }[] = [
+    ...diff.brandsRemoved.map((b) => ({ tone: "danger" as const, text: `تُحذف علامة ${b} كاملة` })),
+    ...diff.itemsRemoved.map((i) => ({ tone: "danger" as const, text: `يُحذف ${i.brand} — ${i.label}` })),
+    ...diff.brandsAdded.map((b) => ({ tone: "success" as const, text: `علامة جديدة: ${b}` })),
+    ...diff.itemsAdded.map((i) => ({ tone: "success" as const, text: `صنف جديد: ${i.brand} — ${i.label}` })),
+    ...diff.changed.map((c) => ({ tone: "info" as const, text: `${c.brand} — ${c.label}: ${fieldNames[c.field]} ${c.before || "—"} ← ${c.after || "—"}` })),
+  ];
+  const shown = all ? lines : lines.slice(0, 8);
+  return (
+    <div className="catalog-changes">
+      <div className="cc-summary">
+        <strong>ما الذي سيتغير عند المتاجر</strong>
+        {diff.itemsRemoved.length + diff.brandsRemoved.length > 0 && <Badge tone="danger">{diff.itemsRemoved.length + diff.brandsRemoved.length} حذف</Badge>}
+        {diff.itemsAdded.length + diff.brandsAdded.length > 0 && <Badge tone="success">{diff.itemsAdded.length + diff.brandsAdded.length} إضافة</Badge>}
+        {diff.changed.length > 0 && <Badge tone="info">{diff.changed.length} تعديل</Badge>}
+      </div>
+      <ul>
+        {shown.map((l, i) => (
+          <li key={i} className={l.tone}>
+            {l.text}
+          </li>
+        ))}
+      </ul>
+      {lines.length > 8 && (
+        <button type="button" className="disclosure" onClick={() => setAll(!all)}>
+          {all ? "أقل" : `كل التغييرات (${lines.length})`}
+        </button>
+      )}
+    </div>
   );
 }

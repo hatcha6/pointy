@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -45,6 +46,19 @@ type AlertStore interface {
 	// ReleaseAlert drops the mark key. True means it was there: the
 	// condition it marked had been alerted, and its end is worth saying.
 	ReleaseAlert(ctx context.Context, key string) (bool, error)
+	// ListAlertMarks is every mark whose key starts with prefix: conditions
+	// alerted and not yet over (a balance still low), oldest first.
+	ListAlertMarks(ctx context.Context, prefix string) ([]AlertMark, error)
+}
+
+// AlertMark is one condition the alert channel has said and not unsaid.
+type AlertMark struct {
+	Key    string    `json:"key"`
+	SentAt time.Time `json:"sent_at"`
+}
+
+func sortAlertMarks(marks []AlertMark) {
+	sort.Slice(marks, func(i, j int) bool { return marks[i].SentAt.Before(marks[j].SentAt) })
 }
 
 // ErrInvalidAlertTopic is a topic ntfy would not accept, or one short enough
@@ -117,6 +131,19 @@ func (s *FileStore) ReleaseAlert(_ context.Context, key string) (bool, error) {
 	return ok, nil
 }
 
+func (s *FileStore) ListAlertMarks(_ context.Context, prefix string) ([]AlertMark, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	marks := []AlertMark{}
+	for key, at := range s.alertMarks {
+		if strings.HasPrefix(key, prefix) {
+			marks = append(marks, AlertMark{Key: key, SentAt: at})
+		}
+	}
+	sortAlertMarks(marks)
+	return marks, nil
+}
+
 // --- postgres store --------------------------------------------------------
 
 func (s *PostgresStore) AlertSettings(ctx context.Context) (AlertSettings, error) {
@@ -172,6 +199,23 @@ func (s *PostgresStore) ReleaseAlert(ctx context.Context, key string) (bool, err
 	return tag.RowsAffected() == 1, nil
 }
 
+func (s *PostgresStore) ListAlertMarks(ctx context.Context, prefix string) ([]AlertMark, error) {
+	rows, err := s.pool.Query(ctx, `SELECT key, sent_at FROM relay_alert_marks WHERE starts_with(key, $1) ORDER BY sent_at`, prefix)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	marks := []AlertMark{}
+	for rows.Next() {
+		var mark AlertMark
+		if err := rows.Scan(&mark.Key, &mark.SentAt); err != nil {
+			return nil, err
+		}
+		marks = append(marks, mark)
+	}
+	return marks, rows.Err()
+}
+
 // --- cache wrapper -----------------------------------------------------------
 
 func (s *CachedInstallationStore) alertStore() (AlertStore, error) {
@@ -212,4 +256,12 @@ func (s *CachedInstallationStore) ReleaseAlert(ctx context.Context, key string) 
 		return false, err
 	}
 	return store.ReleaseAlert(ctx, key)
+}
+
+func (s *CachedInstallationStore) ListAlertMarks(ctx context.Context, prefix string) ([]AlertMark, error) {
+	store, err := s.alertStore()
+	if err != nil {
+		return nil, err
+	}
+	return store.ListAlertMarks(ctx, prefix)
 }

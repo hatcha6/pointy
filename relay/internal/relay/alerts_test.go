@@ -1,6 +1,7 @@
 package relay
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -9,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"pointy/relay/internal/alerts"
 	"pointy/relay/internal/control"
@@ -141,5 +143,27 @@ func TestWalletTopUpAlertSaysAmountShopAndOutcome(t *testing.T) {
 	test, _ := walletTopUpAlert(topUp, "paid_confirm", "")
 	if !strings.HasPrefix(test.Title, "[TEST] ") || test.Priority > alerts.PriorityLow {
 		t.Fatalf("test money must read as test and stay quiet: %+v", test)
+	}
+}
+
+func TestActiveAlertsListsLowBalances(t *testing.T) {
+	server, _ := newAlertServer(t)
+	store := server.Store.(control.AlertStore)
+	if _, err := store.ClaimAlert(context.Background(), "balance_low:reloadly", time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ClaimAlert(context.Background(), "wallet_paid:abc", time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	code, body := alertRequest(t, server, http.MethodGet, "/v1/alerts/active", true)
+	alerts, _ := body["alerts"].([]any)
+	if code != http.StatusOK || len(alerts) != 1 {
+		t.Fatalf("active %d %v", code, body)
+	}
+	if first := alerts[0].(map[string]any); first["kind"] != "balance_low" || first["source"] != "reloadly" {
+		t.Fatalf("alert %v", first)
+	}
+	if code, _ := alertRequest(t, server, http.MethodGet, "/v1/alerts/active", false); code != http.StatusUnauthorized {
+		t.Fatalf("admin-only: %d", code)
 	}
 }

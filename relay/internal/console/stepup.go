@@ -44,6 +44,8 @@ var stepUpRules = []stepUpRule{
 	rule(http.MethodPost, "/v1/wallet/admin/entries"),
 	rule(http.MethodPost, "/v1/wallet/admin/topups/*/confirm"),
 	rule(http.MethodPost, "/v1/wallet/admin/topups/*/reject"),
+	// The company's books: a line taken out changes the profit an owner reads.
+	rule(http.MethodPost, "/v1/finance/entries/*/void"),
 	// Where shops send their money.
 	rule(http.MethodPut, "/v1/wallet/admin/bank-accounts"),
 	rule(http.MethodPost, "/v1/vouchers/admin/purchases/*/resolve"),

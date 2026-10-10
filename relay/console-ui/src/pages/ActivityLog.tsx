@@ -56,6 +56,7 @@ export function ActivityLog() {
             onChange={setArea}
             options={[
               { id: "", label: "الكل" },
+              { id: "/v1/finance/", label: "الدفتر" },
               { id: "/v1/wallet/", label: "المحافظ" },
               { id: "/v1/installations", label: "المتاجر" },
               { id: "/v1/vouchers/", label: "البطاقات" },

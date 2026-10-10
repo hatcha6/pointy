@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Unavailable } from "../../components/Unavailable";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Activity, Calculator, Globe2, Languages, RefreshCw, Search, TriangleAlert } from "lucide-react";
 import { api, qs } from "../../lib/api";
@@ -81,7 +82,7 @@ function DirectoryTab({ onQuote }: { onQuote: (q: QuoteInput) => void }) {
   const shown = countries.filter((c) => matches(query, c.name, c.name_en, c.code));
 
   if (directory.isLoading) return <Skeleton height={300} />;
-  if (directory.isError) return <Empty title="الخدمات غير متاحة على هذا الخادم">{String((directory.error as Error)?.message ?? "")}</Empty>;
+  if (directory.isError) return <Unavailable feature="services" error={directory.error} onRetry={() => void directory.refetch()} />;
   const d = directory.data!.directory;
   return (
     <div className="stack">

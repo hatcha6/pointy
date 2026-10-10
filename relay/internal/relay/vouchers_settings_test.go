@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -505,5 +506,42 @@ func TestVoucherAdminPurchasesCanBeListedByKind(t *testing.T) {
 	}
 	if status, body := h.admin(t, http.MethodGet, "/purchases?kind=gift", ``); status != http.StatusBadRequest {
 		t.Fatalf("an unknown kind: %d %v", status, body)
+	}
+}
+
+func TestVoucherSettingsPreviewPricesADraftWithoutPublishing(t *testing.T) {
+	h := newSettingsHarness(t)
+	draft := `{"usd_rate":"7","usd_rate_source":"manual","funding_percent":"2","airtime":{"service_fee_lyd":"0.5"}}`
+	status, body := h.admin(t, http.MethodPost, "/settings/preview",
+		`{"settings":`+draft+`,"samples":[{"kind":"card","cost":"10","currency":"USD"},{"kind":"airtime","cost":"20","currency":"LYD"},{"kind":"card","cost":"x","currency":"LYD"}]}`)
+	if status != http.StatusOK || body["valid"] != true {
+		t.Fatalf("preview %d %v", status, body)
+	}
+	settings, err := vouchers.ParseSettings([]byte(draft))
+	if err != nil {
+		t.Fatal(err)
+	}
+	samples := body["samples"].([]any)
+	card := asMap(t, samples[0])
+	costLYD, _ := settings.USDToLYD(big.NewRat(10, 1))
+	want, _ := settings.ServicePrices("card", costLYD)
+	if card["cost_lyd"] != "71.400" || card["shop_pays"] != control.FormatWalletAmount(want.ShopPays) || card["retail"] != control.FormatWalletAmount(want.Retail) {
+		t.Fatalf("card %v want shop %s retail %s", card, want.ShopPays.FloatString(3), want.Retail.FloatString(3))
+	}
+	if airtime := asMap(t, samples[1]); airtime["fee"] != "0.500" {
+		t.Fatalf("airtime fee %v", airtime)
+	}
+	if bad := asMap(t, samples[2]); bad["problem"] != "cost" {
+		t.Fatalf("bad cost %v", bad)
+	}
+	if rate := asMap(t, body["rate"]); rate["source"] != "manual" || rate["rate"] != "7.0000" {
+		t.Fatalf("rate %v", rate)
+	}
+	// A draft that does not read is said, not refused.
+	if status, body := h.admin(t, http.MethodPost, "/settings/preview", `{"settings":{"retial_step":"1"}}`); status != http.StatusOK || body["valid"] != false {
+		t.Fatalf("bad draft %d %v", status, body)
+	}
+	if _, err := h.store.FileStore.CurrentVoucherSettings(context.Background()); err == nil {
+		t.Fatal("a preview must publish nothing")
 	}
 }

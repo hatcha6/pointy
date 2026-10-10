@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { Download, KeyRound, Plus, Search, Store, TriangleAlert } from "lucide-react";
-import { keys, useFleet, useInstallations, useWallets } from "../lib/queries";
+import { CalendarPlus, Download, KeyRound, Plus, PlusCircle, Search, Store, TriangleAlert } from "lucide-react";
+import { keys, useFleet, useInstallationsWithPresence, useWallets } from "../lib/queries";
 import { useRouter, useSearchParam } from "../lib/router";
 import { matches } from "../lib/search";
 import { count, date, days as dayCount, daysUntil } from "../lib/format";
@@ -12,7 +12,9 @@ import { PageHeader } from "../components/PageHeader";
 import { Dialog } from "../components/dialog";
 import { PasskeyHint, useAction } from "../components/guarded";
 
-type Filter = "all" | "active" | "expiring" | "inactive";
+type Filter = "all" | "active" | "expiring" | "inactive" | "offline";
+type Sort = "name" | "ends" | "balance" | "seen";
+type ShopRow = Installation & { connector_online?: boolean };
 
 export function subscriptionBadge(shop: Installation) {
   const days = daysUntil(shop.subscription_ends_at);
@@ -29,11 +31,13 @@ export function isExpiring(shop: Installation): boolean {
 
 export function Shops() {
   const { navigate } = useRouter();
-  const installations = useInstallations();
+  const installations = useInstallationsWithPresence();
   const wallets = useWallets();
   const fleet = useFleet();
   const [query, setQuery] = useSearchParam("q");
   const [filter, setFilter] = useSearchParam("filter");
+  const [sortParam, setSort] = useSearchParam("sort");
+  const sort = (sortParam || "name") as Sort;
   const [creating, setCreating] = useState(false);
   const current = (filter || "all") as Filter;
 
@@ -50,18 +54,70 @@ export function Shops() {
     active: all.filter((s) => s.subscription_active).length,
     expiring: all.filter(isExpiring).length,
     inactive: all.filter((s) => !s.subscription_active).length,
+    offline: all.filter((s) => s.connector_online === false).length,
+  };
+  const time = (v: string | null | undefined, missing: number) => (v ? new Date(v).getTime() : missing);
+  const sorters: Record<Sort, (a: ShopRow, b: ShopRow) => number> = {
+    name: (a, b) => (a.shop_name || "").localeCompare(b.shop_name || "", "ar"),
+    ends: (a, b) => time(a.subscription_ends_at, Infinity) - time(b.subscription_ends_at, Infinity),
+    balance: (a, b) => Number(balanceOf.get(b.id) ?? 0) - Number(balanceOf.get(a.id) ?? 0),
+    seen: (a, b) => time(b.last_connector_connected_at, 0) - time(a.last_connector_connected_at, 0),
   };
   const rows = all
     .filter((shop) => matches(query, shop.shop_name, shop.id, shop.business_id))
     .filter((shop) =>
-      current === "active" ? shop.subscription_active : current === "inactive" ? !shop.subscription_active : current === "expiring" ? isExpiring(shop) : true,
+      current === "active"
+        ? shop.subscription_active
+        : current === "inactive"
+          ? !shop.subscription_active
+          : current === "expiring"
+            ? isExpiring(shop)
+            : current === "offline"
+              ? shop.connector_online === false
+              : true,
     )
-    .sort((a, b) => (a.shop_name || "").localeCompare(b.shop_name || "", "ar"));
+    .sort(sorters[sort] ?? sorters.name);
 
-  const columns: Column<Installation>[] = [
-    { key: "shop", header: "المتجر", mobile: "title", cell: (s) => <Stacked title={s.shop_name || "متجر بلا اسم"} sub={s.id} mono /> },
-    { key: "status", header: "الاشتراك", mobile: "trailing", cell: subscriptionBadge },
-    { key: "ends", header: "ينتهي في", cell: (s) => date(s.subscription_ends_at) },
+  const columns: Column<ShopRow>[] = [
+    {
+      key: "shop",
+      header: "المتجر",
+      mobile: "title",
+      cell: (s) => (
+        <div className="shop-cell">
+          <span
+            className={`presence ${s.connector_online ? "on" : s.connector_online === false ? "off" : ""}`}
+            title={s.connector_online ? "متصل الآن" : "غير متصل"}
+            aria-label={s.connector_online ? "متصل الآن" : "غير متصل"}
+          />
+          <Stacked
+            title={s.shop_name || "متجر بلا اسم"}
+            sub={
+              s.connector_online ? (
+                "متصل الآن"
+              ) : s.last_connector_connected_at ? (
+                <>
+                  آخر اتصال <TimeAgo value={s.last_connector_connected_at} />
+                </>
+              ) : (
+                "لم يتصل بعد"
+              )
+            }
+          />
+        </div>
+      ),
+    },
+    {
+      key: "status",
+      header: "الاشتراك",
+      mobile: "trailing",
+      cell: (s) => (
+        <div className="status-cell">
+          {subscriptionBadge(s)}
+          <span className="faint status-note">{s.subscription_ends_at ? `حتى ${date(s.subscription_ends_at)}` : s.subscription_active ? "بلا تاريخ انتهاء" : ""}</span>
+        </div>
+      ),
+    },
     {
       key: "balance",
       header: "المحفظة",
@@ -80,8 +136,23 @@ export function Shops() {
         </div>
       ),
     },
-    { key: "seen", header: "آخر اتصال", cell: (s) => <TimeAgo value={s.last_connector_connected_at} /> },
     { key: "version", header: "الإصدار", wideOnly: true, mobile: "meta", cell: (s) => <span className="mono">{versionOf.get(s.id) || "—"}</span> },
+    {
+      key: "actions",
+      header: "",
+      align: "end",
+      mobile: "actions",
+      cell: (s) => (
+        <div className="row-actions">
+          <Button size="sm" variant="ghost" icon={<PlusCircle />} title="إضافة رصيد" onClick={() => navigate(`/shops/${encodeURIComponent(s.id)}?do=credit`)}>
+            رصيد
+          </Button>
+          <Button size="sm" variant="ghost" icon={<CalendarPlus />} title="تمديد الاشتراك" onClick={() => navigate(`/shops/${encodeURIComponent(s.id)}?do=extend`)}>
+            تمديد
+          </Button>
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -109,8 +180,15 @@ export function Shops() {
               { id: "active", label: `فعّال ${tally.active}` },
               { id: "expiring", label: `ينتهي قريباً ${tally.expiring}` },
               { id: "inactive", label: `متوقف ${tally.inactive}` },
+              { id: "offline", label: `غير متصل ${tally.offline}` },
             ]}
           />
+          <select className="select toolbar-select" value={sort} onChange={(e) => setSort(e.target.value === "name" ? "" : e.target.value)} aria-label="الترتيب">
+            <option value="name">ترتيب بالاسم</option>
+            <option value="ends">الأقرب انتهاءً أولاً</option>
+            <option value="balance">الأعلى رصيداً أولاً</option>
+            <option value="seen">آخر اتصال أولاً</option>
+          </select>
         </div>
         <DataTable
           rows={rows}

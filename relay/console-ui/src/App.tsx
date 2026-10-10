@@ -1,8 +1,9 @@
 import { Suspense, lazy, useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { onSignedOut } from "./lib/api";
+import { setPageTitle } from "./lib/title";
 import { keys, useMe } from "./lib/queries";
-import { match, usePath } from "./lib/router";
+import { match, usePath, useRouter } from "./lib/router";
 import { Shell } from "./components/Shell";
 import { pageTitles } from "./components/nav";
 import { Skeleton } from "./components/ui";
@@ -14,6 +15,7 @@ import { ShopDetail } from "./pages/ShopDetail";
 import { TopUps } from "./pages/TopUps";
 import { TopUpDetail } from "./pages/TopUpDetail";
 import { Purchases } from "./pages/Purchases";
+import { Finance } from "./pages/Finance";
 import { Card, Empty } from "./components/ui";
 import { Link } from "./lib/router";
 
@@ -28,8 +30,15 @@ const Services = lazy(() => import("./pages/vouchers/Services").then((m) => ({ d
 const Fleet = lazy(() => import("./pages/Fleet").then((m) => ({ default: m.Fleet })));
 const Operators = lazy(() => import("./pages/Operators").then((m) => ({ default: m.Operators })));
 const ActivityLog = lazy(() => import("./pages/ActivityLog").then((m) => ({ default: m.ActivityLog })));
-const Integrations = lazy(() => import("./pages/Integrations").then((m) => ({ default: m.Integrations })));
-const Alerts = lazy(() => import("./pages/Alerts").then((m) => ({ default: m.Alerts })));
+const Settings = lazy(() => import("./pages/Settings").then((m) => ({ default: m.Settings })));
+const Ledger = lazy(() => import("./pages/Ledger").then((m) => ({ default: m.Ledger })));
+
+/** An old address that moved: replaced, so Back does not bounce. */
+function Redirect({ to }: { to: string }) {
+  const { navigate } = useRouter();
+  useEffect(() => navigate(to, { replace: true }), [to]);
+  return null;
+}
 
 function Page({ path }: { path: string }) {
   const shop = match("/shops/:id", path);
@@ -45,16 +54,22 @@ function Page({ path }: { path: string }) {
       return <TopUps />;
     case "/purchases":
       return <Purchases />;
+    case "/finance":
+      return <Finance />;
+    case "/ledger":
+      return <Ledger />;
     case "/activity":
       return <ActivityLog />;
     case "/operators":
       return <Operators />;
     case "/integrations":
-      return <Integrations />;
+      return <Redirect to="/settings?section=integrations" />;
+    case "/settings":
+      return <Settings />;
     case "/fleet":
       return <Fleet />;
     case "/alerts":
-      return <Alerts />;
+      return <Redirect to="/settings?section=alerts" />;
     case "/wallets":
       return <Wallets />;
     case "/licenses":
@@ -103,7 +118,7 @@ export function App() {
 
   useEffect(() => {
     const name = pageTitles[path] ?? (path.startsWith("/shops/") ? "متجر" : path.startsWith("/topups/") ? "عملية شحن" : "");
-    document.title = name ? `${name} — دفتر` : "دفتر — لوحة التشغيل";
+    setPageTitle(name ? `${name} — دفتر` : "دفتر — لوحة التشغيل");
   }, [path]);
 
   if (path === "/invite") return <Invite />;

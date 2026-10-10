@@ -601,6 +601,13 @@ func (s HTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.withAdmin(w, r, s.handleSetIntegrationSwitch)
+	case r.URL.Path == "/v1/alerts/active" && r.Method == http.MethodGet:
+		// What the alert channel has said and not unsaid: a balance still low.
+		if !s.RouteMode.allowsAdmin() {
+			writeNotFound(w)
+			return
+		}
+		s.withAdmin(w, r, s.handleActiveAlerts)
 	case r.URL.Path == "/v1/alerts" && r.Method == http.MethodGet,
 		r.URL.Path == "/v1/alerts/topic" && r.Method == http.MethodPost,
 		r.URL.Path == "/v1/alerts/test" && r.Method == http.MethodPost:
@@ -617,7 +624,14 @@ func (s HTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		default:
 			s.withAdmin(w, r, s.handleAlertStatus)
 		}
-	case strings.HasPrefix(r.URL.Path, "/v1/artifacts/"):
+	case strings.HasPrefix(r.URL.Path, "/v1/finance/"):
+		// The company's books: hand-written lines and the profit summary.
+		if !s.RouteMode.allowsAdmin() {
+			writeNotFound(w)
+			return
+		}
+		s.withAdmin(w, r, s.handleFinanceRoutes)
+	case r.URL.Path == "/v1/artifacts" || strings.HasPrefix(r.URL.Path, "/v1/artifacts/"):
 		if !s.RouteMode.allowsAdmin() {
 			writeNotFound(w)
 			return
@@ -1935,10 +1949,51 @@ func (s HTTPServer) handleListInstallations(w http.ResponseWriter, r *http.Reque
 	for _, installation := range installations {
 		payloads = append(payloads, adminInstallationPayload(installation, now))
 	}
+	// ?presence=1 adds whether each shop's connector is connected now — one
+	// lookup per shop, so only the callers that show it ask for it.
+	if r.URL.Query().Get("presence") == "1" {
+		online := s.connectorsOnline(r.Context(), installations)
+		for i, installation := range installations {
+			payloads[i]["connector_online"] = online[installation.ID]
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"installations": payloads,
 		"count":         len(payloads),
 	})
+}
+
+// connectorsOnline is, per installation, whether its connector is connected to
+// this relay or (by presence) to any node. A failed lookup reads as offline.
+func (s HTTPServer) connectorsOnline(ctx context.Context, installations []control.Installation) map[string]bool {
+	online := make(map[string]bool, len(installations))
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	slots := make(chan struct{}, 16)
+	for _, installation := range installations {
+		id := installation.ID
+		if s.Hub != nil && s.Hub.IsOnline(id) {
+			mu.Lock()
+			online[id] = true
+			mu.Unlock()
+			continue
+		}
+		if s.Presence == nil {
+			continue
+		}
+		wg.Add(1)
+		slots <- struct{}{}
+		go func() {
+			defer wg.Done()
+			defer func() { <-slots }()
+			_, ok, err := s.Presence.Get(ctx, id)
+			mu.Lock()
+			online[id] = ok && err == nil
+			mu.Unlock()
+		}()
+	}
+	wg.Wait()
+	return online
 }
 
 func (s HTTPServer) handleInstallationAuditEvents(

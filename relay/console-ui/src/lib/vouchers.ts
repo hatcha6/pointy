@@ -69,6 +69,9 @@ export type CatalogRecord = { id: string; sha256: string; actor: string; note: s
 export type CatalogAnswer = { catalog: CatalogRecord | null; view: ShopView | null; supply: Supply[] };
 
 export type SupplierOffer = {
+  /** The supplier's price before its last change, and when it changed. */
+  previous_price?: string;
+  price_changed_at?: string | null;
   supplier: string;
   ref: string;
   name: string;

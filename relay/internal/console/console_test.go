@@ -635,3 +635,23 @@ func TestStepUpBeginTakesABodyHash(t *testing.T) {
 		t.Fatalf("a body that does not match its hash ran: %d", code)
 	}
 }
+
+func TestCompanyBooks(t *testing.T) {
+	h := newHarness(t)
+	b, key := h.register("Omar")
+	// Writing a line is bookkeeping: no tap, but the operator is named.
+	if code, _ := b.do(http.MethodPost, "/console/api/v1/finance/entries", json.RawMessage(`{"direction":"expense","actor":"someone else"}`)); code != http.StatusOK {
+		t.Fatalf("entry: %d", code)
+	}
+	if code, _ := b.do(http.MethodGet, "/console/api/v1/finance/summary", nil); code != http.StatusOK {
+		t.Fatalf("summary: %d", code)
+	}
+	// Taking a line out changes the profit an owner reads: a tap.
+	path := "/v1/finance/entries/fin_1/void"
+	if code, refused := b.do(http.MethodPost, "/console/api"+path, json.RawMessage(`{"reason":"twice"}`)); code != http.StatusForbidden || refused["code"] != "step_up_required" {
+		t.Fatalf("void ran without a tap: %d", code)
+	}
+	if code, _ := b.stepUp(key, http.MethodPost, path, `{"reason":"twice"}`); code != http.StatusOK {
+		t.Fatalf("stepped-up void: %d", code)
+	}
+}

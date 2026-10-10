@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -69,10 +70,38 @@ func TestPostgresStoreAlerts(t *testing.T) {
 	if !claim() {
 		t.Fatal("the mark is won again once the cooldown is over")
 	}
+	if marks, err := store.ListAlertMarks(ctx, "balance_low:"); err != nil || len(marks) != 1 || marks[0].Key != "balance_low:reloadly" {
+		t.Fatalf("marks %+v %v", marks, err)
+	}
+	if marks, _ := store.ListAlertMarks(ctx, "balance_unreadable:"); len(marks) != 0 {
+		t.Fatalf("other prefix %+v", marks)
+	}
 	if had, _ := store.ReleaseAlert(ctx, "balance_low:reloadly"); !had {
 		t.Fatal("release did not find the mark")
 	}
 	if had, _ := store.ReleaseAlert(ctx, "balance_low:reloadly"); had {
 		t.Fatal("a second release found a mark")
+	}
+}
+
+func TestFileStoreListsAlertMarksByPrefix(t *testing.T) {
+	ctx := context.Background()
+	store, err := NewFileStore(filepath.Join(t.TempDir(), "installations.json"), fixedClock{now: time.Date(2026, 10, 9, 10, 0, 0, 0, time.UTC)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"balance_low:reloadly", "balance_low:bnplus_lyd", "wallet_paid:x"} {
+		if _, err := store.ClaimAlert(ctx, key, time.Hour); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if marks, err := store.ListAlertMarks(ctx, "balance_low:"); err != nil || len(marks) != 2 {
+		t.Fatalf("marks %+v %v", marks, err)
+	}
+	if _, err := store.ReleaseAlert(ctx, "balance_low:reloadly"); err != nil {
+		t.Fatal(err)
+	}
+	if marks, _ := store.ListAlertMarks(ctx, "balance_low:"); len(marks) != 1 || marks[0].Key != "balance_low:bnplus_lyd" {
+		t.Fatalf("after release %+v", marks)
 	}
 }

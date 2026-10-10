@@ -15,17 +15,37 @@ const dateTimeFormat = new Intl.DateTimeFormat(LOCALE, {
 });
 const relative = new Intl.RelativeTimeFormat(LOCALE, { numeric: "auto" });
 
+// An amount reads the Arabic way wherever it lands — the number first, on the
+// right, and its currency after it, on the left: "د.ل 2,400.00" on screen.
+// The whole amount is a right-to-left isolate, so the text around it cannot
+// reorder it; the number (with its sign) is a left-to-right isolate inside
+// it, so "+2,400.00" and "−80.00" keep the sign in front.
+const RTL_START = "\u2067";
+const LTR_START = "\u2066";
+const END = "\u2069";
+
+function amount(n: number, currency: string, sign = ""): string {
+  return `${RTL_START}${LTR_START}${sign}${moneyFormat.format(n)}${END} ${currency}${END}`;
+}
+
 export function money(value: string | number | null | undefined, currency = "د.ل"): string {
   if (value === null || value === undefined || value === "") return "—";
   const n = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(n)) return String(value);
-  return `${moneyFormat.format(n)} ${currency}`;
+  return amount(n, currency);
+}
+
+/** An amount with its sign always shown: "+2,400.00", "−80.00". */
+export function moneySigned(value: string | number, currency = "د.ل"): string {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return String(value);
+  return amount(Math.abs(n), currency, n > 0 ? "+" : n < 0 ? "−" : "");
 }
 
 export function signedMoney(value: string | number): string {
   const n = Number(value);
   if (!Number.isFinite(n)) return String(value);
-  return (n > 0 ? "+" : n < 0 ? "−" : "") + money(Math.abs(n));
+  return moneySigned(n);
 }
 
 export function count(value: number | null | undefined): string {

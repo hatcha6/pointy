@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
+import { Unavailable } from "../components/Unavailable";
 import { Activity, CalendarCheck2, ChevronLeft, CircleMinus, CreditCard, FileDown, History, LayoutDashboard, PauseCircle, Pencil, PlayCircle, PlusCircle, RotateCcw, Wallet as WalletIcon, Wifi, WifiOff } from "lucide-react";
-import { useConsoleAudit, useEntries, useInstallation, useInstallationAudit, useInstallationStatus, usePurchases, useTopUps, useWallets, keys } from "../lib/queries";
+import { useEntries, useInstallation, useInstallationStatus, usePurchases, useTopUps, useWallets, keys } from "../lib/queries";
 import { Link, useSearchParam } from "../lib/router";
-import { account as accountLabels, auditLabel } from "../lib/labels";
-import { date, dateTime } from "../lib/format";
+import { rememberShop } from "../lib/recent";
+import { account as accountLabels } from "../lib/labels";
+import { date } from "../lib/format";
 import type { Installation } from "../lib/types";
+import { ShopBooksCard } from "../components/finance/ShopBooksCard";
 import { Badge, Button, Card, CopyText, Empty, Money, Notice, Segmented, Skeleton, Tabs, TimeAgo } from "../components/ui";
 import { Dialog } from "../components/dialog";
 import { useAction } from "../components/guarded";
@@ -13,10 +16,12 @@ import { WalletEntryDialog, type EntryMode } from "../components/money-dialogs";
 import { SubscriptionDialog } from "../components/SubscriptionDialog";
 import { subscriptionBadge } from "./Shops";
 import { DiagnosticsDialog, RenameDialog, UpdatesCard } from "./shop/ShopManage";
+import { ShopTimeline } from "./shop/ShopTimeline";
 
 type Tab = "overview" | "wallet" | "topups" | "purchases" | "history";
 
 export function ShopDetail({ id }: { id: string }) {
+  useEffect(() => rememberShop(id), [id]);
   const shop = useInstallation(id);
   const wallets = useWallets();
   const [tab, setTab] = useSearchParam("tab");
@@ -106,15 +111,15 @@ export function ShopDetail({ id }: { id: string }) {
           { id: "wallet", label: "المحفظة", icon: <WalletIcon width={16} /> },
           { id: "topups", label: "الشحن", icon: <Activity width={16} /> },
           { id: "purchases", label: "البطاقات والخدمات", icon: <CreditCard width={16} /> },
-          { id: "history", label: "السجل", icon: <History width={16} /> },
+          { id: "history", label: "كل ما حدث", icon: <History width={16} /> },
         ]}
       />
 
-      {current === "overview" && <Overview shop={data} balances={balances} onCredit={() => setEntryMode("credit")} onSubscription={() => setSubscriptionOpen(true)} />}
+      {current === "overview" && <Overview shop={data} balances={balances} onSubscription={() => setSubscriptionOpen(true)} />}
       {current === "wallet" && <WalletTab id={id} balances={balances} onEntry={setEntryMode} />}
       {current === "topups" && <ShopTopUps id={id} />}
       {current === "purchases" && <ShopPurchases id={id} />}
-      {current === "history" && <ShopHistory id={id} />}
+      {current === "history" && <ShopTimeline id={id} />}
 
       <WalletEntryDialog
         open={entryMode !== null}
@@ -131,7 +136,7 @@ export function ShopDetail({ id }: { id: string }) {
   );
 }
 
-function Overview({ shop, balances, onCredit, onSubscription }: { shop: Installation; balances: Record<string, string>; onCredit: () => void; onSubscription: () => void }) {
+function Overview({ shop, balances, onSubscription }: { shop: Installation; balances: Record<string, string>; onSubscription: () => void }) {
   const status = useInstallationStatus(shop.id);
   const [toggling, setToggling] = useState<"enable" | "disable" | null>(null);
   const online = status.data?.connector_presence?.online || status.data?.connector_online_local;
@@ -145,7 +150,7 @@ function Overview({ shop, balances, onCredit, onSubscription }: { shop: Installa
           </div>
           <div className="fact">
             <dt>ينتهي في</dt>
-            <dd>{date(shop.subscription_ends_at)}</dd>
+            <dd>{shop.subscription_ends_at ? date(shop.subscription_ends_at) : shop.subscription_active ? "بلا تاريخ انتهاء" : "—"}</dd>
           </div>
           <div className="fact">
             <dt>الوصول عن بعد</dt>
@@ -173,7 +178,7 @@ function Overview({ shop, balances, onCredit, onSubscription }: { shop: Installa
         </div>
       </Card>
 
-      <Card title="المحفظة" actions={<Button size="sm" variant="money" icon={<PlusCircle />} onClick={onCredit}>إضافة رصيد</Button>}>
+      <Card title="المحفظة" actions={<Link to={`/shops/${encodeURIComponent(shop.id)}?tab=wallet`}>الحركات</Link>}>
         <div className="balance-big">
           <Money value={balances.main} />
         </div>
@@ -186,6 +191,8 @@ function Overview({ shop, balances, onCredit, onSubscription }: { shop: Installa
           </span>
         </div>
       </Card>
+
+      <ShopBooksCard shopId={shop.id} />
 
       <Card title="الاتصال" hint={status.isFetching ? "يُحدَّث…" : undefined}>
         {status.isLoading ? (
@@ -340,7 +347,7 @@ function ShopPurchases({ id }: { id: string }) {
   if (purchases.isError) {
     return (
       <Card>
-        <Empty title="متجر البطاقات غير متاح على هذا الخادم" />
+        <Unavailable feature="vouchers" error={purchases.error} onRetry={() => void purchases.refetch()} />
       </Card>
     );
   }
@@ -351,49 +358,3 @@ function ShopPurchases({ id }: { id: string }) {
   );
 }
 
-function ShopHistory({ id }: { id: string }) {
-  const changes = useInstallationAudit(id);
-  const fromConsole = useConsoleAudit({ q: id });
-  return (
-    <div className="grid two">
-      <Card tight title="تغييرات الاشتراك">
-        <div className="timeline">
-          {changes.isLoading && <div className="card-body"><Skeleton height={80} /></div>}
-          {(changes.data ?? []).map((event) => (
-            <div key={event.id} className="timeline-item">
-              <div className="t-icon">
-                <CalendarCheck2 />
-              </div>
-              <div className="t-body">
-                <strong>{event.reason || event.action}</strong>
-                <div className="t-meta">
-                  {event.actor || "—"} · <span title={dateTime(event.created_at)}>{dateTime(event.created_at)}</span>
-                </div>
-              </div>
-            </div>
-          ))}
-          {!changes.isLoading && (changes.data ?? []).length === 0 && <Empty title="لا تغييرات بعد" />}
-        </div>
-      </Card>
-      <Card tight title="من لوحة التشغيل">
-        <div className="timeline">
-          {(fromConsole.data ?? []).map((event) => (
-            <div key={event.id} className="timeline-item">
-              <div className={`t-icon ${event.stepped_up ? "money" : ""}`}>
-                <Activity />
-              </div>
-              <div className="t-body">
-                <strong>{auditLabel(event.action, event.method, event.path)}</strong>
-                <div className="t-meta">
-                  {event.operator_name} · {dateTime(event.at)}
-                  {event.status >= 400 && <> · <Badge tone="danger">رُفضت {event.status}</Badge></>}
-                </div>
-              </div>
-            </div>
-          ))}
-          {!fromConsole.isLoading && (fromConsole.data ?? []).length === 0 && <Empty title="لا عمليات من اللوحة بعد" />}
-        </div>
-      </Card>
-    </div>
-  );
-}

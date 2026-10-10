@@ -10,6 +10,8 @@ import "@fontsource/ibm-plex-sans-arabic/latin-600.css";
 import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/ui.css";
+import "./styles/finance.css";
+import "./styles/pages.css";
 import "./styles/responsive.css";
 import { App } from "./App";
 import { RouterProvider } from "./lib/router";

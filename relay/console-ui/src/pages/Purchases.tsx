@@ -1,12 +1,17 @@
 import { usePurchases } from "../lib/queries";
-import { useSearchParam } from "../lib/router";
-import { Card, Empty, Segmented } from "../components/ui";
+import { Unavailable } from "../components/Unavailable";
+import { useSearchParam, useSetSearch } from "../lib/router";
+import { matches } from "../lib/search";
+import { Search } from "lucide-react";
+import { Card, Segmented } from "../components/ui";
 import { PurchasesTable } from "../components/tables";
 
 export function Purchases() {
-  const [held, setHeld] = useSearchParam("held");
+  const [held] = useSearchParam("held");
   const [kind, setKind] = useSearchParam("kind");
-  const [status, setStatus] = useSearchParam("status");
+  const [status] = useSearchParam("status");
+  const [query, setQuery] = useSearchParam("q");
+  const setSearch = useSetSearch();
   const filter: Record<string, string> = {};
   if (held) filter.held = "1";
   if (kind) filter.kind = kind;
@@ -22,12 +27,13 @@ export function Purchases() {
       </div>
       <Card tight>
         <div className="toolbar stacks">
+          <div className="search-input">
+            <Search />
+            <input className="input" placeholder="متجر، صنف، رقم طلب المورّد، المبلغ…" value={query} onChange={(e) => setQuery(e.target.value)} />
+          </div>
           <Segmented
             value={held ? "held" : status}
-            onChange={(v) => {
-              setHeld(v === "held" ? "1" : "");
-              setStatus(v === "held" ? "" : v);
-            }}
+            onChange={(v) => setSearch({ held: v === "held" ? "1" : "", status: v === "held" ? "" : v })}
             options={[
               { id: "", label: "الكل" },
               { id: "held", label: "معلّقة" },
@@ -48,9 +54,12 @@ export function Purchases() {
           />
         </div>
         {purchases.isError ? (
-          <Empty title="متجر البطاقات غير متاح على هذا الخادم" />
+          <Unavailable feature="vouchers" error={purchases.error} onRetry={() => void purchases.refetch()} />
         ) : (
-          <PurchasesTable purchases={purchases.data ?? []} loading={purchases.isLoading} />
+          <PurchasesTable
+            purchases={(purchases.data ?? []).filter((p) => matches(query, p.shop_name, p.name, p.id, p.supplier_order_id, p.target, p.amount))}
+            loading={purchases.isLoading}
+          />
         )}
       </Card>
     </>

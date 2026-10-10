@@ -359,6 +359,24 @@ Security model:
 - CSRF: a custom header on every call plus an `Origin` check plus `SameSite`.
   CSP allows only the console's own scripts; the page cannot be framed.
 
+**Company books** (`/console/finance`, `/console/ledger`; API `/v1/finance/...`,
+admin-only). The profit page adds up what the relay already records — what
+shops paid from their wallets for each service, less refunds; supplier costs
+(dollars at today's pricing rate, an estimate the page states); Resala's cost
+per text — plus hand-written ledger lines for what the relay cannot see
+(hosting, salaries, a subscription paid in cash). Test-mode rows never count.
+A top-up is the shop's money until it is spent, so it is shown beside the
+result, never in it. Lines are never edited or deleted: a mistake is voided
+with a reason (passkey tap) and entered again. Months are Libyan (UTC+2).
+A line can carry its invoice or receipt (photos or PDFs, 10 MB each, in the
+same content-addressed store as bank-transfer receipts; one can be added
+later, none removed). Monthly lines (rent, hosting, salaries) write their own
+line on their day ("auto"), or wait as due until an operator confirms the
+month's real amount or skips it ("confirm"); each month's line is keyed
+`recurring:<id>:<month>`, so it is written once. Due lines are written when
+the books are read. Console shortcuts: ⌘K or `/`, `n` new expense, `g` then a
+letter to jump, `?` for the list.
+
 The first operator is invited from the CLI; after that, operators invite each
 other from the console:
 
@@ -380,6 +398,7 @@ relay/console-ui/scripts/dev-relay.sh invite "Your name"
 make relay-console-dev            # live-reload app on :5173 (relay origin :5173)
 ```
 
+The preview relay keeps update bundles in `console-ui/.dev-artifacts` (git-ignored).
 The preview relay uses its own database (`relay_console_dev`) and Redis db, and
 runs suppliers in test mode whatever `relay/.env` holds.
 

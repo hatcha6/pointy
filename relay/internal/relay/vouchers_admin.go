@@ -66,6 +66,8 @@ func (s HTTPServer) handleVoucherAdminRoutes(w http.ResponseWriter, r *http.Requ
 		s.handleVoucherAdminSettings(w, r, store)
 	case path == "/settings" && r.Method == http.MethodPut:
 		s.handleVoucherAdminSettingsPublish(w, r, store)
+	case path == "/settings/preview" && r.Method == http.MethodPost:
+		s.handleVoucherAdminSettingsPreview(w, r)
 	case path == "/settings/history" && r.Method == http.MethodGet:
 		s.handleVoucherAdminSettingsHistory(w, r, store)
 	case path == "/images" && r.Method == http.MethodPost:

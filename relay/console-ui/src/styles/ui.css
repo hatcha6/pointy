@@ -641,16 +641,23 @@ a.kpi-link:hover {
   align-items: center;
 }
 
+/* The console is right-to-left, so the unit sits on the left. Its room is
+   reserved on the left physically: number fields switch to left-to-right
+   (dir="ltr", .amount), and a logical padding would then move to the right
+   and leave the number under the unit. */
 .input-affix .affix {
   position: absolute;
-  inset-inline-end: 12px;
+  left: 12px;
   color: var(--muted);
   font-weight: 600;
   pointer-events: none;
 }
 
-.input-affix .input {
-  padding-inline-end: 44px;
+.input-affix .input,
+.input-affix .input[dir="ltr"],
+.input-affix .input.amount {
+  padding-left: 48px;
+  padding-right: 12px;
 }
 
 .input.amount {

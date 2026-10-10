@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Unavailable } from "../../components/Unavailable";
 import { useQuery } from "@tanstack/react-query";
 import { BookOpen, Download, History, Search, Upload } from "lucide-react";
 import { api } from "../../lib/api";
@@ -67,7 +68,7 @@ export function Catalog() {
       />
       {catalog.isError ? (
         <Card>
-          <Empty icon={<BookOpen />} title="متجر البطاقات غير متاح على هذا الخادم" />
+          <Unavailable feature="vouchers" error={catalog.error} onRetry={() => void catalog.refetch()} />
         </Card>
       ) : (
         <div className="stack">

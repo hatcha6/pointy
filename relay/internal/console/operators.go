@@ -25,7 +25,8 @@ var forwardPrefixes = []string{
 	"/v1/enrollment/tokens",
 	"/v1/fleet",
 	"/v1/alerts",
-	"/v1/artifacts/",
+	"/v1/finance/",
+	"/v1/artifacts",
 	"/v1/exchange-rates",
 	"/v1/holidays",
 	"/v1/sms/usage",
@@ -146,6 +147,9 @@ func (c *Console) forward(w http.ResponseWriter, r *http.Request, who session, r
 	switch {
 	case writes && body == nil && r.ContentLength > 0:
 		c.audit(r, who.Operator, "", rec.status(), `{"binary_bytes":`+strconv.FormatInt(r.ContentLength, 10)+`}`, steppedUp)
+	case writes && quietWrite.MatchString(route):
+		// A what-if that changes nothing: auditing every keystroke would
+		// bury the real changes.
 	case writes:
 		c.audit(r, who.Operator, "", rec.status(), auditBody(body, contentType), steppedUp)
 	case auditedRead.MatchString(route):
@@ -159,6 +163,7 @@ const maxBundleBytes = 4 << 30
 var (
 	artifactUpload = regexp.MustCompile(`^/v1/artifacts/[^/]+$`)
 	auditedRead    = regexp.MustCompile(`^/v1/installations/[^/]+/diagnostics-analytics$`)
+	quietWrite     = regexp.MustCompile(`^/v1/vouchers/admin/settings/preview$`)
 )
 
 // withActor names the operator in a JSON object body, replacing any actor

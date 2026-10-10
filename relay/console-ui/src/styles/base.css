@@ -78,7 +78,7 @@ button {
 .num,
 .money {
   font-variant-numeric: tabular-nums;
-  direction: ltr;
+  direction: rtl;
   unicode-bidi: isolate;
   display: inline-block;
 }
@@ -125,5 +125,40 @@ button {
   *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* Amounts and times never break across lines. */
+.money,
+time,
+.nowrap {
+  white-space: nowrap;
+}
+
+/* Keyboard focus is always visible; a mouse click does not leave a ring. */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.table tbody tr.clickable:focus-visible {
+  outline: none;
+}
+
+.table tbody tr.clickable:focus-visible td {
+  background: var(--primary-wash);
+  box-shadow: inset 0 2px 0 var(--primary), inset 0 -2px 0 var(--primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
   }
 }

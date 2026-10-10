@@ -9,7 +9,15 @@ import { Button, Empty, Skeleton } from "./ui";
  * it at full size), or the bank's PDF in the browser's own viewer. It is
  * fetched through the console API, never linked, so it needs the session.
  */
-export function ReceiptViewer({ topUpId, name, contentType, size }: { topUpId: string; name?: string; contentType: string; size?: number }) {
+export function ReceiptViewer({ topUpId, path, name, contentType, size }: {
+  topUpId?: string;
+  /** A console API path to the file, when it is not a top-up's receipt. */
+  path?: string;
+  name?: string;
+  contentType: string;
+  size?: number;
+}) {
+  const source = path ?? `/v1/wallet/admin/topups/${encodeURIComponent(topUpId ?? "")}/receipt`;
   const [url, setUrl] = useState<string | null>(null);
   const [blob, setBlob] = useState<Blob | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -21,7 +29,7 @@ export function ReceiptViewer({ topUpId, name, contentType, size }: { topUpId: s
     let objectUrl: string | null = null;
     setUrl(null);
     setError(null);
-    fetchBlob(`/v1/wallet/admin/topups/${encodeURIComponent(topUpId)}/receipt`)
+    fetchBlob(source)
       .then(({ blob: fetched }) => {
         // The type the relay decided from the bytes, never the file's name.
         const typed = new Blob([fetched], { type: contentType });
@@ -36,7 +44,7 @@ export function ReceiptViewer({ topUpId, name, contentType, size }: { topUpId: s
       live = false;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [topUpId, contentType]);
+  }, [source, contentType]);
 
   const fileName = name || (pdf ? "receipt.pdf" : "receipt.jpg");
   return (

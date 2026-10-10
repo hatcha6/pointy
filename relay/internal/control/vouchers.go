@@ -109,6 +109,41 @@ type VoucherOffer struct {
 	Currency string    `json:"currency"`
 	InStock  bool      `json:"in_stock"`
 	SyncedAt time.Time `json:"synced_at"`
+	// PreviousPrice is what the supplier charged before its last price
+	// change, and PriceChangedAt when that change was first read: the
+	// operator sees what moved without comparing lists by eye.
+	PreviousPrice  string     `json:"previous_price,omitempty"`
+	PriceChangedAt *time.Time `json:"price_changed_at,omitempty"`
+}
+
+// carryVoucherPriceHistory lays each offer's price history over a fresh read:
+// a price that moved remembers the old one; a price that did not keeps the
+// history it had.
+func carryVoucherPriceHistory(before map[string]VoucherOffer, offers []VoucherOffer, now time.Time) []VoucherOffer {
+	out := make([]VoucherOffer, len(offers))
+	for i, offer := range offers {
+		old, ok := before[offer.Ref]
+		switch {
+		case !ok:
+			offer.PreviousPrice, offer.PriceChangedAt = "", nil
+		case !sameVoucherPrice(old.Price, offer.Price):
+			at := now.UTC()
+			offer.PreviousPrice, offer.PriceChangedAt = old.Price, &at
+		default:
+			offer.PreviousPrice, offer.PriceChangedAt = old.PreviousPrice, old.PriceChangedAt
+		}
+		out[i] = offer
+	}
+	return out
+}
+
+func sameVoucherPrice(a, b string) bool {
+	x, okA := new(big.Rat).SetString(strings.TrimSpace(a))
+	y, okB := new(big.Rat).SetString(strings.TrimSpace(b))
+	if okA && okB {
+		return x.Cmp(y) == 0
+	}
+	return strings.TrimSpace(a) == strings.TrimSpace(b)
 }
 
 // VoucherPurchase is one ledger row: one shop buying cards of one item.
@@ -843,12 +878,15 @@ func (s *FileStore) ReplaceVoucherOffers(_ context.Context, supplier string, off
 	defer s.mu.Unlock()
 
 	before := map[string]VoucherOffer{}
+	byRef := map[string]VoucherOffer{}
 	for key, offer := range s.data.VoucherOffers {
 		if offer.Supplier == supplier {
 			before[key] = offer
+			byRef[offer.Ref] = offer
 			delete(s.data.VoucherOffers, key)
 		}
 	}
+	offers = carryVoucherPriceHistory(byRef, offers, s.clock.Now())
 	if s.data.VoucherOffers == nil {
 		s.data.VoucherOffers = map[string]VoucherOffer{}
 	}

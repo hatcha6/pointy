@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Unavailable } from "../../components/Unavailable";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeftRight, Landmark, RefreshCw, Search, Settings2, Telescope, Truck } from "lucide-react";
 import { api, qs } from "../../lib/api";
@@ -7,7 +8,7 @@ import { matches } from "../../lib/search";
 import { count, money } from "../../lib/format";
 import { label, supplier as supplierLabels } from "../../lib/labels";
 import { reasonText, type SupplierOffer, type Supply } from "../../lib/vouchers";
-import { Badge, Button, Card, Empty, Money, Segmented, Skeleton, Tabs, TimeAgo } from "../../components/ui";
+import { Badge, Button, Card, Empty, Money, Segmented, Skeleton, Switch, Tabs, TimeAgo } from "../../components/ui";
 import { DataTable, Stacked, type Column } from "../../components/DataTable";
 import { PageHeader } from "../../components/PageHeader";
 import { AutoView } from "../../components/AutoView";
@@ -49,7 +50,8 @@ function OffersTab() {
   const toast = useToast();
   const [supplier, setSupplier] = useSearchParam("supplier");
   const [query, setQuery] = useState("");
-  const [stock, setStock] = useState<"" | "in" | "out">("");
+  const [stock, setStock] = useState<"" | "in" | "out" | "moved">("");
+  const [grouped, setGrouped] = useState(true);
   const offers = useQuery({
     queryKey: ["vouchers", "offers", supplier],
     queryFn: () => api.get<{ offers: SupplierOffer[] }>("/v1/vouchers/admin/offers" + qs({ supplier })).then((r) => r.offers ?? []),
@@ -57,12 +59,44 @@ function OffersTab() {
   });
   const sync = useAction<{ synced: Record<string, number> }>({});
   const rows = (offers.data ?? []).filter(
-    (o) => matches(query, o.name, o.ref, o.group) && (stock === "" || (stock === "in" ? o.in_stock : !o.in_stock)),
+    (o) =>
+      matches(query, o.name, o.ref, o.group) &&
+      (stock === "" || (stock === "moved" ? recentlyMoved(o) : stock === "in" ? o.in_stock : !o.in_stock)),
   );
+  const moved = (offers.data ?? []).filter(recentlyMoved).length;
+  // Grouped by brand (the supplier's group), biggest groups first; the rows
+  // of a group stay in the supplier's order.
+  const groups = useMemo(() => {
+    const map = new Map<string, SupplierOffer[]>();
+    for (const o of rows) {
+      const key = o.group || "بلا مجموعة";
+      map.set(key, [...(map.get(key) ?? []), o]);
+    }
+    return [...map.entries()].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]));
+  }, [rows]);
   const columns: Column<SupplierOffer>[] = [
     { key: "name", header: "البطاقة", mobile: "title", cell: (o) => <Stacked title={o.name} sub={`${label(supplierLabels, o.supplier)} · ${o.ref}${o.group ? " · " + o.group : ""}`} /> },
     { key: "cost", header: "بالدينار", align: "end", mobile: "trailing", cell: (o) => (o.cost_lyd ? <Money value={Number(o.cost_lyd).toFixed(3)} /> : <span className="faint">—</span>) },
-    { key: "price", header: "سعر المورّد", align: "end", cell: (o) => <span className="num">{o.price} {o.currency}</span> },
+    {
+      key: "price",
+      header: "سعر المورّد",
+      align: "end",
+      cell: (o) => {
+        const up = o.previous_price ? Number(o.price) > Number(o.previous_price) : false;
+        return (
+          <span className="price-cell">
+            <span className="num nowrap">
+              {supplierPrice(o.price)} {o.currency}
+            </span>
+            {o.previous_price && recentlyMoved(o) && (
+              <span className={`price-move ${up ? "up" : "down"}`} title={`كان ${supplierPrice(o.previous_price)} — تغيّر ${o.price_changed_at ? new Date(o.price_changed_at).toLocaleDateString("ar-LY-u-nu-latn") : ""}`}>
+                {up ? "▲" : "▼"} كان {supplierPrice(o.previous_price)}
+              </span>
+            )}
+          </span>
+        );
+      },
+    },
     { key: "stock", header: "المخزون", cell: (o) => (o.in_stock ? <Badge tone="success">متوفر</Badge> : <Badge tone="danger">نافد</Badge>) },
     { key: "synced", header: "قُرئ", wideOnly: true, cell: (o) => <TimeAgo value={o.synced_at} /> },
   ];
@@ -108,13 +142,34 @@ function OffersTab() {
             { id: "", label: "الكل" },
             { id: "in", label: "متوفر" },
             { id: "out", label: "نافد" },
+            { id: "moved", label: moved ? `تغيّر سعرها (${moved})` : "تغيّر سعرها" },
           ]}
         />
+        <label className="row muted" style={{ fontSize: 13 }}>
+          <Switch on={grouped} onChange={setGrouped} label="حسب العلامة" />
+          حسب العلامة
+        </label>
       </div>
       {offers.isError ? (
-        <Empty title="العروض غير متاحة على هذا الخادم" />
+        <Unavailable feature="offers" error={offers.error} onRetry={() => void offers.refetch()} />
       ) : (
-        <DataTable rows={rows} columns={columns} rowKey={(o) => `${o.supplier}:${o.ref}`} loading={offers.isLoading} empty={<Empty icon={<Truck />} title="لا عروض" />} />
+        grouped && !offers.isLoading && rows.length > 0 ? (
+          <div className="offer-groups">
+            {groups.map(([name, list]) => (
+              <details key={name} className="offer-group" open={groups.length <= 6 || !!query || stock === "moved"}>
+                <summary>
+                  <strong>{name}</strong>
+                  <span className="faint">{list.length} عرضاً</span>
+                  {list.some(recentlyMoved) && <Badge tone="warning">تغيّر سعر</Badge>}
+                  {list.some((o) => !o.in_stock) && <Badge tone="danger">{list.filter((o) => !o.in_stock).length} نافد</Badge>}
+                </summary>
+                <DataTable rows={list} columns={columns} rowKey={(o) => `${o.supplier}:${o.ref}`} />
+              </details>
+            ))}
+          </div>
+        ) : (
+          <DataTable rows={rows} columns={columns} rowKey={(o) => `${o.supplier}:${o.ref}`} loading={offers.isLoading} empty={<Empty icon={<Truck />} title="لا عروض" />} />
+        )
       )}
     </Card>
   );
@@ -356,5 +411,22 @@ function ConfigTab() {
         />
       )}
     </Card>
+  );
+}
+
+/** A supplier's price as it reads on an invoice: no float noise, at most four places. */
+function supplierPrice(raw: string | number): string {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return String(raw);
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 4, minimumFractionDigits: 2 }).format(n);
+}
+
+/** A price that moved in the last week is worth a look. */
+function recentlyMoved(o: SupplierOffer): boolean {
+  return (
+    !!o.previous_price &&
+    Number(o.previous_price) !== Number(o.price) &&
+    !!o.price_changed_at &&
+    Date.now() - new Date(o.price_changed_at).getTime() < 7 * 86_400_000
   );
 }

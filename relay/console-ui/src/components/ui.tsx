@@ -1,7 +1,7 @@
 import { useEffect, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { Check, Copy, Inbox, Loader2 } from "lucide-react";
 import type { Tone } from "../lib/labels";
-import { ago, dateTime, money } from "../lib/format";
+import { ago, dateTime, money, moneySigned } from "../lib/format";
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "money" | "ghost" | "danger" | "default";
@@ -96,7 +96,7 @@ export function Notice({ tone = "info", icon, children }: { tone?: "info" | "war
 export function Money({ value, signed, currency }: { value: string | number | null | undefined; signed?: boolean; currency?: string }) {
   const n = Number(value);
   const cls = signed && Number.isFinite(n) ? (n > 0 ? "positive" : n < 0 ? "negative" : "") : "";
-  const text = signed && Number.isFinite(n) ? (n > 0 ? "+" : n < 0 ? "−" : "") + money(Math.abs(n), currency) : money(value, currency);
+  const text = signed && Number.isFinite(n) ? moneySigned(n, currency) : money(value, currency);
   return <span className={`money ${cls}`}>{text}</span>;
 }
 

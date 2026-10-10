@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -151,6 +152,18 @@ func (s *Store) FetchStatus(version string) (FetchStatus, error) {
 		return FetchStatus{}, ErrNoFetch
 	}
 	return job.snapshot(), nil
+}
+
+// Fetches is every download since the relay started, newest first.
+func (s *Store) Fetches() []FetchStatus {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]FetchStatus, 0, len(s.fetches))
+	for _, job := range s.fetches {
+		out = append(out, job.snapshot())
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].StartedAt.After(out[j].StartedAt) })
+	return out
 }
 
 func (j *fetchJob) snapshot() FetchStatus {

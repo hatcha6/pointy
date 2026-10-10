@@ -223,3 +223,83 @@ func TestAdminArtifactUploadAndFleetStatus(t *testing.T) {
 		t.Fatal("installation missing from fleet status")
 	}
 }
+
+func TestAdminPinNeedsAnUploadedBundle(t *testing.T) {
+	server, provisioned, art := newUpdateTestServer(t)
+	patch := func(body string) (int, string) {
+		req := httptest.NewRequest(http.MethodPatch, "http://relay/v1/installations/"+provisioned.Installation.ID+"/update", strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer admin-token")
+		rec := httptest.NewRecorder()
+		server.ServeHTTP(rec, req)
+		return rec.Code, rec.Body.String()
+	}
+	// A typo must not freeze the shop: refused, and nothing else in the
+	// request (the channel) is applied either.
+	if code, body := patch(`{"channel":"beta","pinned_version":"0.8.l"}`); code != http.StatusBadRequest || !strings.Contains(body, "no_artifact") {
+		t.Fatalf("pin without a bundle: %d %s", code, body)
+	}
+	installation, err := server.Store.GetInstallation(context.Background(), provisioned.Installation.ID)
+	if err != nil || installation.PinnedVersion != "" || control.NormalizeChannel(installation.UpdateChannel) != "stable" {
+		t.Fatalf("a refused request changed the shop: %+v %v", installation, err)
+	}
+	if _, err := art.Put("0.8.1", strings.NewReader("bundle")); err != nil {
+		t.Fatal(err)
+	}
+	if code, body := patch(`{"pinned_version":"0.8.1"}`); code != http.StatusOK {
+		t.Fatalf("pin with a bundle: %d %s", code, body)
+	}
+	// Unpinning never needs a bundle.
+	if code, body := patch(`{"pinned_version":""}`); code != http.StatusOK {
+		t.Fatalf("unpin: %d %s", code, body)
+	}
+}
+
+func TestAdminArtifactList(t *testing.T) {
+	server, _, art := newUpdateTestServer(t)
+	for _, v := range []string{"0.7.9", "0.8.0"} {
+		if _, err := art.Put(v, strings.NewReader("bundle-"+v)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	req := httptest.NewRequest(http.MethodGet, "http://relay/v1/artifacts", nil)
+	req.Header.Set("Authorization", "Bearer admin-token")
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, req)
+	var body struct {
+		Bundles []artifacts.Meta `json:"bundles"`
+		Fetches []any            `json:"fetches"`
+	}
+	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &body) != nil || len(body.Bundles) != 2 || body.Fetches == nil {
+		t.Fatalf("list %d %s", rec.Code, rec.Body.String())
+	}
+	unauth := httptest.NewRequest(http.MethodGet, "http://relay/v1/artifacts", nil)
+	rec = httptest.NewRecorder()
+	server.ServeHTTP(rec, unauth)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("the list is admin-only: %d", rec.Code)
+	}
+}
+
+func TestInstallationListPresenceIsOptIn(t *testing.T) {
+	server, provisioned, _ := newUpdateTestServer(t)
+	list := func(query string) map[string]any {
+		req := httptest.NewRequest(http.MethodGet, "http://relay/v1/installations"+query, nil)
+		req.Header.Set("Authorization", "Bearer admin-token")
+		rec := httptest.NewRecorder()
+		server.ServeHTTP(rec, req)
+		var body struct {
+			Installations []map[string]any `json:"installations"`
+		}
+		if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &body) != nil || len(body.Installations) != 1 {
+			t.Fatalf("list %d %s", rec.Code, rec.Body.String())
+		}
+		return body.Installations[0]
+	}
+	if _, asked := list("")["connector_online"]; asked {
+		t.Fatal("presence costs a lookup per shop; it is only sent when asked for")
+	}
+	shop := list("?presence=1")
+	if shop["id"] != provisioned.Installation.ID || shop["connector_online"] != false {
+		t.Fatalf("presence %v", shop)
+	}
+}

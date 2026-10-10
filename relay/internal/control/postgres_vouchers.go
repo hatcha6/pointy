@@ -322,17 +322,39 @@ func (s *PostgresStore) ReplaceVoucherOffers(ctx context.Context, supplier strin
 	}
 	defer tx.Rollback(ctx)
 
+	// What was there, for each offer's price history.
+	byRef := map[string]VoucherOffer{}
+	rows, err := tx.Query(ctx, `SELECT ref, price, previous_price, price_changed_at FROM relay_voucher_offers WHERE supplier = $1`, supplier)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var offer VoucherOffer
+		if err := rows.Scan(&offer.Ref, &offer.Price, &offer.PreviousPrice, &offer.PriceChangedAt); err != nil {
+			rows.Close()
+			return err
+		}
+		byRef[offer.Ref] = offer
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	offers = carryVoucherPriceHistory(byRef, offers, s.clock.Now())
+
 	if _, err := tx.Exec(ctx, `DELETE FROM relay_voucher_offers WHERE supplier = $1`, supplier); err != nil {
 		return err
 	}
 	batch := &pgx.Batch{}
 	for _, offer := range offers {
 		batch.Queue(
-			`INSERT INTO relay_voucher_offers (supplier, ref, name, group_name, price, currency, in_stock, synced_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8::timestamptz)
+			`INSERT INTO relay_voucher_offers (supplier, ref, name, group_name, price, currency, in_stock, synced_at,
+				previous_price, price_changed_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8::timestamptz, $9, $10)
 			ON CONFLICT (supplier, ref) DO UPDATE SET
 				name = EXCLUDED.name, group_name = EXCLUDED.group_name, price = EXCLUDED.price,
-				currency = EXCLUDED.currency, in_stock = EXCLUDED.in_stock, synced_at = EXCLUDED.synced_at`,
+				currency = EXCLUDED.currency, in_stock = EXCLUDED.in_stock, synced_at = EXCLUDED.synced_at,
+				previous_price = EXCLUDED.previous_price, price_changed_at = EXCLUDED.price_changed_at`,
 			supplier,
 			offer.Ref,
 			offer.Name,
@@ -341,6 +363,8 @@ func (s *PostgresStore) ReplaceVoucherOffers(ctx context.Context, supplier strin
 			offer.Currency,
 			offer.InStock,
 			offer.SyncedAt.UTC(),
+			offer.PreviousPrice,
+			offer.PriceChangedAt,
 		)
 	}
 	if batch.Len() > 0 {
@@ -355,7 +379,7 @@ func (s *PostgresStore) ListVoucherOffers(ctx context.Context, supplier string) 
 	supplier = strings.TrimSpace(supplier)
 	rows, err := s.pool.Query(
 		ctx,
-		`SELECT supplier, ref, name, group_name, price, currency, in_stock, synced_at
+		`SELECT supplier, ref, name, group_name, price, currency, in_stock, synced_at, previous_price, price_changed_at
 		FROM relay_voucher_offers
 		WHERE $1 = '' OR supplier = $1
 		ORDER BY supplier, group_name, name`,
@@ -370,7 +394,7 @@ func (s *PostgresStore) ListVoucherOffers(ctx context.Context, supplier string) 
 		var offer VoucherOffer
 		if err := rows.Scan(
 			&offer.Supplier, &offer.Ref, &offer.Name, &offer.Group,
-			&offer.Price, &offer.Currency, &offer.InStock, &offer.SyncedAt,
+			&offer.Price, &offer.Currency, &offer.InStock, &offer.SyncedAt, &offer.PreviousPrice, &offer.PriceChangedAt,
 		); err != nil {
 			return nil, err
 		}
