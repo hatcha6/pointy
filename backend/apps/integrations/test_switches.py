@@ -381,7 +381,8 @@ class SweepTests(TestCase):
         switch_off("qareeb")
         with mock.patch("apps.integrations.vouchers.provider_for") as driver:
             vouchers.sync_all()
-        driver.assert_not_called()
+        # Only the company's own shelf, which is always on, is read.
+        self.assertNotIn(account, [call.args[0] for call in driver.call_args_list])
         self.assertFalse(
             IntegrationVoucherBrand.objects.filter(account=account, is_listed=True).exists()
         )

@@ -1,5 +1,4 @@
 import logging
-import re
 
 import django_filters
 from django.db import IntegrityError, transaction
@@ -14,7 +13,6 @@ from rest_framework.response import Response
 from apps.analytics.models import AnalyticsEvent
 from apps.analytics.services import record_domain_event
 from apps.catalog.models import ProductVariant, VariantOptionValue
-from apps.catalog.search_text import code_form
 from apps.channels.services import require_active_sales_channel
 from apps.core.idempotency import run_idempotent_request
 from apps.core.discovery import request_is_relayed
@@ -31,6 +29,7 @@ from .models import (
     RegisterSession,
 )
 from .register_summary import cached_register_session_summary
+from .return_search import receipt_lookup_candidates, search_returns
 from .serializers import (
     CheckoutSerializer,
     ConvertQuotationSerializer,
@@ -50,8 +49,10 @@ from .serializers import (
     RegisterCashMovementSerializer,
     RegisterSessionCloseSerializer,
     RegisterSessionSerializer,
+    OWN_REGISTER_RECONCILIATION,
     LineCostRequestSerializer,
     RegisterSessionStartSerializer,
+    ReturnSearchLineSerializer,
 )
 from .services import money, sale_cost_basis, selling_warehouse_id
 
@@ -81,35 +82,6 @@ def _best_effort_print_step(description, step):
     except Exception:
         logger.exception("Failed to enqueue %s; the sale is unaffected.", description)
         return None
-
-
-# The date and sequence digits of an ``R{YYYYMMDD}{seq:06d}`` receipt: fourteen,
-# and more once a shop's series passes 999999 (the width is a minimum).
-_RECEIPT_DIGITS_RE = re.compile(r"[0-9]{14,}")
-
-
-def receipt_lookup_candidates(typed) -> list[str]:
-    """The receipt numbers a returns-desk entry can mean, most literal first.
-
-    The customer's paper says «R20260929000123», and the desk types it with
-    spaces between the groups, in the Arabic digits the keyboard is set to, in
-    lower case, or without the «R» nobody reads as part of the number. Each of
-    those is rewritten to the form Pointy issues — spaces gone, digits ASCII,
-    upper case, the «R» put back in front of the digits — and then matched
-    EXACTLY: this is how money leaves the drawer, so it never becomes a partial
-    or fuzzy match.
-
-    What was typed is tried first, as it always was. A sale imported from a
-    shop's old system keeps the number that system printed
-    (``apps.migration.loaders.sales``), which can be lower case or all digits,
-    and a rewrite must never shadow it.
-    """
-    as_typed = (typed or "").strip()
-    normalized = "".join(code_form(as_typed).split()).upper()
-    candidates = [as_typed, normalized]
-    if _RECEIPT_DIGITS_RE.fullmatch(normalized):
-        candidates.append(f"R{normalized}")
-    return [number for number in dict.fromkeys(candidates) if number]
 
 
 class OrderFilter(django_filters.FilterSet):
@@ -180,6 +152,9 @@ class OrderViewSet(
         # browsing the list. Visibility for the adjustment verbs above is widened
         # for this permission in get_queryset (the verbs keep needing add_order).
         "lookup": ("sales.process_return_lookup",),
+        # The desk's one search box: a receipt (whole, its tail, or its QR), a
+        # product sold inside the return window, or a customer's phone.
+        "return_search": ("sales.process_return_lookup",),
         # What the cart cost the shop. Its own permission, because it is the
         # most sensitive number a shop has and a cashier does not get it by
         # virtue of being able to sell.
@@ -245,7 +220,14 @@ class OrderViewSet(
         # A returns-desk operator may reach ONE invoice at a time (fetch it by id
         # or receipt number and adjust it) without seeing the whole list. The
         # ``list`` action stays session-scoped, so this never widens browsing.
-        lookup_actions = {"retrieve", "return_items", "void", "exchange_items", "lookup"}
+        lookup_actions = {
+            "retrieve",
+            "return_items",
+            "void",
+            "exchange_items",
+            "lookup",
+            "return_search",
+        }
         if self.action in lookup_actions and self.request.user.has_perm(
             "sales.process_return_lookup"
         ):
@@ -673,6 +655,47 @@ class OrderViewSet(
             status=status.HTTP_200_OK,
         )
 
+    @action(detail=False, methods=["get"], url_path="return-search")
+    def return_search(self, request):
+        """Returns-desk search; see :mod:`apps.sales.return_search`.
+
+        ``order`` set means one invoice matched exactly — open it. Otherwise
+        ``invoices`` (receipt tails, a customer's phone) and ``lines`` (sold,
+        still returnable, inside the shop's return window) are the choices.
+        """
+        query = request.query_params.get("q", "")
+        if not query.strip():
+            raise serializers.ValidationError({"q": "A search term is required."})
+        settings = ShopSettings.load()
+        result = search_returns(query, scope=self.get_queryset(), settings=settings)
+        context = {
+            "request": request,
+            "shop_settings": settings,
+            "return_matches": result.line_matches,
+        }
+        exact = result.exact_order
+        return Response(
+            {
+                # Read through this action's full document queryset, so it
+                # carries its lines like ``lookup``'s answer does.
+                "order": (
+                    OrderSerializer(exact, context=context).data
+                    if exact is not None
+                    else None
+                ),
+                "invoices": OrderSessionSerializer(
+                    result.invoices, many=True, context=context
+                ).data,
+                "lines": ReturnSearchLineSerializer(
+                    result.lines, many=True, context=context
+                ).data,
+                "lines_truncated": result.lines_truncated,
+                "window_hours": result.window_hours,
+                "window_starts_at": result.window_starts_at,
+            },
+            status=status.HTTP_200_OK,
+        )
+
     def _invoice_print_action_serializer(self, request):
         print_action = request.data.get("print_invoice")
         if print_action in (None, False):
@@ -882,10 +905,26 @@ class RegisterSessionViewSet(
         # The cache is shop-wide, so who is reading is decided here, after it:
         # a cashier reviewing their own shift sees what the provider sales
         # took, not what they cost the shop or made it.
-        if not user_has_full_visibility(request.user):
+        sees_shop_wide = user_has_full_visibility(request.user)
+        if not sees_shop_wide:
             summary = {
                 **summary,
                 "integrations": without_costs(summary["integrations"]),
+            }
+        # A blind close stays blind here too: without the grant, the cash block
+        # loses the same figures the session payload drops (expected cash, the
+        # variance and the totals that add up to them). The cashier's Z-report
+        # then prints what they counted, not what the drawer should hold.
+        if not sees_shop_wide and not request.user.has_perm(
+            OWN_REGISTER_RECONCILIATION
+        ):
+            summary = {
+                **summary,
+                "cash": {
+                    key: value
+                    for key, value in summary["cash"].items()
+                    if key not in RegisterSessionSerializer.reconciliation_fields
+                },
             }
         return Response(summary)
 

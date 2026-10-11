@@ -163,7 +163,7 @@ const maxBundleBytes = 4 << 30
 var (
 	artifactUpload = regexp.MustCompile(`^/v1/artifacts/[^/]+$`)
 	auditedRead    = regexp.MustCompile(`^/v1/installations/[^/]+/diagnostics-analytics$`)
-	quietWrite     = regexp.MustCompile(`^/v1/vouchers/admin/settings/preview$`)
+	quietWrite     = regexp.MustCompile(`^/v1/vouchers/admin/(settings/preview|stock/validate)$`)
 )
 
 // withActor names the operator in a JSON object body, replacing any actor
@@ -213,8 +213,9 @@ func auditBody(body []byte, contentType string) string {
 }
 
 // secretKeys are request fields the audit log never keeps: a download's
-// Authorization header, a token handed to a supplier.
-var secretKeys = regexp.MustCompile(`(?i)^(headers|authorization|password|secret|api_key|.*_token|token)$`)
+// Authorization header, a token handed to a supplier, a card code added to
+// the company's stock.
+var secretKeys = regexp.MustCompile(`(?i)^(headers|authorization|password|secret|api_key|.*_token|token|code|pin)$`)
 
 func redactSecrets(value any) any {
 	switch typed := value.(type) {

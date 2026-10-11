@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BadgeCheck, CreditCard, Landmark, RefreshCw, Receipt, Wallet as WalletIcon } from "lucide-react";
+import { BadgeCheck, CreditCard, Landmark, RefreshCw, Receipt, RotateCcw, Wallet as WalletIcon } from "lucide-react";
 import { useRouter } from "../lib/router";
 import {
   account as accountLabels,
@@ -20,6 +20,7 @@ import { DataTable, Stacked, type Column } from "./DataTable";
 import { useAction } from "./guarded";
 import { useToast } from "./toast";
 import { ConfirmTopUpDialog, ResolvePurchaseDialog } from "./money-dialogs";
+import { StockRefundDialog, refundableStockSale } from "./StockReturnChoice";
 
 function TestBadge({ on }: { on?: boolean }) {
   return on ? <Badge tone="warning">تجريبي</Badge> : null;
@@ -180,6 +181,7 @@ export function PurchasesTable({ purchases, loading, showShop = true }: { purcha
   const { navigate } = useRouter();
   const toast = useToast();
   const [resolving, setResolving] = useState<Purchase | null>(null);
+  const [refunding, setRefunding] = useState<Purchase | null>(null);
   const [checking, setChecking] = useState<string | null>(null);
   const check = useAction<{ purchase: Purchase; verdict?: string; error?: string }>({ invalidate: [["vouchers"], ["wallet"]] });
 
@@ -251,6 +253,18 @@ export function PurchasesTable({ purchases, loading, showShop = true }: { purcha
               تسوية
             </Button>
           </div>
+        ) : refundableStockSale(p) ? (
+          <Button
+            size="sm"
+            icon={<RotateCcw />}
+            title="أعِد المبلغ للمتجر، والكود إلى المخزون أو ألغِه"
+            onClick={(event) => {
+              event.stopPropagation();
+              setRefunding(p);
+            }}
+          >
+            استرداد
+          </Button>
         ) : null,
     },
   ];
@@ -265,6 +279,7 @@ export function PurchasesTable({ purchases, loading, showShop = true }: { purcha
         empty={<Empty icon={<CreditCard />} title="لا عمليات هنا" />}
       />
       <ResolvePurchaseDialog purchase={resolving} onClose={() => setResolving(null)} />
+      <StockRefundDialog purchase={refunding} onClose={() => setRefunding(null)} />
     </>
   );
 }

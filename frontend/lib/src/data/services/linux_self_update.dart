@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 /// Linux self-update: applies a downloaded portable `.tar.gz` client build.
@@ -106,4 +107,50 @@ Future<void> installLinuxUpdate(String archivePath) async {
     rethrow;
   }
   exit(0);
+}
+
+/// Where `build-deb.sh` installs the app. A till running from here was
+/// installed from the `.deb`: root owns the directory, so the bundle swap
+/// above cannot run and the update has to be the next `.deb`.
+const String linuxPackageInstallDir = '/opt/pointy';
+
+/// True when the running app came from the `.deb` rather than the tarball.
+bool isLinuxPackageInstall({String? executable}) {
+  final path = executable ?? Platform.resolvedExecutable;
+  return path.startsWith('$linuxPackageInstallDir/');
+}
+
+/// Opens a downloaded `.deb` in the desktop's package installer (Mint's
+/// Captain/GDebi, Ubuntu's App Center), which asks for the password and
+/// installs it over the running version. Tries `xdg-open`, then `gio open`.
+/// The opener is left running on its own: `xdg-open` can stay in the
+/// foreground for as long as the installer window is open, so only a quick
+/// failure counts — a launcher that is still running after a few seconds has
+/// opened the file.
+Future<void> openLinuxPackage(String debPath) async {
+  const openers = [
+    ['xdg-open'],
+    ['gio', 'open'],
+  ];
+  Object? lastError;
+  for (final opener in openers) {
+    try {
+      // Not detached: a detached process has no exit code to read.
+      final process = await Process.start(opener.first, [
+        ...opener.skip(1),
+        debPath,
+      ]);
+      unawaited(process.stdout.drain<void>());
+      unawaited(process.stderr.drain<void>());
+      final code = await process.exitCode.timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => 0,
+      );
+      if (code == 0) return;
+      lastError = Exception('${opener.join(' ')} exited with $code');
+    } on ProcessException catch (error) {
+      lastError = error;
+    }
+  }
+  throw Exception('could not open $debPath: $lastError');
 }

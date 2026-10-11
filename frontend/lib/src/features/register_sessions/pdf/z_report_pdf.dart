@@ -425,6 +425,8 @@ class RegisterZReportPdfService {
 
   pw.Widget _cashSection(RegisterSessionSummary summary) {
     final cash = summary.cash;
+    // Withheld for a cashier closing blind: leave the lines out, never 0.00.
+    final reconciled = cash.hasReconciliation;
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.stretch,
       children: [
@@ -434,30 +436,32 @@ class RegisterZReportPdfService {
           label: 'النقد الافتتاحي',
           value: formatMoney(cash.openingCash),
         ),
-        PointyPdfFieldRow(
-          label: 'مبيعات نقدية',
-          value: formatMoney(cash.cashSalesTotal),
-        ),
-        if (cash.payInTotal > 0)
+        if (reconciled)
+          PointyPdfFieldRow(
+            label: 'مبيعات نقدية',
+            value: formatMoney(cash.cashSalesTotal),
+          ),
+        if (reconciled && cash.payInTotal > 0)
           PointyPdfFieldRow(
             label: 'إيداع نقدي',
             value: formatMoney(cash.payInTotal),
           ),
-        if (cash.payOutTotal > 0)
+        if (reconciled && cash.payOutTotal > 0)
           PointyPdfFieldRow(
             label: 'سحب نقدي',
             value: formatMoney(cash.payOutTotal),
           ),
-        if (cash.cashRefundTotal > 0)
+        if (reconciled && cash.cashRefundTotal > 0)
           PointyPdfFieldRow(
             label: 'مرتجعات نقدية',
             value: formatMoney(cash.cashRefundTotal),
           ),
-        PointyPdfFieldRow(
-          label: 'النقد المتوقع',
-          value: formatMoney(cash.expectedCash),
-          strong: true,
-        ),
+        if (reconciled)
+          PointyPdfFieldRow(
+            label: 'النقد المتوقع',
+            value: formatMoney(cash.expectedCash),
+            strong: true,
+          ),
         if (cash.closingCash != null)
           PointyPdfFieldRow(
             label: 'النقد الفعلي',

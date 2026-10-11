@@ -103,6 +103,11 @@ enum AppCapability {
   changeProductVariant,
   viewRegisterSessions,
   viewRegisterSessionOrders,
+
+  /// Expected cash and the variance on the user's own register sessions —
+  /// granted per user (in no role) so a cashier can chase a difference before
+  /// handing the drawer over instead of closing blind.
+  viewOwnRegisterReconciliation,
   manageDeviceSettings,
   manageUsers,
   manageShopSettings,
@@ -801,6 +806,12 @@ class AuthorizationCapabilities {
         'sales.view_registersession',
       ])) {
         capabilities.add(AppCapability.viewRegisterSessions);
+      }
+      if (_hasAny(user, const [
+        'view_own_register_reconciliation',
+        'sales.view_own_register_reconciliation',
+      ])) {
+        capabilities.add(AppCapability.viewOwnRegisterReconciliation);
       }
       if (_hasAny(user, const ['view_order', 'sales.view_order'])) {
         capabilities
@@ -1513,6 +1524,13 @@ class AuthorizationCapabilities {
       allows(AppCapability.viewRegisterSessions);
   bool get canViewRegisterSessionOrders =>
       allows(AppCapability.viewRegisterSessionOrders);
+
+  /// Whether expected cash and the drawer variance are shown: the shop's
+  /// managers on every session, a granted cashier on their own (the server
+  /// only ever lists them their own).
+  bool get canViewRegisterReconciliation =>
+      canManageShopSettings ||
+      allows(AppCapability.viewOwnRegisterReconciliation);
   bool get canManageDeviceSettings =>
       allows(AppCapability.manageDeviceSettings);
   bool get canManageUsers => allows(AppCapability.manageUsers);

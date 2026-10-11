@@ -211,6 +211,11 @@ PERMISSION_CATALOG = [
             _perm("sales.view_registersession", "عرض ورديات الصندوق", "الاطلاع على ورديات الصندوق وملخصاتها."),
             _perm("sales.add_registersession", "فتح ورديات الصندوق", "بدء واستئناف ورديات الصندوق."),
             _perm("sales.change_registersession", "إغلاق ورديات الصندوق", "إغلاق الورديات وتسويتها."),
+            _perm(
+                "sales.view_own_register_reconciliation",
+                "مراجعة فرق الصندوق في ورديته",
+                "إظهار النقد المتوقع والعجز أو الزيادة في ورديات المستخدم نفسه، ليطابق صندوقه قبل الإغلاق.",
+            ),
             _perm("sales.view_registercashmovement", "عرض الحركات النقدية للصندوق", "الاطلاع على الإيداع والسحب النقدي في الورديات."),
             _perm("sales.add_registercashmovement", "حركات نقدية للصندوق", "تسجيل إيداع وسحب نقدي من الصندوق."),
         ],

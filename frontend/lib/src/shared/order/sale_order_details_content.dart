@@ -84,6 +84,7 @@ class SaleOrderDetailsContent extends StatefulWidget {
     this.popOnSuccessfulAdjustment = true,
     this.padding = const EdgeInsets.fromLTRB(16, 0, 16, 16),
     this.footer,
+    this.preselectedLineId,
   });
 
   final SaleOrder order;
@@ -131,6 +132,11 @@ class SaleOrderDetailsContent extends StatefulWidget {
   final bool useInvoiceLabels;
   final bool popOnSuccessfulAdjustment;
   final EdgeInsetsGeometry padding;
+
+  /// The line the operator came here for — the returns desk found it by its
+  /// goods. The return and exchange dialogs open with one of it (or all that
+  /// is left, when less than one) already selected.
+  final int? preselectedLineId;
 
   /// Rendered at the end of the scroll, below the totals. The extension point
   /// for content that belongs to this invoice but not to the sale itself —
@@ -439,6 +445,10 @@ class _SaleOrderDetailsContentState extends State<SaleOrderDetailsContent> {
               decimalEntryHint: l10n.saleReturnQuantityHint(
                 formatSaleQuantity(line.returnableQuantity),
               ),
+              initialQuantity: preselectedQuantity(
+                line,
+                widget.preselectedLineId,
+              ),
             ),
       ],
     );
@@ -527,6 +537,7 @@ class _SaleOrderDetailsContentState extends State<SaleOrderDetailsContent> {
         order: widget.order,
         onProductSearch: widget.onProductSearch!,
         trackedStockRepository: widget.trackedStockRepository,
+        preselectedLineId: widget.preselectedLineId,
       ),
     );
     if (draft == null || widget.onExchange == null) {
@@ -1391,11 +1402,13 @@ class _SaleExchangeDialog extends StatefulWidget {
     required this.order,
     required this.onProductSearch,
     this.trackedStockRepository,
+    this.preselectedLineId,
   });
 
   final SaleOrder order;
   final ExchangeProductSearch onProductSearch;
   final TrackedStockRepository? trackedStockRepository;
+  final int? preselectedLineId;
 
   @override
   State<_SaleExchangeDialog> createState() => _SaleExchangeDialogState();
@@ -1403,7 +1416,8 @@ class _SaleExchangeDialog extends StatefulWidget {
 
 class _SaleExchangeDialogState extends State<_SaleExchangeDialog> {
   late final Map<int, double> _outbound = {
-    for (final line in widget.order.lines) line.id: 0,
+    for (final line in widget.order.lines)
+      line.id: preselectedQuantity(line, widget.preselectedLineId),
   };
   final List<_ExchangeReplacement> _replacements = [];
   final TextEditingController _reasonController = TextEditingController();
@@ -1855,6 +1869,16 @@ class _CreditBalanceCallout extends StatelessWidget {
             ),
     );
   }
+}
+
+/// How much of [line] an adjustment dialog starts with: one of the line the
+/// operator picked ([preselectedLineId]), or all that is left of it when that
+/// is less than one (half a kilo of cheese); nothing for every other line.
+double preselectedQuantity(SaleOrderLine line, int? preselectedLineId) {
+  if (line.id != preselectedLineId || line.returnableQuantity <= 0) {
+    return 0;
+  }
+  return line.returnableQuantity < 1 ? line.returnableQuantity : 1;
 }
 
 String saleLineDisplayName(SaleOrderLine line, AppLocalizations l10n) {

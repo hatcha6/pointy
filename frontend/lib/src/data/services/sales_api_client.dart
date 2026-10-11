@@ -1,6 +1,7 @@
 import '../../features/payments/models/payment_record.dart';
 import '../models/messaging_gateway.dart';
 import '../models/print_job.dart';
+import '../models/return_search.dart';
 import '../models/sale_order.dart';
 import '../models/sale_order_page.dart';
 import 'api_session.dart';
@@ -275,6 +276,20 @@ class SalesApiClient {
     // (no such receipt) apart from an unreachable or failing server.
     _session.throwApiException(response, 'Invoice lookup failed with status');
     return SaleOrder.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  /// Returns-desk search: a receipt (whole, its tail, or its QR link), goods
+  /// sold inside the shop's return window, or a customer's phone. Gated
+  /// server-side by ``sales.process_return_lookup``.
+  Future<ReturnSearchResult> searchReturns(String query) async {
+    final response = await _session.get(
+      'orders/return-search/',
+      query: {'q': query},
+    );
+    _session.throwApiException(response, 'Returns search failed with status');
+    return ReturnSearchResult.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
   }

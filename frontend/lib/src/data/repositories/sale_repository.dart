@@ -1,6 +1,7 @@
 import '../../core/result.dart';
 import '../models/messaging_gateway.dart';
 import '../models/print_job.dart';
+import '../models/return_search.dart';
 import '../models/sale_order.dart';
 import '../models/sale_order_page.dart';
 import '../services/pos_api_service.dart';
@@ -227,6 +228,10 @@ class SaleRepository {
 
   Future<Result<SaleOrder>> lookupByReceipt(String receiptNumber) async {
     return Result.guard(() => _service.lookupSaleOrderByReceipt(receiptNumber));
+  }
+
+  Future<Result<ReturnSearchResult>> searchReturns(String query) async {
+    return Result.guard(() => _service.searchReturns(query));
   }
 
   List<SaleStockShortage> _stockShortagesFromException(

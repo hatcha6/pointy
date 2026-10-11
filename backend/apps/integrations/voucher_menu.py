@@ -21,9 +21,16 @@ from __future__ import annotations
 import base64
 from decimal import Decimal
 
-from . import catalog, pricing_rules, services_menu, services_mirror, switches, vouchers
+from . import (
+    catalog,
+    company_account,
+    pricing_rules,
+    services_menu,
+    services_mirror,
+    switches,
+    vouchers,
+)
 from .models import (
-    IntegrationAccount,
     IntegrationVoucher,
     IntegrationVoucherBrand,
     IntegrationVoucherCountry,
@@ -60,8 +67,10 @@ def menu_payload(request, *, with_cost: bool) -> dict:
         return {**payload, "error_code": ERROR_UNAVAILABLE}
     if switches.is_switched_off(PROVIDER):
         return {**payload, "error_code": ERROR_SWITCHED_OFF}
-    account = IntegrationAccount.objects.filter(provider=PROVIDER).first()
-    if account is None or not account.is_active or not account.is_configured:
+    # Always on (``company_account``): one that went missing or was switched
+    # off before that rule is put back rather than leaving the menu dark.
+    account = company_account.ensure_account()
+    if account is None or not account.is_configured:
         return {**payload, "error_code": ERROR_NOT_CONFIGURED}
     payload["balance"] = _money(account.balance)
     payload["balance_at"] = account.balance_at.isoformat() if account.balance_at else None

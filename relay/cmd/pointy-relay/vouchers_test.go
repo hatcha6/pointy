@@ -21,8 +21,25 @@ import (
 	"pointy/relay/internal/vouchers"
 )
 
+// testStockKey is a well-formed stock key, so the cases below are not about it.
+const testStockKey = "EcYokvxrd0H6MsJVKSq0CTinYHWmrmjerdiqBQ1X0qQ="
+
+func TestBuildVoucherConfigStockKey(t *testing.T) {
+	config, _, warnings, err := buildVoucherConfig(voucherSettings{RateLimit: "30/minute"})
+	if err != nil || config.StockSealer != nil || len(warnings) != 1 || !strings.Contains(warnings[0], "POINTY_RELAY_VOUCHER_STOCK_KEY") {
+		t.Fatalf("no key: the stock is off, loudly: %v %v", warnings, err)
+	}
+	config, _, warnings, err = buildVoucherConfig(voucherSettings{RateLimit: "30/minute", StockKey: testStockKey})
+	if err != nil || config.StockSealer == nil || len(warnings) != 0 {
+		t.Fatalf("a key: %v %v", warnings, err)
+	}
+	if _, _, _, err := buildVoucherConfig(voucherSettings{RateLimit: "30/minute", StockKey: "short"}); err == nil {
+		t.Fatal("a malformed key stops the relay")
+	}
+}
+
 func TestBuildVoucherConfig(t *testing.T) {
-	config, credentials, warnings, err := buildVoucherConfig(voucherSettings{RateLimit: "30/minute"})
+	config, credentials, warnings, err := buildVoucherConfig(voucherSettings{RateLimit: "30/minute", StockKey: testStockKey})
 	if err != nil || len(warnings) != 0 || credentials.Configured() || config.TestMode {
 		t.Fatalf("nothing set: %+v %+v %v %v", config, credentials, warnings, err)
 	}
@@ -32,7 +49,7 @@ func TestBuildVoucherConfig(t *testing.T) {
 	}
 
 	config, credentials, warnings, err = buildVoucherConfig(voucherSettings{
-		RateLimit: "30/minute", BNPlusEmail: "ops@example.ly", BNPlusPassword: "p", BNPlusToken: "t",
+		RateLimit: "30/minute", BNPlusEmail: "ops@example.ly", BNPlusPassword: "p", BNPlusToken: "t", StockKey: testStockKey,
 	})
 	if err != nil || len(warnings) != 0 || !credentials.Configured() || credentials.BaseURL != "https://portal.bn-plusli.ly" ||
 		credentials.Timeout != 45*time.Second {
@@ -43,12 +60,12 @@ func TestBuildVoucherConfig(t *testing.T) {
 		t.Fatalf("BN Plus is on: %+v", config)
 	}
 
-	_, credentials, warnings, err = buildVoucherConfig(voucherSettings{RateLimit: "30/minute", BNPlusToken: "t"})
+	_, credentials, warnings, err = buildVoucherConfig(voucherSettings{RateLimit: "30/minute", BNPlusToken: "t", StockKey: testStockKey})
 	if err != nil || len(warnings) != 1 || credentials.Configured() || credentials.Partial() {
 		t.Fatalf("half a set warns and stays off: %+v %v %v", credentials, warnings, err)
 	}
 
-	if _, _, warnings, err = buildVoucherConfig(voucherSettings{RateLimit: "30/minute", TestMode: true}); err != nil ||
+	if _, _, warnings, err = buildVoucherConfig(voucherSettings{RateLimit: "30/minute", TestMode: true, StockKey: testStockKey}); err != nil ||
 		len(warnings) != 1 || !strings.Contains(warnings[0], "TEST MODE") {
 		t.Fatalf("test mode warns: %v %v", warnings, err)
 	}

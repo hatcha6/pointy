@@ -216,9 +216,21 @@ class RegisterSessionSerializer(serializers.ModelSerializer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         request = self.context.get("request")
-        if request is None or not user_has_full_visibility(request.user):
+        if request is None or not reader_sees_register_reconciliation(request.user):
             for field in self.reconciliation_fields:
                 self.fields.pop(field, None)
+
+
+OWN_REGISTER_RECONCILIATION = "sales.view_own_register_reconciliation"
+
+
+def reader_sees_register_reconciliation(user) -> bool:
+    """Shop-wide readers see every drawer's expected cash and variance; a user
+    granted ``view_own_register_reconciliation`` sees them too, and the
+    register-session viewset only ever hands that user their own sessions."""
+    return user_has_full_visibility(user) or user.has_perm(
+        OWN_REGISTER_RECONCILIATION
+    )
 
 
 class RegisterSessionStartSerializer(serializers.Serializer):
@@ -924,6 +936,76 @@ class OrderListSerializer(OrderSerializer):
         # The order still carries a light `lines` prefetch (total_cost/profit
         # read it), so count from the cache rather than the serialized array.
         return len(order.lines.all())
+
+
+class ReturnSearchLineSerializer(serializers.ModelSerializer):
+    """One sold line the returns desk found by its goods: enough to tell the
+    customer's purchase apart from the others (when, who, how much) and open
+    the invoice it is on. ``matched_by``/``matched_code`` say why it is listed
+    — the IMEI that named it, the barcode scanned — from the search's
+    ``return_matches`` context."""
+
+    order = serializers.IntegerField(source="order_id", read_only=True)
+    receipt_number = serializers.CharField(source="order.receipt_number", read_only=True)
+    sold_at = serializers.DateTimeField(source="order.created_at", read_only=True)
+    sale_type = serializers.CharField(source="order.sale_type", read_only=True)
+    customer_name = serializers.SerializerMethodField()
+    cashier_name = serializers.CharField(
+        source="order.register_session.owner_display_name", read_only=True
+    )
+    product = serializers.IntegerField(source="variant.product_id", read_only=True)
+    product_name = serializers.CharField(source="variant.product.name", read_only=True)
+    variant_name = serializers.CharField(source="variant.display_name", read_only=True)
+    unit_label = serializers.SerializerMethodField()
+    quantity = serializers.DecimalField(
+        max_digits=10, decimal_places=3, coerce_to_string=False, read_only=True
+    )
+    returned_quantity = serializers.FloatField(read_only=True)
+    returnable_quantity = serializers.FloatField(read_only=True)
+    line_total = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    matched_by = serializers.SerializerMethodField()
+    matched_code = serializers.SerializerMethodField()
+
+    class Meta:
+        model = OrderLine
+        fields = [
+            "id",
+            "order",
+            "receipt_number",
+            "sold_at",
+            "sale_type",
+            "customer_name",
+            "cashier_name",
+            "product",
+            "product_name",
+            "variant_name",
+            "unit_label",
+            "quantity",
+            "returned_quantity",
+            "returnable_quantity",
+            "unit_price",
+            "discount_total",
+            "line_total",
+            "matched_by",
+            "matched_code",
+        ]
+        read_only_fields = fields
+
+    def get_customer_name(self, line):
+        customer = line.order.customer
+        return customer.full_name if customer is not None else ""
+
+    def get_unit_label(self, line):
+        return unit_label_for(line.unit or line.variant.product.unit, self.context)
+
+    def _match(self, line):
+        return self.context.get("return_matches", {}).get(line.pk, ("", ""))
+
+    def get_matched_by(self, line):
+        return self._match(line)[0]
+
+    def get_matched_code(self, line):
+        return self._match(line)[1]
 
 
 class OrderSessionSerializer(OrderListSerializer):

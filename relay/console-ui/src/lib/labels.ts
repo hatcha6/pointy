@@ -112,6 +112,7 @@ export const supplier: Record<string, string> = {
   bnplus: "BN Plus",
   reloadly: "Reloadly",
   qareeb: "قريب",
+  stock: "مخزوننا",
 };
 
 /** Update channels by their code; an unknown one shows its code. */

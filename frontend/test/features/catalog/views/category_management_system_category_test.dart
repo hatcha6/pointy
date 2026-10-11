@@ -23,6 +23,14 @@ const _cards = ProductCategory(
   isSystem: true,
 );
 
+const _daftar = ProductCategory(
+  id: 3,
+  name: 'كروت دفتر',
+  isQuickAccess: true,
+  isSystem: true,
+  systemKey: ProductCategorySystemKey.pointyVouchers,
+);
+
 /// The category a provider's shelf keeps is marked as automatic and cannot be
 /// deleted from the screen — the next sync would only make it again. Editing
 /// and pinning stay, because the shop arranges it like any other.
@@ -80,6 +88,14 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text(l10n.deleteButton), findsOneWidget);
   });
+
+  test('the quick-access panel leaves «كروت دفتر» out: it is always pinned, '
+      'always first', () async {
+    final viewModel = CategoryManagementViewModel(_StubCatalogRepository());
+    addTearDown(viewModel.dispose);
+    await viewModel.loadQuickAccess();
+    expect(viewModel.quickAccess.map((category) => category.id), [_cards.id]);
+  });
 }
 
 class _StubCatalogRepository extends CatalogRepository {
@@ -101,5 +117,5 @@ class _StubCatalogRepository extends CatalogRepository {
 
   @override
   Future<Result<List<ProductCategory>>> loadQuickAccessCategories() async =>
-      const Ok([]);
+      const Ok([_daftar, _cards]);
 }

@@ -30,6 +30,7 @@ import '../services/print_transport.dart';
 import '../services/print_transports.dart';
 import '../services/repair_intake_printables.dart';
 import '../services/repair_ticket_document_service.dart';
+import '../services/z_report_cash.dart';
 import '../services/z_report_integrations.dart';
 
 class PrintingRepository {
@@ -1184,36 +1185,6 @@ class PrintingRepository {
 
     final integrations = summary.integrations;
 
-    final cashRows = <Map<String, Object?>>[
-      {'label': 'النقد الافتتاحي', 'value': formatMoney(cash.openingCash)},
-      {'label': 'مبيعات نقدية', 'value': formatMoney(cash.cashSalesTotal)},
-      if (cash.payInTotal > 0)
-        {'label': 'إيداع نقدي', 'value': formatMoney(cash.payInTotal)},
-      if (cash.payOutTotal > 0)
-        {'label': 'سحب نقدي', 'value': formatMoney(cash.payOutTotal)},
-      if (cash.cashRefundTotal > 0)
-        {'label': 'مرتجعات نقدية', 'value': formatMoney(cash.cashRefundTotal)},
-      {
-        'label': 'النقد المتوقع',
-        'value': formatMoney(cash.expectedCash),
-        'emphasize': true,
-      },
-      if (cash.closingCash != null)
-        {'label': 'النقد الفعلي', 'value': formatMoney(cash.closingCash!)},
-      if (cash.cashVariance != null)
-        {
-          // Named, not signed: a bare "-12.00" reads the same as "12.00"
-          // on a till slip, so the label carries the direction.
-          'label': cash.cashVariance! < -0.005
-              ? 'العجز'
-              : cash.cashVariance! > 0.005
-              ? 'الزيادة'
-              : 'الفرق',
-          'value': formatMoney(cash.cashVariance!.abs()),
-          'emphasize': true,
-        },
-    ];
-
     return {
       'kind': 'z_report',
       'shop': {
@@ -1236,7 +1207,7 @@ class PrintingRepository {
           if (integrations.hasActivity)
             zReportIntegrationThermalSection(integrations),
           {'title': 'المبيعات حسب الفئة', 'rows': categoryRows},
-          {'title': 'تسوية النقد', 'rows': cashRows},
+          {'title': 'تسوية النقد', 'rows': zReportCashRows(cash)},
         ],
       },
     };

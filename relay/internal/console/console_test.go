@@ -609,6 +609,21 @@ func TestAuditNeverKeepsSecrets(t *testing.T) {
 	}
 }
 
+func TestCardStockNeedsATapAndItsCodesAreNeverAudited(t *testing.T) {
+	for _, route := range []string{"/v1/vouchers/admin/stock", "/v1/vouchers/admin/stock/stk_1/void", "/v1/vouchers/admin/purchases/p1/refund"} {
+		if !needsStepUp(http.MethodPost, route) {
+			t.Errorf("POST %s needs a passkey tap", route)
+		}
+	}
+	if needsStepUp(http.MethodPost, "/v1/vouchers/admin/stock/validate") || !quietWrite.MatchString("/v1/vouchers/admin/stock/validate") {
+		t.Error("checking a batch changes nothing: no tap, no audit line")
+	}
+	got := auditBody([]byte(`{"source":"wholesaler","codes":[{"item":"psn-10","code":"1111-2222-3333","pin":"9876","cost":"40"}]}`), "application/json")
+	if strings.Contains(got, "1111-2222-3333") || strings.Contains(got, "9876") || !strings.Contains(got, `"item":"psn-10"`) {
+		t.Fatalf("the audit kept a card code: %s", got)
+	}
+}
+
 func TestStepUpBeginTakesABodyHash(t *testing.T) {
 	h := newHarness(t)
 	b, key := h.register("Omar")

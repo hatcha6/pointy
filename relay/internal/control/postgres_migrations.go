@@ -898,6 +898,53 @@ ALTER TABLE relay_voucher_offers ADD COLUMN IF NOT EXISTS previous_price text NO
 ALTER TABLE relay_voucher_offers ADD COLUMN IF NOT EXISTS price_changed_at timestamptz;
 `,
 	},
+	{
+		version: 28,
+		name:    "company card stock",
+		sql: `
+-- Codes the company bought outside the suppliers' APIs, sold before any
+-- supplier is called. A code is held once, whatever its item.
+CREATE TABLE IF NOT EXISTS relay_voucher_stock (
+	id text PRIMARY KEY,
+	item_key text NOT NULL,
+	-- The code sealed by the relay (AES-256-GCM, its stock key), a keyed
+	-- fingerprint that makes a code unique without holding it in the clear,
+	-- and its last four characters for the operator's listings.
+	code_sealed text NOT NULL,
+	code_fingerprint text NOT NULL,
+	code_mask text NOT NULL DEFAULT '',
+	serial text NOT NULL DEFAULT '',
+	cost numeric(14, 3) NOT NULL,
+	expires_on date,
+	batch_id text NOT NULL,
+	source text NOT NULL DEFAULT '',
+	note text NOT NULL DEFAULT '',
+	status text NOT NULL DEFAULT 'available',
+	purchase_id text NOT NULL DEFAULT '',
+	actor text NOT NULL DEFAULT '',
+	created_at timestamptz NOT NULL,
+	sold_at timestamptz,
+	voided_at timestamptz,
+	voided_by text NOT NULL DEFAULT '',
+	void_reason text NOT NULL DEFAULT '',
+	-- A refunded sale gives its codes back: to the shelf, or void.
+	returned_from text NOT NULL DEFAULT '',
+	returned_at timestamptz,
+	returned_by text NOT NULL DEFAULT '',
+	return_reason text NOT NULL DEFAULT '',
+	CONSTRAINT relay_voucher_stock_code_unique UNIQUE (code_fingerprint),
+	CONSTRAINT relay_voucher_stock_status_valid CHECK (status IN ('available', 'sold', 'void')),
+	CONSTRAINT relay_voucher_stock_cost_positive CHECK (cost > 0),
+	CONSTRAINT relay_voucher_stock_sold_has_purchase CHECK ((status = 'sold') = (purchase_id <> ''))
+);
+CREATE INDEX IF NOT EXISTS relay_voucher_stock_available_idx
+	ON relay_voucher_stock (item_key, expires_on, created_at) WHERE status = 'available';
+CREATE INDEX IF NOT EXISTS relay_voucher_stock_purchase_idx
+	ON relay_voucher_stock (purchase_id) WHERE purchase_id <> '';
+CREATE INDEX IF NOT EXISTS relay_voucher_stock_created_idx
+	ON relay_voucher_stock (created_at DESC, id DESC);
+`,
+	},
 }
 
 // migrationsAdvisoryLockKey serializes concurrent migrators (e.g. autoscaled

@@ -58,6 +58,17 @@ class RegisterSession(TimeStampedModel):
                 name="unique_open_register_session_per_owner",
             )
         ]
+        permissions = [
+            # A cashier closes blind by default: expected cash and the variance
+            # are the owner's check on the drawer. Some shops would rather the
+            # cashier count against the expected figure and chase a difference
+            # before handing over, so it is granted per user — on their OWN
+            # sessions only (the viewset already scopes them), in no role.
+            (
+                "view_own_register_reconciliation",
+                "See expected cash and the variance on own register sessions",
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"{self.owner_key} {self.status} register session"

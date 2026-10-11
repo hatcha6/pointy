@@ -210,7 +210,12 @@ class CategoryManagementViewModel extends ChangeNotifier {
     final result = await _catalogRepository.loadQuickAccessCategories();
     switch (result) {
       case Ok<List<ProductCategory>>():
-        _quickAccess = result.value;
+        // «كروت دفتر» is always pinned and always first on the till: it is
+        // not the shop's to unpin or reorder, so this panel leaves it out.
+        _quickAccess = [
+          for (final category in result.value)
+            if (!category.isPointyVouchers) category,
+        ];
         _quickAccessError = false;
       case Error<List<ProductCategory>>():
         _quickAccessError = true;

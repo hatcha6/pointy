@@ -10,7 +10,7 @@ aggregate payload the manager view and the Z-Report render.
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group
+from django.contrib.auth.models import Group, Permission
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework import status
@@ -233,6 +233,13 @@ class RegisterSummaryEndpointTests(TestCase):
 
     # 7. Cash reconciliation block carries the drawer figures.
     def test_cash_reconciliation_block(self):
+        # Cashiers close blind; the figures below need the per-user grant.
+        self.user.user_permissions.add(
+            Permission.objects.get(
+                content_type__app_label="sales",
+                codename="view_own_register_reconciliation",
+            )
+        )
         session = _open_session(self.user)
         session.opening_cash = Decimal("50.00")
         session.save(update_fields=["opening_cash"])

@@ -18,6 +18,12 @@ new card product to it; it never takes one out. A brand that leaves the shelf
 is switched off along with its product, and whatever the shop put in the
 category itself is the shop's.
 
+The company's own shelf («كروت دفتر», ``vouchers:pointy``) is the exception:
+it is part of Daftar, not a choice, so its chip is made as soon as the shop can
+sell (its top-ups and bills need no card on sale) and is kept pinned and on
+(:func:`keep_company_chip`). The till draws it right after «الكل» whatever its
+order, and the category screens never show it.
+
 Like the rest of the sweep it writes only what changed, so an unchanged shelf
 moves no catalog version.
 """
@@ -40,6 +46,10 @@ CATEGORY_NAMES = {
     # (``vouchers:pointy``) and opens the voucher menu instead of the grid.
     "pointy": "كروت دفتر",
 }
+
+
+#: The company's own shelf, whose chip is always pinned (see the module docstring).
+COMPANY_PROVIDER = "pointy"
 
 
 def system_key(provider_key: str) -> str:
@@ -81,6 +91,26 @@ def file_shelf(account) -> int:
         category.products.add(*missing)
         changed += len(missing)
     return changed
+
+
+def keep_company_chip(account) -> int:
+    """Make the company's chip if it is missing; pin it and switch it on again.
+
+    Returns rows changed — none for a chip already as it should be, so an
+    unchanged shelf still moves no catalog version.
+    """
+    if account.provider != COMPANY_PROVIDER or not account.is_configured:
+        return 0
+    category = ProductCategory.objects.filter(system_key=system_key(account.provider)).first()
+    if category is None:
+        _, created = _make_category(account)
+        return int(created)
+    if category.is_quick_access and category.is_active:
+        return 0
+    category.is_quick_access = True
+    category.is_active = True
+    category.save(update_fields=["is_quick_access", "is_active", "updated_at"])
+    return 1
 
 
 def _make_category(account) -> tuple[ProductCategory, bool]:

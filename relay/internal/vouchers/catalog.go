@@ -525,6 +525,14 @@ func normalizeItem(item Item) Item {
 			EndsAt:      promo.EndsAt.UTC(),
 		}
 	}
+	if market := item.Market; market != nil {
+		normalized.Market = &Market{
+			PriceLYD:    canonicalPrice(market.PriceLYD),
+			USDRate:     canonicalPrice(market.USDRate),
+			Captured:    strings.TrimSpace(market.Captured),
+			Competitors: market.Competitors,
+		}
+	}
 	return normalized
 }
 

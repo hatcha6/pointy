@@ -387,18 +387,14 @@ class IntegrationApiTests(TestCase):
         resp = self.client.get("/api/integrations/")
         self.assertEqual(resp.status_code, 200)
         keys = [p["key"] for p in resp.data["providers"]]
-        self.assertEqual(keys, ["hdbox", "lnet", "qareeb", "pointy"])
+        # «كروت دفتر» is always on, so the page never offers it.
+        self.assertEqual(keys, ["hdbox", "lnet", "qareeb"])
         by_key = {p["key"]: p for p in resp.data["providers"]}
         self.assertTrue(by_key["hdbox"]["is_configurable"])
         self.assertTrue(by_key["lnet"]["is_configurable"])
         self.assertTrue(by_key["qareeb"]["is_configurable"])
         self.assertEqual(by_key["qareeb"]["blocked_reason"], "")
         self.assertIsNone(by_key["hdbox"]["account"])
-        # The company's own cards need no credential, only the relay link —
-        # which this shop does not have, so they cannot be switched on here.
-        self.assertEqual(by_key["pointy"]["fields"], [])
-        self.assertTrue(by_key["pointy"]["relay_hosted"])
-        self.assertFalse(by_key["pointy"]["is_configurable"])
         self.assertFalse(by_key["hdbox"]["relay_hosted"])
 
     def test_cashier_cannot_read_integration_settings(self):

@@ -25,6 +25,7 @@ from apps.core.permissions import HasPointyPermission
 from apps.core.roles import user_has_full_visibility
 
 from . import catalog
+from . import company_account
 from . import payment_report
 from . import quotes
 from . import recharge
@@ -89,6 +90,9 @@ def _catalog_payload() -> dict:
                 spec, accounts.get(spec.key), switched_off=spec.key in off
             )
             for spec in catalog.PROVIDERS
+            # «كروت دفتر» is part of Daftar, not a service the shop chooses:
+            # nothing on this page may switch it off or hide it.
+            if not company_account.is_always_on(spec.key)
         ]
     }
 
@@ -166,6 +170,12 @@ class IntegrationAccountView(APIView):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
+        if company_account.is_always_on(provider) and data.get("is_active") is False:
+            return Response(
+                {"detail": "this service is always on", "error_code": company_account.ERROR_ALWAYS_ON},
+                status=status.HTTP_409_CONFLICT,
+            )
+
         # The company's own provider has no credential but the relay link: a
         # shop that is not linked cannot switch it on (switching it off, or
         # changing a setting of a switched-off one, is always allowed).
@@ -227,6 +237,11 @@ class IntegrationAccountView(APIView):
         if spec is None:
             return Response(
                 {"detail": "unknown provider"}, status=status.HTTP_404_NOT_FOUND
+            )
+        if company_account.is_always_on(provider):
+            return Response(
+                {"detail": "this service is always on", "error_code": company_account.ERROR_ALWAYS_ON},
+                status=status.HTTP_409_CONFLICT,
             )
         account = IntegrationAccount.objects.filter(provider=provider).first()
         if account is not None:

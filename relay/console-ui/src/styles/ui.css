@@ -1390,27 +1390,6 @@ table.table {
   max-width: 420px;
 }
 
-.auth-art ul {
-  list-style: none;
-  padding: 0;
-  margin: 8px 0 0;
-  display: grid;
-  gap: 10px;
-}
-
-.auth-art li {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  color: #dbe1e8;
-}
-
-.auth-art li svg {
-  width: 18px;
-  height: 18px;
-  color: var(--rail-active);
-}
-
 .auth-brand {
   display: flex;
   align-items: center;

@@ -18,6 +18,7 @@ class AdjustmentLineOption {
     this.allowDecimal = false,
     this.decimalEntryTitle,
     this.decimalEntryHint,
+    this.initialQuantity = 0,
   });
 
   /// Identifier echoed back in the matching [AdjustmentLineSelection.lineId].
@@ -40,6 +41,11 @@ class AdjustmentLineOption {
   /// stays localization-agnostic.
   final String? decimalEntryTitle;
   final String? decimalEntryHint;
+
+  /// What the stepper starts at — the line the operator already picked (the
+  /// returns desk found it by its goods) arrives selected. Clamped to
+  /// [maxQuantity].
+  final double initialQuantity;
 }
 
 /// A single non-zero line chosen in a [QuantityAdjustmentDialog].
@@ -114,7 +120,8 @@ class QuantityAdjustmentDialog extends StatefulWidget {
 
 class _QuantityAdjustmentDialogState extends State<QuantityAdjustmentDialog> {
   late final Map<int, double> _quantities = {
-    for (final option in widget.options) option.lineId: 0,
+    for (final option in widget.options)
+      option.lineId: option.initialQuantity.clamp(0, option.maxQuantity),
   };
   final TextEditingController _reasonController = TextEditingController();
 

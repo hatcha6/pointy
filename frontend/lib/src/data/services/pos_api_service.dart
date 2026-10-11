@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:http/http.dart' as http;
 
 import '../models/money_source.dart';
+import '../models/return_search.dart';
 import '../models/attachment_summary.dart';
 import '../models/password_policy.dart';
 import '../models/pos_user.dart';
@@ -2852,6 +2853,10 @@ class PosApiService {
 
   Future<SaleOrder> lookupSaleOrderByReceipt(String receiptNumber) {
     return _sales.lookupSaleOrderByReceipt(receiptNumber);
+  }
+
+  Future<ReturnSearchResult> searchReturns(String query) {
+    return _sales.searchReturns(query);
   }
 
   Future<PurchaseOrder> createPurchaseOrder(

@@ -1,11 +1,10 @@
 [Desktop Entry]
 Type=Application
 Version=1.0
-# Arabic is the app's only locale, so it is the default name here too — the
-# same string Android shows (android:label in AndroidManifest.xml). A desktop
-# running an English locale gets the transliteration instead.
+# The brand is دفتر in every locale — the same string Android shows
+# (android:label in AndroidManifest.xml) and the Windows shortcuts carry. No
+# Name[en]: an English-locale desktop would label the shortcut "Daftar".
 Name=دفتر
-Name[en]=Daftar
 GenericName=نقطة بيع
 GenericName[en]=Point of Sale
 Comment=نقطة البيع والمخزون

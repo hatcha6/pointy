@@ -102,6 +102,10 @@ type VoucherConfig struct {
 	// Breaker remembers which suppliers just failed in a way that will repeat, so
 	// they are skipped for a few minutes while another can sell. Nil: never.
 	Breaker *SupplierBreaker
+	// StockSealer seals and opens the company's own stock codes
+	// (POINTY_RELAY_VOUCHER_STOCK_KEY). Nil: the relay neither adds stock nor
+	// sells it.
+	StockSealer *vouchers.StockSealer
 }
 
 // Configured reports whether the relay can sell cards at all.
@@ -251,6 +255,11 @@ type voucherOffers struct {
 	// may be before they stop being believed (0: they never do).
 	now    time.Time
 	maxAge time.Duration
+	// stock is how many usable codes the company's own stock holds per item,
+	// and stockSupplier sells them; nil when the relay keeps no stock (or in
+	// test mode).
+	stock         map[string]int
+	stockSupplier vouchers.Supplier
 }
 
 func (s HTTPServer) loadVoucherOffers(ctx context.Context, store control.VoucherStore) (voucherOffers, error) {
@@ -272,7 +281,7 @@ func (s HTTPServer) loadVoucherOffers(ctx context.Context, store control.Voucher
 			index.newest[offer.Supplier] = offer.SyncedAt
 		}
 	}
-	return index, nil
+	return s.withStock(ctx, index)
 }
 
 // at is the moment the offers are judged at.
@@ -773,7 +782,7 @@ func (s HTTPServer) voucherCodes(ctx context.Context, purchase control.VoucherPu
 	if purchase.Status != control.VoucherPurchaseSucceeded {
 		return nil, purchase.Status == control.VoucherPurchasePending
 	}
-	supplier, ok := s.Vouchers.supplierByKey(purchase.Supplier)
+	supplier, ok := s.voucherSupplierByKey(purchase.Supplier)
 	if !ok || purchase.SupplierOrderID == "" {
 		return nil, true
 	}
@@ -935,7 +944,7 @@ func (s HTTPServer) checkVoucherPurchase(
 	if control.NormalizeVoucherKind(purchase.Kind) != control.VoucherKindCard {
 		return s.checkServiceOrder(ctx, store, purchase)
 	}
-	supplier, ok := s.Vouchers.supplierByKey(purchase.Supplier)
+	supplier, ok := s.voucherSupplierByKey(purchase.Supplier)
 	if !ok {
 		return purchase, "supplier_unconfigured", nil
 	}

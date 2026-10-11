@@ -304,6 +304,7 @@ class SessionCashSummary {
     required this.hasCashVariance,
     required this.denominationTotal,
     required this.denominations,
+    this.hasReconciliation = true,
   });
 
   final double openingCash;
@@ -317,6 +318,11 @@ class SessionCashSummary {
   final bool hasCashVariance;
   final double denominationTotal;
   final List<DenominationCount> denominations;
+
+  /// False when the server withheld the expected cash and the totals behind
+  /// it — a cashier closing blind. Those fields then read as zero, so every
+  /// surface must leave their lines out rather than print a false 0.00.
+  final bool hasReconciliation;
 
   factory SessionCashSummary.fromJson(Map<String, Object?> json) {
     return SessionCashSummary(
@@ -335,6 +341,7 @@ class SessionCashSummary {
       denominations: _list(
         json['denominations'],
       ).map(DenominationCount.fromJson).toList(growable: false),
+      hasReconciliation: json.containsKey('expected_cash'),
     );
   }
 }

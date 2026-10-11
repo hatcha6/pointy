@@ -35,7 +35,7 @@ class SessionOrders extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final session = viewModel.selectedSession;
-    final showReconciliation = capabilities.canManageShopSettings;
+    final showReconciliation = capabilities.canViewRegisterReconciliation;
     final spacing = AdaptiveSpacing.of(context);
 
     return Padding(

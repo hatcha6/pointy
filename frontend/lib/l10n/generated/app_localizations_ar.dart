@@ -12348,30 +12348,72 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get returnsLookupPrompt =>
-      'أدخل رقم الفاتورة لإجراء إرجاع أو استبدال.';
+      'رقم الفاتورة أو آخر أرقامه، رمز QR على الإيصال، باركود المنتج أو اسمه، أو هاتف العميل';
 
   @override
-  String get returnsLookupFieldLabel => 'رقم الفاتورة';
+  String get returnsLookupFieldLabel => 'ابحث بالفاتورة أو المنتج';
 
   @override
   String get returnsLookupSearchButton => 'بحث';
 
   @override
-  String get returnsLookupNotFound => 'لا توجد فاتورة بهذا الرقم.';
+  String get returnsLookupNotFound => 'لم يُعثر على فاتورة أو منتج مباع.';
 
   @override
-  String get returnsLookupEmpty => 'ابحث عن فاتورة برقمها للبدء.';
+  String get returnsLookupEmpty =>
+      'امسح الإيصال أو المنتج، أو اكتب رقم الفاتورة أو اسم المنتج.';
 
   @override
-  String get returnsLookupNotFoundHint =>
-      'تأكّد من رقم الفاتورة المطبوع على الإيصال، أو جرّب رقمًا آخر.';
+  String returnsLookupNotFoundHint(String window) {
+    return 'تأكّد من رقم الفاتورة المطبوع على الإيصال. المنتجات تظهر فقط إن بيعت خلال مدة الإرجاع ($window) وبقي منها شيء يُرجَع.';
+  }
 
   @override
-  String get returnsLookupFailedTitle => 'تعذّر البحث عن الفاتورة';
+  String get returnsLookupFailedTitle => 'تعذّر البحث';
 
   @override
   String get returnsLookupFailedMessage =>
       'لم يصل ردّ من الخادم، ولا يعني ذلك أن الفاتورة غير موجودة. تحقّق من الاتصال ثم أعد المحاولة.';
+
+  @override
+  String get returnsSearchWindowClosedHint =>
+      'مدة الإرجاع في الإعدادات صفر، فلا يمكن البحث بالمنتج أو بهاتف العميل. ابحث برقم الفاتورة.';
+
+  @override
+  String returnsSearchWindowNote(String window) {
+    return 'المنتجات المباعة خلال آخر $window — مدة الإرجاع المسموحة';
+  }
+
+  @override
+  String get returnsSearchInvoicesSection => 'فواتير';
+
+  @override
+  String get returnsSearchLinesSection => 'منتجات مباعة';
+
+  @override
+  String returnsSearchTruncated(int count) {
+    return 'تظهر أحدث $count نتيجة فقط. امسح الباركود أو أضف كلمة لتضييق البحث.';
+  }
+
+  @override
+  String returnsSearchLineQuantities(String sold, String returnable) {
+    return 'المباع $sold • المتبقي للإرجاع $returnable';
+  }
+
+  @override
+  String returnsSearchSerialMatch(String code) {
+    return 'الرقم التسلسلي $code';
+  }
+
+  @override
+  String get returnsSearchNothingLeft => 'لا شيء متبقٍ للإرجاع';
+
+  @override
+  String get returnsSearchBackToResults => 'رجوع إلى نتائج البحث';
+
+  @override
+  String get returnsSearchOpenFailed =>
+      'تعذّر فتح الفاتورة. تحقّق من الاتصال ثم أعد المحاولة.';
 
   @override
   String get salePaymentsTitle => 'المدفوعات';

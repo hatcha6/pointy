@@ -2801,11 +2801,12 @@ void main() {
     await tester.testTextInput.receiveAction(TextInputAction.search);
     await tester.pumpAndSettle();
 
-    expect(find.text('لا توجد فاتورة بهذا الرقم.'), findsOneWidget);
-    // The miss also says what to do about it.
+    expect(find.text('لم يُعثر على فاتورة أو منتج مباع.'), findsOneWidget);
+    // The miss also says what to do about it, naming the shop's window.
     expect(
       find.text(
-        'تأكّد من رقم الفاتورة المطبوع على الإيصال، أو جرّب رقمًا آخر.',
+        'تأكّد من رقم الفاتورة المطبوع على الإيصال. المنتجات تظهر فقط إن '
+        'بيعت خلال مدة الإرجاع (3 يوم) وبقي منها شيء يُرجَع.',
       ),
       findsOneWidget,
     );
@@ -2827,8 +2828,8 @@ void main() {
       expect(lookups, 1);
       // A 500 must never be reported as "no invoice with that number" — the
       // cashier would tell the customer their real receipt is invalid.
-      expect(find.text('لا توجد فاتورة بهذا الرقم.'), findsNothing);
-      expect(find.text('تعذّر البحث عن الفاتورة'), findsOneWidget);
+      expect(find.text('لم يُعثر على فاتورة أو منتج مباع.'), findsNothing);
+      expect(find.text('تعذّر البحث'), findsOneWidget);
       expect(
         find.text(
           'لم يصل ردّ من الخادم، ولا يعني ذلك أن الفاتورة غير موجودة. '
@@ -6575,6 +6576,26 @@ PosApiService _mockApiService({
           );
         }
         return _jsonResponse(_orderJson());
+      }
+
+      if (path.endsWith('/orders/return-search/')) {
+        onSaleLookup?.call(request);
+        final query = request.url.queryParameters['q'];
+        if (query == 'R-500') {
+          return http.Response.bytes(
+            utf8.encode(jsonEncode({'detail': 'Server error.'})),
+            500,
+            headers: const {'Content-Type': 'application/json; charset=utf-8'},
+          );
+        }
+        return _jsonResponse({
+          'order': query == 'R-100' ? _orderJson() : null,
+          'invoices': const <Object?>[],
+          'lines': const <Object?>[],
+          'lines_truncated': false,
+          'window_hours': 72,
+          'window_starts_at': null,
+        });
       }
 
       if (path.endsWith('/orders/100/exchange-items/')) {

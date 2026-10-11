@@ -13,6 +13,10 @@ import 'pointy_category_strip.dart';
 ///
 /// The strip quietly collapses to nothing when there is nothing to show, so it
 /// never adds empty chrome to a shop that hasn't pinned any categories.
+///
+/// The company's own shelf («كروت دفتر») is the exception to "the shop's
+/// chips": it always comes first after «الكل», drawn in the accent colour, and
+/// the server keeps it pinned (see `apps.integrations.shelf_category`).
 class QuickAccessCategoryStrip extends StatefulWidget {
   const QuickAccessCategoryStrip({
     super.key,
@@ -75,10 +79,15 @@ class _QuickAccessCategoryStripState extends State<QuickAccessCategoryStrip> {
             category.name.trim().isNotEmpty)
           category,
     ];
+    // «كروت دفتر» leads, right after «الكل», whatever order the shop gave
+    // its own chips: it is part of Daftar, always pinned, never reordered.
     final categories = [
-      for (final category in _quickAccess)
-        if (category.name.trim().isNotEmpty) category,
-      ...extras,
+      for (final category in [..._quickAccess, ...extras])
+        if (category.isPointyVouchers && category.name.trim().isNotEmpty)
+          category,
+      for (final category in [..._quickAccess, ...extras])
+        if (!category.isPointyVouchers && category.name.trim().isNotEmpty)
+          category,
     ];
 
     if (categories.isEmpty) {
@@ -96,7 +105,14 @@ class _QuickAccessCategoryStripState extends State<QuickAccessCategoryStrip> {
       allLabel: widget.allLabel,
       items: [
         for (final category in categories)
-          PointyCategoryStripItem(value: category.id, label: category.name),
+          PointyCategoryStripItem(
+            value: category.id,
+            label: category.name,
+            featured: category.isPointyVouchers,
+            icon: category.isPointyVouchers
+                ? Icons.card_giftcard_rounded
+                : null,
+          ),
       ],
       selectedValues: selectedValues,
       onSelectAll: widget.onSelectAll,

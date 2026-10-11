@@ -231,6 +231,13 @@ var usageSections = []usageSection{
 		detail:    `  gen-token      Print a strong random admin token for POINTY_RELAY_ADMIN_TOKEN.`,
 		flagsOnly: true,
 	},
+	{
+		name:     "gen-stock-key",
+		synopsis: []string{"pointy-relay gen-stock-key"},
+		detail: `  gen-stock-key  Print a random key for POINTY_RELAY_VOUCHER_STOCK_KEY, which seals the
+                 company's own card stock codes. Keep it with the other relay secrets and back
+                 it up apart from the database: without it the codes in stock cannot be opened.`,
+	},
 }
 
 const adminAPIUsageNote = `Admin API commands read POINTY_RELAY_CONTROL_URL and POINTY_RELAY_ADMIN_TOKEN

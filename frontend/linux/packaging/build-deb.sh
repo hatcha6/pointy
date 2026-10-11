@@ -82,8 +82,9 @@ The application lives in ${INSTALL_DIR}; /usr/bin/${PKG_NAME} launches it from a
 terminal and the menu entry launches it from the desktop.
 
 Updates: a till installed from this package cannot replace itself in place —
-${INSTALL_DIR} belongs to root. Download the current .deb from the shop server's
-LAN page (http://<server>/clients/) and install it over this one.
+${INSTALL_DIR} belongs to root. The app downloads the next .deb from the shop
+server and opens it in the package installer; it is also on the server's LAN
+page (http://<server>/clients/) to install over this one by hand.
 EOF
 chmod 0644 "${root}/usr/share/doc/${PKG_NAME}/README.Debian"
 
@@ -130,6 +131,36 @@ if [ "$1" = "configure" ]; then
   if command -v update-desktop-database >/dev/null 2>&1; then
     update-desktop-database -q /usr/share/applications || true
   fi
+
+  # A desktop shortcut, as the Windows installer makes. Once per till, not per
+  # upgrade: the marker is what keeps a cashier who deleted it from getting it
+  # back with every update — and what gives a till installed before this
+  # existed its one shortcut on its next update. Every human account gets one,
+  # like the Windows common desktop, because the installing user is unknowable
+  # here (the GUI installers run this from a root daemon, not under sudo).
+  marker=/var/lib/pointy/desktop-shortcut-created
+  if [ ! -e "$marker" ]; then
+    getent passwd | while IFS=: read -r name _ uid gid _ home _; do
+      [ "$uid" -ge 1000 ] && [ "$uid" -lt 60000 ] || continue
+      [ -d "$home" ] || continue
+      # xdg-user-dir only reads ~/.config/user-dirs.dirs, so HOME is enough —
+      # and it is what finds an Arabic session's «سطح المكتب».
+      desktop="$(HOME="$home" xdg-user-dir DESKTOP 2>/dev/null || true)"
+      if [ -z "$desktop" ] || [ "$desktop" = "$home" ]; then
+        desktop="$home/Desktop"
+      fi
+      [ -d "$desktop" ] || continue
+      shortcut="$desktop/ly.daftr.desktop"
+      [ -e "$shortcut" ] && continue
+      # Executable and owned by the user: what Nemo (Mint) needs to treat a
+      # launcher as trusted. GNOME also wants the gio flag, best effort.
+      install -o "$uid" -g "$gid" -m 0755 /usr/share/applications/ly.daftr.desktop "$shortcut" || continue
+      if command -v runuser >/dev/null 2>&1 && command -v gio >/dev/null 2>&1; then
+        runuser -u "$name" -- gio set "$shortcut" metadata::trusted true >/dev/null 2>&1 || true
+      fi
+    done
+    mkdir -p /var/lib/pointy && touch "$marker"
+  fi
 fi
 exit 0
 EOF
@@ -137,6 +168,10 @@ EOF
 cat > "${root}/DEBIAN/postrm" <<'EOF'
 #!/bin/sh
 set -e
+if [ "$1" = "purge" ]; then
+  rm -f /var/lib/pointy/desktop-shortcut-created
+  rmdir /var/lib/pointy 2>/dev/null || true
+fi
 if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
   if command -v gtk-update-icon-cache >/dev/null 2>&1; then
     gtk-update-icon-cache -q -f -t /usr/share/icons/hicolor || true

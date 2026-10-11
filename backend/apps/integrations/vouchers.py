@@ -66,7 +66,15 @@ from django.utils.dateparse import parse_datetime
 from apps.catalog.models import Product, ProductAlias, ProductVariant
 from apps.core import caching
 
-from . import catalog, pricing_rules, shelf_category, switches, voucher_flags, voucher_logos
+from . import (
+    catalog,
+    company_account,
+    pricing_rules,
+    shelf_category,
+    switches,
+    voucher_flags,
+    voucher_logos,
+)
 from .models import (
     IntegrationAccount,
     IntegrationVoucher,
@@ -185,6 +193,10 @@ def sync_all(*, relay_hosted=None) -> dict:
     fleet: its cards must not stay on sale behind it. ``relay_hosted`` limits
     both to one kind of account (``None``: every one).
     """
+    if relay_hosted is not False:
+        # «كروت دفتر» is always on: a missing or switched-off account is
+        # put back before the sweep looks for accounts to read.
+        company_account.ensure_account()
     reports = []
     live = set()
     for account in voucher_accounts(relay_hosted=relay_hosted):
@@ -197,7 +209,21 @@ def sync_all(*, relay_hosted=None) -> dict:
     for account in IntegrationAccount.objects.exclude(pk__in=live):
         if sells_vouchers(account) and _in_sweep(account, relay_hosted):
             withdraw_shelf(account)
+    if relay_hosted is not False:
+        _keep_company_chip()
     return {"accounts": reports}
+
+
+def _keep_company_chip() -> None:
+    """The company's chip, pinned and on whatever the shop did to it (``shelf_category``)."""
+    account = IntegrationAccount.objects.filter(provider=company_account.PROVIDER).first()
+    if account is None or switches.is_switched_off(account.provider):
+        return
+    try:
+        with transaction.atomic():
+            shelf_category.keep_company_chip(account)
+    except Exception:  # pragma: no cover - a nicety must not fail a sync
+        logger.warning("could not keep the company's chip pinned", exc_info=True)
 
 
 # --- the sweep --------------------------------------------------------------------

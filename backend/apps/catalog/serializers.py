@@ -211,6 +211,11 @@ def variant_identity_conflicts(data, *, exclude_variant_ids=(), target, index=No
     return conflicts
 
 
+#: The company's own card shelf (``apps.integrations.shelf_category``): the one
+#: system category whose chip is always pinned and on.
+ALWAYS_PINNED_KEY = "vouchers:pointy"
+
+
 class ProductCategorySerializer(serializers.ModelSerializer):
     parent_name = serializers.CharField(source="parent.name", read_only=True)
     children_count = serializers.IntegerField(read_only=True)
@@ -277,6 +282,12 @@ class ProductCategorySerializer(serializers.ModelSerializer):
                 {"name": "A category with this name already exists at this level."}
             )
         attrs["name"] = name
+        if self.instance is not None and self.instance.system_key == ALWAYS_PINNED_KEY:
+            # «كروت دفتر» is part of Daftar: its chip is always on the till,
+            # so nothing may unpin or switch it off (a full edit from an older
+            # client sends both and simply keeps them).
+            attrs["is_quick_access"] = True
+            attrs["is_active"] = True
         return attrs
 
 

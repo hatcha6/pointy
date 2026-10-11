@@ -88,3 +88,19 @@ func TestLocalCardsSellAtFaceWithAnEightyTwentySplit(t *testing.T) {
 		t.Fatalf("cost over face: %v %v", shop, retail)
 	}
 }
+
+func TestNormalizeKeepsMarket(t *testing.T) {
+	document := Document{Brands: []Brand{{Key: "apple", Items: []Item{{
+		Key:    "apple-us-10usd",
+		Market: &Market{PriceLYD: " 120.00 ", USDRate: "9.76", Captured: "2026-10-11", Competitors: 3},
+	}}}}}
+	got := Normalize(document).Brands[0].Items[0].Market
+	if got == nil || got.PriceLYD != "120.00" || got.USDRate != "9.76" || got.Captured != "2026-10-11" || got.Competitors != 3 {
+		t.Fatalf("market lost in Normalize: %+v", got)
+	}
+	_, before, _ := Encode(Normalize(Document{Brands: []Brand{{Key: "apple", Items: []Item{{Key: "apple-us-10usd"}}}}}))
+	_, after, _ := Encode(Normalize(document))
+	if before == after {
+		t.Fatal("a competitor price must change the catalog hash, or a push of new market data reads as unchanged")
+	}
+}

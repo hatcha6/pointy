@@ -71,6 +71,7 @@ from .models import (
     VariantOptionValue,
 )
 from .serializers import (
+    ALWAYS_PINNED_KEY,
     BoughtTogetherProductSerializer,
     ModifierGroupSerializer,
     ProductBulkArchiveSerializer,
@@ -237,6 +238,11 @@ class ConditionalListMixin:
         return response
 
 
+def _asks_for_quick_access(request) -> bool:
+    value = request.query_params.get("is_quick_access", "")
+    return value.strip().lower() in ("true", "1")
+
+
 class ProductCategoryViewSet(ConditionalListMixin, viewsets.ModelViewSet):
     serializer_class = ProductCategorySerializer
     permission_classes = [IsAuthenticated, HasPointyPermission]
@@ -278,6 +284,16 @@ class ProductCategoryViewSet(ConditionalListMixin, viewsets.ModelViewSet):
             )
             .order_by("display_order", "name", "id")
         )
+
+    def filter_queryset(self, queryset):
+        queryset = super().filter_queryset(queryset)
+        # «كروت دفتر» is part of Daftar: its chip is always on the till and
+        # nothing about it is the shop's to arrange, so the category screens
+        # and pickers never list it. Only the till's quick-access read, which
+        # draws that chip, does — and a read by id still finds it.
+        if self.action == "list" and not _asks_for_quick_access(self.request):
+            queryset = queryset.exclude(system_key=ALWAYS_PINNED_KEY)
+        return queryset
 
     def perform_destroy(self, instance):
         # A category a feature keeps (a provider's shelf) would only be made

@@ -41,6 +41,9 @@ type voucherSettings struct {
 	TestMode             bool
 	SyncInterval         time.Duration
 	RateLimit            string
+	// StockKey seals the company's own stock codes (base64, 32 bytes). Empty:
+	// the relay neither adds stock nor sells it.
+	StockKey string
 }
 
 // buildVoucherConfig validates the card shop's settings. A malformed limit,
@@ -84,13 +87,38 @@ func buildVoucherConfig(settings voucherSettings) (relayserver.VoucherConfig, bn
 	if settings.TestMode {
 		warnings = append(warnings, "vouchers are in TEST MODE: every purchase gets fake TEST- codes and no supplier is called, while shops' voucher balances are still charged")
 	}
+	// A malformed key stops the relay: starting without it would quietly stop
+	// selling every code already in stock.
+	var sealer *vouchers.StockSealer
+	if text := strings.TrimSpace(settings.StockKey); text != "" {
+		key, err := vouchers.ParseStockKey(text)
+		if err != nil {
+			return relayserver.VoucherConfig{}, bnplus.Config{}, nil, fmt.Errorf("POINTY_RELAY_VOUCHER_STOCK_KEY: %w", err)
+		}
+		if sealer, err = vouchers.NewStockSealer(key); err != nil {
+			return relayserver.VoucherConfig{}, bnplus.Config{}, nil, fmt.Errorf("POINTY_RELAY_VOUCHER_STOCK_KEY: %w", err)
+		}
+	} else {
+		warnings = append(warnings, "the company's card stock is OFF: POINTY_RELAY_VOUCHER_STOCK_KEY is not set (pointy-relay gen-stock-key), so no code can be added and none in stock is sold")
+	}
 	return relayserver.VoucherConfig{
 		TestMode:       settings.TestMode,
 		RateLimit:      rate,
 		RequestTimeout: timeout,
 		SyncInterval:   settings.SyncInterval,
 		Breaker:        relayserver.NewSupplierBreaker(),
+		StockSealer:    sealer,
 	}, credentials, warnings, nil
+}
+
+// runGenStockKey prints a fresh key for POINTY_RELAY_VOUCHER_STOCK_KEY.
+func runGenStockKey() error {
+	key, err := vouchers.GenerateStockKey()
+	if err != nil {
+		return err
+	}
+	fmt.Println(key)
+	return nil
 }
 
 // attachVoucherSuppliers builds the clients of the suppliers the relay has

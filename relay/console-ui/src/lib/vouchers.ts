@@ -92,6 +92,8 @@ const reasonPrefixes: [string, string][] = [
   ["the price at Reloadly is not known", "سعر Reloadly غير معروف بعد"],
   ["the supplier no longer sells this card", "المورّد لم يعد يبيع هذه البطاقة"],
   ["the supplier is out of stock", "نفدت لدى المورّد"],
+  ["no code left in the company's stock", "نفد مخزوننا من هذه البطاقة"],
+  ["this relay keeps no stock", "الخادم لا يحفظ مخزوناً"],
 ];
 
 export function reasonText(reason?: string): string {

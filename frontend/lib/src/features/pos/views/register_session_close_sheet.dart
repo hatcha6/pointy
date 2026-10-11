@@ -11,6 +11,7 @@ import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/tutor/anchors.dart';
 import '../../../shared/tutor/tutor_target.dart';
+import '../../register_sessions/views/session_cash_variance.dart';
 
 class RegisterSessionCloseSheet extends StatefulWidget {
   const RegisterSessionCloseSheet({
@@ -18,6 +19,7 @@ class RegisterSessionCloseSheet extends StatefulWidget {
     required this.onClose,
     this.closeErrorDetail,
     this.initialClosingCash = '',
+    this.loadExpectedCash,
   });
 
   final Future<bool> Function(RegisterSessionCloseInput input) onClose;
@@ -27,6 +29,10 @@ class RegisterSessionCloseSheet extends StatefulWidget {
   /// turned one stale session id into 21 presses of the same dead button.
   final String Function()? closeErrorDetail;
   final String initialClosingCash;
+
+  /// Reads the drawer's expected cash fresh when the sheet opens. Only passed
+  /// for a user granted their own reconciliation; null keeps the close blind.
+  final Future<double?> Function()? loadExpectedCash;
 
   @override
   State<RegisterSessionCloseSheet> createState() =>
@@ -44,10 +50,12 @@ class _RegisterSessionCloseSheetState extends State<RegisterSessionCloseSheet> {
   bool _isSubmitting = false;
   bool _showError = false;
   String _errorDetail = '';
+  double? _expectedCash;
 
   @override
   void initState() {
     super.initState();
+    _loadExpectedCash();
     for (final controller in [
       _closingCashController,
       _count025Controller,
@@ -56,6 +64,13 @@ class _RegisterSessionCloseSheetState extends State<RegisterSessionCloseSheet> {
       _count100Controller,
     ]) {
       controller.addListener(_onAmountsChanged);
+    }
+  }
+
+  Future<void> _loadExpectedCash() async {
+    final expected = await widget.loadExpectedCash?.call();
+    if (expected != null && mounted) {
+      setState(() => _expectedCash = expected);
     }
   }
 
@@ -188,6 +203,13 @@ class _RegisterSessionCloseSheetState extends State<RegisterSessionCloseSheet> {
                         label: l10n.closingCashTotalLabel,
                         value: formatMoney(_closingCashTotal),
                       ),
+                      if (_expectedCash case final expected?) ...[
+                        SizedBox(height: spacing.md),
+                        _ExpectedCashComparison(
+                          expected: expected,
+                          counted: _closingCashTotal,
+                        ),
+                      ],
                       if (_showError) ...[
                         SizedBox(height: spacing.md),
                         PointyInlineMessage.error(
@@ -292,6 +314,43 @@ class _RegisterSessionCloseSheetState extends State<RegisterSessionCloseSheet> {
       return 0;
     }
     return int.parse(value);
+  }
+}
+
+/// Expected cash against the live count, so a granted cashier sees a
+/// shortage or overage while counting and can recount before closing.
+class _ExpectedCashComparison extends StatelessWidget {
+  const _ExpectedCashComparison({
+    required this.expected,
+    required this.counted,
+  });
+
+  final double expected;
+  final double counted;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final variance = counted - expected;
+    return PointySummaryList(
+      key: const ValueKey('register_session_expected_cash_comparison'),
+      rows: [
+        PointySummaryRow(
+          label: l10n.sessionExpectedCashMetric,
+          value: formatMoney(expected),
+        ),
+        PointySummaryRow(
+          label: sessionCashVarianceMetric(l10n, variance),
+          value:
+              sessionCashVarianceKind(variance) ==
+                  SessionCashVarianceKind.matched
+              ? l10n.sessionCashMatchedValue
+              : formatMoney(variance.abs()),
+          emphasized: true,
+          valueColor: sessionCashVarianceColor(context, variance),
+        ),
+      ],
+    );
   }
 }
 

@@ -115,6 +115,8 @@ func run(args []string) error {
 		return runMigrate(args[1:])
 	case "gen-token":
 		return runGenToken(args[1:])
+	case "gen-stock-key":
+		return runGenStockKey()
 	case "version", "-v", "--version":
 		fmt.Println(version)
 		return nil
@@ -507,6 +509,11 @@ func runServer(args []string) error {
 		envDuration("POINTY_RELAY_VOUCHERS_SYNC_INTERVAL", 30*time.Minute),
 		"how often supplier offers (price, stock) are read; 0 disables",
 	)
+	voucherStockKey := flags.String(
+		"voucher-stock-key",
+		envString("POINTY_RELAY_VOUCHER_STOCK_KEY", ""),
+		"base64 key (32 bytes, pointy-relay gen-stock-key) that seals the company's own card stock codes; empty turns the stock off. Losing it loses every code in stock",
+	)
 	vouchersRateLimit := flags.String(
 		"vouchers-rate-limit",
 		envString("POINTY_RELAY_VOUCHERS_RATE_LIMIT", "30/minute"),
@@ -795,6 +802,7 @@ func runServer(args []string) error {
 		TestMode:             *vouchersTestMode,
 		SyncInterval:         *vouchersSyncInterval,
 		RateLimit:            *vouchersRateLimit,
+		StockKey:             *voucherStockKey,
 	}
 	voucherConfig, bnplusCredentials, voucherWarnings, err := buildVoucherConfig(voucherSettingValues)
 	if err != nil {

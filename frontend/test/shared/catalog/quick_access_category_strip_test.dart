@@ -19,6 +19,15 @@ const _cards = ProductCategory(
   isSystem: true,
 );
 
+const _daftar = ProductCategory(
+  id: 3,
+  name: 'كروت دفتر',
+  isQuickAccess: true,
+  displayOrder: 9,
+  isSystem: true,
+  systemKey: ProductCategorySystemKey.pointyVouchers,
+);
+
 /// The provider's shelf is pinned for the till, where its cards are sold. The
 /// purchasing catalog never lists a provider's cards, so there the same chip
 /// would open onto an empty grid.
@@ -32,6 +41,32 @@ void main() {
     expect(find.text(_cards.name), findsOneWidget);
   });
 
+  testWidgets('the company chip comes right after «الكل», in the accent', (
+    tester,
+  ) async {
+    await _pumpStrip(
+      tester,
+      includeSystemCategories: true,
+      pinned: const [_drinks, _cards, _daftar],
+    );
+
+    final labels = tester
+        .widgetList<ChoiceChip>(find.byType(ChoiceChip))
+        .map((chip) => (chip.label as Text).data)
+        .toList();
+    expect(labels, ['الكل', _daftar.name, _drinks.name, _cards.name]);
+
+    final daftar = tester.widget<ChoiceChip>(
+      find.widgetWithText(ChoiceChip, _daftar.name),
+    );
+    expect(daftar.backgroundColor, PointyColors.amberContainer);
+    expect(daftar.avatar, isNotNull);
+    final drinks = tester.widget<ChoiceChip>(
+      find.widgetWithText(ChoiceChip, _drinks.name),
+    );
+    expect(drinks.backgroundColor, isNull);
+  });
+
   testWidgets('purchasing leaves the provider shelf out', (tester) async {
     await _pumpStrip(tester, includeSystemCategories: false);
 
@@ -43,6 +78,7 @@ void main() {
 Future<void> _pumpStrip(
   WidgetTester tester, {
   required bool includeSystemCategories,
+  List<ProductCategory> pinned = const [_drinks, _cards],
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -52,7 +88,7 @@ Future<void> _pumpStrip(
       theme: PointyTheme.light(),
       home: Scaffold(
         body: QuickAccessCategoryStrip(
-          catalogRepository: _StubCatalogRepository(const [_drinks, _cards]),
+          catalogRepository: _StubCatalogRepository(pinned),
           selectedCategories: const [],
           allLabel: 'الكل',
           onSelectAll: () {},

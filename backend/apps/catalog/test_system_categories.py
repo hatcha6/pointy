@@ -91,3 +91,39 @@ class SystemCategoryTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         self.shelf.refresh_from_db()
         self.assertEqual(self.shelf.system_key, "vouchers:qareeb")
+
+
+class CompanyShelfCategoryTests(TestCase):
+    """«كروت دفتر» is the exception: always pinned, and no category screen lists it."""
+
+    def setUp(self):
+        ensure_role_groups()
+        manager = get_user_model().objects.create_user(username="mgr", password="x")
+        manager.groups.add(Group.objects.get(name=MANAGER_GROUP))
+        self.client = APIClient()
+        self.client.force_authenticate(manager)
+        self.shelf = ProductCategory.objects.create(
+            name="كروت دفتر", system_key="vouchers:pointy", is_quick_access=True
+        )
+        self.drinks = ProductCategory.objects.create(name="مشروبات", is_quick_access=True)
+
+    def _ids(self, **params):
+        response = self.client.get(reverse("productcategory-list"), params)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        return {row["id"] for row in response.data["results"]}
+
+    def test_only_the_tills_quick_access_read_lists_it(self):
+        self.assertEqual(self._ids(), {self.drinks.pk})
+        self.assertEqual(self._ids(is_quick_access="true"), {self.shelf.pk, self.drinks.pk})
+        detail = self.client.get(reverse("productcategory-detail", args=[self.shelf.pk]))
+        self.assertEqual(detail.status_code, status.HTTP_200_OK)
+
+    def test_nothing_unpins_or_switches_it_off(self):
+        response = self.client.patch(
+            reverse("productcategory-detail", args=[self.shelf.pk]),
+            {"is_quick_access": False, "is_active": False},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.shelf.refresh_from_db()
+        self.assertTrue(self.shelf.is_quick_access and self.shelf.is_active)

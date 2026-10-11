@@ -78,6 +78,21 @@ extension PosRegisterSessionActions on PosViewModel {
     await loadCatalog();
   }
 
+  /// The open drawer's expected cash, read fresh (sales since it opened move
+  /// it). Null when it cannot be read; the server omits the figure for a user
+  /// not granted their own reconciliation, so only call it for one who is.
+  Future<double?> loadActiveRegisterExpectedCash() async {
+    final session = _activeRegisterSession;
+    if (session == null) {
+      return null;
+    }
+    final result = await _registerSessionRepository.loadSession(session.id);
+    return switch (result) {
+      Ok<RegisterSession>() => result.value.expectedCash,
+      Error<RegisterSession>() => null,
+    };
+  }
+
   Future<bool> closeActiveRegisterSession({
     required double closingCash,
     required int count025,

@@ -3,6 +3,7 @@ import { BadgeCheck, Banknote, Building2, CircleMinus, Gift, Landmark, PenLine, 
 import { Dialog } from "./dialog";
 import { Button, Field, Money, Notice, Segmented } from "./ui";
 import { PasskeyHint, useAction } from "./guarded";
+import { StockReturnChoice, stockReturnReady, type StockReturn } from "./StockReturnChoice";
 import { useToast } from "./toast";
 import { idempotencyKey } from "../lib/stepup";
 import { money, parseAmount } from "../lib/format";
@@ -328,14 +329,18 @@ export function ResolvePurchaseDialog({ purchase, onClose }: { purchase: Purchas
   const [outcome, setOutcome] = useState<"refund" | "found">("refund");
   const [orderId, setOrderId] = useState("");
   const [reason, setReason] = useState("");
+  const [stock, setStock] = useState<StockReturn>({ restock: false, verifiedUnused: false });
   const action = useAction({ passkey: true, invalidate: [["vouchers"], ["wallet"]], success: "سُوّيت العملية." });
   useEffect(() => {
     setOutcome("refund");
     setOrderId("");
     setReason("");
+    setStock({ restock: false, verifiedUnused: false });
   }, [purchase]);
   if (!purchase) return null;
-  const valid = reason.trim() && (outcome === "refund" || orderId.trim());
+  // A held sale from our own stock already took its codes: refunded, they go back on the shelf or void.
+  const fromStock = purchase.supplier === "stock" && outcome === "refund";
+  const valid = reason.trim() && (outcome === "refund" || orderId.trim()) && (!fromStock || stockReturnReady(stock));
   return (
     <Dialog
       open
@@ -357,6 +362,7 @@ export function ResolvePurchaseDialog({ purchase, onClose }: { purchase: Purchas
                 outcome,
                 supplier_order_id: outcome === "found" ? orderId.trim() : "",
                 reason: reason.trim(),
+                ...(fromStock ? { restock: stock.restock, verified_unused: stock.verifiedUnused } : {}),
               });
               if (result) onClose();
             }}
@@ -381,6 +387,7 @@ export function ResolvePurchaseDialog({ purchase, onClose }: { purchase: Purchas
             { id: "found", label: "تمّت لدى المورّد" },
           ]}
         />
+        {fromStock && <StockReturnChoice value={stock} onChange={setStock} quantity={purchase.quantity} />}
         {outcome === "found" && (
           <Field label="رقم الطلب لدى المورّد" htmlFor="order">
             <input id="order" className="input mono" value={orderId} onChange={(e) => setOrderId(e.target.value)} autoFocus />

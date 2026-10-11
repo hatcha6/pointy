@@ -65,6 +65,7 @@ import 'identified_stock_settings_page.dart';
 import 'danger_zone_page.dart';
 import 'subscription_status_page.dart';
 import '../../../shared/formatters.dart';
+import '../../../shared/return_window_label.dart';
 
 part 'shop_settings_widgets.dart';
 part 'shop_backup_widgets.dart';
@@ -1497,15 +1498,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
   }
 
   String _formatCashierReturnWindow(AppLocalizations l10n) {
-    final days = _cashierReturnWindowHours ~/ 24;
-    final hours = _cashierReturnWindowHours % 24;
-    if (days == 0) {
-      return l10n.cashierReturnWindowHoursValue(hours);
-    }
-    if (hours == 0) {
-      return l10n.cashierReturnWindowDaysValue(days);
-    }
-    return l10n.cashierReturnWindowDaysHoursValue(days, hours);
+    return formatReturnWindow(l10n, _cashierReturnWindowHours);
   }
 
   Future<void> _pickCashierReturnWindow(

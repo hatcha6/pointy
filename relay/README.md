@@ -1612,6 +1612,7 @@ offer's cost in dinars.
 | `POINTY_RELAY_VOUCHERS_TEST_MODE` | `false` | fake `TEST-` codes from a built-in supplier; balances still charged (`make relay-run` turns it on). Direct top-up and bills then fill their orders from a fake too; their directory is Reloadly's when it is configured, else an embedded fixture |
 | `POINTY_RELAY_VOUCHERS_SYNC_INTERVAL` | `30m` | how often the suppliers' prices and stock are read (BN Plus: everything it sells; Reloadly: the cards the catalog names) |
 | `POINTY_RELAY_VOUCHERS_RATE_LIMIT` | `30/minute` | purchases per shop |
+| `POINTY_RELAY_VOUCHER_STOCK_KEY` | empty | base64 key (`pointy-relay gen-stock-key`) that seals the company's own card stock (codes added in the console, sold before any supplier). Empty: no stock is added or sold. A malformed key stops the relay. **Losing it loses every code in stock**: keep it with the other relay secrets and back it up apart from the database |
 
 ### Operator CLI
 

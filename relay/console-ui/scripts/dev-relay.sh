@@ -15,6 +15,9 @@ PG="${CONSOLE_DEV_PG:-postgres://postgres:postgres@127.0.0.1:5432}"
 TOKEN_FILE="console-ui/.dev-admin-token"
 [ -s "$TOKEN_FILE" ] || go run ./cmd/pointy-relay gen-token > "$TOKEN_FILE"
 TOKEN="$(tr -d '\n' < "$TOKEN_FILE")"
+# The stock key seals the company's own card codes; a throwaway one per checkout.
+STOCK_KEY_FILE="console-ui/.dev-stock-key"
+[ -s "$STOCK_KEY_FILE" ] || go run ./cmd/pointy-relay gen-stock-key > "$STOCK_KEY_FILE"
 
 if [ "${1:-}" = "invite" ]; then
   POINTY_RELAY_CONTROL_URL="http://127.0.0.1:$PORT" POINTY_RELAY_ADMIN_TOKEN="$TOKEN" \
@@ -36,6 +39,7 @@ exec env \
   POINTY_RELAY_AUTO_MIGRATE=true \
   POINTY_RELAY_ARTIFACT_DIR="${CONSOLE_DEV_ARTIFACTS:-$PWD/console-ui/.dev-artifacts}" \
   POINTY_RELAY_ADMIN_TOKEN="$TOKEN" \
+  POINTY_RELAY_VOUCHER_STOCK_KEY="$(tr -d '\n' < "$STOCK_KEY_FILE")" \
   POINTY_RELAY_CONSOLE_ORIGIN="${CONSOLE_DEV_ORIGIN:-http://localhost:$PORT}" \
   POINTY_RELAY_VOUCHERS_TEST_MODE=true \
   POINTY_RELAY_RELOADLY_SANDBOX=true \

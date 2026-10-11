@@ -78,7 +78,8 @@ class RegisterSessionList extends StatelessWidget {
                       return RegisterSessionTile(
                         session: session,
                         isSelected: viewModel.selectedSession?.id == session.id,
-                        showCashVariance: capabilities.canManageShopSettings,
+                        showCashVariance:
+                            capabilities.canViewRegisterReconciliation,
                         onTap: canViewOrders ? handleTap : null,
                       );
                     },

@@ -36,9 +36,11 @@ import (
 //	POST /v1/vouchers/admin/offers/sync           read them now
 //	GET  /v1/vouchers/admin/purchases?installation_id=&status=&kind=card|airtime|bill&held=1&limit=
 //	POST /v1/vouchers/admin/purchases/{id}/check  ask the supplier now
-//	POST /v1/vouchers/admin/purchases/{id}/resolve {outcome: refund|found, supplier_order_id, reason, actor}
+//	POST /v1/vouchers/admin/purchases/{id}/resolve {outcome: refund|found, supplier_order_id, reason, actor, restock}
+//	POST /v1/vouchers/admin/purchases/{id}/refund  refund a sale from stock (vouchers_stock.go)
 //	GET  /v1/vouchers/admin/bnplus/{wallets|groups|companies|cards|orders|order}
 //	GET  /v1/vouchers/admin/reloadly/balance      the company's gift card balance at Reloadly (USD)
+//	.../v1/vouchers/admin/stock...                 the company's own card stock (vouchers_stock.go)
 
 const (
 	maxVoucherCatalogBytes = 4 << 20
@@ -87,9 +89,13 @@ func (s HTTPServer) handleVoucherAdminRoutes(w http.ResponseWriter, r *http.Requ
 			s.handleVoucherAdminCheck(w, r, store, id)
 		case "resolve":
 			s.handleVoucherAdminResolve(w, r, store, id)
+		case "refund":
+			s.handleVoucherAdminStockRefund(w, r, id)
 		default:
 			writeNotFound(w)
 		}
+	case path == "/stock" || strings.HasPrefix(path, "/stock/"):
+		s.handleVoucherAdminStock(w, r, store, strings.TrimPrefix(path, "/stock"))
 	case strings.HasPrefix(path, "/bnplus/") && r.Method == http.MethodGet:
 		s.handleVoucherAdminBNPlus(w, r, strings.TrimPrefix(path, "/bnplus/"))
 	case strings.HasPrefix(path, "/reloadly/") && r.Method == http.MethodGet:
@@ -476,6 +482,11 @@ type voucherResolveRequest struct {
 	SupplierOrderID string `json:"supplier_order_id"`
 	Reason          string `json:"reason"`
 	Actor           string `json:"actor"`
+	// Restock decides, for a purchase sold from stock that is refunded,
+	// whether its codes go back on the shelf (true) or void (false, the default).
+	// Back on the shelf needs VerifiedUnused, as a stock refund does.
+	Restock        *bool `json:"restock"`
+	VerifiedUnused bool  `json:"verified_unused"`
 }
 
 // handleVoucherAdminResolve serves POST /v1/vouchers/admin/purchases/{id}/resolve:
@@ -490,6 +501,10 @@ func (s HTTPServer) handleVoucherAdminResolve(w http.ResponseWriter, r *http.Req
 	request.Reason = strings.TrimSpace(request.Reason)
 	if request.Reason == "" {
 		writeSMSError(w, http.StatusBadRequest, voucherCodeInvalidRequest, "reason is required", nil)
+		return
+	}
+	if request.Restock != nil && *request.Restock && !request.VerifiedUnused {
+		writeSMSError(w, http.StatusBadRequest, "verify_unused", verifiedUnusedRequired, nil)
 		return
 	}
 	resolution := control.VoucherPurchaseResolution{
@@ -524,7 +539,20 @@ func (s HTTPServer) handleVoucherAdminResolve(w http.ResponseWriter, r *http.Req
 	s.logger().Info("a card purchase was settled by the operator",
 		"purchase_id", resolved.ID, "outcome", request.Outcome, "actor", request.Actor,
 		"reason", request.Reason, "applied", applied)
-	writeJSON(w, http.StatusOK, map[string]any{"purchase": resolved, "applied": applied})
+	answer := map[string]any{"purchase": resolved, "applied": applied}
+	if applied {
+		stock, err := s.returnStockOfRefundedPurchase(r.Context(), resolved, request.Restock, request.Actor, request.Reason)
+		if err != nil {
+			// The refund stands; the codes stay with the purchase until the
+			// operator gives them back (POST .../refund).
+			s.logger().Error("a refunded stock purchase's codes could not be given back; retry with the refund action",
+				"purchase_id", resolved.ID, "error", err)
+			answer["stock_error"] = "the codes could not be given back: " + err.Error()
+		} else if stock != nil {
+			answer["stock"] = stock
+		}
+	}
+	writeJSON(w, http.StatusOK, answer)
 }
 
 // handleVoucherAdminReloadly answers the operator's reads from Reloadly with

@@ -1,4 +1,4 @@
-; Inno Setup script for the Pointy Windows POS app.
+﻿; Inno Setup script for the Pointy Windows POS app.
 ;
 ; Produces a single setup.exe that installs the Flutter build (the app, its DLLs,
 ; the bundled Visual C++ runtime, and the data/ folder), creates Start Menu and
@@ -9,6 +9,11 @@
 ;
 ; SourceDir must point at the built Release folder AFTER the VC++ runtime DLLs
 ; have been copied in, so they ship inside the installer too.
+;
+; This file is UTF-8 WITH a byte-order mark, and the mark is load-bearing: it is
+; what tells ISCC to read the Arabic app name as UTF-8 instead of the build
+; machine's ANSI code page. An editor that drops it ships a shortcut named in
+; mojibake.
 
 #ifndef AppVersion
   #define AppVersion "0.0.0"
@@ -20,8 +25,14 @@
   #define OutputDir "..\..\..\dist"
 #endif
 
-#define AppName "Pointy"
-#define AppPublisher "Pointy"
+; The name a person sees: shortcuts, the wizard, Add/Remove Programs. It is the
+; brand (the same string as android:label and the Linux .desktop Name).
+#define AppName "دفتر"
+; The name on disk and in the registry. It stays "Pointy": changing the install
+; folder would strand every existing till's install on upgrade, and the Run
+; value below is the one autostart_channel.cpp writes.
+#define AppDirName "Pointy"
+#define AppPublisher "Daftar"
 #define AppExeName "pointy_frontend.exe"
 
 [Setup]
@@ -30,8 +41,11 @@ AppId={{38AF6CF1-834E-4C16-8EE2-513B5E0B1557}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher={#AppPublisher}
-DefaultDirName={autopf}\{#AppName}
+DefaultDirName={autopf}\{#AppDirName}
 DefaultGroupName={#AppName}
+; Releases before the rename put the Start menu entries in a "Pointy" folder;
+; reusing the remembered folder would keep that name on every upgraded till.
+UsePreviousGroup=no
 DisableProgramGroupPage=yes
 UninstallDisplayIcon={app}\{#AppExeName}
 UninstallDisplayName={#AppName}
@@ -57,6 +71,12 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: checkedonce
+
+[InstallDelete]
+; Shortcuts from the releases before the rename, so an upgraded till is left
+; with one desktop icon named دفتر rather than that one beside the old "Pointy".
+Type: files; Name: "{autodesktop}\Pointy.lnk"
+Type: filesandordirs; Name: "{autoprograms}\Pointy"
 
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion

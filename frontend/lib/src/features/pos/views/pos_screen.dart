@@ -175,6 +175,9 @@ class PosScreen extends StatelessWidget {
       builder: (context) {
         return RegisterSessionCloseSheet(
           closeErrorDetail: () => viewModel.registerSessionErrorMessage,
+          loadExpectedCash: capabilities.canViewRegisterReconciliation
+              ? viewModel.loadActiveRegisterExpectedCash
+              : null,
           onClose: (input) {
             return viewModel.closeActiveRegisterSession(
               closingCash: input.closingCash,

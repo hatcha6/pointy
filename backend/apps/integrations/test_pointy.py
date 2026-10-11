@@ -402,6 +402,44 @@ class PointyProviderTests(PointyMixin, TestCase):
         self.assertEqual(response.data["error_code"], ERROR_NOT_CONFIGURED)
         self.assertFalse(IntegrationAccount.objects.filter(provider="pointy").exists())
 
+    def test_it_is_always_on_and_never_on_the_integrations_page(self):
+        self.link_relay()
+        self.pointy_account()
+        listed = self.client.get("/api/integrations/").data["providers"]
+        self.assertNotIn("pointy", [provider["key"] for provider in listed])
+
+        off = self.client.put("/api/integrations/pointy/", {"is_active": False}, format="json")
+        self.assertEqual((off.status_code, off.data["error_code"]), (409, "always_on"))
+        gone = self.client.delete("/api/integrations/pointy/")
+        self.assertEqual((gone.status_code, gone.data["error_code"]), (409, "always_on"))
+        self.assertTrue(IntegrationAccount.objects.get(provider="pointy").is_active)
+
+    def test_the_sweep_makes_the_account_and_keeps_its_chip_pinned(self):
+        self.link_relay()
+        self.use_relay()
+        vouchers.sync_all(relay_hosted=True)
+        self.assertTrue(IntegrationAccount.objects.get(provider="pointy").is_active)
+        chip = ProductCategory.objects.get(system_key="vouchers:pointy")
+        self.assertTrue(chip.is_quick_access and chip.is_active)
+
+        # The API keeps it pinned and on whatever an edit sends...
+        response = self.client.patch(
+            f"/api/product-categories/{chip.pk}/",
+            {"is_quick_access": False, "is_active": False},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        chip.refresh_from_db()
+        self.assertTrue(chip.is_quick_access and chip.is_active)
+
+        # ...and the sweep puts back what an older build let a shop change.
+        IntegrationAccount.objects.filter(provider="pointy").update(is_active=False)
+        ProductCategory.objects.filter(pk=chip.pk).update(is_quick_access=False, is_active=False)
+        vouchers.sync_all(relay_hosted=True)
+        chip.refresh_from_db()
+        self.assertTrue(chip.is_quick_access and chip.is_active)
+        self.assertTrue(IntegrationAccount.objects.get(provider="pointy").is_active)
+
     def test_its_float_is_never_topped_up_by_hand(self):
         self.link_relay()
         self.pointy_account()
@@ -447,7 +485,7 @@ class PointyProviderTests(PointyMixin, TestCase):
         self.sync(account)
         category = ProductCategory.objects.get(system_key=system_key("pointy"))
         self.assertEqual(category.name, "كروت دفتر")
-        response = self.client.get("/api/product-categories/")
+        response = self.client.get("/api/product-categories/?is_quick_access=true")
         self.assertEqual(response.status_code, 200)
         rows = response.data["results"] if isinstance(response.data, dict) else response.data
         row = next(row for row in rows if row["id"] == category.pk)
@@ -1157,10 +1195,11 @@ class PointyMenuTests(PointyMixin, TestCase):
             (data["available"], data["error_code"], data["brands"]), (False, "unavailable", [])
         )
 
+        # Always on: an account switched off before that rule is put back.
         IntegrationAccount.objects.filter(pk=self.account.pk).update(config={}, is_active=False)
-        self.assertEqual(self.menu()["error_code"], "not_configured")
+        self.assertNotEqual(self.menu()["error_code"], "not_configured")
+        self.assertTrue(IntegrationAccount.objects.get(pk=self.account.pk).is_active)
 
-        IntegrationAccount.objects.filter(pk=self.account.pk).update(is_active=True)
         RelayInstallation.objects.update(integrations_disabled=["pointy"])
         self.assertEqual(self.menu()["error_code"], "switched_off")
 

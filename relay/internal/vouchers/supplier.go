@@ -22,6 +22,12 @@ const (
 	SupplierReloadly = "reloadly"
 	// SupplierTest is the built-in supplier of test mode: fake codes, no money.
 	SupplierTest = "test"
+	// SupplierStock is the company's own stock: codes the operator added in
+	// the console. It is tried before every other supplier of a card, whether
+	// the item lists it or not; listing it ({"key": "stock"}) only matters for
+	// a card no supplier sells, which is then sold from stock alone. Its ref
+	// ID is the item's key.
+	SupplierStock = "stock"
 )
 
 // maxSuppliersPerItem bounds an item's supplier list: one entry per supplier
@@ -51,6 +57,7 @@ var refParsers = map[string]refParser{
 	SupplierBNPlus:   parseBNPlusRef,
 	SupplierReloadly: parseReloadlyRef,
 	SupplierTest:     parseTestRef,
+	SupplierStock:    parseStockRef,
 }
 
 // SupplierKeys lists the suppliers a catalog may name.
@@ -273,6 +280,20 @@ func parseTestRef(raw json.RawMessage) (Ref, error) {
 		return Ref{}, fmt.Errorf("test takes key and id: %v", err)
 	}
 	return Ref{Supplier: SupplierTest, ID: strings.TrimSpace(block.ID)}, nil
+}
+
+// parseStockRef reads {"key": "stock"}: the card is sold from the company's own
+// stock. The ref's ID is filled with the item's key when the item is read.
+func parseStockRef(raw json.RawMessage) (Ref, error) {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	var block struct {
+		Key string `json:"key"`
+	}
+	if err := decoder.Decode(&block); err != nil {
+		return Ref{}, fmt.Errorf("stock takes key only: %v", err)
+	}
+	return Ref{Supplier: SupplierStock}, nil
 }
 
 // Status of a supplier purchase.

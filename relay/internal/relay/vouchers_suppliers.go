@@ -162,8 +162,24 @@ func (c VoucherConfig) rankSuppliers(located vouchers.Located, offers voucherOff
 	if len(refs) == 0 {
 		refs = []vouchers.Ref{located.Ref}
 	}
+	// The company's own stock goes first, listed or not: an item that names it
+	// is judged by its stock there, one that does not gets it in front while a
+	// code is left.
+	var stock *supplierEvaluation
 	for index, ref := range refs {
+		if ref.Supplier == vouchers.SupplierStock {
+			evaluation := stockEvaluation(located.Item.Key, offers)
+			evaluation.Index = index
+			stock = &evaluation
+			ranking.Evaluations = append(ranking.Evaluations, evaluation)
+			continue
+		}
 		ranking.Evaluations = append(ranking.Evaluations, c.evaluateSupplier(index, ref, offers, settings))
+	}
+	if stock == nil && offers.stock[located.Item.Key] > 0 {
+		evaluation := stockEvaluation(located.Item.Key, offers)
+		stock = &evaluation
+		ranking.Evaluations = append([]supplierEvaluation{evaluation}, ranking.Evaluations...)
 	}
 	if !ranking.Listed {
 		// Nothing is bought, but the operator still sees each supplier's price.
@@ -175,7 +191,8 @@ func (c VoucherConfig) rankSuppliers(located vouchers.Located, offers voucherOff
 	}
 	if c.TestMode {
 		// Nothing is bought from anyone: the first listed supplier stands for
-		// the built-in one, and the others are only shown.
+		// the built-in one, and the others are only shown. (Test mode reads no
+		// stock, so the list starts with the item's own first supplier.)
 		for i := range ranking.Evaluations {
 			evaluation := &ranking.Evaluations[i]
 			evaluation.Candidate = i == 0
@@ -196,6 +213,9 @@ func (c VoucherConfig) rankSuppliers(located vouchers.Located, offers voucherOff
 	}
 	sort.SliceStable(ranking.Candidates, func(i, j int) bool {
 		a, b := ranking.Candidates[i], ranking.Candidates[j]
+		if fromStock := a.Ref.Supplier == vouchers.SupplierStock; fromStock != (b.Ref.Supplier == vouchers.SupplierStock) {
+			return fromStock
+		}
 		switch {
 		case a.Cost != nil && b.Cost != nil:
 			if order := a.Cost.Cmp(b.Cost); order != 0 {

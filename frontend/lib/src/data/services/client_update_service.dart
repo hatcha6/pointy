@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' show File, Platform;
+import 'dart:io' show Directory, File, Platform;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
@@ -99,8 +99,9 @@ class ClientUpdateStatus {
 }
 
 /// Applies a downloaded build: hands off to the native installer on
-/// Android/Windows (method channel); on Linux the portable tar.gz has no
-/// installer, so a Dart-side handoff swaps the app bundle and relaunches.
+/// Android/Windows (method channel). On Linux a `.deb` opens in the desktop's
+/// package installer; the portable tar.gz has no installer, so a Dart-side
+/// handoff swaps the app bundle and relaunches.
 class AppInstaller {
   const AppInstaller();
 
@@ -113,6 +114,7 @@ class AppInstaller {
       case ClientPlatform.windows:
         return _channel.invokeMethod('runInstaller', {'path': path});
       case ClientPlatform.linux:
+        if (path.endsWith('.deb')) return openLinuxPackage(path);
         return installLinuxUpdate(path);
       case ClientPlatform.unsupported:
         throw UnsupportedError('self-update is not supported on this platform');
@@ -131,12 +133,14 @@ class ClientUpdateService {
     Future<String> Function()? readRunningVersion,
     ClientPlatform Function()? platform,
     MachineAddressReader? localAddresses,
+    bool Function()? isPackageInstall,
   }) : _apiBaseUrl = apiBaseUrl,
        _client = client ?? http.Client(),
        _installer = installer,
        _readRunningVersion = readRunningVersion ?? _packageVersion,
        _platform = platform ?? currentClientPlatform,
-       _localAddresses = localAddresses ?? readMachineIpv4Addresses;
+       _localAddresses = localAddresses ?? readMachineIpv4Addresses,
+       _isPackageInstall = isPackageInstall ?? isLinuxPackageInstall;
 
   final String Function() _apiBaseUrl;
   final http.Client _client;
@@ -144,6 +148,7 @@ class ClientUpdateService {
   final Future<String> Function() _readRunningVersion;
   final ClientPlatform Function() _platform;
   final MachineAddressReader _localAddresses;
+  final bool Function() _isPackageInstall;
 
   /// The release's own `POINTY_VERSION` wins over the bundle's package
   /// version: a Linux bundle's version.json is not stamped by
@@ -193,10 +198,7 @@ class ClientUpdateService {
         return ClientUpdateStatus(currentVersion: current, platform: platform);
       }
       final body = jsonDecode(response.body) as Map<String, dynamic>;
-      final clients =
-          (body['clients'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{};
-      final entry = clients[platform.name];
+      final entry = _manifestEntry(body, platform);
       if (entry is! Map) {
         return ClientUpdateStatus(currentVersion: current, platform: platform);
       }
@@ -219,6 +221,19 @@ class ClientUpdateService {
     }
   }
 
+  /// The manifest entry this device updates from. A Linux till installed
+  /// from the `.deb` cannot swap its root-owned bundle, so it is offered the
+  /// next `.deb` (a `downloads` entry) instead of the tarball.
+  Object? _manifestEntry(Map<String, dynamic> body, ClientPlatform platform) {
+    Map<String, dynamic> section(String key) =>
+        (body[key] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    if (platform == ClientPlatform.linux && _isPackageInstall()) {
+      return section('downloads')['linux_deb'];
+    }
+    return section('clients')[platform.name];
+  }
+
   Future<void> downloadAndInstall(
     ClientRelease release, {
     void Function(double progress)? onProgress,
@@ -239,7 +254,7 @@ class ClientUpdateService {
     if (response.statusCode != 200) {
       throw Exception('download failed (${response.statusCode})');
     }
-    final dir = await getTemporaryDirectory();
+    final dir = await _downloadDirectory(release.file);
     final out = File('${dir.path}/${release.file}');
     final sink = out.openWrite();
     final total = release.size ?? response.contentLength ?? 0;
@@ -253,5 +268,21 @@ class ClientUpdateService {
     });
     await sink.close();
     return out;
+  }
+
+  /// A `.deb` goes to the user's Downloads: the package installer it opens in
+  /// may be a snap (Ubuntu's App Center), which cannot see the app's /tmp.
+  static Future<Directory> _downloadDirectory(String file) async {
+    if (file.endsWith('.deb')) {
+      try {
+        final downloads = await getDownloadsDirectory();
+        if (downloads != null) {
+          return await downloads.create(recursive: true);
+        }
+      } on Object {
+        // Fall back to the temporary directory below.
+      }
+    }
+    return getTemporaryDirectory();
   }
 }

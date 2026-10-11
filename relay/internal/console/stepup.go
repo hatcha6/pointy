@@ -52,6 +52,13 @@ var stepUpRules = []stepUpRule{
 	// Prices every shop pays.
 	rule(http.MethodPut, "/v1/vouchers/admin/catalog"),
 	rule(http.MethodPut, "/v1/vouchers/admin/settings"),
+	// The company's own card stock: codes worth money going on, or off, the
+	// shelf every shop buys from first.
+	rule(http.MethodPost, "/v1/vouchers/admin/stock"),
+	rule(http.MethodPost, "/v1/vouchers/admin/stock/*/void"),
+	// A sale from stock given back: the shop's money returns, its code goes
+	// back on the shelf or void.
+	rule(http.MethodPost, "/v1/vouchers/admin/purchases/*/refund"),
 	// What every shop installs: a bundle (uploaded, or fetched by the relay
 	// from a URL), a channel's version and rollout, one shop's pinned version
 	// or channel. An upload carries its tap in headers (verifyStreamedStepUp).

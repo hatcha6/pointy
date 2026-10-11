@@ -1,6 +1,7 @@
 import {
   Activity,
   BookOpen,
+  Boxes,
   CreditCard,
   Home,
   KeyRound,
@@ -51,6 +52,7 @@ export const navGroups: NavGroup[] = [
     label: "إعداد البطاقات",
     items: [
       { to: "/catalog", label: "الكتالوج", icon: BookOpen, hint: "ما تراه المتاجر، ونشر نسخة جديدة" },
+      { to: "/stock", label: "مخزون البطاقات", icon: Boxes, hint: "أكواد اشتريناها بأنفسنا، تُباع قبل الموردين" },
       { to: "/suppliers", label: "الموردون", icon: Truck, hint: "عروض الموردين والمقارنة والأرصدة" },
       { to: "/pricing", label: "التسعير", icon: PercentCircle, hint: "سعر الدولار والهوامش ونشر الإعدادات" },
       { to: "/services", label: "الشحن والفواتير", icon: Smartphone, hint: "دليل المشغّلين والمفوترين وحساب سعر" },

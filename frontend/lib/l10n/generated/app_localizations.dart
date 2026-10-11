@@ -21250,13 +21250,13 @@ abstract class AppLocalizations {
   /// No description provided for @returnsLookupPrompt.
   ///
   /// In ar, this message translates to:
-  /// **'أدخل رقم الفاتورة لإجراء إرجاع أو استبدال.'**
+  /// **'رقم الفاتورة أو آخر أرقامه، رمز QR على الإيصال، باركود المنتج أو اسمه، أو هاتف العميل'**
   String get returnsLookupPrompt;
 
   /// No description provided for @returnsLookupFieldLabel.
   ///
   /// In ar, this message translates to:
-  /// **'رقم الفاتورة'**
+  /// **'ابحث بالفاتورة أو المنتج'**
   String get returnsLookupFieldLabel;
 
   /// No description provided for @returnsLookupSearchButton.
@@ -21268,25 +21268,25 @@ abstract class AppLocalizations {
   /// No description provided for @returnsLookupNotFound.
   ///
   /// In ar, this message translates to:
-  /// **'لا توجد فاتورة بهذا الرقم.'**
+  /// **'لم يُعثر على فاتورة أو منتج مباع.'**
   String get returnsLookupNotFound;
 
   /// No description provided for @returnsLookupEmpty.
   ///
   /// In ar, this message translates to:
-  /// **'ابحث عن فاتورة برقمها للبدء.'**
+  /// **'امسح الإيصال أو المنتج، أو اكتب رقم الفاتورة أو اسم المنتج.'**
   String get returnsLookupEmpty;
 
-  /// No description provided for @returnsLookupNotFoundHint.
+  /// Shown when a returns-desk search finds nothing. window is the shop's return window, e.g. «3 يوم».
   ///
   /// In ar, this message translates to:
-  /// **'تأكّد من رقم الفاتورة المطبوع على الإيصال، أو جرّب رقمًا آخر.'**
-  String get returnsLookupNotFoundHint;
+  /// **'تأكّد من رقم الفاتورة المطبوع على الإيصال. المنتجات تظهر فقط إن بيعت خلال مدة الإرجاع ({window}) وبقي منها شيء يُرجَع.'**
+  String returnsLookupNotFoundHint(String window);
 
   /// No description provided for @returnsLookupFailedTitle.
   ///
   /// In ar, this message translates to:
-  /// **'تعذّر البحث عن الفاتورة'**
+  /// **'تعذّر البحث'**
   String get returnsLookupFailedTitle;
 
   /// No description provided for @returnsLookupFailedMessage.
@@ -21294,6 +21294,66 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'لم يصل ردّ من الخادم، ولا يعني ذلك أن الفاتورة غير موجودة. تحقّق من الاتصال ثم أعد المحاولة.'**
   String get returnsLookupFailedMessage;
+
+  /// No description provided for @returnsSearchWindowClosedHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'مدة الإرجاع في الإعدادات صفر، فلا يمكن البحث بالمنتج أو بهاتف العميل. ابحث برقم الفاتورة.'**
+  String get returnsSearchWindowClosedHint;
+
+  /// Header above returns-desk product results. window is the shop's return window.
+  ///
+  /// In ar, this message translates to:
+  /// **'المنتجات المباعة خلال آخر {window} — مدة الإرجاع المسموحة'**
+  String returnsSearchWindowNote(String window);
+
+  /// No description provided for @returnsSearchInvoicesSection.
+  ///
+  /// In ar, this message translates to:
+  /// **'فواتير'**
+  String get returnsSearchInvoicesSection;
+
+  /// No description provided for @returnsSearchLinesSection.
+  ///
+  /// In ar, this message translates to:
+  /// **'منتجات مباعة'**
+  String get returnsSearchLinesSection;
+
+  /// No description provided for @returnsSearchTruncated.
+  ///
+  /// In ar, this message translates to:
+  /// **'تظهر أحدث {count} نتيجة فقط. امسح الباركود أو أضف كلمة لتضييق البحث.'**
+  String returnsSearchTruncated(int count);
+
+  /// Sold and still-returnable quantity of a sold line found at the returns desk.
+  ///
+  /// In ar, this message translates to:
+  /// **'المباع {sold} • المتبقي للإرجاع {returnable}'**
+  String returnsSearchLineQuantities(String sold, String returnable);
+
+  /// No description provided for @returnsSearchSerialMatch.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرقم التسلسلي {code}'**
+  String returnsSearchSerialMatch(String code);
+
+  /// No description provided for @returnsSearchNothingLeft.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا شيء متبقٍ للإرجاع'**
+  String get returnsSearchNothingLeft;
+
+  /// No description provided for @returnsSearchBackToResults.
+  ///
+  /// In ar, this message translates to:
+  /// **'رجوع إلى نتائج البحث'**
+  String get returnsSearchBackToResults;
+
+  /// No description provided for @returnsSearchOpenFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر فتح الفاتورة. تحقّق من الاتصال ثم أعد المحاولة.'**
+  String get returnsSearchOpenFailed;
 
   /// No description provided for @salePaymentsTitle.
   ///

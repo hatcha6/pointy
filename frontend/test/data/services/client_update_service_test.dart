@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:pointy_frontend/src/data/services/client_update_service.dart';
+import 'package:pointy_frontend/src/data/services/linux_self_update.dart';
 
 void main() {
   group('isNewerVersion', () {
@@ -24,12 +25,14 @@ void main() {
     MockClient client, {
     String running = '1.3.0',
     ClientPlatform platform = ClientPlatform.android,
+    bool packageInstall = false,
   }) {
     return ClientUpdateService(
       apiBaseUrl: () => 'http://10.0.0.5:8000/api',
       client: client,
       readRunningVersion: () async => running,
       platform: () => platform,
+      isPackageInstall: () => packageInstall,
     );
   }
 
@@ -111,6 +114,73 @@ void main() {
     ).check();
     expect(status.hasUpdate, isTrue);
     expect(status.available!.file, 'pointy-1.4.0-linux-x64.tar.gz');
+  });
+
+  group('linux .deb install', () {
+    MockClient manifest({bool withDeb = true}) => MockClient((request) async {
+      return http.Response(
+        jsonEncode({
+          'version': '1.4.0',
+          'clients': {
+            'linux': {
+              'version': '1.4.0',
+              'file': 'pointy-1.4.0-linux-x64.tar.gz',
+              'url': '/clients/files/pointy-1.4.0-linux-x64.tar.gz',
+            },
+          },
+          'downloads': {
+            if (withDeb)
+              'linux_deb': {
+                'version': '1.4.0',
+                'file': 'pointy-1.4.0-linux-x64.deb',
+                'sha256': 'abc',
+                'size': 10,
+                'url': '/clients/files/pointy-1.4.0-linux-x64.deb',
+              },
+          },
+        }),
+        200,
+      );
+    });
+
+    test('is offered the .deb, not the tarball it cannot swap', () async {
+      final status = await service(
+        manifest(),
+        platform: ClientPlatform.linux,
+        packageInstall: true,
+      ).check();
+      expect(status.hasUpdate, isTrue);
+      expect(status.available!.file, 'pointy-1.4.0-linux-x64.deb');
+      expect(
+        status.available!.url,
+        '/clients/files/pointy-1.4.0-linux-x64.deb',
+      );
+    });
+
+    test('is offered nothing when the bundle carries no .deb', () async {
+      final status = await service(
+        manifest(withDeb: false),
+        platform: ClientPlatform.linux,
+        packageInstall: true,
+      ).check();
+      expect(status.hasUpdate, isFalse);
+      expect(status.error, isNull);
+    });
+  });
+
+  test('isLinuxPackageInstall() recognises the .deb install dir', () {
+    expect(
+      isLinuxPackageInstall(executable: '/opt/pointy/pointy_frontend'),
+      isTrue,
+    );
+    expect(
+      isLinuxPackageInstall(executable: '/home/till/pointy/pointy_frontend'),
+      isFalse,
+    );
+    expect(
+      isLinuxPackageInstall(executable: '/opt/pointy-old/pointy_frontend'),
+      isFalse,
+    );
   });
 
   test('check() is unsupported on web/other platforms', () async {
