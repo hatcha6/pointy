@@ -281,6 +281,10 @@ func (s HTTPServer) handleWalletVouchersAllocate(w http.ResponseWriter, r *http.
 	status := http.StatusCreated
 	if !created {
 		status = http.StatusOK
+	} else if s.Balances != nil {
+		// The shops now hold more than BN Plus may cover: say so right away,
+		// not at the next sweep.
+		s.Balances.CheckOwedSoon()
 	}
 	writeJSON(w, status, map[string]any{
 		"balance":  balances.main,

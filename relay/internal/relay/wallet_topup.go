@@ -101,6 +101,7 @@ func (s HTTPServer) handleWalletTopUpCreate(w http.ResponseWriter, r *http.Reque
 		InstallationID: installation.ID,
 		Method:         method.Key,
 		Amount:         control.FormatWalletAmount(amount),
+		Fee:            control.FormatWalletAmount(s.Wallet.topUpFee(amount)),
 		IdempotencyKey: request.IdempotencyKey,
 		RequestedBy:    request.RequestedBy,
 		PayerHint:      payer.hint,

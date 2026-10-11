@@ -170,7 +170,7 @@ extension PosCartActions on PosViewModel {
     String lineKey, {
     String source = 'cart_quantity_button',
   }) {
-    if (_isCheckingOut) {
+    if (_isCartFrozen) {
       return;
     }
     final index = _cart.indexWhere((line) => line.lineKey == lineKey);
@@ -203,7 +203,7 @@ extension PosCartActions on PosViewModel {
     String lineKey, {
     String source = 'cart_quantity_button',
   }) {
-    if (_isCheckingOut) {
+    if (_isCartFrozen) {
       return;
     }
     final index = _cart.indexWhere((line) => line.lineKey == lineKey);
@@ -239,7 +239,7 @@ extension PosCartActions on PosViewModel {
   /// first-expiring-first-out at checkout, which is the answer a pharmacy wants
   /// nine times out of ten.
   void setCartLineBatch(String lineKey, StockBatch? batch) {
-    if (_isCheckingOut) {
+    if (_isCartFrozen) {
       return;
     }
     final index = _cart.indexWhere((line) => line.lineKey == lineKey);
@@ -261,7 +261,7 @@ extension PosCartActions on PosViewModel {
     double quantity, {
     String source = 'cart_weight_edit',
   }) {
-    if (_isCheckingOut || quantity <= 0) {
+    if (_isCartFrozen || quantity <= 0) {
       return;
     }
     final index = _cart.indexWhere((line) => line.lineKey == lineKey);
@@ -299,7 +299,7 @@ extension PosCartActions on PosViewModel {
     String lineKey, {
     String source = 'cart_delete_button',
   }) {
-    if (_isCheckingOut) {
+    if (_isCartFrozen) {
       return null;
     }
     final index = _cart.indexWhere((line) => line.lineKey == lineKey);
@@ -318,7 +318,7 @@ extension PosCartActions on PosViewModel {
   /// Re-inserts a line removed via [removeCartLine] at its original position
   /// (clamped if the cart changed meanwhile). Backs the cart-line undo action.
   void restoreCartLine(CartLine line, int index) {
-    if (_isCheckingOut) {
+    if (_isCartFrozen) {
       return;
     }
     final position = index < 0
@@ -337,7 +337,7 @@ extension PosCartActions on PosViewModel {
     String note, {
     String source = 'cart_line_note',
   }) {
-    if (_isCheckingOut) {
+    if (_isCartFrozen) {
       return;
     }
     final index = _cart.indexWhere((line) => line.lineKey == lineKey);
@@ -399,7 +399,7 @@ extension PosCartActions on PosViewModel {
   }
 
   void clearCart({String source = 'cart_clear_button'}) {
-    if (_isCheckingOut || _cart.isEmpty) {
+    if (_isCartFrozen || _cart.isEmpty) {
       return;
     }
     final removedLines = List<CartLine>.of(_cart);
@@ -432,7 +432,7 @@ extension PosCartActions on PosViewModel {
     StockUnit? stockUnit,
     StockBatch? stockBatch,
   }) {
-    if (_isCheckingOut || quantity <= 0) {
+    if (_isCartFrozen || quantity <= 0) {
       return false;
     }
 
@@ -503,7 +503,7 @@ extension PosCartActions on PosViewModel {
   /// The price shown here is what the server quoted for this shop's markup.
   /// The server recomputes it at checkout; this is display, not instruction.
   void addIntegrationRecharge(IntegrationRechargeDraft draft) {
-    if (_isCheckingOut) {
+    if (_isCartFrozen) {
       return;
     }
     final service = draft.serviceVariant;
@@ -553,7 +553,7 @@ extension PosCartActions on PosViewModel {
     required String title,
     bool testMode = false,
   }) {
-    if (_isCheckingOut || !quote.isUsable) {
+    if (_isCartFrozen || !quote.isUsable) {
       return false;
     }
     final source = quote.kind == ServiceKind.airtime
@@ -599,7 +599,7 @@ extension PosCartActions on PosViewModel {
   /// Switches the unit a cart line is sold in (used from the cart). Changes the
   /// per-unit price and stock conversion, so the discount preview is refreshed.
   void setCartLineUnit(String lineKey, UnitOption unit) {
-    if (_isCheckingOut) {
+    if (_isCartFrozen) {
       return;
     }
     final index = _cart.indexWhere((line) => line.lineKey == lineKey);
@@ -630,7 +630,7 @@ extension PosCartActions on PosViewModel {
   /// rather than quietly charging the shelf price. This only hides the
   /// affordance from people who cannot use it.
   void setCartLinePrice(String lineKey, double? unitPrice) {
-    if (_isCheckingOut) {
+    if (_isCartFrozen) {
       return;
     }
     final index = _cart.indexWhere((line) => line.lineKey == lineKey);
@@ -661,7 +661,7 @@ extension PosCartActions on PosViewModel {
   /// Replaces the modifier selection on a cart line (used when editing from the
   /// cart). Modifiers affect price, so the discount preview is refreshed.
   void setCartLineModifiers(String lineKey, List<CartLineModifier> modifiers) {
-    if (_isCheckingOut) {
+    if (_isCartFrozen) {
       return;
     }
     final index = _cart.indexWhere((line) => line.lineKey == lineKey);

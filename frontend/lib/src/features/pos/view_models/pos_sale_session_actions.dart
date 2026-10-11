@@ -16,7 +16,7 @@ extension PosSaleSessionActions on PosViewModel {
   }
 
   void switchSaleSession(int sessionId) {
-    if (_isCheckingOut || sessionId == _activeSaleSessionId) {
+    if (_isCartFrozen || sessionId == _activeSaleSessionId) {
       return;
     }
     if (!_saleSessions.any((session) => session.id == sessionId)) {
@@ -37,7 +37,7 @@ extension PosSaleSessionActions on PosViewModel {
   /// A no-op (returns false, so the key isn't consumed) when a checkout is in
   /// progress or there is only one open invoice.
   bool cycleActiveSaleSession({required bool forward}) {
-    if (_isCheckingOut || _saleSessions.length < 2) {
+    if (_isCartFrozen || _saleSessions.length < 2) {
       return false;
     }
     final currentIndex = _saleSessions.indexWhere(
@@ -53,7 +53,7 @@ extension PosSaleSessionActions on PosViewModel {
   }
 
   void discardSaleSession(int sessionId) {
-    if (_isCheckingOut || sessionId == _activeSaleSessionId) {
+    if (_isCartFrozen || sessionId == _activeSaleSessionId) {
       return;
     }
 

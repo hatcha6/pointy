@@ -117,6 +117,8 @@ func (s HTTPServer) handleFinanceRoutes(w http.ResponseWriter, r *http.Request) 
 		s.handleFinanceRecurringUpdate(w, r, id)
 	case path == "/v1/finance/summary" && r.Method == http.MethodGet:
 		s.handleFinanceSummary(w, r)
+	case path == "/v1/finance/position" && r.Method == http.MethodGet:
+		s.handleFinancePosition(w, r)
 	default:
 		writeNotFound(w)
 	}
@@ -312,27 +314,49 @@ func (b *financeBook) addTracked(months []control.FinanceTrackedMonth) {
 			b.add(month.Month, control.FinanceIncome, "tracked:"+service, ratOf(amount))
 		}
 		b.add(month.Month, control.FinanceExpense, "tracked:sms_cost", ratOf(month.SMSCost))
-		for currency, cost := range month.SupplierCost {
-			value := ratOf(cost)
-			switch {
-			case currency == control.FinanceCurrency:
-			case currency == "USD" && b.usdRate != nil:
-				value.Mul(value, b.usdRate)
-			default:
-				// No rate for it: reported beside the result, not guessed.
-				addTo(b.unpriced, currency, value)
-				continue
-			}
-			b.add(month.Month, control.FinanceExpense, "tracked:supplier_cost", value)
-		}
+		b.addSupplierCosts(month.Month, "tracked:supplier_cost", month.SupplierCost)
+		// What the company bought for itself: its own spending, beside the
+		// services' costs, not inside them.
+		b.addSupplierCosts(month.Month, "tracked:"+financeCompanyPurchases, month.CompanyCost)
 		for method, amount := range month.TopUps {
 			addTo(b.topUps, method, ratOf(amount))
 		}
+		// Dafa keeps its fee out of every payment it collects for us, and we
+		// keep the same out of the shop's credit: a cost, and the charge that
+		// covers it, both on the books.
+		fees := ratOf(month.TopUpFees)
+		b.add(month.Month, control.FinanceIncome, "tracked:topup_fee", fees)
+		b.add(month.Month, control.FinanceExpense, "tracked:gateway_fee", new(big.Rat).Set(fees))
+	}
+}
+
+// financeCompanyPurchases is the book's key for what the company bought for
+// itself (cards, top-ups, bills) from its own suppliers.
+const financeCompanyPurchases = "company_purchases"
+
+// addSupplierCosts books supplier costs given by currency, in dinars.
+func (b *financeBook) addSupplierCosts(month, key string, costs map[string]string) {
+	for currency, cost := range costs {
+		value := ratOf(cost)
+		switch {
+		case currency == control.FinanceCurrency:
+		case currency == "USD" && b.usdRate != nil:
+			value.Mul(value, b.usdRate)
+		default:
+			// No rate for it: reported beside the result, not guessed.
+			addTo(b.unpriced, currency, value)
+			continue
+		}
+		b.add(month, control.FinanceExpense, key, value)
 	}
 }
 
 func (b *financeBook) addEntries(entries []control.FinanceEntry) {
 	for _, entry := range entries {
+		if entry.Direction == control.FinanceWithdrawal {
+			// The owners taking their money is not a cost of earning it.
+			continue
+		}
 		key := "manual:" + entry.Category
 		b.add(entry.OccurredOn[:7], entry.Direction, key, ratOf(entry.Amount))
 		b.counts[entry.Direction+":"+key]++
@@ -458,6 +482,28 @@ func (s HTTPServer) financeBookFor(r *http.Request, store control.FinanceStore, 
 	return book, len(entries), nil
 }
 
+// financeUSDRate is the rate dollar costs are turned into dinars at: the
+// pricing rate the shops are charged at today. An estimate, and every report
+// using it says so.
+func (s HTTPServer) financeUSDRate(r *http.Request) (*big.Rat, map[string]string) {
+	rateInfo := map[string]string{}
+	voucherStore, ok := s.Store.(control.VoucherStore)
+	if !ok {
+		return nil, rateInfo
+	}
+	settings, _, err := s.currentVoucherSettings(r.Context(), voucherStore)
+	if err != nil {
+		return nil, rateInfo
+	}
+	rate, source := settings.EffectiveUSDRate()
+	if rate == nil {
+		return nil, rateInfo
+	}
+	rateInfo["rate"] = rate.FloatString(4)
+	rateInfo["source"] = source
+	return rate, rateInfo
+}
+
 func (s HTTPServer) handleFinanceSummary(w http.ResponseWriter, r *http.Request) {
 	store, ok := s.financeStore(w)
 	if !ok {
@@ -470,19 +516,7 @@ func (s HTTPServer) handleFinanceSummary(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Dollar costs are turned into dinars at the pricing rate the shops are
-	// charged at today: an estimate, and the summary says so.
-	var usdRate *big.Rat
-	rateInfo := map[string]string{}
-	if voucherStore, ok := s.Store.(control.VoucherStore); ok {
-		if settings, _, err := s.currentVoucherSettings(r.Context(), voucherStore); err == nil {
-			if rate, source := settings.EffectiveUSDRate(); rate != nil {
-				usdRate = rate
-				rateInfo["rate"] = rate.FloatString(4)
-				rateInfo["source"] = source
-			}
-		}
-	}
+	usdRate, rateInfo := s.financeUSDRate(r)
 
 	book, manualCount, err := s.financeBookFor(r, store, from, to, usdRate)
 	if err != nil {
@@ -504,16 +538,21 @@ func (s HTTPServer) handleFinanceSummary(w http.ResponseWriter, r *http.Request)
 		topUpTotal.Add(topUpTotal, value)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"from":         from.Format("2006-01-02"),
-		"to":           to.Format("2006-01-02"),
-		"currency":     control.FinanceCurrency,
-		"usd_rate":     rateInfo,
-		"totals":       book.totals(),
-		"previous":     map[string]any{"from": previousFrom.Format("2006-01-02"), "to": previousTo.Format("2006-01-02"), "totals": previous.totals()},
-		"months":       book.monthSeries(from, to),
-		"income":       book.lines(control.FinanceIncome, book.income),
-		"expense":      book.lines(control.FinanceExpense, book.expense),
-		"topups":       map[string]any{"total": control.FormatWalletAmount(topUpTotal), "by_method": formatRatMap(book.topUps)},
+		"from":     from.Format("2006-01-02"),
+		"to":       to.Format("2006-01-02"),
+		"currency": control.FinanceCurrency,
+		"usd_rate": rateInfo,
+		"totals":   book.totals(),
+		"previous": map[string]any{"from": previousFrom.Format("2006-01-02"), "to": previousTo.Format("2006-01-02"), "totals": previous.totals()},
+		"months":   book.monthSeries(from, to),
+		"income":   book.lines(control.FinanceIncome, book.income),
+		"expense":  book.lines(control.FinanceExpense, book.expense),
+		"topups": map[string]any{
+			"total":     control.FormatWalletAmount(topUpTotal),
+			"by_method": formatRatMap(book.topUps),
+			// Kept out of the credit for Dafa's cut; on the books as both.
+			"fees": control.FormatWalletAmount(book.income["tracked:topup_fee"]),
+		},
 		"unpriced":     formatRatMap(book.unpriced),
 		"manual_count": manualCount,
 	})

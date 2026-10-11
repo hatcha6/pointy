@@ -36,6 +36,7 @@ const walletTopUpColumns = `t.id,
 	t.installation_id,
 	t.method,
 	t.amount::text,
+	t.fee::text,
 	t.status,
 	t.invoice_no,
 	t.provider_transaction_id,
@@ -514,13 +515,13 @@ func (s *PostgresStore) BeginWalletTopUp(ctx context.Context, topUp WalletTopUp)
 				provider_transaction_id, checkout_url, idempotency_key, requested_by,
 				payer_hint, otp_attempts,
 				test_mode, error_code, error_detail, entry_id, confirmed_by,
-				created_at, updated_at, paid_at, transfer
+				created_at, updated_at, paid_at, transfer, fee
 			) VALUES (
 				$1, $2, $3, $4::text::numeric, $5, $6,
 				'', '', $7, $8,
 				$9, 0,
 				$10, '', '', '', '',
-				$11::timestamptz, $11::timestamptz, NULL, $12::jsonb
+				$11::timestamptz, $11::timestamptz, NULL, $12::jsonb, $13::text::numeric
 			)
 			ON CONFLICT (installation_id, idempotency_key) DO NOTHING
 			RETURNING `+walletTopUpColumns,
@@ -536,6 +537,7 @@ func (s *PostgresStore) BeginWalletTopUp(ctx context.Context, topUp WalletTopUp)
 			prepared.TestMode,
 			prepared.CreatedAt,
 			transfer,
+			prepared.Fee,
 		), false)
 		switch code, constraint := pgErrorCode(err); {
 		case err == nil:
@@ -866,6 +868,7 @@ func scanWalletTopUp(row pgx.Row, withShop bool) (WalletTopUp, error) {
 		&topUp.InstallationID,
 		&topUp.Method,
 		&topUp.Amount,
+		&topUp.Fee,
 		&topUp.Status,
 		&topUp.InvoiceNo,
 		&topUp.ProviderTransactionID,
@@ -894,6 +897,7 @@ func scanWalletTopUp(row pgx.Row, withShop bool) (WalletTopUp, error) {
 		return WalletTopUp{}, err
 	}
 	topUp.Amount = NormalizeWalletAmount(topUp.Amount)
+	topUp.Fee = NormalizeWalletAmount(topUp.Fee)
 	topUp.CreatedAt = topUp.CreatedAt.UTC()
 	topUp.UpdatedAt = topUp.UpdatedAt.UTC()
 	if paidAt.Valid {

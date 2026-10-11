@@ -23,7 +23,9 @@ import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../../settings/views/messaging_presentation.dart';
+import '../view_models/job_bill.dart';
 import '../view_models/job_details_view_model.dart';
+import 'job_bill_section.dart';
 import 'job_decline_sheet.dart';
 import 'job_declined_callout.dart';
 import 'job_invoice_flow.dart';
@@ -445,6 +447,14 @@ class _JobDetailsBodyState extends State<_JobDetailsBody> {
                     SizedBox(height: spacing.lg),
                     if (job.jobType != OperationsJobType.production) ...[
                       _servicesSection(context),
+                      SizedBox(height: spacing.lg),
+                    ],
+                    // What the invoice will come to, added up the way the
+                    // invoice adds it — until there is an invoice to read.
+                    if (job.order == null &&
+                        !job.isDeclined &&
+                        job.jobType != OperationsJobType.production) ...[
+                      JobBillSection(bill: JobBill.of(job)),
                       SizedBox(height: spacing.lg),
                     ],
                     _editSection(context),

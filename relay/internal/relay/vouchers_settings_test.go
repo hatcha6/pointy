@@ -155,6 +155,24 @@ func TestVoucherSettingsAdminRouteNeedsTheAdminToken(t *testing.T) {
 	}
 }
 
+// The default source is fulus.ly: with a fresh rate received, the settings
+// price Reloadly even though the document names no rate, so the console must
+// not warn that nothing sells.
+func TestVoucherSettingsPricedByTheLiveFulusRate(t *testing.T) {
+	h := newSettingsHarness(t)
+	if _, err := h.store.FileStore.UpsertExchangeRate(context.Background(),
+		usdRate("cash", "", "9.40", h.clock.now.Add(-time.Hour))); err != nil {
+		t.Fatal(err)
+	}
+	status, body := h.admin(t, http.MethodGet, "/settings", ``)
+	if status != http.StatusOK || body["priced"] != true {
+		t.Fatalf("a fresh fulus.ly rate prices the defaults: %d %v", status, body)
+	}
+	if _, set := asMap(t, body["settings"])["usd_rate"]; set {
+		t.Fatalf("the live rate is not written into the settings: %v", body["settings"])
+	}
+}
+
 func TestVoucherSettingsAdminRouteLifecycle(t *testing.T) {
 	h := newSettingsHarness(t)
 

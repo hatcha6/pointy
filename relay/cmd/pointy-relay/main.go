@@ -554,6 +554,11 @@ func runServer(args []string) error {
 		envString("POINTY_RELAY_WALLET_QUICK_AMOUNTS", "50,100,200,500"),
 		"comma-separated amounts the app offers as one-tap top-ups",
 	)
+	walletFeePercent := flags.String(
+		"wallet-dafa-fee-percent",
+		envString("POINTY_RELAY_WALLET_DAFA_FEE_PERCENT", "2"),
+		"percent of every Dafa top-up kept out of the wallet credit to cover the gateway's fee (0 keeps nothing)",
+	)
 	walletTopUpTTL := flags.Duration(
 		"wallet-topup-ttl",
 		envDuration("POINTY_RELAY_WALLET_TOPUP_TTL", 30*time.Minute),
@@ -776,6 +781,7 @@ func runServer(args []string) error {
 		MinTopUp:          *walletTopUpMin,
 		MaxTopUp:          *walletTopUpMax,
 		QuickAmounts:      *walletQuickAmounts,
+		FeePercent:        *walletFeePercent,
 		TopUpTTL:          *walletTopUpTTL,
 		TopUpRateLimit:    *walletTopUpRateLimit,
 		RequestTimeout:    *dafaRequestTimeout,
@@ -1237,6 +1243,7 @@ func runServer(args []string) error {
 		SMS:                  smsConfig,
 		Wallet:               walletConfig,
 		Alerts:               alertNotifier,
+		Balances:             balanceWatcher,
 		Vouchers:             voucherConfig,
 		VoucherCache:         &relayserver.VoucherCatalogCache{},
 		VoucherSettingsCache: &relayserver.VoucherSettingsCache{},
@@ -1424,6 +1431,7 @@ func runServer(args []string) error {
 			"public_url", walletConfig.PublicURL,
 			"min", walletConfig.MinTopUp,
 			"max", walletConfig.MaxTopUp,
+			"fee_percent", walletConfig.FeePercent,
 		)
 	}
 	for _, plan := range []string{control.WalletPlanRemoteAccess, control.WalletPlanAI} {
@@ -1471,6 +1479,7 @@ func runServer(args []string) error {
 	// every kind of purchase.
 	if servicesService.Configured() {
 		go servicesService.Run(ctx)
+		go servicesService.RunFunds(ctx)
 		logger.Info(
 			"relay services configured",
 			"mode", servicesStartupMode(voucherConfig),

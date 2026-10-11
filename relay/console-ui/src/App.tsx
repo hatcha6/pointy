@@ -26,6 +26,7 @@ const Sms = lazy(() => import("./pages/Sms").then((m) => ({ default: m.Sms })));
 const Catalog = lazy(() => import("./pages/vouchers/Catalog").then((m) => ({ default: m.Catalog })));
 const Suppliers = lazy(() => import("./pages/vouchers/Suppliers").then((m) => ({ default: m.Suppliers })));
 const Stock = lazy(() => import("./pages/vouchers/Stock").then((m) => ({ default: m.Stock })));
+const Company = lazy(() => import("./pages/vouchers/Company").then((m) => ({ default: m.Company })));
 const Pricing = lazy(() => import("./pages/vouchers/Pricing").then((m) => ({ default: m.Pricing })));
 const Services = lazy(() => import("./pages/vouchers/Services").then((m) => ({ default: m.Services })));
 const Fleet = lazy(() => import("./pages/Fleet").then((m) => ({ default: m.Fleet })));
@@ -83,6 +84,8 @@ function Page({ path }: { path: string }) {
       return <Suppliers />;
     case "/stock":
       return <Stock />;
+    case "/company":
+      return <Company />;
     case "/pricing":
       return <Pricing />;
     case "/services":

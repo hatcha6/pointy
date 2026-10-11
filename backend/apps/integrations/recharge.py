@@ -27,9 +27,11 @@ provider that is idempotent on a key of ours (the company's relay) is told the
 attempt's key (:func:`attempt_key`), and the attempt is settled by reading it
 back under that key instead.
 
-Nothing here ever retries. A caller that wants another go must first get the
-row back to ``pending``, which only reconciliation does, and only once it has
-proved the provider never performed it.
+Nothing ever retries, and nothing may. A refusal is final (``failed``), and so
+is an unanswered attempt that reconciliation later proves was never performed:
+the shop is never charged for a line on a later, unattended attempt it did not
+choose. The customer's money goes back instead (:mod:`.refusal_refund`), and
+another go is another sale.
 """
 
 from __future__ import annotations
@@ -102,15 +104,15 @@ def charge(fulfillment_id: int, *, user=None) -> ChargeOutcome:
         )
 
     # A provider the operator switched off is not even claimed for: nothing
-    # will be sent, so the line stays merely sold — neither an attempt nor a
-    # refusal on its record — for a refund, or for when it is back on.
+    # is sent, and the line is refused for good — never charged later, when
+    # it is back on and nobody is standing at the till.
     off = switches.switched_off_providers()
     if off:
         current = IntegrationFulfillment.objects.filter(pk=fulfillment_id).first()
         if current is not None and current.provider in off:
             return ChargeOutcome(
                 outcome=OUTCOME_REFUSED,
-                fulfillment=current,
+                fulfillment=_refuse_unsent(fulfillment_id, ERROR_SWITCHED_OFF),
                 error_code=ERROR_SWITCHED_OFF,
             )
 
@@ -280,6 +282,26 @@ def _claim(fulfillment_id: int) -> IntegrationFulfillment | None:
         return row
 
 
+def _refuse_unsent(fulfillment_id: int, error_code: str) -> IntegrationFulfillment | None:
+    """Refuse a still-pending row for good without sending anything."""
+    with transaction.atomic():
+        row = (
+            IntegrationFulfillment.objects.select_for_update()
+            .filter(pk=fulfillment_id)
+            .select_related("order_line")
+            .first()
+        )
+        if row is not None and row.status == IntegrationFulfillment.Status.PENDING:
+            row.status = IntegrationFulfillment.Status.FAILED
+            row.last_error_code = error_code
+            row.last_error = ""
+            row.save(
+                update_fields=["status", "last_error_code", "last_error", "updated_at"]
+            )
+            bump("integrations")
+    return row
+
+
 def _record(fulfillment, result: RechargeResult) -> ChargeOutcome:
     """Write down what came back, and nothing more than what came back."""
     with transaction.atomic():
@@ -308,9 +330,9 @@ def _record(fulfillment, result: RechargeResult) -> ChargeOutcome:
             row.last_error = result.error_detail or ""
             outcome = OUTCOME_UNKNOWN
         else:
-            # A definite refusal: the provider never took the money, so this
-            # row goes back to being merely sold, and may be tried again.
-            row.status = IntegrationFulfillment.Status.PENDING
+            # A definite refusal: the provider never took the money. Final —
+            # the sale is given back, never charged again behind the till.
+            row.status = IntegrationFulfillment.Status.FAILED
             row.last_error_code = result.error_code or ""
             row.last_error = result.error_detail or ""
             outcome = OUTCOME_REFUSED

@@ -11,6 +11,8 @@ import '../../../shared/components/components.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
 import '../../../shared/formatters.dart';
 import '../../register_sessions/views/open_register_session_dialog.dart';
+import '../view_models/job_bill.dart';
+import 'job_bill_section.dart';
 
 /// Billing a job and taking its money — shared by the job screen, where the
 /// counter asks for it, and the board, which asks for it on the way to the
@@ -256,12 +258,14 @@ class _JobInvoiceDialogState extends State<_JobInvoiceDialog> {
   late final double _lineTotal = _feeOnly
       ? (widget.job.declineFee ?? 0)
       : widget.job.billableTotal;
+  // The same arithmetic as the job's «الحساب» card, so the invoice opens on
+  // the amount the counter already saw there: what the lines leave of the
+  // agreed price (or, before approval, the quote) is pre-filled here.
+  late final JobBill _bill = JobBill.of(widget.job);
   late final TextEditingController _laborController = TextEditingController(
-    text: _feeOnly || widget.job.approvedPrice == null
+    text: _feeOnly || _bill.remainder <= 0
         ? ''
-        : (widget.job.approvedPrice! - _lineTotal)
-              .clamp(0, double.infinity)
-              .toStringAsFixed(2),
+        : _bill.remainder.toStringAsFixed(2),
   );
   final TextEditingController _paidNowController = TextEditingController();
   var _method = PaymentMethod.cash;
@@ -293,6 +297,10 @@ class _JobInvoiceDialogState extends State<_JobInvoiceDialog> {
     final balance = (total - paidNow).clamp(0.0, double.infinity);
     final needsCustomer = _onCredit && job.customer == null;
     final overpaid = paidNow > total;
+    final agreed = _feeOnly ? null : _bill.agreedPrice;
+    final priceName = _bill.agreedIsApproved
+        ? l10n.jobBillAgreedPrice
+        : l10n.jobBillQuotedPrice;
 
     return AlertDialog(
       icon: const Icon(Icons.receipt_long_outlined),
@@ -322,26 +330,41 @@ class _JobInvoiceDialogState extends State<_JobInvoiceDialog> {
               if (_feeOnly)
                 Text(l10n.jobCollectFeeAmountLabel(formatMoney(_lineTotal)))
               else ...[
-                Text(
-                  l10n.jobMaterialsTotalLabel(formatMoney(job.materialsTotal)),
-                ),
-                if (job.servicesTotal > 0)
-                  Text(
-                    '${l10n.jobInvoiceServicesLabel}: '
-                    '${formatMoney(job.servicesTotal)}',
-                  ),
+                // The job's «الحساب», line for line: what the counter saw on
+                // the job is what it confirms here, whichever way it got here.
+                JobBillRow(l10n.jobBillPartsLabel, job.materialsTotal),
+                JobBillRow(l10n.jobBillServicesLabel, job.servicesTotal),
                 const SizedBox(height: 12),
                 TextField(
+                  key: const ValueKey('job_invoice_extra_field'),
                   controller: _laborController,
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
                   ),
                   inputFormatters: [DecimalTextInputFormatter()],
                   decoration: InputDecoration(
-                    labelText: l10n.jobLaborTotalLabel,
+                    labelText: l10n.jobInvoiceExtraLabel,
+                    helperText: agreed == null
+                        ? null
+                        : l10n.jobInvoiceExtraFillsAgreed(
+                            priceName,
+                            formatMoney(agreed),
+                          ),
+                    helperMaxLines: 3,
                   ),
                   onChanged: (_) => setState(() {}),
                 ),
+                if (agreed != null && total > agreed + 0.004) ...[
+                  const SizedBox(height: 8),
+                  PointyInlineMessage.warning(
+                    key: const ValueKey('job_invoice_over_agreed'),
+                    message: l10n.jobInvoiceOverAgreed(
+                      priceName,
+                      formatMoney(agreed),
+                    ),
+                    compact: true,
+                  ),
+                ],
               ],
               const SizedBox(height: 12),
               SegmentedButton<PaymentMethod>(
@@ -403,9 +426,12 @@ class _JobInvoiceDialogState extends State<_JobInvoiceDialog> {
                   ),
               ],
               const SizedBox(height: 12),
-              Text(
-                l10n.jobInvoiceTotalLabel(formatMoney(total)),
-                style: Theme.of(context).textTheme.titleMedium,
+              const Divider(height: 1),
+              JobBillRow(
+                l10n.jobBillTotalLabel,
+                total,
+                key: const ValueKey('job_invoice_total'),
+                strong: true,
               ),
               const SizedBox(height: 8),
               Text(

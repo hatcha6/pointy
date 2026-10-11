@@ -304,6 +304,10 @@ type HTTPServer struct {
 	Wallet WalletConfig
 	// Alerts is the company's ntfy alert channel; nil sends nothing.
 	Alerts *alerts.Ntfy
+	// Balances watches the company's supplier balances; the server asks it
+	// to re-check coverage when a shop moves money into its card balance.
+	// Nil skips that.
+	Balances BalanceChecker
 	// Vouchers. The company's own card shop: the suppliers it buys cards from
 	// with its own accounts (BN Plus), and what a shop's voucher balance pays.
 	Vouchers VoucherConfig
@@ -3751,4 +3755,9 @@ func (s HTTPServer) handleAdminUpsertExchangeRate(w http.ResponseWriter, r *http
 		return
 	}
 	writeJSON(w, http.StatusCreated, stored)
+}
+
+// BalanceChecker is the part of alerts.BalanceWatcher the server nudges.
+type BalanceChecker interface {
+	CheckOwedSoon()
 }

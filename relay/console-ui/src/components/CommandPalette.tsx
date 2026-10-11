@@ -9,7 +9,7 @@ import { money } from "../lib/format";
 import { topUpStatus } from "../lib/labels";
 import { categoryOf, financeKeys, libyaDay, type FinanceEntry } from "../lib/finance";
 import type { Purchase, TopUp } from "../lib/types";
-import { ArrowDownLeft, ArrowRight, ArrowUpRight, Repeat, CalendarPlus, CornerDownLeft, PlusCircle, Search, Store, UserPlus } from "lucide-react";
+import { ArrowDownLeft, ArrowRight, ArrowUpRight, Repeat, CalendarPlus, CornerDownLeft, PiggyBank, PlusCircle, Search, Store, UserPlus } from "lucide-react";
 import { useInstallations } from "../lib/queries";
 import { useRouter } from "../lib/router";
 import { matches } from "../lib/search";
@@ -109,11 +109,13 @@ export function CommandPalette({ open, onClose, startWith }: { open: boolean; on
     const books = [
       { id: "expense", title: "تسجيل مصروف…", icon: <ArrowUpRight />, keywords: "مصروف مصاريف دفع فاتورة راتب ايجار خادم دفتر حسابات" },
       { id: "income", title: "تسجيل دخل…", icon: <ArrowDownLeft />, keywords: "دخل ايراد قبض نقد اشتراك نقدا دفتر حسابات" },
+      { id: "withdraw", title: "تسجيل سحب لك…", icon: <PiggyBank />, keywords: "سحب ارباح مالي متاح لي اخذت مال المالك" },
+      { id: "available", title: "مالك المتاح للسحب", icon: <PiggyBank />, keywords: "متاح سحب ارباح ربح مالي كم لي تكلفة" },
       { id: "monthly", title: "المصروفات الشهرية", icon: <Repeat />, keywords: "شهري متكرر ايجار راتب خادم فاتورة كهرباء" },
     ];
     for (const b of books) {
       if (matches(query, b.title, b.keywords)) {
-        actions.push({ id: "action:" + b.id, group: "إجراءات سريعة", title: b.title, icon: b.icon, run: go(b.id === "monthly" ? "/ledger?tab=monthly" : `/ledger?do=${b.id}`) });
+        actions.push({ id: "action:" + b.id, group: "إجراءات سريعة", title: b.title, icon: b.icon, run: go(b.id === "monthly" ? "/ledger?tab=monthly" : b.id === "available" ? "/finance" : `/ledger?do=${b.id}`) });
       }
     }
     if (matches(query, "دعوة مشغل اضافة جهاز")) {

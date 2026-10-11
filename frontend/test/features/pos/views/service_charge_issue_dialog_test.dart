@@ -116,6 +116,28 @@ void main() {
       expectNoCardWords(tester);
     });
 
+    testServices('names what the server already gave back', (tester) async {
+      await open(tester, [
+        IntegrationChargeResult.fromJson({
+          'fulfillment': 1,
+          'order_line': 7,
+          'provider': 'pointy',
+          'kind': 'airtime',
+          'outcome': 'refused',
+          'status': 'pending',
+          'error_code': 'insufficient_float',
+          'refunded': true,
+          'refund_amount': '19.50',
+        }),
+      ]);
+
+      expect(
+        find.textContaining('أُلغي من الفاتورة تلقائياً — أعِد 19.50'),
+        findsOneWidget,
+      );
+      expectNoCardWords(tester);
+    });
+
     testServices('says why, in plain words, by what the provider answered', (
       tester,
     ) async {

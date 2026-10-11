@@ -11,6 +11,7 @@ import '../../../shared/responsive/responsive.dart';
 import '../view_models/wallet_view_model.dart';
 import 'wallet_bank_transfer_step.dart';
 import 'wallet_code_step.dart';
+import 'wallet_fee_breakdown.dart';
 import 'wallet_method_picker.dart';
 import 'wallet_payer_dialog.dart';
 import 'wallet_presentation.dart';
@@ -26,21 +27,30 @@ import 'wallet_transfer_review.dart';
 Future<void> showWalletTopUpSheet({
   required BuildContext context,
   required WalletViewModel viewModel,
+  double? initialAmount,
 }) async {
   final l10n = AppLocalizations.of(context)!;
   viewModel.beginTopUp();
   await showAdaptiveFormSurface<void>(
     context: context,
     title: l10n.walletTopUpSheetTitle,
-    builder: (sheetContext) => WalletTopUpFlow(viewModel: viewModel),
+    builder: (sheetContext) =>
+        WalletTopUpFlow(viewModel: viewModel, initialAmount: initialAmount),
   );
   viewModel.endTopUp();
 }
 
 class WalletTopUpFlow extends StatefulWidget {
-  const WalletTopUpFlow({super.key, required this.viewModel});
+  const WalletTopUpFlow({
+    super.key,
+    required this.viewModel,
+    this.initialAmount,
+  });
 
   final WalletViewModel viewModel;
+
+  /// An amount to start from, already typed in.
+  final double? initialAmount;
 
   @override
   State<WalletTopUpFlow> createState() => _WalletTopUpFlowState();
@@ -57,6 +67,9 @@ class _WalletTopUpFlowState extends State<WalletTopUpFlow> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialAmount case final amount?) {
+      _amount.text = formatWalletBound(amount);
+    }
     // Coming back from the browser is the moment a verdict is most likely
     // waiting; ask at once instead of at the next tick.
     _lifecycle = AppLifecycleListener(
@@ -271,6 +284,25 @@ class _TopUpForm extends StatelessWidget {
                       enabled: !starting,
                       onSelected: viewModel.selectMethod,
                     ),
+                    if (options != null && options.chargesFee(method)) ...[
+                      SizedBox(height: spacing.sm),
+                      // Rebuilt as the amount is typed: the owner sees what
+                      // the wallet gets before pressing pay.
+                      ListenableBuilder(
+                        listenable: amount,
+                        builder: (context, _) {
+                          final typed = _validAmount(amount.text, options);
+                          return WalletFeeBreakdown(
+                            percent: options.feePercent,
+                            amount: typed,
+                            fee: typed == null
+                                ? 0
+                                : options.feeFor(typed, method),
+                            transferIsFree: options.bankTransfer != null,
+                          );
+                        },
+                      ),
+                    ],
                     SizedBox(height: spacing.sm),
                     SwitchListTile.adaptive(
                       contentPadding: EdgeInsets.zero,
@@ -353,6 +385,18 @@ class _TopUpForm extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The typed amount when it is one the relay would take, else null.
+double? _validAmount(String text, WalletTopUpOptions options) {
+  final parsed = double.tryParse(text.trim().replaceAll(',', '.'));
+  if (parsed == null ||
+      parsed <= 0 ||
+      parsed < options.minAmount ||
+      parsed > options.maxAmount) {
+    return null;
+  }
+  return parsed;
 }
 
 class _AmountField extends StatelessWidget {

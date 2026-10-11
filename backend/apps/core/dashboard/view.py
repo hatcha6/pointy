@@ -245,12 +245,20 @@ def _period_from_request(request):
         days = int(request.query_params.get("days", 30))
     except (TypeError, ValueError):
         days = 30
-    days = min(max(days, 7), 90)
-
     end = timezone.now()
-    start = end - timedelta(days=days)
-    previous_end = start
-    previous_start = previous_end - timedelta(days=days)
+    if days == 1:
+        # «اليوم»: since local midnight, compared with yesterday up to the
+        # same time of day so a morning is never measured against a full day.
+        # Local-aware ends so the sections that compare .date() read the shop's day.
+        end = timezone.localtime(end)
+        start = end.replace(hour=0, minute=0, second=0, microsecond=0)
+        previous_start = start - timedelta(days=1)
+        previous_end = end - timedelta(days=1)
+    else:
+        days = min(max(days, 7), 90)
+        start = end - timedelta(days=days)
+        previous_end = start
+        previous_start = previous_end - timedelta(days=days)
     return {
         "days": days,
         "start": start,

@@ -77,7 +77,7 @@ from .providers.base import (
     ERROR_UNREACHABLE,
     ProbeResult,
 )
-from .providers.base import HistoryResult, RechargeOption
+from .providers.base import HistoryResult, RechargeOption, RechargeResult
 from .providers import hdbox
 from .providers.hdbox import (
     DETAIL_VIEW_PATH,
@@ -3469,9 +3469,9 @@ class RechargeGuardTests(TransactionTestCase):
         self.assertEqual(retry.outcome, recharge.OUTCOME_NOT_CLAIMABLE)
         self.assertEqual(again.renew_calls, [])
 
-    def test_a_definite_refusal_frees_the_row_to_be_tried_again(self):
-        # An empty float is the one failure a shop can fix itself, and the
-        # provider proved it took nothing — so this must not strand the sale.
+    def test_a_definite_refusal_is_final(self):
+        # Even the one failure a shop can fix itself: the float topped up later
+        # must never spend itself on a sale nobody is standing at.
         fulfillment = self._fulfillment()
         with patch_session(self._session(renew=_FakeResponse(RENEW_BROKE))):
             outcome = recharge.charge(fulfillment.pk)
@@ -3479,14 +3479,15 @@ class RechargeGuardTests(TransactionTestCase):
         self.assertEqual(outcome.outcome, recharge.OUTCOME_REFUSED)
         self.assertEqual(outcome.error_code, "insufficient_float")
         fulfillment.refresh_from_db()
-        self.assertEqual(fulfillment.status, IntegrationFulfillment.Status.PENDING)
+        self.assertEqual(fulfillment.status, IntegrationFulfillment.Status.FAILED)
 
-        # Topped up, it goes through — and the attempt count remembers both.
         session = self._session(renew=_FakeResponse(RENEW_OK))
         with patch_session(session):
-            self.assertTrue(recharge.charge(fulfillment.pk).ok)
+            again = recharge.charge(fulfillment.pk)
+        self.assertEqual(again.outcome, recharge.OUTCOME_NOT_CLAIMABLE)
+        self.assertEqual(session.renew_calls, [])
         fulfillment.refresh_from_db()
-        self.assertEqual(fulfillment.attempt_count, 2)
+        self.assertEqual(fulfillment.attempt_count, 1)
 
     def test_a_driver_that_raises_is_unknown_not_failed(self):
         fulfillment = self._fulfillment()
@@ -3617,23 +3618,88 @@ class IntegrationChargeApiTests(TransactionTestCase):
         result = response.data["results"][0]
         self.assertEqual(result["outcome"], "refused")
         self.assertEqual(result["error_code"], "insufficient_float")
-        # Still sold, still retryable once the shop tops up.
-        self.assertEqual(result["status"], "pending")
+        # Final: given back, never charged once the shop tops up.
+        self.assertEqual(result["status"], "failed")
 
-    def test_one_line_can_be_retried_on_its_own(self):
+    def test_a_refused_line_is_given_back_in_the_drawer_that_sold_it(self):
+        # Annaseem 2026-10-11: every refused card stayed a paid cash sale, so
+        # the drawer closed short by all of them.
         order = self._order()
+        expected_before = self.register.expected_cash
         with patch_session(self._session(renew=_FakeResponse(RENEW_BROKE))):
-            self.client.post(
+            response = self.client.post(
                 "/api/integrations/fulfillments/charge/", {"order": order.pk}, format="json"
             )
+
+        result = response.data["results"][0]
+        self.assertTrue(result["refunded"])
+        self.assertEqual(result["refund_amount"], Decimal("25.00"))
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.VOID)
+        adjustment = order.adjustments.get()
+        self.assertEqual(adjustment.register_session_id, self.register.pk)
+        # The system gave it back, not the cashier: not on their return record.
+        self.assertIsNone(adjustment.created_by_id)
+        self.register.refresh_from_db()
+        self.assertEqual(
+            self.register.expected_cash, expected_before - Decimal("25.00")
+        )
+        # And a refused line can never spend the float later.
         fulfillment = IntegrationFulfillment.objects.get()
-        with patch_session(self._session(renew=_FakeResponse(RENEW_OK))):
-            response = self.client.post(
+        self.assertEqual(fulfillment.status, IntegrationFulfillment.Status.FAILED)
+        session = self._session(renew=_FakeResponse(RENEW_OK))
+        with patch_session(session):
+            again = self.client.post(
                 "/api/integrations/fulfillments/charge/",
-                {"fulfillment": fulfillment.pk},
+                {"order": order.pk},
                 format="json",
             )
-        self.assertEqual(response.data["results"][0]["outcome"], "charged")
+        self.assertEqual(again.data["results"], [])
+        self.assertEqual(session.renew_calls, [])
+
+    def test_a_single_line_cannot_be_named_to_retry(self):
+        order = self._order()
+        fulfillment = IntegrationFulfillment.objects.get(order_line__order=order)
+        response = self.client.post(
+            "/api/integrations/fulfillments/charge/",
+            {"fulfillment": fulfillment.pk},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_only_the_refused_line_of_a_mixed_sale_is_given_back(self):
+        order = self._order(cards=("210906803499", "210906803500"))
+        with mock.patch("apps.integrations.recharge.provider_for") as provider:
+            provider.return_value.recharge.side_effect = [
+                RechargeResult(ok=True, reference="558032"),
+                RechargeResult(ok=False, error_code="insufficient_float"),
+            ]
+            response = self.client.post(
+                "/api/integrations/fulfillments/charge/", {"order": order.pk}, format="json"
+            )
+
+        charged, refused = response.data["results"]
+        self.assertEqual(charged["outcome"], "charged")
+        self.assertFalse(charged["refunded"])
+        self.assertTrue(refused["refunded"])
+        order.refresh_from_db()
+        # The delivered card is still sold; only the other came back.
+        self.assertEqual(order.status, Order.Status.PAID)
+        self.assertEqual(order.adjustments.get().amount, Decimal("25.00"))
+
+    def test_an_unknown_outcome_is_never_refunded(self):
+        order = self._order()
+        with patch_session(
+            self._session(renew_raises=hdbox.requests.ConnectionError("reset"))
+        ):
+            response = self.client.post(
+                "/api/integrations/fulfillments/charge/", {"order": order.pk}, format="json"
+            )
+
+        self.assertFalse(response.data["results"][0]["refunded"])
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.PAID)
+        self.assertFalse(order.adjustments.exists())
 
     def test_naming_neither_an_order_nor_a_line_is_a_bad_request(self):
         response = self.client.post(
@@ -4707,25 +4773,25 @@ class SubmittedResolutionTests(TestCase):
         self.assertEqual(row.provider_receipt["reference"], "4300578")
         self.assertEqual(result["resolved"]["confirmed"], 1)
 
-    def test_a_held_reference_is_never_returned_to_retryable(self):
+    def test_a_held_reference_is_never_closed_as_not_performed(self):
         # The provider told us a payment existed. Even with the log reaching
         # back past the attempt, retrying would credit the customer twice.
         row = self._submitted(cost="23.75", reference="no-such-serial")
         result = self._reconcile()
         row.refresh_from_db()
         self.assertEqual(row.status, IntegrationFulfillment.Status.SUBMITTED)
-        self.assertEqual(result["resolved"]["retryable"], 0)
+        self.assertEqual(result["resolved"]["not_performed"], 0)
         self.assertEqual(len(result["resolved"]["unknown"]), 1)
 
-    def test_absence_from_a_log_that_reaches_back_makes_it_retryable(self):
+    def test_absence_from_a_log_that_reaches_back_closes_it_as_not_performed(self):
         # No reference was ever handed back, and the report covers the attempt,
         # so the provider demonstrably never performed it.
         row = self._submitted(cost="99.99", sent_ago_hours=1)
         result = self._reconcile()
         row.refresh_from_db()
-        self.assertEqual(row.status, IntegrationFulfillment.Status.PENDING)
-        self.assertEqual(result["resolved"]["retryable"], 1)
-        # Re-armed: the guard will now allow exactly one more attempt.
+        self.assertEqual(row.status, IntegrationFulfillment.Status.FAILED)
+        self.assertEqual(result["resolved"]["not_performed"], 1)
+        # Closed, never re-armed: nothing will be sent for it again.
         self.assertEqual(row.last_error_code, "")
 
     def test_absence_from_a_log_that_does_not_reach_back_proves_nothing(self):
@@ -4736,7 +4802,7 @@ class SubmittedResolutionTests(TestCase):
         result = self._reconcile()
         row.refresh_from_db()
         self.assertEqual(row.status, IntegrationFulfillment.Status.SUBMITTED)
-        self.assertEqual(result["resolved"]["retryable"], 0)
+        self.assertEqual(result["resolved"]["not_performed"], 0)
         self.assertEqual(len(result["resolved"]["unknown"]), 1)
 
     def test_an_unreadable_log_settles_nothing(self):
@@ -4749,7 +4815,7 @@ class SubmittedResolutionTests(TestCase):
         row.refresh_from_db()
         self.assertEqual(row.status, IntegrationFulfillment.Status.SUBMITTED)
         self.assertEqual(result["resolved"]["confirmed"], 0)
-        self.assertEqual(result["resolved"]["retryable"], 0)
+        self.assertEqual(result["resolved"]["not_performed"], 0)
 
     def test_one_provider_entry_cannot_settle_two_sales(self):
         # Otherwise a genuine unperformed row hides behind a real payment.

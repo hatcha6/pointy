@@ -196,13 +196,14 @@ func (c *VoucherSettingsCache) remember(loaded loadedVoucherSettings, now time.T
 // voucherSettingsView is how the admin route (and so the CLI) shows settings:
 // the settings themselves, the version they came from, whether Reloadly can be
 // priced with them, and which knobs are still the demonstration values nobody
-// decided.
-func voucherSettingsView(settings vouchers.Settings, record *control.VoucherSettingsRecord) map[string]any {
+// decided. "priced" lays the live fulus.ly rate on first, as a sale does: the
+// default source has no rate written in the document itself.
+func (s HTTPServer) voucherSettingsView(ctx context.Context, settings vouchers.Settings, record *control.VoucherSettingsRecord) map[string]any {
 	return map[string]any{
 		"stored":        record != nil,
 		"settings":      settings,
 		"record":        record,
-		"priced":        settings.Priced(),
+		"priced":        s.withLiveRate(ctx, settings).Priced(),
 		"demo_defaults": settings.DemoDefaults(),
 	}
 }
@@ -212,7 +213,7 @@ func voucherSettingsView(settings vouchers.Settings, record *control.VoucherSett
 func (s HTTPServer) handleVoucherAdminSettings(w http.ResponseWriter, r *http.Request, store control.VoucherStore) {
 	record, err := store.CurrentVoucherSettings(r.Context())
 	if errors.Is(err, control.ErrVoucherSettingsNotFound) {
-		writeJSON(w, http.StatusOK, voucherSettingsView(vouchers.DefaultSettings(), nil))
+		writeJSON(w, http.StatusOK, s.voucherSettingsView(r.Context(), vouchers.DefaultSettings(), nil))
 		return
 	}
 	if err != nil {
@@ -232,7 +233,7 @@ func (s HTTPServer) handleVoucherAdminSettings(w http.ResponseWriter, r *http.Re
 		return
 	}
 	record.Document = nil
-	writeJSON(w, http.StatusOK, voucherSettingsView(settings, &record))
+	writeJSON(w, http.StatusOK, s.voucherSettingsView(r.Context(), settings, &record))
 }
 
 // handleVoucherAdminSettingsPublish serves PUT /v1/vouchers/admin/settings: the
@@ -290,7 +291,7 @@ func (s HTTPServer) handleVoucherAdminSettingsPublish(w http.ResponseWriter, r *
 	}
 	if err == nil && voucherSettingsUnchanged(current, sum, settings) {
 		current.Document = nil
-		view := voucherSettingsView(settings, &current)
+		view := s.voucherSettingsView(ctx, settings, &current)
 		view["unchanged"] = true
 		writeJSON(w, http.StatusOK, view)
 		return
@@ -308,9 +309,9 @@ func (s HTTPServer) handleVoucherAdminSettingsPublish(w http.ResponseWriter, r *
 	s.VoucherSettingsCache.invalidate()
 	s.logger().Info("voucher settings published",
 		"settings_id", published.ID, "sha256", published.SHA256, "actor", published.Actor,
-		"priced", settings.Priced(), "demo_defaults", len(settings.DemoDefaults()))
+		"priced", s.withLiveRate(ctx, settings).Priced(), "demo_defaults", len(settings.DemoDefaults()))
 	published.Document = nil
-	view := voucherSettingsView(settings, &published)
+	view := s.voucherSettingsView(ctx, settings, &published)
 	view["unchanged"] = false
 	writeJSON(w, http.StatusCreated, view)
 }

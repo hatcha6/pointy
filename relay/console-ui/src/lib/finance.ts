@@ -14,12 +14,15 @@ import {
   MessageSquare,
   Monitor,
   MoreHorizontal,
+  PiggyBank,
   Scale,
   Server,
+  ShoppingBag,
   Sparkles,
   Store,
   Truck,
   Users,
+  Wallet,
   Wifi,
   Wrench,
   type LucideIcon,
@@ -29,7 +32,8 @@ import { ApiError, api, qs } from "./api";
 // The company's books: hand-written lines (FinanceEntry) and the profit
 // summary the relay adds up from them and from its own records.
 
-export type Direction = "income" | "expense";
+/** A withdrawal is money the owners took: neither income nor an expense. */
+export type Direction = "income" | "expense" | "withdrawal";
 
 export type FinanceEntry = {
   id: string;
@@ -97,9 +101,39 @@ export type FinanceSummary = {
   months: { month: string; income: string; expense: string; net: string }[];
   income: FinanceLine[];
   expense: FinanceLine[];
-  topups: { total: string; by_method: Record<string, string> };
+  /** `total` is as credited to the wallets; `fees` went to the payment gateway. */
+  topups: { total: string; by_method: Record<string, string>; fees?: string };
   unpriced: Record<string, string>;
   manual_count: number;
+};
+
+/** One service, all time: what it sold for, what it cost, what was left. */
+export type ServiceProfit = { key: string; sales: string; cost: string; profit: string; margin_percent: string };
+
+/**
+ * The money that is the owners' to take, as of now (GET /v1/finance/position):
+ * all-time profit, less what was earned on paper but never came in, less what
+ * was already taken.
+ */
+export type FinancePosition = {
+  as_of: string;
+  usd_rate: { rate?: string; source?: string };
+  services: ServiceProfit[];
+  gross: { sales: string; cost: string; profit: string; margin_percent: string };
+  manual_income: string;
+  manual_expense: string;
+  /** What the company bought from its suppliers for itself (/company). */
+  company_purchases?: string;
+  net_profit: string;
+  shops_owe: string;
+  owing_shops: number;
+  in_flight: string;
+  goodwill: string;
+  withdrawn: string;
+  available: string;
+  shops_hold: string;
+  stock_cost: string;
+  unpriced: Record<string, string>;
 };
 
 export type Category = { id: string; label: string; icon: LucideIcon; hint?: string };
@@ -128,7 +162,13 @@ export const incomeCategories: Category[] = [
   { id: "hardware_sale", label: "بيع أجهزة", icon: Monitor },
   { id: "training", label: "تدريب ودعم", icon: GraduationCap },
   { id: "custom_work", label: "تطوير خاص", icon: Code2 },
+  { id: "voucher_resale", label: "بيع بطاقات أو شحن نقداً", icon: CreditCard, hint: "ما اشتريناه لأنفسنا ثم بعناه" },
   { id: "other_income", label: "دخل آخر", icon: HandCoins },
+];
+
+/** What the owners take out of what the company earned. */
+export const withdrawalCategories: Category[] = [
+  { id: "owner_draw", label: "سحب أرباح", icon: PiggyBank, hint: "مال أخذته لنفسك من أرباح الشركة" },
 ];
 
 /** Numbers the relay adds up on its own, by the key the summary sends. */
@@ -138,11 +178,14 @@ const trackedIncome: Record<string, Category> = {
   ai: { id: "ai", label: "المساعد الذكي", icon: Sparkles },
   remote_access: { id: "remote_access", label: "الوصول عن بعد", icon: Wifi },
   vouchers: { id: "vouchers", label: "البطاقات والشحن والفواتير", icon: CreditCard },
+  topup_fee: { id: "topup_fee", label: "رسوم الدفع على شحن المحافظ", icon: Wallet, hint: "ما يُخصم من شحن المتجر ليغطي عمولة دفع" },
 };
 
 const trackedExpense: Record<string, Category> = {
   supplier_cost: { id: "supplier_cost", label: "تكلفة الموردين", icon: Truck, hint: "ما دفعناه لموردي البطاقات والشحن" },
   sms_cost: { id: "sms_cost", label: "تكلفة الرسائل", icon: MessageSquare, hint: "ما تخصمه رسالة عن كل جزء" },
+  gateway_fee: { id: "gateway_fee", label: "عمولة بوابة الدفع (دفع)", icon: Wallet, hint: "ما تقتطعه دفع من كل شحن تحصّله لنا" },
+  company_purchases: { id: "company_purchases", label: "مشتريات الشركة", icon: ShoppingBag, hint: "بطاقات وشحن وفواتير اشتريناها لأنفسنا" },
 };
 
 /** Where a tracked line is explained in detail. */
@@ -154,13 +197,21 @@ export const trackedLinks: Record<string, string> = {
   remote_access: "/wallets",
   vouchers: "/purchases",
   supplier_cost: "/suppliers",
+  topup_fee: "/wallets",
+  gateway_fee: "/wallets",
+  company_purchases: "/company",
 };
 
 const fallback = (id: string): Category => ({ id, label: id, icon: MoreHorizontal });
 
 export function categoryOf(direction: Direction, id: string): Category {
-  const list = direction === "income" ? incomeCategories : expenseCategories;
+  const list = direction === "income" ? incomeCategories : direction === "withdrawal" ? withdrawalCategories : expenseCategories;
   return list.find((c) => c.id === id) ?? fallback(id);
+}
+
+/** A service's name as the money-position table shows it. */
+export function serviceCategory(key: string): Category {
+  return trackedIncome[key] ?? fallback(key);
 }
 
 export function lineCategory(direction: Direction, line: FinanceLine): Category {
@@ -246,6 +297,7 @@ export const financeKeys = {
   all: ["finance"],
   recurring: ["finance", "recurring"],
   summary: (from: string, to: string) => ["finance", "summary", from, to],
+  position: ["finance", "position"],
   entries: (filter: Record<string, string>) => ["finance", "entries", filter],
 };
 
@@ -253,6 +305,15 @@ export function useFinanceSummary(from: string, to: string) {
   return useQuery({
     queryKey: financeKeys.summary(from, to),
     queryFn: () => api.get<FinanceSummary>("/v1/finance/summary" + qs({ from, to })),
+    staleTime: 30_000,
+    retry: false,
+  });
+}
+
+export function useFinancePosition() {
+  return useQuery({
+    queryKey: financeKeys.position,
+    queryFn: () => api.get<FinancePosition>("/v1/finance/position"),
     staleTime: 30_000,
     retry: false,
   });

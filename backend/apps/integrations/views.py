@@ -29,6 +29,7 @@ from . import company_account
 from . import payment_report
 from . import quotes
 from . import recharge
+from . import refusal_refund
 from . import relay_link
 from . import switches
 from .models import IntegrationAccount, IntegrationFulfillment, IntegrationSearch
@@ -984,9 +985,9 @@ class IntegrationChargeView(APIView):
     """Perform the recharges a sale has already sold. Spends the float.
 
     Addressed by order, because that is how a till uses it: the sale completes,
-    and the same screen immediately asks for its recharges to be performed. A
-    single fulfillment can be named instead, which is how a cashier retries the
-    one line a provider refused.
+    and the same screen immediately asks for its recharges to be performed.
+    There is no retry: a refused line is given back (:mod:`.refusal_refund`),
+    and another go is another sale.
 
     Every write goes through :mod:`apps.integrations.recharge`, which allows a
     given line **one** attempt. This view therefore cannot double-charge by
@@ -1004,11 +1005,13 @@ class IntegrationChargeView(APIView):
         # A refusal's detail can name what the provider charges the shop: only
         # for a reader who may see cost (``serializers.charge_payload``).
         with_cost = user_has_full_visibility(request.user)
+        outcomes = [recharge.charge(row.pk, user=request.user) for row in rows]
+        # Nothing was delivered, so the customer's money goes back — recorded,
+        # in the drawer that took it, not left for the drawer to come up short.
+        refunded = refusal_refund.refund_refused(outcomes)
         results = [
-            charge_payload(
-                recharge.charge(row.pk, user=request.user), with_cost=with_cost
-            )
-            for row in rows
+            charge_payload(outcome, with_cost=with_cost, refunded=refunded)
+            for outcome in outcomes
         ]
         accounts = {row.account_id for row in rows}
         balance = None
@@ -1020,14 +1023,10 @@ class IntegrationChargeView(APIView):
     def _targets(self, data):
         """The fulfillments this call may attempt, oldest line first."""
         rows = IntegrationFulfillment.objects.select_related("account")
-        fulfillment_id = data.get("fulfillment")
         order_id = data.get("order")
-        if fulfillment_id:
-            rows = rows.filter(pk=fulfillment_id)
-        elif order_id:
-            rows = rows.filter(order_line__order_id=order_id)
-        else:
-            return [], "name an order or a fulfillment"
+        if not order_id:
+            return [], "name an order"
+        rows = rows.filter(order_line__order_id=order_id)
         # Only what may still be attempted. Anything else is not an error —
         # a till that re-sends a completed sale should get "nothing to do".
         rows = rows.filter(status=IntegrationFulfillment.Status.PENDING)

@@ -96,7 +96,7 @@ class ServiceChargeIssueDialog extends StatelessWidget {
                   l10n.posServiceIssueReference(ltrIsolated(reference)),
                   style: textTheme.bodySmall?.copyWith(color: colors.mutedInk),
                 ),
-            ] else
+            ] else ...[
               Text(
                 serviceChargeReason(l10n, row),
                 style: textTheme.bodySmall?.copyWith(
@@ -104,6 +104,14 @@ class ServiceChargeIssueDialog extends StatelessWidget {
                   height: 1.35,
                 ),
               ),
+              // The server already returned the line in this drawer: say how
+              // much goes back, so it is not rung up again on the same money.
+              if (row.refundAmount case final amount?)
+                Text(
+                  l10n.rechargeRefundedLine(formatMoney(amount)),
+                  style: textTheme.bodySmall?.copyWith(color: colors.danger),
+                ),
+            ],
           ],
         ),
       );

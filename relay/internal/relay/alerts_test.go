@@ -155,13 +155,19 @@ func TestActiveAlertsListsLowBalances(t *testing.T) {
 	if _, err := store.ClaimAlert(context.Background(), "wallet_paid:abc", time.Hour); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := store.ClaimAlert(context.Background(), "balance_short:bnplus_lyd", time.Hour); err != nil {
+		t.Fatal(err)
+	}
 	code, body := alertRequest(t, server, http.MethodGet, "/v1/alerts/active", true)
 	alerts, _ := body["alerts"].([]any)
-	if code != http.StatusOK || len(alerts) != 1 {
+	if code != http.StatusOK || len(alerts) != 2 {
 		t.Fatalf("active %d %v", code, body)
 	}
 	if first := alerts[0].(map[string]any); first["kind"] != "balance_low" || first["source"] != "reloadly" {
 		t.Fatalf("alert %v", first)
+	}
+	if short := alerts[1].(map[string]any); short["kind"] != "balance_short" || short["source"] != "bnplus_lyd" {
+		t.Fatalf("shortfall alert %v", short)
 	}
 	if code, _ := alertRequest(t, server, http.MethodGet, "/v1/alerts/active", false); code != http.StatusUnauthorized {
 		t.Fatalf("admin-only: %d", code)

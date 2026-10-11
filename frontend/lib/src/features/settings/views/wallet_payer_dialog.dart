@@ -75,6 +75,14 @@ class _WalletPayerDialogState extends State<WalletPayerDialog> {
   late final _birthYear = TextEditingController(text: widget.draft.birthYear);
   WalletException? _error;
 
+  /// The gateway fee the form already showed, said again here.
+  double get _fee =>
+      widget.viewModel.overview?.topUpOptions?.feeFor(
+        widget.amount,
+        widget.method,
+      ) ??
+      0;
+
   /// Refusals the form answers, not this dialog: the amount, or the method
   /// itself, is what the owner has to change.
   static const _formErrors = {
@@ -171,6 +179,18 @@ class _WalletPayerDialogState extends State<WalletPayerDialog> {
                       ),
                       style: theme.textTheme.bodyMedium,
                     ),
+                    if (_fee > 0) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        l10n.walletFeeCreditLine(
+                          formatWalletMoney(widget.amount - _fee),
+                          formatWalletMoney(_fee),
+                        ),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 16),
                     WalletPayerFields(
                       method: method,

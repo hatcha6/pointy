@@ -350,7 +350,8 @@ class ChargeTests(TransactionTestCase):
         self.assertEqual(outcome.outcome, recharge.OUTCOME_REFUSED)
         self.assertEqual(outcome.error_code, ERROR_SWITCHED_OFF)
         fulfillment.refresh_from_db()
-        self.assertEqual(fulfillment.status, IntegrationFulfillment.Status.PENDING)
+        # Refused for good: never charged later, once it is switched back on.
+        self.assertEqual(fulfillment.status, IntegrationFulfillment.Status.FAILED)
         self.assertEqual(fulfillment.attempt_count, 0)
         self.assertIsNone(fulfillment.submitted_at)
 

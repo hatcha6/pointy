@@ -175,7 +175,7 @@ def reconcile_account(
         "checked": len(pending),
         "confirmed": confirmed,
         # What the sent-but-unanswered pass did: confirmed against the
-        # provider's log, returned to retryable on proof of absence, or left
+        # provider's log, closed as not performed on proof of absence, or left
         # alone because nothing could be proved.
         "resolved": settled,
         "unperformed": [_fulfillment_brief(row) for row in unperformed],
@@ -201,10 +201,12 @@ def _resolve_submitted(account, driver, *, since, now) -> dict:
     matches on cost and card like any other sale. The customer got what they
     paid for.
 
-    **Retryable** — the provider does *not* have it, and the page we read
+    **Not performed** — the provider does *not* have it, and the page we read
     reaches back past the attempt, so absence is proof rather than ignorance.
-    Only then does the row go back to ``pending``, which re-arms the one
-    attempt it is allowed.
+    The row is closed as ``failed``: never sent again, because a second,
+    unattended attempt would charge the shop for a sale nobody is standing at.
+    The customer is owed their money; the row says so in the unperformed list
+    and on the session's summary.
 
     **Still unknown** — anything else: the read failed, or the log does not
     reach back far enough to prove absence. The row stays put and keeps
@@ -230,7 +232,7 @@ def _resolve_submitted(account, driver, *, since, now) -> dict:
         # Read back by identity, never matched against a log: see
         # ``settle_attempts``.
         return settle_attempts(driver, rows, now=now)
-    settled = {"confirmed": 0, "retryable": 0, "unknown": [], "checked": len(rows)}
+    settled = {"confirmed": 0, "not_performed": 0, "unknown": [], "checked": len(rows)}
     if not rows:
         return settled
 
@@ -256,7 +258,7 @@ def _resolve_submitted(account, driver, *, since, now) -> dict:
                 # We were handed a reference before the answer stopped
                 # coming, which means a payment was created. Identity beats
                 # inference: settle on that reference or not at all. It is
-                # NEVER retryable — whether or not the log still shows it,
+                # NEVER closed as not performed — whether or not the log shows it,
                 # the provider told us it existed, and a second attempt would
                 # credit the customer twice. Missing from a log that reaches
                 # back past it is a contradiction for a person to look at.
@@ -275,9 +277,9 @@ def _resolve_submitted(account, driver, *, since, now) -> dict:
                 continue
 
             if not row.provider_reference and history.covers(row.submitted_at):
-                # Proof of absence: the provider never performed it, so the
-                # sale may be attempted once more.
-                row.status = IntegrationFulfillment.Status.PENDING
+                # Proof of absence: the provider never performed it. Closed
+                # for good — never attempted again.
+                row.status = IntegrationFulfillment.Status.FAILED
                 row.last_error_code = ""
                 row.last_error = ""
                 row.save(
@@ -288,7 +290,7 @@ def _resolve_submitted(account, driver, *, since, now) -> dict:
                         "updated_at",
                     ]
                 )
-                settled["retryable"] += 1
+                settled["not_performed"] += 1
                 continue
 
             settled["unknown"].append(_fulfillment_brief(row))
@@ -296,7 +298,7 @@ def _resolve_submitted(account, driver, *, since, now) -> dict:
 
 
 # --- attempts a provider reads back by key (the company's relay) ----------------------
-#: A sent attempt goes back to retryable only once it is this old, and only on
+#: A sent attempt is closed as not performed only once it is this old, and only on
 #: the provider's word. Longer than a purchase waits for its own answer
 #: (``providers.pointy``): a settle must never meet an attempt whose request is
 #: still out, or that request's late answer would be written over the next one.
@@ -363,9 +365,8 @@ def settle_attempts(driver, rows, *, now) -> dict:
     **Charged** — CONFIRMED, with the code on the receipt the customer is
     reprinted, and the cost corrected to what was charged.
 
-    **Refused, or never heard of** — back to PENDING, which re-arms the one
-    attempt the row is allowed (under a new key), once the attempt is older
-    than ``ATTEMPT_SETTLE_AFTER``.
+    **Refused, or never heard of** — closed as FAILED, never sent again, once
+    the attempt is older than ``ATTEMPT_SETTLE_AFTER``.
 
     **Anything else** — still being bought, the code not read back yet, the
     read failed: left as it is, and asked again next time.
@@ -374,7 +375,7 @@ def settle_attempts(driver, rows, *, now) -> dict:
     give — is left as it is and does not stop the others: a customer is waiting
     on every one of them.
     """
-    settled = {"confirmed": 0, "retryable": 0, "unknown": [], "checked": len(rows)}
+    settled = {"confirmed": 0, "not_performed": 0, "unknown": [], "checked": len(rows)}
     for row in rows:
         try:
             ending = _settle_attempt(driver, row, now=now)
@@ -389,7 +390,7 @@ def settle_attempts(driver, rows, *, now) -> dict:
 
 
 def _settle_attempt(driver, row, *, now) -> str | None:
-    """``confirmed`` or ``retryable`` when this row's attempt was settled, else ``None``."""
+    """``confirmed`` or ``not_performed`` when this row's attempt was settled, else ``None``."""
     from . import recharge
 
     # The driver is told which fulfillment it reads back, so a service's slip is
@@ -406,9 +407,9 @@ def _settle_attempt(driver, row, *, now) -> str | None:
     if (
         outcome.state in (ATTEMPT_REFUSED, ATTEMPT_ABSENT)
         and old_enough
-        and _rearm_attempt(row, outcome, now=now)
+        and _close_attempt(row, outcome, now=now)
     ):
-        return "retryable"
+        return "not_performed"
     return None
 
 
@@ -456,13 +457,13 @@ def _confirm_attempt(row, outcome, *, now) -> bool:
     return True
 
 
-def _rearm_attempt(row, outcome, *, now) -> bool:
+def _close_attempt(row, outcome, *, now) -> bool:
     with transaction.atomic():
         locked = _locked_attempt(row)
         if locked is None:
             return False
-        locked.status = IntegrationFulfillment.Status.PENDING
-        # Why, when the provider said: the till offers "try again" with it.
+        locked.status = IntegrationFulfillment.Status.FAILED
+        # Why, when the provider said: the sale's details show it.
         locked.last_error_code = (outcome.error_code or "")[:32]
         locked.last_error = outcome.error_detail or ""
         locked.save(

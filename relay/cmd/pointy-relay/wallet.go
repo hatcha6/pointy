@@ -22,13 +22,15 @@ import (
 // walletSettings is the raw wallet configuration as the server command reads
 // it.
 type walletSettings struct {
-	DafaBaseURL    string
-	DafaAPIKey     string
-	Methods        string
-	PublicURL      string
-	MinTopUp       string
-	MaxTopUp       string
-	QuickAmounts   string
+	DafaBaseURL  string
+	DafaAPIKey   string
+	Methods      string
+	PublicURL    string
+	MinTopUp     string
+	MaxTopUp     string
+	QuickAmounts string
+	// FeePercent is the share of a Dafa top-up kept out of the credit.
+	FeePercent     string
 	TopUpTTL       time.Duration
 	TopUpRateLimit string
 	RequestTimeout time.Duration
@@ -101,6 +103,15 @@ func buildWalletConfig(settings walletSettings) (relayserver.WalletConfig, []str
 		}
 		quickAmounts = append(quickAmounts, raw)
 	}
+	feePercent := "0"
+	if raw := strings.TrimSpace(settings.FeePercent); raw != "" {
+		parsed, err := control.ParseWalletAmount(raw)
+		if err != nil || parsed.Sign() < 0 || parsed.Cmp(big.NewRat(100, 1)) >= 0 {
+			return relayserver.WalletConfig{}, nil, fmt.Errorf(
+				"POINTY_RELAY_WALLET_DAFA_FEE_PERCENT must be a percent from 0 to below 100, got %q", settings.FeePercent)
+		}
+		feePercent = raw
+	}
 	rate, err := ratelimit.ParsePolicy(settings.TopUpRateLimit)
 	if err != nil {
 		return relayserver.WalletConfig{}, nil, fmt.Errorf("POINTY_RELAY_WALLET_TOPUP_RATE_LIMIT: %w", err)
@@ -146,6 +157,7 @@ func buildWalletConfig(settings walletSettings) (relayserver.WalletConfig, []str
 		MinTopUp:       minimum.FloatString(2),
 		MaxTopUp:       maximum.FloatString(2),
 		QuickAmounts:   quickAmounts,
+		FeePercent:     feePercent,
 		TopUpTTL:       settings.TopUpTTL,
 		TopUpRateLimit: rate,
 		RequestTimeout: settings.RequestTimeout,

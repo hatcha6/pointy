@@ -85,6 +85,10 @@ func (g walletGateway) settleFromPayment(
 	if method, ok := lookupWalletMethod(topUp.Method); ok {
 		description = "شحن عبر " + method.NameAr + " " + topUp.InvoiceNo
 	}
+	if fee, err := control.ParseWalletAmount(control.NormalizeWalletAmount(topUp.Fee)); err == nil && fee.Sign() > 0 {
+		// The statement says why the credit is less than what was paid.
+		description += fmt.Sprintf(" (دُفع %s، رسوم الدفع %s)", topUp.Amount, control.FormatWalletAmount(fee))
+	}
 	settled, applied, err := g.store.SettleWalletTopUp(ctx, topUp.ID, control.WalletTopUpSettlement{
 		ProviderTransactionID: payment.ID,
 		ConfirmedBy:           walletConfirmedByGateway,

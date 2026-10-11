@@ -610,7 +610,10 @@ func TestAuditNeverKeepsSecrets(t *testing.T) {
 }
 
 func TestCardStockNeedsATapAndItsCodesAreNeverAudited(t *testing.T) {
-	for _, route := range []string{"/v1/vouchers/admin/stock", "/v1/vouchers/admin/stock/stk_1/void", "/v1/vouchers/admin/purchases/p1/refund"} {
+	for _, route := range []string{"/v1/vouchers/admin/stock", "/v1/vouchers/admin/stock/stk_1/void", "/v1/vouchers/admin/purchases/p1/refund",
+		// The company spending its own supplier money, and a card it bought
+		// shown again.
+		"/v1/vouchers/admin/company/cards", "/v1/vouchers/admin/company/services", "/v1/vouchers/admin/company/purchases/p1/reveal"} {
 		if !needsStepUp(http.MethodPost, route) {
 			t.Errorf("POST %s needs a passkey tap", route)
 		}

@@ -113,6 +113,19 @@ func (s HTTPServer) handleServiceOrder(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	s.placeServiceOrder(w, r, store, voucherBuyer{InstallationID: installation.ID}, request)
+}
+
+// placeServiceOrder places one airtime or bill order for a buyer: the shop's
+// order route, and the operator's order for the company.
+func (s HTTPServer) placeServiceOrder(
+	w http.ResponseWriter,
+	r *http.Request,
+	store control.VoucherStore,
+	buyer voucherBuyer,
+	request serviceOrderRequest,
+) {
+	installation := control.Installation{ID: buyer.InstallationID}
 	order := request.order()
 	order.InstallationID = installation.ID
 	ctx := r.Context()
@@ -131,7 +144,7 @@ func (s HTTPServer) handleServiceOrder(w http.ResponseWriter, r *http.Request) {
 		s.replayServiceRequest(w, r, store, existing, order, itemKey)
 		return
 	}
-	if s.enforceVoucherRateLimit(w, r, installation.ID) {
+	if !buyer.company() && s.enforceVoucherRateLimit(w, r, installation.ID) {
 		return
 	}
 
@@ -145,7 +158,18 @@ func (s HTTPServer) handleServiceOrder(w http.ResponseWriter, r *http.Request) {
 		writeRefusal(w, refusal)
 		return
 	}
-	if request.maxUnitPrice != nil && prepared.Prices.Unit.Cmp(request.maxUnitPrice) > 0 {
+	unitPrice := prepared.Prices.Unit
+	if buyer.company() {
+		// Nobody is charged: the row carries what the order should cost the
+		// company in dinars, at the rate in force now.
+		cost, ok := in.Settings.USDToLYD(prepared.Cost)
+		if !ok || cost.Sign() <= 0 {
+			writeSMSError(w, http.StatusServiceUnavailable, services.CodeServicesUnpriced,
+				"no dollar rate is published, so the cost cannot be told", nil)
+			return
+		}
+		unitPrice = companyDinars(cost)
+	} else if request.maxUnitPrice != nil && prepared.Prices.Unit.Cmp(request.maxUnitPrice) > 0 {
 		writeSMSError(w, http.StatusConflict, services.CodePriceChanged,
 			"this costs more than the shop was quoted", map[string]any{"unit_price": vouchers.FormatDinars(prepared.Prices.Unit)})
 		return
@@ -161,13 +185,15 @@ func (s HTTPServer) handleServiceOrder(w http.ResponseWriter, r *http.Request) {
 		Quantity:       1,
 		Target:         prepared.Target,
 		Details:        prepared.Details,
-		UnitPrice:      control.FormatWalletAmount(prepared.Prices.Unit),
+		UnitPrice:      control.FormatWalletAmount(unitPrice),
 		Supplier:       s.Services.Supplier(),
 		SupplierRef:    prepared.SupplierRef,
 		// Not real money: the fake supplier's, or Reloadly's sandbox (which is
 		// really called, with fake money).
 		TestMode:    s.Services.TestOrSandbox(),
 		RequestedBy: request.RequestedBy,
+		Purpose:     buyer.Purpose,
+		Note:        buyer.Note,
 	})
 	var balanceErr *control.WalletBalanceError
 	switch {
@@ -233,6 +259,10 @@ func (s HTTPServer) handleServiceOrder(w http.ResponseWriter, r *http.Request) {
 			"purchase_id", claim.ID, "status", finished.Status)
 	}
 	s.logServiceOrder(installation.ID, finished, outcome, execErr, secrets)
+	if finished.Status != control.VoucherPurchaseFailed {
+		// Carried out, or perhaps: the company's balance is lower either way.
+		s.Services.Spent(prepared.Kind, prepared.Cost)
+	}
 	if outcome.Status == control.VoucherPurchaseSucceeded {
 		s.auditServiceDelivery(finished, prepared, result, in.Settings)
 	}

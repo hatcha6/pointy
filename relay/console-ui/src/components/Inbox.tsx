@@ -38,6 +38,16 @@ const balanceNames: Record<string, string> = {
   serper: "Serper (بحث الصور)",
 };
 
+const balanceAlertTitles: Record<string, (name: string) => string> = {
+  balance_low: (name) => `رصيد ${name} منخفض`,
+  balance_short: (name) => `رصيد ${name} لا يغطي أرصدة كروت المتاجر`,
+};
+
+const balanceAlertHints: Record<string, string> = {
+  balance_low: "اشحنه قبل أن تفشل المبيعات",
+  balance_short: "قد يُرفض كرت دفع المتجر ثمنه مسبقاً؛ اشحن الحساب",
+};
+
 const levelOrder: Record<InboxLevel, number> = { urgent: 0, money: 1, soon: 2, setup: 3 };
 
 export function useInbox() {
@@ -71,12 +81,12 @@ export function useInbox() {
     const name = balanceNames[alert.source] ?? alert.source;
     items.push({
       id: `alert-${alert.kind}-${alert.source}`,
-      level: alert.kind === "balance_low" ? "urgent" : "soon",
+      level: alert.kind === "balance_unreadable" ? "soon" : "urgent",
       icon: <CircleDollarSign />,
-      title: alert.kind === "balance_low" ? `رصيد ${name} منخفض` : `تعذّرت قراءة رصيد ${name}`,
+      title: balanceAlertTitles[alert.kind]?.(name) ?? `تعذّرت قراءة رصيد ${name}`,
       meta: (
         <>
-          {alert.kind === "balance_low" ? "اشحنه قبل أن تفشل المبيعات" : "تحقّق من حساب المورّد"} · منذ <TimeAgo value={alert.since} />
+          {balanceAlertHints[alert.kind] ?? "تحقّق من حساب المورّد"} · منذ <TimeAgo value={alert.since} />
         </>
       ),
       cta: "الأرصدة",

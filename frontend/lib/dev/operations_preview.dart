@@ -132,6 +132,8 @@ class _Router extends StatelessWidget {
         return _assetTypes();
       case 'details':
         return _details(_richJob);
+      case 'details-bill':
+        return _details(_quotedLabourJob);
       case 'details-done':
         return _details(_doneJob);
       case 'details-decision':
@@ -1119,6 +1121,33 @@ final List<OperationsJob> _boardJobs = [
     orderReceiptNumber: 'INV-2042',
   ),
 ];
+
+/// Annaseem, 2026-10-12: told the customer 250, logged a 100 labour line. The
+/// «الحساب» card must say 250, with the 150 left of the price on its own row.
+final OperationsJob _quotedLabourJob = _job(
+  id: 47,
+  jobNumber: 'REP-20261011-000047',
+  currentStage: 2,
+  nextStage: _repairStages[2],
+  customerName: 'زبون جديد',
+  assignedEmployeeName: 'الحسين حمودة',
+  symptoms: 'الشاشة لا تعمل',
+  quotedPrice: 250,
+  servicesTotal: 100,
+  services: const [
+    JobServiceLine(
+      id: 9,
+      variant: 92,
+      productName: 'أجور خدمة وصيانة',
+      variantName: '',
+      quantity: 1,
+      unitPrice: 100,
+      lineTotal: 100,
+      note: 'تغيير شاشة',
+      isLabor: true,
+    ),
+  ],
+);
 
 final OperationsJob _richJob = _job(
   id: 1,

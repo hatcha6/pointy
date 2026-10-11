@@ -12,7 +12,8 @@ export function Purchases() {
   const [status] = useSearchParam("status");
   const [query, setQuery] = useSearchParam("q");
   const setSearch = useSetSearch();
-  const filter: Record<string, string> = {};
+  // The company's own purchases have their page (/company).
+  const filter: Record<string, string> = { buyer: "shops" };
   if (held) filter.held = "1";
   if (kind) filter.kind = kind;
   if (status) filter.status = status;

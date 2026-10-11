@@ -494,7 +494,7 @@ class SubscriberWriteSerializer(serializers.Serializer):
     note = serializers.CharField(max_length=255, required=False, allow_blank=True)
 
 
-def charge_payload(outcome, *, with_cost: bool = False) -> dict:
+def charge_payload(outcome, *, with_cost: bool = False, refunded=None) -> dict:
     """The result of one attempted write, as the till needs to read it.
 
     ``outcome`` is the honest word and ``status`` is the row it left behind;
@@ -506,9 +506,14 @@ def charge_payload(outcome, *, with_cost: bool = False) -> dict:
     reporting roles, as everywhere). A refusal's detail can carry the shop's own
     money — the price the provider now asks, the wallet balance — so anyone else
     is given its code word alone, which the till words in Arabic.
+
+    ``refunded`` maps an order line to what was given back for it when the
+    refusal returned the line (:mod:`.refusal_refund`); ``refund_amount`` is
+    then what the cashier hands back, and null when nothing was returned.
     """
     fulfillment = outcome.fulfillment
     printed = printed_receipt(fulfillment)
+    refund_amount = (refunded or {}).get(fulfillment.order_line_id) if fulfillment else None
     return {
         "fulfillment": fulfillment.pk if fulfillment else None,
         "order_line": fulfillment.order_line_id if fulfillment else None,
@@ -528,6 +533,8 @@ def charge_payload(outcome, *, with_cost: bool = False) -> dict:
         "provider_reference": fulfillment.provider_reference if fulfillment else "",
         "balance_after": outcome.balance_after,
         "receipt": printed or {},
+        "refunded": refund_amount is not None,
+        "refund_amount": refund_amount,
     }
 
 

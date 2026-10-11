@@ -883,6 +883,7 @@ class IntegrationChargeResult {
     this.balanceAfter,
     this.receipt = const {},
     this.testMode = false,
+    this.refundAmount,
   });
 
   final int? fulfillment;
@@ -929,6 +930,13 @@ class IntegrationChargeResult {
   bool get isRefused => outcome == 'refused';
   bool get isOutOfFloat => errorCode == 'insufficient_float';
 
+  /// What the server gave back for this line because the provider refused
+  /// it: the line was returned, in this drawer, and this is the cash (or
+  /// card) owed to the customer. Null when nothing was returned — a delivered
+  /// line, an unknown one, or a server from before refusals were refunded.
+  final double? refundAmount;
+  bool get isRefunded => refundAmount != null;
+
   factory IntegrationChargeResult.fromJson(Map<String, Object?> json) {
     return IntegrationChargeResult(
       fulfillment: int.tryParse(json['fulfillment']?.toString() ?? ''),
@@ -949,6 +957,9 @@ class IntegrationChargeResult {
           json['test_mode'] == true ||
           (json['receipt'] is Map &&
               (json['receipt'] as Map)['test_mode'] == true),
+      refundAmount: json['refunded'] == true
+          ? double.tryParse(json['refund_amount']?.toString() ?? '')
+          : null,
     );
   }
 }

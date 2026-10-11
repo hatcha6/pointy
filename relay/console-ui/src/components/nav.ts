@@ -10,6 +10,7 @@ import {
   PercentCircle,
   Rocket,
   Settings,
+  ShoppingBag,
   Smartphone,
   Store,
   TrendingUp,
@@ -44,6 +45,7 @@ export const navGroups: NavGroup[] = [
     label: "الخدمات",
     items: [
       { to: "/purchases", label: "عمليات البطاقات", icon: CreditCard, hint: "عمليات البطاقات والشحن والفواتير", badge: "purchases" },
+      { to: "/company", label: "مشتريات الشركة", icon: ShoppingBag, hint: "شراء بطاقة أو شحن أو فاتورة لنا، أو للبيع نقداً" },
       { to: "/sms", label: "الرسائل النصية", icon: MessageSquare, hint: "الاستهلاك والسجل والإعداد" },
     ],
   },

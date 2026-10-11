@@ -79,6 +79,7 @@ Future<QuantityAdjustmentResult?> showQuantityAdjustmentDialog(
   required String reasonLabel,
   required String reasonHint,
   required List<AdjustmentLineOption> options,
+  Widget? notice,
 }) {
   return showDialog<QuantityAdjustmentResult>(
     context: context,
@@ -89,6 +90,7 @@ Future<QuantityAdjustmentResult?> showQuantityAdjustmentDialog(
       reasonLabel: reasonLabel,
       reasonHint: reasonHint,
       options: options,
+      notice: notice,
     ),
   );
 }
@@ -104,6 +106,7 @@ class QuantityAdjustmentDialog extends StatefulWidget {
     required this.reasonLabel,
     required this.reasonHint,
     required this.options,
+    this.notice,
   });
 
   final IconData icon;
@@ -112,6 +115,9 @@ class QuantityAdjustmentDialog extends StatefulWidget {
   final String reasonLabel;
   final String reasonHint;
   final List<AdjustmentLineOption> options;
+
+  /// Shown above the lines: something to know before confirming.
+  final Widget? notice;
 
   @override
   State<QuantityAdjustmentDialog> createState() =>
@@ -144,6 +150,10 @@ class _QuantityAdjustmentDialogState extends State<QuantityAdjustmentDialog> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (widget.notice case final notice?) ...[
+                notice,
+                const SizedBox(height: 12),
+              ],
               if (widget.options.isEmpty)
                 Text(widget.emptyMessage)
               else

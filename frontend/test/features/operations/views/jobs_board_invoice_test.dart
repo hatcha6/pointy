@@ -542,7 +542,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     await tester.enterText(
-      _inDialog(find.widgetWithText(TextField, l10n.jobLaborTotalLabel)),
+      _inDialog(find.byKey(const ValueKey('job_invoice_extra_field'))),
       '150',
     );
     await tester.pumpAndSettle();

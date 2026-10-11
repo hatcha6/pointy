@@ -48,11 +48,15 @@ SaleOrder _creditInvoice({
 SaleOrder _standardInvoice({
   required String status,
   required double returnedQuantity,
+  String? sessionStatus,
 }) {
   return SaleOrder(
     id: 9,
     receiptNumber: 'R20260701000009',
     status: status,
+    registerSession: 36,
+    registerSessionNumber: 'RS-36',
+    registerSessionStatus: sessionStatus,
     lines: [
       SaleOrderLine(
         id: 1,
@@ -224,6 +228,52 @@ void main() {
   /// rebuild a `TextField` against a dead controller and take the screen down.
   /// The dialog owns it now; these open and close it the way a cashier does.
   group('SaleOrderDetailsContent void dialog', () {
+    // Annaseem 2026-10-11: eight voids of a closed drawer's sales were paid
+    // out of the manager's open drawer without anyone saying so.
+    const closedNotice = ValueKey('sale_closed_drawer_notice');
+
+    testWidgets('a closed drawer\'s sale says whose drawer pays it back', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _wrap(
+          SaleOrderDetailsContent(
+            order: _standardInvoice(
+              status: 'paid',
+              returnedQuantity: 0,
+              sessionStatus: 'closed',
+            ),
+            onVoid: (_, _) async => true,
+            popOnSuccessfulAdjustment: false,
+          ),
+        ),
+      );
+
+      await _openVoidDialog(tester);
+      expect(find.byKey(closedNotice), findsOneWidget);
+      expect(find.text('الفاتورة من وردية مُغلقة'), findsOneWidget);
+      expect(find.textContaining('RS-36'), findsWidgets);
+    });
+
+    testWidgets('an open drawer\'s sale shows no warning', (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          SaleOrderDetailsContent(
+            order: _standardInvoice(
+              status: 'paid',
+              returnedQuantity: 0,
+              sessionStatus: 'open',
+            ),
+            onVoid: (_, _) async => true,
+            popOnSuccessfulAdjustment: false,
+          ),
+        ),
+      );
+
+      await _openVoidDialog(tester);
+      expect(find.byKey(closedNotice), findsNothing);
+    });
+
     testWidgets('cancelling it leaves the screen standing', (tester) async {
       String? voidedWith;
       await tester.pumpWidget(

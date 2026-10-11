@@ -322,11 +322,12 @@ class HistoryResult:
     #: present in ``purchases``. ``None`` means the driver makes no such claim.
     #:
     #: This is what lets absence be read as proof. Reconciliation may only
-    #: return a sent-but-unconfirmed charge to retryable on the strength of
+    #: close a sent-but-unconfirmed charge as not performed on the strength of
     #: "the provider has no record of it", and that inference is sound only
     #: where the page actually reaches back past the attempt. A driver that
     #: read one page of a long log must say where its knowledge stops, or a
-    #: top-up that merely scrolled off the end would be charged twice.
+    #: top-up that merely scrolled off the end would be refunded although the
+    #: customer got it.
     complete_since: datetime | None = None
     error_code: str = ""
     error_detail: str = ""

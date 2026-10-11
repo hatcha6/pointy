@@ -1050,3 +1050,261 @@
   background: var(--surface-2);
   color: var(--ink);
 }
+
+/* ---------- money that is the owners' to take ---------- */
+
+.available {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 22px 24px;
+  border-radius: var(--radius-lg);
+  border: 1px solid color-mix(in srgb, var(--primary) 25%, var(--line));
+  background: linear-gradient(135deg, var(--primary-wash), var(--surface) 60%);
+  box-shadow: var(--shadow);
+}
+
+.available.short {
+  border-color: color-mix(in srgb, var(--danger) 25%, var(--line));
+  background: linear-gradient(135deg, var(--danger-wash), var(--surface) 60%);
+}
+
+.available-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.available-icon {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: var(--surface);
+  color: var(--primary-strong);
+  border: 1px solid var(--line);
+}
+
+.available.short .available-icon {
+  color: var(--danger);
+}
+
+.available-main {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.available-value {
+  font-size: 38px;
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 2px 0 4px;
+  color: var(--primary-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.available.short .available-value {
+  color: var(--danger);
+}
+
+.available-sentence {
+  margin: 0;
+  color: var(--ink-2);
+  line-height: 1.8;
+}
+
+.available-actions {
+  flex: none;
+}
+
+.profit-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.profit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.profit-table th,
+.profit-table td {
+  padding: 9px 12px;
+  text-align: start;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--line);
+}
+
+.profit-table thead th {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 12.5px;
+  background: var(--surface-2);
+}
+
+.profit-table tfoot th {
+  border-bottom: 0;
+  background: var(--surface-2);
+}
+
+.profit-table tbody tr:last-child td {
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.available-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
+.available-steps ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.available-steps li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px dashed var(--line);
+}
+
+.available-steps li.total {
+  font-weight: 700;
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.available-steps li:last-child {
+  border-bottom: 0;
+}
+
+.available-steps .sign {
+  flex: none;
+  width: 16px;
+  text-align: center;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.available-steps .what {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.available-steps .what small {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.available-notes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.available-notes li {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.available-notes svg {
+  flex: none;
+  margin-top: 3px;
+}
+
+.b-icon.withdrawal,
+.l-icon.withdrawal {
+  background: var(--info-wash);
+  color: var(--info);
+}
+
+@media (max-width: 560px) {
+  .available {
+    padding: 18px 16px;
+  }
+
+  .available-value {
+    font-size: 30px;
+  }
+
+  .available-actions,
+  .available-actions .btn {
+    width: 100%;
+  }
+
+  /* A row per service becomes a small card: the name, then sales, cost and
+     profit side by side, each labelled. */
+  .profit-table thead {
+    display: none;
+  }
+
+  .profit-table tr {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 2px 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .profit-table tbody tr:last-child {
+    border-bottom: 1px solid var(--line-strong);
+  }
+
+  .profit-table tfoot tr {
+    background: var(--surface-2);
+    border-bottom: 0;
+  }
+
+  .profit-table th,
+  .profit-table td,
+  .profit-table tbody tr:last-child td {
+    display: block;
+    padding: 0;
+    border: 0;
+    background: none;
+  }
+
+  .profit-table tr > :first-child {
+    grid-column: 1 / -1;
+    margin-bottom: 4px;
+  }
+
+  .profit-table [data-label]::before {
+    content: attr(data-label);
+    display: block;
+    color: var(--muted);
+    font-weight: 400;
+    font-size: 11.5px;
+  }
+
+  .profit-table tbody tr > td.col-margin,
+  .profit-table tfoot tr > th.col-margin {
+    display: none;
+  }
+}

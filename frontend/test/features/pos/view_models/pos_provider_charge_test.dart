@@ -295,8 +295,7 @@ class _Integrations extends IntegrationsRepository {
 
   @override
   Future<Result<List<IntegrationChargeResult>>> charge({
-    int? orderId,
-    int? fulfillmentId,
+    required int orderId,
   }) async {
     final index = chargeCalls < answers.length
         ? chargeCalls

@@ -39,7 +39,7 @@ from .services import sync_topups
 from .tests import _CLIENT, _LOCMEM, link_relay
 
 
-def paid_topup(amount, *, relay_id, expensed=False):
+def paid_topup(amount, *, relay_id, expensed=False, fee="0"):
     """A paid top-up as the shop mirrors it; ``expensed`` = booked the old way."""
     now = timezone.now()
     return WalletTopUp.objects.create(
@@ -47,6 +47,7 @@ def paid_topup(amount, *, relay_id, expensed=False):
         invoice_no=f"DFW-{relay_id}",
         method="dafa_moamalat",
         amount=Decimal(amount),
+        fee=Decimal(fee),
         status=WalletTopUp.Status.PAID,
         paid_at=now,
         relay_created_at=now,
@@ -256,6 +257,31 @@ class WalletInTheTreasuryTests(TestCase):
                 )
         wallet_row = next(row for row in statement["accounts"] if row["account"].pk == wallet.pk)
         self.assertEqual(wallet_row["movement_total"], Decimal("30.00"))
+
+    def test_the_gateway_fee_is_a_bank_expense_and_never_reaches_the_wallet(self):
+        bank_before = self.positions()[self.bank.pk]["expected_balance"]
+        topup = books.book_topup(paid_topup("100", relay_id="t-fee", fee="2").pk)
+
+        wallet = WalletSettings.load().money_account
+        positions = self.positions()
+        self.assertEqual(positions[wallet.pk]["expected_balance"], Decimal("98.00"))
+        # The bank lost exactly what the payer paid: 98 moved, 2 in fees.
+        self.assertEqual(
+            positions[self.bank.pk]["expected_balance"], bank_before - Decimal("100.00")
+        )
+        self.assertEqual(topup.transfer.amount, Decimal("98.00"))
+        self.assertEqual(topup.fee_expense.amount, Decimal("2.00"))
+        self.assertEqual(topup.fee_expense.money_account, self.bank)
+        self.assertEqual(topup.fee_expense.reference, "DFW-t-fee")
+
+        # Booked once: a second pass books no second fee.
+        books.book_topup(topup.pk)
+        self.assertEqual(Expense.objects.filter(reference="DFW-t-fee").count(), 1)
+
+    def test_a_topup_without_a_fee_books_no_fee_expense(self):
+        topup = books.book_topup(paid_topup("50", relay_id="t-nofee").pk)
+        self.assertEqual(topup.transfer.amount, Decimal("50.00"))
+        self.assertIsNone(topup.fee_expense)
 
     def test_a_cash_expense_or_a_bank_one_never_touches_the_wallet(self):
         books.book_topup(paid_topup("100", relay_id="t-1").pk)

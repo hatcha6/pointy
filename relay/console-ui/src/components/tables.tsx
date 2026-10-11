@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { BadgeCheck, CreditCard, Landmark, RefreshCw, Receipt, RotateCcw, Wallet as WalletIcon } from "lucide-react";
 import { useRouter } from "../lib/router";
 import {
@@ -177,7 +177,15 @@ export function TopUpsTable({ topUps, loading, showShop = true }: { topUps: TopU
   );
 }
 
-export function PurchasesTable({ purchases, loading, showShop = true }: { purchases: Purchase[]; loading?: boolean; showShop?: boolean }) {
+export function PurchasesTable({ purchases, loading, showShop = true, columnsBefore = [], actions }: {
+  purchases: Purchase[];
+  loading?: boolean;
+  showShop?: boolean;
+  /** Columns drawn before «الوقت» (the company's purchases add why). */
+  columnsBefore?: Column<Purchase>[];
+  /** Actions for a purchase that is not pending. */
+  actions?: (p: Purchase) => ReactNode;
+}) {
   const { navigate } = useRouter();
   const toast = useToast();
   const [resolving, setResolving] = useState<Purchase | null>(null);
@@ -226,6 +234,7 @@ export function PurchasesTable({ purchases, loading, showShop = true }: { purcha
     ...(showShop
       ? [{ key: "shop", header: "المتجر", cell: (p: Purchase) => <Stacked title={p.shop_name || p.installation_id} sub={p.requested_by} /> } as Column<Purchase>]
       : []),
+    ...columnsBefore,
     { key: "when", header: "الوقت", cell: (p) => <TimeAgo value={p.created_at} /> },
     {
       key: "supplier",
@@ -265,7 +274,9 @@ export function PurchasesTable({ purchases, loading, showShop = true }: { purcha
           >
             استرداد
           </Button>
-        ) : null,
+        ) : (
+          actions?.(p) ?? null
+        ),
     },
   ];
   return (

@@ -821,9 +821,7 @@ class ServicesChargeTests(ServicesSaleMixin, TransactionTestCase):
         )
 
     # --- the relay says no ----------------------------------------------------------------
-    def test_every_refusal_the_relay_states_is_definite_and_leaves_the_line_to_try_again(self):
-        order = self.sell(self.quoted())
-        row = self.row(order)
+    def test_every_refusal_the_relay_states_is_definite_and_gives_the_line_back(self):
         cases = {
             "not enough balance": (
                 refusal(402, "insufficient_balance", balance="10.00", amount="91.30"),
@@ -859,18 +857,21 @@ class ServicesChargeTests(ServicesSaleMixin, TransactionTestCase):
         }
         for name, (answer, code) in cases.items():
             with self.subTest(name):
+                # A refused line is given back at once (``refusal_refund``):
+                # another go is another sale, so each case sells its own.
+                order = self.sell(self.quoted())
                 self.relay.order = answer
                 result = self.charge(order)["results"][0]
                 self.assertEqual(
-                    (result["outcome"], result["error_code"], result["status"]),
-                    (recharge.OUTCOME_REFUSED, code, "pending"),
+                    (result["outcome"], result["error_code"], result["refunded"]),
+                    (recharge.OUTCOME_REFUSED, code, True),
                 )
+                row = self.row(order)
                 row.refresh_from_db()
-                self.assertEqual(row.status, IntegrationFulfillment.Status.PENDING)
+                self.assertEqual(row.status, IntegrationFulfillment.Status.FAILED)
         # Every refusal was a separate attempt under a key of its own.
         keys = [sent["idempotency_key"] for sent in self.relay.orders]
         self.assertEqual(len(keys), len(set(keys)))
-        self.assertTrue(keys[0].endswith("-1") and keys[1].endswith("-2"))
 
     def test_an_error_that_repeats_the_number_is_masked_on_the_line_and_to_the_till(self):
         number = "+22370123456"
@@ -913,7 +914,7 @@ class ServicesChargeTests(ServicesSaleMixin, TransactionTestCase):
         self.assertEqual(result["error_detail"], "price_changed")
         self.assertNotIn("99.00", str(result))
         # A reader who may see cost is told the figure too.
-        manager = self.charge_as(self.reader, order)
+        manager = self.charge_as(self.reader, self.sell(self.quoted()))
         self.assertEqual(manager["error_code"], "price_changed")
         self.assertIn("99.00", manager["error_detail"])
         row = self.row(order)
@@ -927,7 +928,7 @@ class ServicesChargeTests(ServicesSaleMixin, TransactionTestCase):
         self.assertEqual(result["error_code"], "insufficient_float")
         self.assertEqual(result["error_detail"], "insufficient_balance")
         self.assertNotIn("91.30", str(result))
-        manager = self.charge_as(self.reader, order)
+        manager = self.charge_as(self.reader, self.sell(self.quoted()))
         self.assertIn("10.00", manager["error_detail"])
         self.assertIn("91.30", manager["error_detail"])
 
@@ -938,11 +939,10 @@ class ServicesChargeTests(ServicesSaleMixin, TransactionTestCase):
         self.relay.order = refusal(502, "supplier_credit", purchase=failed)
         result = self.charge(order)["results"][0]
         self.assertEqual(result["error_detail"], "supplier_credit")
-        manager = self.charge_as(self.reader, order)
+        manager = self.charge_as(self.reader, self.sell(self.quoted()))
         self.assertIn("91.30", manager["error_detail"])
 
     def test_every_supplier_refusal_is_a_definite_refund(self):
-        order = self.sell(self.quoted())
         cases = {
             "supplier_out_of_stock": ERROR_OUT_OF_STOCK,
             "supplier_credit": ERROR_UNAVAILABLE,
@@ -953,12 +953,13 @@ class ServicesChargeTests(ServicesSaleMixin, TransactionTestCase):
         }
         for code, expected in cases.items():
             with self.subTest(code):
+                order = self.sell(self.quoted())
                 failed = service_purchase(status="failed", error_code=code, receipt=None)
                 self.relay.order = refusal(502, code, purchase=failed, balance="1000.00")
                 result = self.charge(order)["results"][0]
                 self.assertEqual(
-                    (result["outcome"], result["error_code"], result["status"]),
-                    (recharge.OUTCOME_REFUSED, expected, "pending"),
+                    (result["outcome"], result["error_code"], result["refunded"]),
+                    (recharge.OUTCOME_REFUSED, expected, True),
                 )
         self.account.refresh_from_db()
         self.assertEqual(self.account.balance, Decimal("1000.00"), "the refund the relay did")
@@ -1094,7 +1095,7 @@ class ServicesChargeTests(ServicesSaleMixin, TransactionTestCase):
         self.assertEqual(row.status, IntegrationFulfillment.Status.CONFIRMED)
         self.assertEqual(row.provider_receipt["printed"], ELECTRICITY_SLIP)
 
-    def test_a_refunded_or_never_recorded_purchase_goes_back_to_be_tried_again(self):
+    def test_a_refunded_or_never_recorded_purchase_is_closed_never_tried_again(self):
         order = self.sell(self.quoted())
         self.relay.order = RelayControlError("timed out", request_sent=True)
         self.charge(order)
@@ -1111,12 +1112,12 @@ class ServicesChargeTests(ServicesSaleMixin, TransactionTestCase):
         }
         settle_relay_attempts()
         row.refresh_from_db()
-        self.assertEqual(row.status, IntegrationFulfillment.Status.PENDING)
+        self.assertEqual(row.status, IntegrationFulfillment.Status.FAILED)
         self.assertEqual(row.last_error_code, ERROR_UNAVAILABLE)
-        # It is sold again under a new key, never the old one.
+        # Nothing ever sends it again, however often the till asks.
         self.relay.order = (201, {"purchase": service_purchase(), "balance": "908.70"})
-        self.assertEqual(self.charge(order)["results"][0]["outcome"], recharge.OUTCOME_CHARGED)
-        self.assertNotEqual(self.relay.orders[1]["idempotency_key"], key)
+        self.assertEqual(self.charge(order)["results"], [])
+        self.assertEqual(len(self.relay.orders), 1)
 
     def test_the_nightly_reconciliation_reads_a_service_back_never_a_log(self):
         order = self.sell(self.quoted())
@@ -1143,7 +1144,7 @@ class ServicesChargeTests(ServicesSaleMixin, TransactionTestCase):
         result = self.charge(order)["results"][0]
         self.assertEqual(
             (result["outcome"], result["error_code"], result["status"]),
-            (recharge.OUTCOME_REFUSED, ERROR_OUT_OF_STOCK, "pending"),
+            (recharge.OUTCOME_REFUSED, ERROR_OUT_OF_STOCK, "failed"),
         )
         self.assertIn("unknown_operator", result["error_detail"])
         self.assertEqual(self.relay.orders, [])
@@ -1431,12 +1432,8 @@ class ServicesWithdrawnSaleTests(ServicesSaleMixin, TransactionTestCase):
         self.assertEqual(row.status, IntegrationFulfillment.Status.CANCELLED)
         self.assertEqual(float_ledger.committed(self.account), Decimal("0.00"))
         self.assertEqual(self.pending_alerts(), [], "no permanent alarm for a refunded sale")
-        # And nobody can send it any more, by the order or by the line.
+        # And nobody can send it any more.
         self.assertEqual(self.charge(order)["results"], [])
-        again = self.client.post(
-            "/api/integrations/fulfillments/charge/", {"fulfillment": row.pk}, format="json"
-        )
-        self.assertEqual(again.data["results"], [])
         self.assertEqual(self.relay.orders, [])
 
     def test_returning_the_line_in_full_withdraws_it_too(self):
@@ -1733,16 +1730,17 @@ class ServicesPriceMovedTests(ServicesSaleMixin, TransactionTestCase):
         self.relay.live_cost = Decimal("97.00")
         result = self.charge(order)["results"][0]
         self.assertEqual(
-            (result["outcome"], result["status"], result["error_code"]),
-            (recharge.OUTCOME_REFUSED, "pending", ERROR_PRICE_CHANGED),
+            (result["outcome"], result["error_code"], result["refunded"]),
+            (recharge.OUTCOME_REFUSED, ERROR_PRICE_CHANGED, True),
         )
         row = self.row(order)
         row.refresh_from_db()
-        self.assertEqual(row.status, IntegrationFulfillment.Status.PENDING)
+        # Refused for good, and given back: the customer is not left paid for nothing.
+        self.assertEqual(row.status, IntegrationFulfillment.Status.FAILED)
         self.assertEqual(row.cost, Decimal("91.30"), "nothing was spent, nothing is rewritten")
-        # Prices move back: the same line is performed on its second go.
+        # Prices move back: the next sale of it is performed.
         self.relay.live_cost = Decimal("92.00")
-        again = self.charge(order)["results"][0]
+        again = self.charge(self.sell(self.quoted()))["results"][0]
         self.assertEqual(again["outcome"], recharge.OUTCOME_CHARGED)
 
     def sell_with_discount(self, discount, *, cost="93.63", retail="97.00"):
@@ -1764,9 +1762,7 @@ class ServicesPriceMovedTests(ServicesSaleMixin, TransactionTestCase):
             (recharge.OUTCOME_REFUSED, ERROR_PRICE_CHANGED),
         )
         self.assertEqual(self.relay.orders[0]["max_unit_price"], "94.00")
-        row = self.row(order)
-        row.refresh_from_db()
-        self.assertEqual(row.status, IntegrationFulfillment.Status.PENDING)
+        self.assertTrue(result["refunded"])
 
     def test_a_rise_the_discounted_price_still_covers_is_performed(self):
         for live in ("94.00", "93.99"):
@@ -1810,7 +1806,8 @@ class ServicesPriceMovedTests(ServicesSaleMixin, TransactionTestCase):
         self.assertEqual(result["error_code"], ERROR_PRICE_CHANGED)
         self.assertEqual(self.relay.orders[0]["max_unit_price"], "93.63", "never below its cost")
         self.relay.live_cost = Decimal("93.63")
-        self.assertEqual(self.charge(order)["results"][0]["outcome"], recharge.OUTCOME_CHARGED)
+        again = self.sell_with_discount("10.00")
+        self.assertEqual(self.charge(again)["results"][0]["outcome"], recharge.OUTCOME_CHARGED)
 
     def test_a_bill_is_held_to_its_price_the_same_way(self):
         order = self.sell(self.bill_quoted())  # 26.00 to the relay, 27.50 from the customer

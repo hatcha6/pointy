@@ -60,6 +60,13 @@ class WalletTopUpTile extends StatelessWidget {
                   facts.join(' · '),
                   style: textTheme.bodySmall?.copyWith(color: colors.mutedInk),
                 ),
+                if (walletCreditLine(l10n, topUp) case final credit?)
+                  Text(
+                    credit,
+                    style: textTheme.bodySmall?.copyWith(
+                      color: colors.mutedInk,
+                    ),
+                  ),
                 // The team's reason is what the owner acts on: shown in full.
                 if (topUp.status == WalletTopUpStatus.rejected &&
                     topUp.errorDetail.isNotEmpty) ...[

@@ -95,6 +95,10 @@ class WalletTopUp(TimeStampedModel):
     # overlaps, mirrors top-ups with an INSERT that names no such column.
     payer_hint = models.CharField(max_length=32, blank=True, default="", db_default="")
     amount = models.DecimalField(max_digits=12, decimal_places=3)
+    # The gateway fee the relay kept out of ``amount``: the wallet got
+    # ``amount - fee``. ``db_default``: the release before this one inserts
+    # without it.
+    fee = models.DecimalField(max_digits=12, decimal_places=3, default=0, db_default=0)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
     provider_transaction_id = models.CharField(max_length=128, blank=True)
     test_mode = models.BooleanField(default=False)
@@ -144,6 +148,16 @@ class WalletTopUp(TimeStampedModel):
         null=True,
     )
     transfer_booked_at = models.DateTimeField(blank=True, null=True)
+    # The gateway fee (``fee``), booked with the transfer as an expense paid
+    # from the same bank: the bank lost ``amount``, the wallet gained
+    # ``amount - fee``.
+    fee_expense = models.OneToOneField(
+        "expenses.Expense",
+        on_delete=models.SET_NULL,
+        related_name="wallet_topup_fee",
+        blank=True,
+        null=True,
+    )
     # Why booking failed, when it did (a closed period, say); retried by the
     # sync. The name is from when a top-up became an expense.
     expense_error = models.CharField(max_length=255, blank=True)

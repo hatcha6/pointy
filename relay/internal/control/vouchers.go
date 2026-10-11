@@ -146,9 +146,12 @@ func sameVoucherPrice(a, b string) bool {
 	return strings.TrimSpace(a) == strings.TrimSpace(b)
 }
 
-// VoucherPurchase is one ledger row: one shop buying cards of one item.
+// VoucherPurchase is one ledger row: one shop buying cards of one item, or
+// the company buying for itself (no installation: see ForCompany).
 type VoucherPurchase struct {
-	ID             string `json:"id"`
+	ID string `json:"id"`
+	// InstallationID is the shop that bought; empty for the company's own
+	// purchase, which no wallet pays for.
 	InstallationID string `json:"installation_id"`
 	// ShopName is filled by listings for the operator; it is not stored.
 	ShopName       string `json:"shop_name,omitempty"`
@@ -168,7 +171,10 @@ type VoucherPurchase struct {
 	// Details is a small JSON object of what was ordered (an airtime order's
 	// operator and amount, say), filled once when the purchase is claimed.
 	Details json.RawMessage `json:"details,omitempty"`
-	// UnitPrice and Amount are what the shop pays, in dinars.
+	// UnitPrice and Amount are what the shop pays, in dinars. For the
+	// company's own purchase they are what it is expected to cost the company,
+	// in dinars, at the moment it was claimed (the supplier's price, converted
+	// at the dollar rate then in force): SupplierCost is the real figure.
 	UnitPrice string `json:"unit_price"`
 	Amount    string `json:"amount"`
 	// Supplier and SupplierRef are where the cards come from; SupplierOrderID
@@ -188,6 +194,37 @@ type VoucherPurchase struct {
 	CreatedAt        time.Time  `json:"created_at"`
 	UpdatedAt        time.Time  `json:"updated_at"`
 	CompletedAt      *time.Time `json:"completed_at,omitempty"`
+	// Purpose says why the company bought for itself (VoucherPurpose*), and
+	// Note what for, in the operator's words. Both are empty on a shop's
+	// purchase.
+	Purpose string `json:"purpose,omitempty"`
+	Note    string `json:"note,omitempty"`
+}
+
+// Why the company buys a card, a top-up or a bill payment for itself.
+const (
+	// VoucherPurposeOwnUse: the company uses it (a subscription, a service).
+	VoucherPurposeOwnUse = "own_use"
+	// VoucherPurposeResale: to sell on for cash, outside the shops.
+	VoucherPurposeResale = "resale"
+	// VoucherPurposeGift: given away (a customer, a partner, staff).
+	VoucherPurposeGift  = "gift"
+	VoucherPurposeOther = "other"
+)
+
+// ValidVoucherPurpose reports whether purpose is one the company may buy for.
+func ValidVoucherPurpose(purpose string) bool {
+	switch purpose {
+	case VoucherPurposeOwnUse, VoucherPurposeResale, VoucherPurposeGift, VoucherPurposeOther:
+		return true
+	}
+	return false
+}
+
+// ForCompany reports whether the company bought this for itself: no shop, no
+// wallet charged, its cost on the company's books as its own spending.
+func (p VoucherPurchase) ForCompany() bool {
+	return p.InstallationID == ""
 }
 
 // VoucherPurchaseOutcome is what a supplier call ended with.
@@ -226,7 +263,27 @@ type VoucherPurchaseFilter struct {
 	Kind string
 	// HeldOnly lists purchases whose outcome is still being found out.
 	HeldOnly bool
-	Limit    int
+	// Buyer lists only the company's own purchases (VoucherBuyerCompany) or
+	// only shops' (VoucherBuyerShops); empty lists both.
+	Buyer string
+	Limit int
+}
+
+// Who a listing of purchases is narrowed to.
+const (
+	VoucherBuyerCompany = "company"
+	VoucherBuyerShops   = "shops"
+)
+
+// voucherBuyerMatches reports whether a purchase passes a Buyer filter.
+func voucherBuyerMatches(purchase VoucherPurchase, buyer string) bool {
+	switch strings.TrimSpace(buyer) {
+	case VoucherBuyerCompany:
+		return purchase.ForCompany()
+	case VoucherBuyerShops:
+		return !purchase.ForCompany()
+	}
+	return true
 }
 
 // VoucherStore is the optional voucher capability, type-asserted by the HTTP
@@ -399,6 +456,8 @@ func prepareVoucherPurchase(purchase VoucherPurchase, now time.Time) (VoucherPur
 	purchase.SupplierRef = strings.TrimSpace(purchase.SupplierRef)
 	purchase.RequestedBy = truncateRunes(strings.TrimSpace(purchase.RequestedBy), maxVoucherKeyRunes)
 	purchase.Target = truncateRunes(strings.TrimSpace(purchase.Target), maxVoucherKeyRunes)
+	purchase.Purpose = strings.TrimSpace(purchase.Purpose)
+	purchase.Note = truncateRunes(strings.TrimSpace(purchase.Note), maxVoucherTextRunes)
 	if !ValidVoucherKind(purchase.Kind) {
 		return VoucherPurchase{}, nil, fmt.Errorf("unknown voucher purchase kind %q", purchase.Kind)
 	}
@@ -408,8 +467,16 @@ func prepareVoucherPurchase(purchase VoucherPurchase, now time.Time) (VoucherPur
 		return VoucherPurchase{}, nil, err
 	}
 	purchase.Details = details
-	if purchase.InstallationID == "" || purchase.IdempotencyKey == "" {
-		return VoucherPurchase{}, nil, errors.New("a voucher purchase needs an installation and an idempotency key")
+	if purchase.IdempotencyKey == "" {
+		return VoucherPurchase{}, nil, errors.New("a voucher purchase needs an idempotency key")
+	}
+	// A purpose is what makes a purchase the company's own: one without an
+	// installation must say why, and a shop's never carries one.
+	switch {
+	case purchase.ForCompany() && !ValidVoucherPurpose(purchase.Purpose):
+		return VoucherPurchase{}, nil, fmt.Errorf("the company's own purchase needs a purpose, got %q", purchase.Purpose)
+	case !purchase.ForCompany() && (purchase.Purpose != "" || purchase.Note != ""):
+		return VoucherPurchase{}, nil, errors.New("a shop's purchase carries no purpose or note")
 	}
 	if utf8.RuneCountInString(purchase.IdempotencyKey) > maxVoucherKeyRunes {
 		return VoucherPurchase{}, nil, fmt.Errorf("idempotency key longer than %d characters", maxVoucherKeyRunes)
@@ -506,6 +573,19 @@ func voucherRefundDescription(purchase VoucherPurchase) string {
 	return truncateRunes(prefix+voucherDescription(purchase), maxWalletTextRunes)
 }
 
+// voucherRefundPostingOf is the price coming back to the shop, or nil for the
+// company's own purchase, which no wallet paid for.
+func voucherRefundPostingOf(purchase VoucherPurchase) (*preparedWalletPosting, error) {
+	if purchase.ForCompany() {
+		return nil, nil
+	}
+	posting, err := prepareWalletPosting(voucherRefundPosting(purchase))
+	if err != nil {
+		return nil, err
+	}
+	return &posting, nil
+}
+
 // applyVoucherOutcome is what finishing a pending row this way makes of it,
 // and what moves on the voucher balance (nil when nothing does).
 func applyVoucherOutcome(
@@ -544,11 +624,11 @@ func applyVoucherOutcome(
 		finished.HeldSince = nil
 		completed := now.UTC()
 		finished.CompletedAt = &completed
-		posting, err := prepareWalletPosting(voucherRefundPosting(finished))
+		posting, err := voucherRefundPostingOf(finished)
 		if err != nil {
 			return VoucherPurchase{}, nil, err
 		}
-		return finished, &posting, nil
+		return finished, posting, nil
 	}
 	return VoucherPurchase{}, nil, fmt.Errorf("a voucher purchase finishes succeeded or failed, got %q", outcome.Status)
 }
@@ -583,11 +663,11 @@ func resolveVoucherPurchase(
 	if resolved.ErrorCode == "" {
 		resolved.ErrorCode = "not_bought"
 	}
-	posting, err := prepareWalletPosting(voucherRefundPosting(resolved))
+	posting, err := voucherRefundPostingOf(resolved)
 	if err != nil {
 		return VoucherPurchase{}, nil, err
 	}
-	return resolved, &posting, nil
+	return resolved, posting, nil
 }
 
 // voucherKindFilter is the kind a listing is narrowed to: "" lists every kind.
@@ -947,19 +1027,21 @@ func (s *FileStore) BeginVoucherPurchase(_ context.Context, purchase VoucherPurc
 	if err != nil {
 		return VoucherPurchase{}, false, err
 	}
-	if _, ok := s.data.Installations[claim.InstallationID]; !ok {
+	if _, ok := s.data.Installations[claim.InstallationID]; !ok && !claim.ForCompany() {
 		return VoucherPurchase{}, false, ErrNotFound
 	}
 	if existing, ok := s.findVoucherPurchaseByKeyLocked(claim.InstallationID, claim.IdempotencyKey); ok {
 		return existing, false, nil
 	}
-	posting, err := prepareWalletPosting(voucherChargePosting(claim))
-	if err != nil {
-		return VoucherPurchase{}, false, err
-	}
-	charge, _, err := s.postWalletEntryLocked(posting)
-	if err != nil {
-		return VoucherPurchase{}, false, err
+	var charge WalletEntry
+	if !claim.ForCompany() {
+		posting, err := prepareWalletPosting(voucherChargePosting(claim))
+		if err != nil {
+			return VoucherPurchase{}, false, err
+		}
+		if charge, _, err = s.postWalletEntryLocked(posting); err != nil {
+			return VoucherPurchase{}, false, err
+		}
 	}
 	if s.data.VoucherPurchases == nil {
 		s.data.VoucherPurchases = map[string]VoucherPurchase{}
@@ -967,7 +1049,9 @@ func (s *FileStore) BeginVoucherPurchase(_ context.Context, purchase VoucherPurc
 	s.data.VoucherPurchases[claim.ID] = claim
 	if err := s.saveLocked(); err != nil {
 		delete(s.data.VoucherPurchases, claim.ID)
-		delete(s.data.WalletEntries, charge.ID)
+		if charge.ID != "" {
+			delete(s.data.WalletEntries, charge.ID)
+		}
 		return VoucherPurchase{}, false, err
 	}
 	return claim, true, nil
@@ -1134,6 +1218,9 @@ func (s *FileStore) ListVoucherPurchases(_ context.Context, filter VoucherPurcha
 			continue
 		}
 		if filter.HeldOnly && purchase.HeldSince == nil {
+			continue
+		}
+		if !voucherBuyerMatches(purchase, filter.Buyer) {
 			continue
 		}
 		purchase.ShopName = s.data.Installations[purchase.InstallationID].ShopName

@@ -400,7 +400,8 @@ class _SaleOrderDetailsContentState extends State<SaleOrderDetailsContent> {
     final l10n = AppLocalizations.of(context)!;
     final reason = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => const _VoidReasonDialog(),
+      builder: (dialogContext) =>
+          _VoidReasonDialog(notice: _closedDrawerNotice(l10n)),
     );
     if (reason == null || widget.onVoid == null) {
       return;
@@ -413,12 +414,29 @@ class _SaleOrderDetailsContentState extends State<SaleOrderDetailsContent> {
     );
   }
 
+  /// A sale from a closed drawer is given back out of the drawer open now
+  /// (``documents.reverse``): said before it is done, so money that never
+  /// sat in that drawer is not "refunded" out of this one.
+  Widget? _closedDrawerNotice(AppLocalizations l10n) {
+    if (!widget.order.soldInClosedDrawer) return null;
+    return PointyDetailCallout(
+      key: const ValueKey('sale_closed_drawer_notice'),
+      icon: Icons.point_of_sale_outlined,
+      tone: PointyCalloutTone.warning,
+      title: l10n.saleClosedDrawerRefundTitle,
+      message: l10n.saleClosedDrawerRefundMessage(
+        ltrIsolated(widget.order.registerSessionNumber ?? '—'),
+      ),
+    );
+  }
+
   Future<void> _showReturnDialog() async {
     final l10n = AppLocalizations.of(context)!;
     final result = await showQuantityAdjustmentDialog(
       context,
       icon: Icons.keyboard_return_outlined,
       title: l10n.saleReturnTitle,
+      notice: _closedDrawerNotice(l10n),
       emptyMessage: l10n.saleNoReturnableItems,
       reasonLabel: l10n.saleAdjustmentReasonLabel,
       reasonHint: l10n.saleAdjustmentReasonHint,
@@ -1070,7 +1088,11 @@ class _RechargeDetails extends StatelessWidget {
             )
           else if (recharge.errorCode.isNotEmpty && !recharge.isConfirmed)
             Text(
-              integrationErrorText(recharge.errorCode, l10n),
+              integrationErrorText(
+                recharge.errorCode,
+                l10n,
+                provider: recharge.provider,
+              ),
               style: theme.textTheme.bodySmall?.copyWith(color: colors.danger),
             ),
           if (receiptFacts.isNotEmpty) ...[
@@ -1937,7 +1959,9 @@ String _receiptNumber(AppLocalizations l10n, SaleOrder order) {
 /// framework assertion that takes the screen with it. The controller here used
 /// to be leaked instead, which is the same bug seen from the other side.
 class _VoidReasonDialog extends StatefulWidget {
-  const _VoidReasonDialog();
+  const _VoidReasonDialog({this.notice});
+
+  final Widget? notice;
 
   @override
   State<_VoidReasonDialog> createState() => _VoidReasonDialogState();
@@ -1961,6 +1985,10 @@ class _VoidReasonDialogState extends State<_VoidReasonDialog> {
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (widget.notice case final notice?) ...[
+            notice,
+            const SizedBox(height: 12),
+          ],
           Text(l10n.saleVoidMessage),
           const SizedBox(height: 12),
           TextField(

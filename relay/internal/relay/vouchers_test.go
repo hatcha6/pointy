@@ -579,6 +579,8 @@ func TestTheVoucherBalanceIsFilledFromTheMainWallet(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	checks := &countingBalanceChecker{}
+	h.server.Balances = checks
 	move := func(amount any, key string) (int, map[string]any) {
 		return h.shop(t, h.server, http.MethodPost, "/v1/wallet/vouchers/allocations", shop.AccessToken,
 			map[string]any{"amount": amount, "idempotency_key": key})
@@ -600,6 +602,9 @@ func TestTheVoucherBalanceIsFilledFromTheMainWallet(t *testing.T) {
 	if status, again := move(12.5, "d"); status != http.StatusOK || again["replayed"] != true {
 		t.Fatalf("replay: %d %v", status, again)
 	}
+	if checks.n != 1 {
+		t.Fatalf("only the money that moved asks for a BN Plus coverage check, got %d", checks.n)
+	}
 	status, wallet := h.shop(t, h.server, http.MethodGet, "/v1/wallet", shop.AccessToken, nil)
 	if status != http.StatusOK || wallet["vouchers"].(map[string]any)["balance"] != "12.500" ||
 		wallet["vouchers"].(map[string]any)["configured"] != true {
@@ -610,6 +615,10 @@ func TestTheVoucherBalanceIsFilledFromTheMainWallet(t *testing.T) {
 		t.Fatalf("voucher statement: %d %v", status, entries)
 	}
 }
+
+type countingBalanceChecker struct{ n int }
+
+func (c *countingBalanceChecker) CheckOwedSoon() { c.n++ }
 
 func TestAnUnconfiguredRelaySellsNoCards(t *testing.T) {
 	h := newVoucherHarness(t)

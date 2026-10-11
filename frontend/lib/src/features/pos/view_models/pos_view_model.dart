@@ -435,6 +435,7 @@ class PosViewModel extends ChangeNotifier {
   bool _isClosingRegisterSession = false;
   bool _isCreatingCashMovement = false;
   bool _isCheckingOut = false;
+  bool _isPreparingCheckout = false;
   bool _isChargingProviders = false;
   DateTime? _providerChargeStartedAt;
 
@@ -641,7 +642,7 @@ class PosViewModel extends ChangeNotifier {
 
   int get openSaleSessionCount => _saleSessions.length;
   int get activeSaleSessionNumber => _activeSaleSession.number;
-  bool get canStartNewSaleSession => !_isCheckingOut && _cart.isNotEmpty;
+  bool get canStartNewSaleSession => !_isCartFrozen && _cart.isNotEmpty;
   bool get isLoading => _isLoading;
   bool get isLoadingMore => _isLoadingMore;
   bool get isLoadingRegisterSession => _isLoadingRegisterSession;
@@ -650,6 +651,36 @@ class PosViewModel extends ChangeNotifier {
   bool get isClosingRegisterSession => _isClosingRegisterSession;
   bool get isCreatingCashMovement => _isCreatingCashMovement;
   bool get isCheckingOut => _isCheckingOut;
+
+  /// True from the moment the cashier presses Pay until the sale is sent or
+  /// the flow is abandoned: the stock and loss prompts, the forced discount
+  /// preview and the payment sheet all happen in here.
+  bool get isPreparingCheckout => _isPreparingCheckout;
+
+  /// Whether the cart may change. It may not while a sale is being paid for:
+  /// the payment sheet reads the total once, when it opens, so a line that
+  /// lands in the gap before it (a tap during the forced preview) left the
+  /// sheet asking for the old cart's total and the server refusing the
+  /// payment as short. Seen in the field as abandoned sales.
+  bool get isCartFrozen => _isCartFrozen;
+  bool get _isCartFrozen => _isCheckingOut || _isPreparingCheckout;
+
+  /// Runs the Pay flow with the cart frozen. Returns null without running
+  /// [flow] when one is already under way, so a second Pay (button and
+  /// Ctrl+Enter together) cannot open a second payment sheet.
+  Future<T?> whilePreparingCheckout<T>(Future<T> Function() flow) async {
+    if (_isCartFrozen) {
+      return null;
+    }
+    _isPreparingCheckout = true;
+    _notifyChanged();
+    try {
+      return await flow();
+    } finally {
+      _isPreparingCheckout = false;
+      _notifyChanged();
+    }
+  }
 
   /// The sale is recorded and a provider is being asked to perform what it
   /// sold — airtime, a bill, a card. It can take over a minute, and the till
@@ -697,7 +728,7 @@ class PosViewModel extends ChangeNotifier {
   /// who is mid-sale is exactly the person who must not be shown last week's
   /// price on the next item they add.
   bool get canRevalidateNow =>
-      !_isCheckingOut && !isResolvingBarcode && _criticalInteractionDepth == 0;
+      !_isCartFrozen && !isResolvingBarcode && _criticalInteractionDepth == 0;
 
   /// A depth, not a flag: these nest (a variant picker opening a weight sheet
   /// opening a modifier sheet), and an inner sheet closing must not reopen the
@@ -1029,7 +1060,7 @@ class PosViewModel extends ChangeNotifier {
   }
 
   void selectCustomer(Customer? customer) {
-    if (_isCheckingOut || customer == _selectedCustomer) {
+    if (_isCartFrozen || customer == _selectedCustomer) {
       return;
     }
     _selectedCustomer = customer;
@@ -1038,7 +1069,7 @@ class PosViewModel extends ChangeNotifier {
   }
 
   void updateCouponCode(String value) {
-    if (_isCheckingOut || value == _couponCode) {
+    if (_isCartFrozen || value == _couponCode) {
       return;
     }
     _couponCode = value;
@@ -1053,7 +1084,7 @@ class PosViewModel extends ChangeNotifier {
   /// accepting a number and having checkout reject it later — and the server
   /// guard is what makes the limit real.
   void updateExtraDiscountAmount(double value) {
-    if (_isCheckingOut) {
+    if (_isCartFrozen) {
       return;
     }
     final limit = invoiceDiscountLimit;

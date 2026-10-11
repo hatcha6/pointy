@@ -178,6 +178,20 @@ class WalletApiTests(TestCase):
 
     # --- reading ---------------------------------------------------------------
 
+    def test_a_gateway_fee_reaches_the_app_and_the_books(self):
+        self.start(fee="2.000", credit_amount="98.000")
+        payload = wallet_payload(recent_topups=[paid(fee="2.000", credit_amount="98.000")])
+        payload["topups"]["fee_percent"] = "2.00"
+        self.relay.get_wallet.return_value = payload
+        resp = self.api.get("/api/wallet/")
+        self.assertEqual(resp.status_code, 200, resp.content)
+        self.assertEqual(resp.data["topups"]["fee_percent"], "2.00")
+        topup = resp.data["recent_topups"][0]
+        self.assertEqual((topup["amount"], topup["fee"], topup["credit_amount"]), ("100.000", "2.000", "98.000"))
+        self.assertEqual(MoneyTransfer.objects.get().amount, Decimal("98.00"))
+        self.assertEqual(Expense.objects.get().amount, Decimal("2.00"))
+        self.assertEqual(WalletTopUp.objects.get().fee, Decimal("2.000"))
+
     def test_overview_books_a_paid_topup_once(self):
         self.start()
         self.relay.get_wallet.return_value = wallet_payload()

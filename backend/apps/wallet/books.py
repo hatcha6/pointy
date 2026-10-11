@@ -9,7 +9,9 @@ till sells, a cost.
   shop when it has none) into «محفظة دفتر», a money account of the provider
   kind: the money position shows it beside the shop's cash, like a provider
   float, never inside the cash total. Booked once, on the day the gateway took
-  the money.
+  the money. The gateway fee the relay kept out of it (``fee``) is not in the
+  wallet: it is booked beside the move as an expense («خدمات دفتر») paid from
+  the same bank, so the bank still loses exactly what the payer paid.
 * **Spending the wallet** — money moved into the SMS balance, a plan paid
   for — is an expense in the wallet's category («خدمات دفتر»), paid FROM
   «محفظة دفتر» (``Expense.money_account``), on the day it happened. The
@@ -191,14 +193,14 @@ def ensure_switched_over(*, main_balance=None) -> bool:
             main_balance = _read_main_balance()
             if main_balance is None:
                 return False
-        unbooked_in = _sum(
-            WalletTopUp.objects.filter(
-                status=WalletTopUp.Status.PAID,
-                record_as_expense=True,
-                expense_booked_at__isnull=True,
-                transfer_booked_at__isnull=True,
-            )
+        unbooked = WalletTopUp.objects.filter(
+            status=WalletTopUp.Status.PAID,
+            record_as_expense=True,
+            expense_booked_at__isnull=True,
+            transfer_booked_at__isnull=True,
         )
+        # In the balance net of the gateway fee kept out of them.
+        unbooked_in = _sum(unbooked) - (unbooked.aggregate(total=Sum("fee"))["total"] or _ZERO)
         unbooked_out = _sum(
             WalletSpend.objects.filter(booked_at__isnull=True, record_in_books=True)
         )
@@ -269,10 +271,17 @@ def book_topup(topup_id):
                 topup.save(update_fields=["expense_error", "updated_at"])
                 return topup
             topup.transfer = _move_in(topup, day=day, note=note)
+            topup.fee_expense = _fee_expense(topup, day=day, note=note)
             topup.transfer_booked_at = timezone.now()
             topup.expense_error = ""
             topup.save(
-                update_fields=["transfer", "transfer_booked_at", "expense_error", "updated_at"]
+                update_fields=[
+                    "transfer",
+                    "fee_expense",
+                    "transfer_booked_at",
+                    "expense_error",
+                    "updated_at",
+                ]
             )
             return topup
     except Exception:
@@ -295,11 +304,41 @@ def _move_in(topup, *, day, note):
         # with no bank account paid it from outside the books.
         from_account=routed_account(MoneyAccount.Kind.BANK),
         to_account=wallet_account(),
-        amount=topup.amount.quantize(_CENT, rounding=ROUND_HALF_UP),
+        amount=_credited(topup),
         moved_at=day,
         reason=reason[:255],
         reference=topup.invoice_no[:128],
         created_by=topup.requested_by,
+    )
+
+
+def _credited(topup) -> Decimal:
+    """What the wallet got, in the books' two places."""
+    return (topup.amount - topup.fee).quantize(_CENT, rounding=ROUND_HALF_UP)
+
+
+def _fee_expense(topup, *, day, note):
+    """The gateway fee kept out of a top-up: an expense paid from the bank the
+    top-up left, so the bank still loses exactly what the payer paid."""
+    from apps.treasury.models import MoneyAccount
+    from apps.treasury.position import routed_account
+
+    fee = topup.amount.quantize(_CENT, rounding=ROUND_HALF_UP) - _credited(topup)
+    if fee <= 0:
+        return None
+    notes = [f"رسوم الدفع على شحن محفظة دفتر رقم {topup.invoice_no}."]
+    if note:
+        notes.append(note)
+    return create_expense(
+        user=topup.requested_by,
+        category=expense_category(),
+        description=f"رسوم شحن محفظة دفتر — {method_name(topup.method)}"[:255],
+        amount=fee,
+        payment_method=Expense.PaymentMethod.TRANSFER,
+        money_account=routed_account(MoneyAccount.Kind.BANK),
+        spent_at=day,
+        reference=topup.invoice_no[:128],
+        notes="\n".join(notes),
     )
 
 

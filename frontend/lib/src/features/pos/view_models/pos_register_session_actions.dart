@@ -216,6 +216,28 @@ extension PosRegisterSessionActions on PosViewModel {
     }
   }
 
+  /// Lets go of the drawer when whoever was selling signs out.
+  ///
+  /// A drawer is its owner's: the server only lets that user sell into it or
+  /// close it. The view model outlives a sign-out, so without this the next
+  /// person to sign in on the same till was shown the previous user's drawer
+  /// as their own. Annaseem, 2026-10-12: the manager signed out at 00:06, a
+  /// cashier signed in and pressed close on the manager's RS-25 three times,
+  /// each refused (404), until a restart. The next sign-in now reads its own
+  /// drawer through the gate. Open invoices are left alone — they are kept
+  /// per user ([restorePersistedSessions]).
+  void forgetRegisterSession() {
+    if (_activeRegisterSession == null && _availableRegisterSession == null) {
+      return;
+    }
+    _activeRegisterSession = null;
+    _availableRegisterSession = null;
+    _serviceShiftId = null;
+    _hasRegisterSessionError = false;
+    _registerSessionErrorMessage = '';
+    _notifyChanged();
+  }
+
   /// Makes [session] the drawer this till is selling into.
   ///
   /// Deliberately does NOT touch the open invoices. Carts belong to the

@@ -56,6 +56,7 @@ void main() {
   _registerTillBlindSpotTests();
   _registerAutoPrintFloorTests();
   _registerInvoiceDiscountTests();
+  _registerPayFlowTests();
   test(
     'cart totals update and checkout locks mutations until success',
     () async {
@@ -3615,4 +3616,140 @@ class _SlowScopedJsonStorage implements ScopedJsonStorage {
     clearedScopes.add(scope);
     _store.remove(scope);
   }
+}
+
+/// The payment sheet reads the cart's total once, when it opens. In the field
+/// a product tile tapped while the Pay flow's forced preview was in flight
+/// slipped into the cart: the sheet asked for the old, smaller total and the
+/// server refused the payment as short — the sale was abandoned every time.
+void _registerPayFlowTests() {
+  group('the Pay flow', () {
+    Completer<void>? holdPreview;
+    _FakePosApiService api() => _FakePosApiService(
+      discountsVersion: '7',
+      shopSettings: _invoiceDiscountSettings(null),
+      catalogPages: const {
+        1: [_coffeeVariant, _teaVariant],
+      },
+      onPreviewDiscounts: (draft) async {
+        await holdPreview?.future;
+        final subtotal = draft.lines.fold<double>(
+          0,
+          (sum, line) => sum + 3.5 * line.quantity,
+        );
+        final extra = draft.extraDiscountAmount.clamp(0.0, subtotal);
+        return SaleDiscountPreview(
+          subtotal: subtotal,
+          discountTotal: extra,
+          total: subtotal - extra,
+          extraDiscountAmount: extra,
+          maxExtraDiscountAmount: subtotal,
+          rulesActive: false,
+          rulesVersion: '7',
+        );
+      },
+    );
+
+    Future<PosViewModel> ready(_FakePosApiService apiService) async {
+      holdPreview = null;
+      final viewModel = _viewModel(apiService);
+      addTearDown(viewModel.dispose);
+      await viewModel.loadCurrentRegisterSession();
+      await viewModel.resumeRegisterSession();
+      await viewModel.loadCheckoutSettings();
+      viewModel.addVariant(_coffeeVariant);
+      viewModel.updateExtraDiscountAmount(1);
+      await _settle();
+      expect(viewModel.total, 2.5);
+      return viewModel;
+    }
+
+    test('a tile tapped while the forced preview is in flight is refused, '
+        'so the sheet asks for the cart that is paid for', () async {
+      final apiService = api();
+      final viewModel = await ready(apiService);
+
+      holdPreview = Completer<void>();
+      final sheetTotal = viewModel.whilePreparingCheckout(() async {
+        await viewModel.refreshDiscountPreview(forceServer: true);
+        return viewModel.total;
+      });
+      await _settle();
+      expect(viewModel.isCartFrozen, isTrue);
+
+      viewModel.addVariant(_teaVariant);
+      viewModel.updateExtraDiscountAmount(3);
+      expect(viewModel.cart, hasLength(1));
+      expect(viewModel.extraDiscountAmount, 1);
+
+      holdPreview!.complete();
+      expect(await sheetTotal, 2.5);
+      expect(viewModel.isCartFrozen, isFalse);
+
+      final outcome = await viewModel.checkoutCurrentSale(
+        payments: const [
+          SaleCheckoutPaymentDraft(method: PaymentMethod.cash, amount: 2.5),
+        ],
+      );
+      expect(outcome.isSuccess, isTrue);
+      expect(apiService.capturedCheckoutDraft?.lines, hasLength(1));
+      expect(apiService.capturedCheckoutDraft?.extraDiscountAmount, 1);
+    });
+
+    test('a second Pay while the first is under way does not run', () async {
+      final viewModel = await ready(api());
+      final gate = Completer<void>();
+      final first = viewModel.whilePreparingCheckout(() => gate.future);
+      var secondRan = false;
+      final second = await viewModel.whilePreparingCheckout(() async {
+        secondRan = true;
+      });
+
+      expect(second, isNull);
+      expect(secondRan, isFalse);
+      gate.complete();
+      await first;
+      expect(viewModel.isCartFrozen, isFalse);
+      viewModel.addVariant(_teaVariant);
+      expect(viewModel.cart, hasLength(2));
+    });
+
+    test('a tender that no longer matches the total is refused before '
+        'anything is sent', () async {
+      final apiService = api();
+      final viewModel = await ready(apiService);
+
+      final refused = await viewModel.checkoutCurrentSale(
+        payments: const [
+          SaleCheckoutPaymentDraft(method: PaymentMethod.cash, amount: 1.5),
+        ],
+      );
+      expect(refused.isTotalChanged, isTrue);
+      expect(refused.isSuccess, isFalse);
+      expect(apiService.capturedCheckoutDraft, isNull);
+      expect(viewModel.isCheckingOut, isFalse);
+      expect(viewModel.cart, hasLength(1));
+
+      final paid = await viewModel.checkoutCurrentSale(
+        payments: const [
+          SaleCheckoutPaymentDraft(method: PaymentMethod.cash, amount: 2.5),
+        ],
+      );
+      expect(paid.isSuccess, isTrue);
+    });
+
+    test('a credit sale may still take a part payment', () async {
+      final apiService = api();
+      final viewModel = await ready(apiService);
+
+      final outcome = await viewModel.checkoutCurrentSale(
+        saleType: SaleType.credit,
+        payments: const [
+          SaleCheckoutPaymentDraft(method: PaymentMethod.cash, amount: 1),
+        ],
+      );
+      expect(outcome.isTotalChanged, isFalse);
+      expect(apiService.capturedCheckoutDraft, isNotNull);
+    });
+  });
 }

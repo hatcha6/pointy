@@ -446,6 +446,52 @@ func TestWalletOTPTopUpIsCreditedByTheConfirmAndOnlyOnce(t *testing.T) {
 	}
 }
 
+func TestWalletDafaFeeIsKeptOutOfTheCredit(t *testing.T) {
+	h := newWalletHarness(t)
+	h.server.Wallet.FeePercent = "2"
+	_, wallet, _ := h.do(t, http.MethodGet, "/v1/wallet", h.shop.AccessToken, "", nil)
+	if options, _ := wallet["topups"].(map[string]any); options["fee_percent"] != "2.00" {
+		t.Fatalf("the app is told the fee before paying: %v", options)
+	}
+	status, started := h.startSadad(t, "100", "key-fee")
+	if status != http.StatusCreated || topUpField(started, "amount") != "100.000" ||
+		topUpField(started, "fee") != "2.000" || topUpField(started, "credit_amount") != "98.000" {
+		t.Fatalf("start: %d %v", status, started["top_up"])
+	}
+	if sent := h.dafa.initiated(0); sent["amount"] != "100.000" {
+		t.Fatalf("the payer pays the whole amount: %v", sent)
+	}
+	// A rate change after the start never moves a payment under way.
+	h.server.Wallet.FeePercent = "5"
+	id := topUpID(t, started)
+	if status, paid := h.confirm(t, id, "111111"); status != http.StatusOK || topUpField(paid, "credit_amount") != "98.000" {
+		t.Fatalf("confirm: %d %v", status, paid)
+	}
+	if h.balance(t) != "98.000" {
+		t.Fatalf("balance after the fee: %s", h.balance(t))
+	}
+	entries, _ := h.store.ListWalletEntries(context.Background(), control.WalletEntryFilter{InstallationID: h.shop.Installation.ID})
+	invoice, _ := topUpField(started, "invoice_no").(string)
+	if len(entries) != 1 || entries[0].Amount != "98.000" ||
+		entries[0].Description != "شحن عبر سداد "+invoice+" (دُفع 100.000، رسوم الدفع 2.000)" {
+		t.Fatalf("the statement says why the credit is less: %+v", entries)
+	}
+}
+
+func TestWalletTopUpFeeRoundsUp(t *testing.T) {
+	config := WalletConfig{FeePercent: "2"}
+	for amount, want := range map[string]string{"100": "2.000", "10.01": "0.201", "10": "0.200", "12.34": "0.247"} {
+		value, _ := control.ParseWalletAmount(amount)
+		if got := control.FormatWalletAmount(config.topUpFee(value)); got != want {
+			t.Errorf("fee on %s: %s, want %s", amount, got, want)
+		}
+	}
+	none, _ := control.ParseWalletAmount("100")
+	if got := (WalletConfig{}).topUpFee(none); got.Sign() != 0 {
+		t.Errorf("no fee configured keeps nothing: %s", got.FloatString(3))
+	}
+}
+
 func TestWalletDeclinedPaymentEndsTheTopUp(t *testing.T) {
 	h := newWalletHarness(t)
 	_, started := h.startSadad(t, "50", "key-1")

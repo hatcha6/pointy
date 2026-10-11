@@ -186,7 +186,11 @@ void main() {
       isActive: true,
       permissions: {'operations.view_job'},
     );
-    await _pumpJob(tester, job: _job(status: 'open'), user: viewer);
+    await _pumpJob(
+      tester,
+      job: _job(status: 'open'),
+      user: viewer,
+    );
     final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
 
     expect(find.text(l10n.jobChangeStageButton), findsNothing);

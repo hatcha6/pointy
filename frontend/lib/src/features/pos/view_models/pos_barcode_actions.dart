@@ -33,7 +33,7 @@ extension PosBarcodeActions on PosViewModel {
     final normalizedBarcode = barcode.trim();
     if (normalizedBarcode.isEmpty ||
         quantity <= 0 ||
-        _isCheckingOut ||
+        _isCartFrozen ||
         isResolvingBarcode) {
       return false;
     }
@@ -335,7 +335,7 @@ extension PosBarcodeActions on PosViewModel {
   /// caller, which owns localisation of unit labels). Backs the F2 and arrow-key
   /// cycle. Returns false when there is no active line.
   bool setActiveCartLineUnit(UnitOption unit) {
-    if (_isCheckingOut) {
+    if (_isCartFrozen) {
       return false;
     }
     final line = activeCartLine;

@@ -768,6 +768,8 @@ class PointyAppDependencies {
       unawaited(syncCameraWedge());
       // Nothing of this cashier's airtime form or customers stays for the next.
       posViewModel.resetServiceState();
+      // Nor their drawer: the next person signs into their own.
+      posViewModel.forgetRegisterSession();
       _disposeSessionViewModels();
     }
   }

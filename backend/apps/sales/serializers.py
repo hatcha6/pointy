@@ -650,6 +650,13 @@ class OrderSerializer(DocumentLifecycleFields, serializers.ModelSerializer):
         source="register_session.session_number",
         read_only=True,
     )
+    # Whether the drawer that sold it is still counting: a void or return of a
+    # sale from a closed drawer is paid out of the one open now, and the till
+    # says so before it is done.
+    register_session_status = serializers.CharField(
+        source="register_session.status",
+        read_only=True,
+    )
     # Who rang the sale up. Derived from the drawer session rather than stored
     # on the order: the session already owns that fact, and a second copy is a
     # second thing that can disagree with the Z-Report.
@@ -706,6 +713,7 @@ class OrderSerializer(DocumentLifecycleFields, serializers.ModelSerializer):
             "payment_status",
             "register_session",
             "register_session_number",
+            "register_session_status",
             "cashier",
             "cashier_name",
             "sales_channel",
@@ -748,6 +756,7 @@ class OrderSerializer(DocumentLifecycleFields, serializers.ModelSerializer):
             "payment_status",
             "register_session",
             "register_session_number",
+            "register_session_status",
             "cashier",
             "cashier_name",
             "sales_channel",

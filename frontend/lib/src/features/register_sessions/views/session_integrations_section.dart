@@ -328,7 +328,11 @@ class _TransactionRow extends StatelessWidget {
         // Why it did not happen, when the provider said: an empty float is
         // the one a shop can fix itself.
         if (transaction.errorCode.isNotEmpty)
-          integrationErrorText(transaction.errorCode, l10n),
+          integrationErrorText(
+            transaction.errorCode,
+            l10n,
+            provider: transaction.provider,
+          ),
       ].join(' — '),
       SessionIntegrationBucket.unknown => l10n.rechargeNeedsAttentionBadge,
       SessionIntegrationBucket.refunded => [

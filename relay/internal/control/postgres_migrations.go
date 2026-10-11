@@ -945,6 +945,49 @@ CREATE INDEX IF NOT EXISTS relay_voucher_stock_created_idx
 	ON relay_voucher_stock (created_at DESC, id DESC);
 `,
 	},
+	{
+		version: 29,
+		name:    "finance owner withdrawals",
+		sql: `
+-- Money the owners took out of the company's earnings: neither income nor an
+-- expense, it lowers what is still theirs to take.
+ALTER TABLE relay_finance_entries DROP CONSTRAINT IF EXISTS relay_finance_entries_direction_valid;
+ALTER TABLE relay_finance_entries ADD CONSTRAINT relay_finance_entries_direction_valid
+	CHECK (direction IN ('income', 'expense', 'withdrawal'));
+`,
+	},
+	{
+		version: 30,
+		name:    "wallet top-up gateway fee",
+		sql: `
+-- The gateway fee kept out of a top-up, fixed when it starts: the wallet is
+-- credited amount - fee. Older top-ups had none, hence the default.
+ALTER TABLE relay_wallet_topups ADD COLUMN IF NOT EXISTS fee numeric(14, 3) NOT NULL DEFAULT 0;
+`,
+	},
+	{
+		version: 31,
+		name:    "company purchases",
+		sql: `
+-- The company buys cards, top-ups and bill payments for itself through the
+-- same ledger (and the same reconciler) as the shops: such a row has no
+-- installation and no wallet movement, and says why it was bought.
+--
+-- purpose: own_use, resale, gift or other; '' on every shop's purchase.
+-- note: what for, in the operator's words.
+ALTER TABLE relay_voucher_purchases
+	ALTER COLUMN installation_id DROP NOT NULL,
+	ADD COLUMN IF NOT EXISTS purpose text NOT NULL DEFAULT '',
+	ADD COLUMN IF NOT EXISTS note text NOT NULL DEFAULT '';
+ALTER TABLE relay_voucher_purchases DROP CONSTRAINT IF EXISTS relay_voucher_purchases_buyer_check;
+ALTER TABLE relay_voucher_purchases ADD CONSTRAINT relay_voucher_purchases_buyer_check
+	CHECK ((installation_id IS NULL) = (purpose <> ''));
+-- (installation_id, idempotency_key) is unique only among shops' rows: NULLs
+-- are distinct. The company's own keys get their own index.
+CREATE UNIQUE INDEX IF NOT EXISTS relay_voucher_purchases_company_key
+	ON relay_voucher_purchases (idempotency_key) WHERE installation_id IS NULL;
+`,
+	},
 }
 
 // migrationsAdvisoryLockKey serializes concurrent migrators (e.g. autoscaled

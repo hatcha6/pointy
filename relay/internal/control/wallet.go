@@ -207,8 +207,13 @@ type WalletTopUp struct {
 	InstallationID string `json:"installation_id"`
 	ShopName       string `json:"shop_name,omitempty"`
 	Method         string `json:"method"`
-	Amount         string `json:"amount"`
-	Status         string `json:"status"`
+	// Amount is what the payer pays.
+	Amount string `json:"amount"`
+	// Fee is the gateway fee kept out of Amount, fixed when the top-up
+	// starts so a later rate change never moves a payment under way. The
+	// wallet is credited Amount less Fee (WalletTopUpCredit).
+	Fee    string `json:"fee,omitempty"`
+	Status string `json:"status"`
 	// InvoiceNo is the company's own reference, unique across every shop. It
 	// is what the owner reads to support, so it is short and readable.
 	InvoiceNo string `json:"invoice_no"`
@@ -857,11 +862,24 @@ func prepareWalletTopUp(topUp WalletTopUp, now time.Time) (WalletTopUp, error) {
 	if err != nil {
 		return WalletTopUp{}, err
 	}
+	fee := new(big.Rat)
+	if strings.TrimSpace(topUp.Fee) != "" {
+		fee, err = ParseWalletAmount(topUp.Fee)
+		if err != nil {
+			return WalletTopUp{}, err
+		}
+		if fee.Sign() < 0 || fee.Cmp(amount) >= 0 {
+			return WalletTopUp{}, errors.New("a top-up fee must be at least zero and below the amount")
+		}
+	}
 	topUp.ID = id
 	topUp.InvoiceNo = invoiceNo
 	topUp.Amount = FormatWalletAmount(amount)
+	topUp.Fee = FormatWalletAmount(fee)
 	topUp.Status = WalletTopUpPending
 	if topUp.Method == WalletTopUpMethodBankTransfer {
+		// The company reads what arrived and credits that: no gateway fee.
+		topUp.Fee = FormatWalletAmount(new(big.Rat))
 		if topUp.Transfer == nil {
 			return WalletTopUp{}, errors.New("a bank transfer top-up needs the transfer's details")
 		}
@@ -887,6 +905,19 @@ func prepareWalletTopUp(topUp WalletTopUp, now time.Time) (WalletTopUp, error) {
 	return topUp, nil
 }
 
+// WalletTopUpCredit is what a paid top-up puts in the wallet: what the payer
+// paid less the gateway fee kept out of it.
+func WalletTopUpCredit(topUp WalletTopUp) string {
+	amount, err := ParseWalletAmount(NormalizeWalletAmount(topUp.Amount))
+	if err != nil {
+		return NormalizeWalletAmount(topUp.Amount)
+	}
+	if fee, err := ParseWalletAmount(NormalizeWalletAmount(topUp.Fee)); err == nil {
+		amount.Sub(amount, fee)
+	}
+	return FormatWalletAmount(amount)
+}
+
 // walletTopUpCredit is the ledger posting a paid top-up makes. Its key is
 // derived from the top-up, so however many paths prove the same payment the
 // wallet is credited once.
@@ -896,7 +927,7 @@ func walletTopUpCredit(topUp WalletTopUp, settlement WalletTopUpSettlement) Wall
 		// The shop reads this on its Arabic statement.
 		description = "شحن المحفظة " + topUp.InvoiceNo
 	}
-	amount := topUp.Amount
+	amount := WalletTopUpCredit(topUp)
 	if credited := strings.TrimSpace(settlement.Amount); credited != "" {
 		amount = credited
 	}

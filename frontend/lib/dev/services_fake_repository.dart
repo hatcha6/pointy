@@ -92,8 +92,7 @@ class PreviewServicesRepository extends IntegrationsRepository {
 
   @override
   Future<Result<List<IntegrationChargeResult>>> charge({
-    int? orderId,
-    int? fulfillmentId,
+    required int orderId,
   }) async {
     final index = chargeCalls < chargeAnswers.length
         ? chargeCalls

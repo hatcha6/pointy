@@ -34,10 +34,11 @@ import (
 //	GET  /v1/vouchers/admin/images/{sha256}       read one back (the operator console shows them)
 //	GET  /v1/vouchers/admin/offers?supplier=      what suppliers sell the company
 //	POST /v1/vouchers/admin/offers/sync           read them now
-//	GET  /v1/vouchers/admin/purchases?installation_id=&status=&kind=card|airtime|bill&held=1&limit=
+//	GET  /v1/vouchers/admin/purchases?installation_id=&status=&kind=card|airtime|bill&buyer=company|shops&held=1&limit=
 //	POST /v1/vouchers/admin/purchases/{id}/check  ask the supplier now
 //	POST /v1/vouchers/admin/purchases/{id}/resolve {outcome: refund|found, supplier_order_id, reason, actor, restock}
 //	POST /v1/vouchers/admin/purchases/{id}/refund  refund a sale from stock (vouchers_stock.go)
+//	.../v1/vouchers/admin/company/...              the company buying for itself (vouchers_company.go)
 //	GET  /v1/vouchers/admin/bnplus/{wallets|groups|companies|cards|orders|order}
 //	GET  /v1/vouchers/admin/reloadly/balance      the company's gift card balance at Reloadly (USD)
 //	.../v1/vouchers/admin/stock...                 the company's own card stock (vouchers_stock.go)
@@ -94,6 +95,8 @@ func (s HTTPServer) handleVoucherAdminRoutes(w http.ResponseWriter, r *http.Requ
 		default:
 			writeNotFound(w)
 		}
+	case strings.HasPrefix(path, "/company/"):
+		s.handleCompanyRoutes(w, r, store, strings.TrimPrefix(path, "/company"))
 	case path == "/stock" || strings.HasPrefix(path, "/stock/"):
 		s.handleVoucherAdminStock(w, r, store, strings.TrimPrefix(path, "/stock"))
 	case strings.HasPrefix(path, "/bnplus/") && r.Method == http.MethodGet:
@@ -443,6 +446,11 @@ func (s HTTPServer) handleVoucherAdminPurchases(w http.ResponseWriter, r *http.R
 		writeSMSError(w, http.StatusBadRequest, voucherCodeInvalidRequest, "kind must be card, airtime or bill", nil)
 		return
 	}
+	buyer := strings.TrimSpace(query.Get("buyer"))
+	if buyer != "" && buyer != control.VoucherBuyerCompany && buyer != control.VoucherBuyerShops {
+		writeSMSError(w, http.StatusBadRequest, voucherCodeInvalidRequest, "buyer must be company or shops", nil)
+		return
+	}
 	limit, _ := strconv.Atoi(query.Get("limit"))
 	held := query.Get("held") == "1" || strings.EqualFold(query.Get("held"), "true")
 	purchases, err := store.ListVoucherPurchases(r.Context(), control.VoucherPurchaseFilter{
@@ -450,6 +458,7 @@ func (s HTTPServer) handleVoucherAdminPurchases(w http.ResponseWriter, r *http.R
 		Status:         status,
 		Kind:           kind,
 		HeldOnly:       held,
+		Buyer:          buyer,
 		Limit:          limit,
 	})
 	if err != nil {

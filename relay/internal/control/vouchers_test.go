@@ -272,6 +272,7 @@ func TestFileStoreVoucherContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	voucherContract(t, store, provisioned.Installation.ID, now)
+	companyPurchaseContract(t, store, provisioned.Installation.ID)
 	voucherCatalogContract(t, store)
 
 	// Everything survives a restart.
@@ -279,9 +280,13 @@ func TestFileStoreVoucherContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	purchases, err := reloaded.ListVoucherPurchases(context.Background(), VoucherPurchaseFilter{})
-	if err != nil || len(purchases) != 4 || purchases[0].ShopName != "Cards Shop" {
+	purchases, err := reloaded.ListVoucherPurchases(context.Background(), VoucherPurchaseFilter{Buyer: VoucherBuyerShops})
+	if err != nil || len(purchases) != 5 || purchases[0].ShopName != "Cards Shop" {
 		t.Fatalf("reloaded purchases: %+v err=%v", purchases, err)
+	}
+	company, err := reloaded.ListVoucherPurchases(context.Background(), VoucherPurchaseFilter{Buyer: VoucherBuyerCompany})
+	if err != nil || len(company) != 3 || company[0].Purpose == "" {
+		t.Fatalf("reloaded company purchases: %+v err=%v", company, err)
 	}
 }
 
@@ -328,11 +333,120 @@ func TestPostgresVoucherContract(t *testing.T) {
 		} {
 			_, _ = store.pool.Exec(cleanup, `DELETE FROM `+table+` WHERE installation_id = $1`, id)
 		}
+		_, _ = store.pool.Exec(cleanup, `DELETE FROM relay_voucher_purchases WHERE installation_id IS NULL AND idempotency_key LIKE 'company-%'`)
 		_, _ = store.pool.Exec(cleanup, `DELETE FROM relay_installations WHERE id = $1`, id)
 		_, _ = store.pool.Exec(cleanup, `DELETE FROM relay_voucher_catalogs WHERE sha256 = 'aaa'`)
 		_, _ = store.pool.Exec(cleanup, `DELETE FROM relay_voucher_images WHERE sha256 LIKE '0f0f%'`)
 		_, _ = store.pool.Exec(cleanup, `DELETE FROM relay_voucher_offers WHERE supplier = 'bnplus'`)
 	})
 	voucherContract(t, store, id, now)
+	companyPurchaseContract(t, store, id)
 	voucherCatalogContract(t, store)
+}
+
+// companyPurchaseContract: the company buying for itself rides the same
+// ledger with no shop and no wallet. Run after voucherContract (which leaves
+// the shop's voucher balance at a known figure).
+func companyPurchaseContract(t *testing.T, store voucherStoreUnderTest, installationID string) {
+	ctx := context.Background()
+	balance := func() string {
+		t.Helper()
+		wallet, err := store.GetWalletAccount(ctx, installationID, WalletAccountVouchers)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return wallet.Balance
+	}
+	shopBalance := balance()
+	purchase := func(key, purpose string) VoucherPurchase {
+		return VoucherPurchase{
+			IdempotencyKey: key, ItemKey: "steam-us-20", BrandKey: "steam", ItemName: "ستيم · 20 دولار",
+			Quantity: 2, UnitPrice: "200.5", Supplier: "reloadly", SupplierRef: "77", RequestedBy: "هاتم",
+			Purpose: purpose, Note: "اشتراك الخادم",
+		}
+	}
+
+	if _, _, err := store.BeginVoucherPurchase(ctx, purchase("company-none", "")); err == nil {
+		t.Fatal("the company's purchase must say why it was bought")
+	}
+	shop := purchase("company-shop", VoucherPurposeOwnUse)
+	shop.InstallationID = installationID
+	if _, _, err := store.BeginVoucherPurchase(ctx, shop); err == nil {
+		t.Fatal("a shop's purchase carries no purpose")
+	}
+
+	claimed, created, err := store.BeginVoucherPurchase(ctx, purchase("company-1", VoucherPurposeOwnUse))
+	if err != nil || !created || !claimed.ForCompany() || claimed.Amount != "401.000" ||
+		claimed.Purpose != VoucherPurposeOwnUse || claimed.Note != "اشتراك الخادم" {
+		t.Fatalf("company claim: %+v created=%v err=%v", claimed, created, err)
+	}
+	again, created, err := store.BeginVoucherPurchase(ctx, purchase("company-1", VoucherPurposeOwnUse))
+	if err != nil || created || again.ID != claimed.ID {
+		t.Fatalf("a repeated key returns the first claim: %+v created=%v err=%v", again, created, err)
+	}
+	found, ok, err := store.FindVoucherPurchaseByKey(ctx, "", "company-1")
+	if err != nil || !ok || found.ID != claimed.ID {
+		t.Fatalf("find by key: %+v ok=%v err=%v", found, ok, err)
+	}
+	if _, ok, err := store.FindVoucherPurchaseByKey(ctx, installationID, "company-1"); err != nil || ok {
+		t.Fatalf("a shop never finds the company's key: ok=%v err=%v", ok, err)
+	}
+	// The same key on a shop's purchase is the shop's own.
+	sameKey := VoucherPurchase{
+		InstallationID: installationID, IdempotencyKey: "company-1", ItemKey: "x", Quantity: 1,
+		UnitPrice: "1", Supplier: "bnplus", SupplierRef: "1",
+	}
+	if shopRow, created, err := store.BeginVoucherPurchase(ctx, sameKey); err != nil || !created || shopRow.ID == claimed.ID {
+		t.Fatalf("a shop's key is apart from the company's: %+v created=%v err=%v", shopRow, created, err)
+	} else if _, _, err := store.FinishVoucherPurchase(ctx, shopRow.ID, VoucherPurchaseOutcome{Status: VoucherPurchaseFailed}); err != nil {
+		t.Fatal(err)
+	}
+
+	bought, applied, err := store.FinishVoucherPurchase(ctx, claimed.ID, VoucherPurchaseOutcome{
+		Status: VoucherPurchaseSucceeded, SupplierOrderID: "company-order-1", SupplierCost: "41", SupplierCurrency: "usd",
+	})
+	if err != nil || !applied || bought.Status != VoucherPurchaseSucceeded || !bought.ForCompany() {
+		t.Fatalf("finish: %+v applied=%v err=%v", bought, applied, err)
+	}
+
+	// A definite failure, and a held one refunded by the operator, move no money.
+	refused, _, err := store.BeginVoucherPurchase(ctx, purchase("company-2", VoucherPurposeResale))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if failed, _, err := store.FinishVoucherPurchase(ctx, refused.ID, VoucherPurchaseOutcome{Status: VoucherPurchaseFailed}); err != nil || failed.Status != VoucherPurchaseFailed {
+		t.Fatalf("failure: %+v err=%v", failed, err)
+	}
+	unknown, _, err := store.BeginVoucherPurchase(ctx, purchase("company-3", VoucherPurposeGift))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := store.FinishVoucherPurchase(ctx, unknown.ID, VoucherPurchaseOutcome{Status: VoucherPurchaseFailed, Uncertain: true}); err != nil {
+		t.Fatal(err)
+	}
+	if resolved, _, err := store.ResolveVoucherPurchase(ctx, unknown.ID, VoucherPurchaseResolution{Detail: "not bought"}); err != nil || resolved.Status != VoucherPurchaseFailed {
+		t.Fatalf("resolve: %+v err=%v", resolved, err)
+	}
+	if got := balance(); got != shopBalance {
+		t.Fatalf("the company's purchases never touch a shop's wallet: %s, was %s", got, shopBalance)
+	}
+
+	company, err := store.ListVoucherPurchases(ctx, VoucherPurchaseFilter{Buyer: VoucherBuyerCompany, Limit: 100})
+	if err != nil || len(company) != 3 {
+		t.Fatalf("company listing: %d err=%v", len(company), err)
+	}
+	for _, row := range company {
+		if !row.ForCompany() || row.ShopName != "" {
+			t.Fatalf("a shop's row in the company listing: %+v", row)
+		}
+	}
+	shops, err := store.ListVoucherPurchases(ctx, VoucherPurchaseFilter{Buyer: VoucherBuyerShops, Limit: 100})
+	if err != nil || len(shops) == 0 {
+		t.Fatalf("shops listing: %d err=%v", len(shops), err)
+	}
+	for _, row := range shops {
+		if row.ForCompany() {
+			t.Fatalf("the company's row in the shops listing: %+v", row)
+		}
+	}
 }

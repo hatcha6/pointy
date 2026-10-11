@@ -4,6 +4,8 @@ import { Button, Card, Empty, Money, Notice, Segmented, Skeleton } from "../comp
 import { Breakdown, Delta, MonthlyChart } from "../components/finance/charts";
 import { EntryDialog, type EntryDraft } from "../components/finance/EntryDialog";
 import { DueStrip } from "../components/finance/Recurring";
+import { AvailableCard } from "../components/finance/AvailableCard";
+import { WithdrawDialog } from "../components/finance/WithdrawDialog";
 import { useWallets } from "../lib/queries";
 import { Link, useSearchParam, useSetSearch } from "../lib/router";
 import { money } from "../lib/format";
@@ -53,16 +55,28 @@ export function PeriodPicker({ period }: { period: ReturnType<typeof usePeriod> 
 export function useEntryDialog() {
   const [doParam, setDo] = useSearchParam("do");
   const [draft, setDraft] = useState<EntryDraft | null>(null);
+  // A withdrawal has its own dialog.
+  const [withdraw, setWithdraw] = useState(false);
   useEffect(() => {
     if (doParam === "income" || doParam === "expense") {
       setDraft({ direction: doParam });
+      setDo("");
+    } else if (doParam === "withdraw") {
+      setWithdraw(true);
       setDo("");
     }
   }, [doParam]);
   return {
     draft,
-    open: (next: EntryDraft) => setDraft(next),
-    dialog: <EntryDialog open={draft !== null} draft={draft ?? undefined} onClose={() => setDraft(null)} />,
+    // A withdrawal (a copied one too) opens its own dialog.
+    open: (next: EntryDraft) => (next.direction === "withdrawal" ? setWithdraw(true) : setDraft(next)),
+    withdraw: () => setWithdraw(true),
+    dialog: (
+      <>
+        <EntryDialog open={draft !== null} draft={draft ?? undefined} onClose={() => setDraft(null)} />
+        <WithdrawDialog open={withdraw} onClose={() => setWithdraw(false)} />
+      </>
+    ),
   };
 }
 
@@ -100,6 +114,8 @@ export function Finance() {
           </Button>
         </div>
       </div>
+
+      <AvailableCard onWithdraw={entry.withdraw} />
 
       <PeriodPicker period={period} />
 
@@ -243,6 +259,12 @@ export function Finance() {
         <p className="muted held-note">
           ما يشحنه المتجر يبقى ماله حتى يصرفه على خدمة. عندها فقط يصبح دخلاً ويظهر أعلاه.
         </p>
+        {data && Number(data.topups.fees ?? 0) > 0 && (
+          <p className="muted held-note">
+            اقتطعت دفع <Money value={data.topups.fees ?? "0"} /> عمولةً من هذه المدفوعات، وخصمناها من شحن المتاجر: تظهر
+            أعلاه مصروفاً ودخلاً متساويين.
+          </p>
+        )}
         {data && Object.keys(data.topups.by_method).length > 0 && (
           <ul className="held-methods">
             {Object.entries(data.topups.by_method)

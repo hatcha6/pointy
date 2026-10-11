@@ -74,6 +74,8 @@ WalletOverview overview({
   SmsWallet? sms,
   VoucherWallet? vouchers,
   List<WalletPlan> plans = const [],
+  double feePercent = 0,
+  WalletBankTransferOffer? bankTransfer,
 }) {
   return WalletOverview(
     available: true,
@@ -88,6 +90,8 @@ WalletOverview overview({
       maxDecimals: 2,
       quickAmounts: const [50, 100],
       pendingTtl: ttl,
+      feePercent: feePercent,
+      bankTransfer: bankTransfer,
     ),
     recentTopUps: const [],
     recentEntries: const [],

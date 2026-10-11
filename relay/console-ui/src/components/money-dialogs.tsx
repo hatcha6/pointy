@@ -341,13 +341,15 @@ export function ResolvePurchaseDialog({ purchase, onClose }: { purchase: Purchas
   // A held sale from our own stock already took its codes: refunded, they go back on the shelf or void.
   const fromStock = purchase.supplier === "stock" && outcome === "refund";
   const valid = reason.trim() && (outcome === "refund" || orderId.trim()) && (!fromStock || stockReturnReady(stock));
+  // The company's own purchase was paid by no wallet: nothing goes back.
+  const company = !purchase.installation_id;
   return (
     <Dialog
       open
       onClose={onClose}
       busy={action.busy}
       title="تسوية عملية معلّقة"
-      subtitle={`${purchase.name} · ${purchase.shop_name || purchase.installation_id}`}
+      subtitle={`${purchase.name} · ${company ? "مشتريات الشركة" : purchase.shop_name || purchase.installation_id}`}
       icon={<RotateCcw />}
       iconTone="money"
       footer={
@@ -367,7 +369,7 @@ export function ResolvePurchaseDialog({ purchase, onClose }: { purchase: Purchas
               if (result) onClose();
             }}
           >
-            {outcome === "refund" ? `أعِد ${money(purchase.amount)} للمتجر` : "سجّل أنها تمّت"}
+            {outcome === "refund" ? (company ? "سجّل أنها لم تتم" : `أعِد ${money(purchase.amount)} للمتجر`) : "سجّل أنها تمّت"}
           </Button>
           <Button size="lg" onClick={onClose} disabled={action.busy}>
             إلغاء
@@ -383,7 +385,7 @@ export function ResolvePurchaseDialog({ purchase, onClose }: { purchase: Purchas
           value={outcome}
           onChange={setOutcome}
           options={[
-            { id: "refund", label: "لم تتم — أعد المبلغ" },
+            { id: "refund", label: company ? "لم تتم" : "لم تتم — أعد المبلغ" },
             { id: "found", label: "تمّت لدى المورّد" },
           ]}
         />

@@ -75,6 +75,8 @@ type PreparedOrder struct {
 	// never the full number.
 	Details json.RawMessage
 	Prices  Prices
+	// Cost is what the supplier debits the company, in dollars.
+	Cost *big.Rat
 	// Receive is what the recipient is credited (airtime) or what is paid to the
 	// biller (bills).
 	Receive     Money
@@ -157,6 +159,9 @@ func (s *Service) Quote(ctx context.Context, in PricingInput, request QuoteReque
 		if refusal != nil {
 			return Quoted{}, refusal
 		}
+		if refusal := s.affordable(KindAirtime, plan.Cost); refusal != nil {
+			return Quoted{}, refusal
+		}
 		receive := entry.receiveFor(amount)
 		return Quoted{
 			Phone: detected,
@@ -187,6 +192,9 @@ func (s *Service) Quote(ctx context.Context, in PricingInput, request QuoteReque
 		}
 		priced, placed, refusal := entry.price(in.Settings, amount)
 		if refusal != nil {
+			return Quoted{}, refusal
+		}
+		if refusal := s.affordable(KindBill, placed.Cost); refusal != nil {
 			return Quoted{}, refusal
 		}
 		return Quoted{
@@ -243,6 +251,9 @@ func (s *Service) prepareAirtime(snap *snapshot, in PricingInput, request OrderR
 	if refusal != nil {
 		return nil, refusal
 	}
+	if refusal := s.affordable(KindAirtime, plan.Cost); refusal != nil {
+		return nil, refusal
+	}
 	receive := entry.receiveFor(amount)
 	details, _ := json.Marshal(airtimeDetails{
 		OperatorID:      entry.id,
@@ -274,6 +285,7 @@ func (s *Service) prepareAirtime(snap *snapshot, in PricingInput, request OrderR
 		Target:      phone.Masked(),
 		Details:     details,
 		Prices:      priced,
+		Cost:        plan.Cost,
 		Receive:     Money{Amount: FormatAmount(receive), Currency: entry.receiveCurrency},
 		Approximate: entry.approximate,
 		SupplierRef: strconv.FormatInt(entry.id, 10),
@@ -319,6 +331,9 @@ func (s *Service) prepareBill(snap *snapshot, in PricingInput, request OrderRequ
 	if refusal != nil {
 		return nil, refusal
 	}
+	if refusal := s.affordable(KindBill, plan2.Cost); refusal != nil {
+		return nil, refusal
+	}
 	var amountID int64
 	if plan != nil {
 		amountID = plan.id
@@ -353,6 +368,7 @@ func (s *Service) prepareBill(snap *snapshot, in PricingInput, request OrderRequ
 		Target:      MaskAccount(account),
 		Details:     details,
 		Prices:      priced,
+		Cost:        plan2.Cost,
 		Receive:     Money{Amount: FormatAmount(amount), Currency: entry.currency},
 		Approximate: entry.approximate,
 		SupplierRef: strconv.FormatInt(entry.id, 10),

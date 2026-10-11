@@ -56,6 +56,11 @@ var stepUpRules = []stepUpRule{
 	// shelf every shop buys from first.
 	rule(http.MethodPost, "/v1/vouchers/admin/stock"),
 	rule(http.MethodPost, "/v1/vouchers/admin/stock/*/void"),
+	// The company buying cards, top-ups or bill payments for itself with
+	// its own supplier money, and the codes of one it bought shown again.
+	rule(http.MethodPost, "/v1/vouchers/admin/company/cards"),
+	rule(http.MethodPost, "/v1/vouchers/admin/company/services"),
+	rule(http.MethodPost, "/v1/vouchers/admin/company/purchases/*/reveal"),
 	// A sale from stock given back: the shop's money returns, its code goes
 	// back on the shelf or void.
 	rule(http.MethodPost, "/v1/vouchers/admin/purchases/*/refund"),

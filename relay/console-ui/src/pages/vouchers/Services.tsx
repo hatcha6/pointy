@@ -18,10 +18,17 @@ type Operator = { id: number; name: string; name_en: string; mode: string; amoun
 type Plan = { id: number; amount: string; description: string; description_en: string; unit_price?: string; retail_price?: string };
 type Biller = { id: number; name: string; name_en: string; type: string; service: string; mode: string; requires_invoice: boolean; amount_currency: string; min?: string; max?: string; plans?: Plan[] };
 type Country = { code: string; name: string; name_en: string; dial: string; currency: string; currency_name: string; popular: boolean; airtime?: Operator[]; bills?: Biller[] };
+/** A country as the relay sends it: operators and billers nested, dial codes a list. */
+type WireCountry = Omit<Country, "dial" | "popular" | "airtime" | "bills"> & {
+  dial?: string[] | null;
+  popular?: number | boolean;
+  airtime?: { operators?: Operator[] | null } | null;
+  bills?: { billers?: Biller[] | null } | null;
+};
 type Directory = { version: string; generated_at: string; currency: string; test_mode: boolean; configured: boolean; priced: boolean; popular: string[]; countries: Country[] };
 type Stats = Record<string, unknown> & { rejected?: { at: string; reason: string } | null; stale?: boolean; read_at?: string };
 type QuoteAnswer = {
-  quote: { kind: string; name: string; unit_price: string; retail_price: string; receive: string; approximate: boolean };
+  quote: { kind: string; name: string; unit_price: string; retail_price: string; receive: { amount: string; currency: string }; approximate: boolean };
   cost_lyd: string;
   order_in_dollars: boolean;
   order_amount: string;
@@ -67,10 +74,25 @@ export function Services() {
 function useDirectory() {
   return useQuery({
     queryKey: ["services", "directory"],
-    queryFn: () => api.get<{ directory: Directory; stats: Stats }>("/v1/services/admin/directory"),
+    queryFn: () =>
+      api.get<{ directory: Omit<Directory, "countries"> & { countries?: WireCountry[] | null }; stats: Stats }>("/v1/services/admin/directory").then((r) => ({
+        ...r,
+        directory: { ...r.directory, countries: (r.directory.countries ?? []).map(flatCountry) },
+      })),
     retry: false,
     staleTime: 5 * 60_000,
   });
+}
+
+/** Flattens a country the way this page reads it: lists of operators and billers, "+227 · +228". */
+function flatCountry(c: WireCountry): Country {
+  return {
+    ...c,
+    dial: (c.dial ?? []).map((d) => "+" + d).join(" · "),
+    popular: !!c.popular,
+    airtime: c.airtime?.operators ?? [],
+    bills: c.bills?.billers ?? [],
+  };
 }
 
 function DirectoryTab({ onQuote }: { onQuote: (q: QuoteInput) => void }) {
@@ -303,7 +325,9 @@ function QuoteTab({ preset }: { preset: QuoteInput | null }) {
             </div>
             <div className="fact">
               <dt>يستلم الزبون</dt>
-              <dd className="num">{answer.quote.receive}</dd>
+              <dd className="num">
+                {answer.quote.receive.amount} {answer.quote.receive.currency}
+              </dd>
             </div>
             <div className="fact">
               <dt>يُطلب من Reloadly</dt>

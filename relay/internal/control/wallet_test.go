@@ -283,6 +283,27 @@ func walletStoreContract(t *testing.T, store WalletStore, installationID string)
 	if !listed {
 		t.Fatalf("the operator's wallet list must show this shop at 7.500: %+v", wallets)
 	}
+
+	// A gateway fee fixed at the start is kept out of the credit.
+	withFee, _, err := store.BeginWalletTopUp(ctx, WalletTopUp{
+		InstallationID: installationID, Method: WalletTopUpMethodDafaSadad, Amount: "50", Fee: "1.0", IdempotencyKey: "k-fee",
+	})
+	if err != nil || withFee.Fee != "1.000" || WalletTopUpCredit(withFee) != "49.000" {
+		t.Fatalf("begin with a fee: %+v %v", withFee, err)
+	}
+	if _, _, err := store.BeginWalletTopUp(ctx, WalletTopUp{
+		InstallationID: installationID, Method: WalletTopUpMethodDafaSadad, Amount: "5", Fee: "5", IdempotencyKey: "k-fee-all",
+	}); err == nil {
+		t.Fatal("a fee that eats the whole amount must be refused")
+	}
+	feePaid, _, err := store.SettleWalletTopUp(ctx, withFee.ID, WalletTopUpSettlement{ConfirmedBy: "dafa"})
+	if err != nil || feePaid.Amount != "50.000" || feePaid.Fee != "1.000" {
+		t.Fatalf("settle with a fee: %+v %v", feePaid, err)
+	}
+	wallet, _ = store.GetWallet(ctx, installationID)
+	if wallet.Balance != "56.500" {
+		t.Fatalf("balance after a 50 top-up with a 1 fee: %s", wallet.Balance)
+	}
 }
 
 func TestFileStoreWalletContract(t *testing.T) {
@@ -443,7 +464,7 @@ func TestPostgresWalletLedger(t *testing.T) {
 	// The row lock: twenty 10-dinar charges race for a 55-dinar balance and
 	// exactly five get through.
 	if _, _, err := store.PostWalletEntry(ctx, WalletPosting{
-		InstallationID: id, Kind: WalletEntryAdjustment, Amount: "47.5", IdempotencyKey: "fund-race",
+		InstallationID: id, Kind: WalletEntryAdjustment, Amount: "-1.5", IdempotencyKey: "fund-race",
 	}); err != nil {
 		t.Fatal(err)
 	}

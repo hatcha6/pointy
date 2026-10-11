@@ -337,7 +337,10 @@ class UserCreateDraft {
       'username': username,
       'password': password,
       'role': role.toJson(),
+      // One field holds the whole name: it all goes in first_name, and
+      // last_name is cleared — see UserUpdateDraft.
       'first_name': displayName,
+      'last_name': '',
       'email': email,
       'is_active': isActive,
       if (extraPermissions != null) 'extra_permissions': extraPermissions,
@@ -366,7 +369,12 @@ class UserUpdateDraft {
     return {
       if (role != null) 'role': role!.toJson(),
       if (isActive != null) 'is_active': isActive,
+      // The form shows first and last name together in one field, so the
+      // whole of it is the first name and last_name is cleared. Writing only
+      // first_name added the surname again on every save (Annaseem
+      // 2026-10-12: «الحسين حمودة حمودة حمودة»).
       if (displayName != null) 'first_name': displayName,
+      if (displayName != null) 'last_name': '',
       if (email != null) 'email': email,
       if (password != null && password!.isNotEmpty) 'password': password,
       if (extraPermissions != null) 'extra_permissions': extraPermissions,

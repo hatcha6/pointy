@@ -108,6 +108,22 @@ void main() {
     expect(viewModel.serviceShelves.airtime!.country, isNotNull);
   });
 
+  // Annaseem 2026-10-12: a cashier signing in after the manager was shown the
+  // manager's RS-25 and pressed close on it three times (404 each).
+  test('a signed-out till lets go of the drawer it was selling into', () async {
+    expect(viewModel.activeRegisterSession, isNotNull);
+
+    viewModel.forgetRegisterSession();
+
+    expect(viewModel.activeRegisterSession, isNull);
+
+    // The next sign-in reads its own drawer through the gate.
+    register.sessionId = 37;
+    await viewModel.loadCurrentRegisterSession();
+    await viewModel.resumeRegisterSession();
+    expect(viewModel.activeRegisterSession?.id, 37);
+  });
+
   test(
     'prices waiting to be shown to the last cashier are not shown to the next',
     () async {

@@ -144,6 +144,7 @@ class WalletTopUpOptions {
     required this.pendingTtl,
     this.maxOtpAttempts = 5,
     this.bankTransfer,
+    this.feePercent = 0,
   });
 
   factory WalletTopUpOptions.fromJson(Map<String, Object?> json) {
@@ -171,6 +172,8 @@ class WalletTopUpOptions {
           : const [],
       pendingTtl: Duration(seconds: _int(json['pending_ttl'], fallback: 1800)),
       maxOtpAttempts: _int(json['max_otp_attempts'], fallback: 5),
+      // A relay from before the fee sends none: nothing is kept.
+      feePercent: _amount(json['fee_percent']).clamp(0, 99.99).toDouble(),
     );
   }
 
@@ -191,6 +194,27 @@ class WalletTopUpOptions {
 
   /// The company's accounts to transfer to, when it takes transfers.
   final WalletBankTransferOffer? bankTransfer;
+
+  /// The share of a gateway payment kept out of the credit for the gateway's
+  /// own fee ("2" keeps 2 of 100). A bank transfer pays none.
+  final double feePercent;
+
+  /// Whether paying by [method] keeps a fee out of the credit.
+  bool chargesFee(WalletTopUpMethod? method) =>
+      method != null && !method.isBankTransfer && feePercent > 0;
+
+  /// The fee [method] keeps out of a payment of [amount], rounded UP to the
+  /// dirham as the relay rounds it. The relay's figure on the started top-up
+  /// is the one that counts; this is the preview.
+  double feeFor(double amount, WalletTopUpMethod? method) {
+    if (!chargesFee(method)) {
+      return 0;
+    }
+    // Rounded to a ten-thousandth first so float noise (100 × 2 / 100 =
+    // 2.0000000001) never rounds up a whole dirham.
+    final thousandths = ((amount * feePercent / 100) * 10000).round() / 10;
+    return thousandths.ceil() / 1000;
+  }
 }
 
 /// What a method asks of the payer before the payment starts.
@@ -412,7 +436,9 @@ class WalletTopUp {
     this.expenseError = '',
     this.errorDetail = '',
     this.transfer,
-  });
+    this.fee = 0,
+    double? creditAmount,
+  }) : _creditAmount = creditAmount;
 
   factory WalletTopUp.fromJson(Map<String, Object?> json) {
     final expenseId = json['expense_id'];
@@ -424,6 +450,8 @@ class WalletTopUp {
       invoiceNo: _string(json['invoice_no']),
       method: _string(json['method']),
       amount: _amount(json['amount']),
+      fee: _amount(json['fee']),
+      creditAmount: _amountOrNull(json['credit_amount']),
       status: WalletTopUpStatus.parse(json['status']),
       testMode: json['test_mode'] == true,
       createdAt: _date(json['created_at']) ?? DateTime.now(),
@@ -456,7 +484,16 @@ class WalletTopUp {
 
   /// The payer's phone or card, masked by the relay: "091•••678".
   final String payerHint;
+
+  /// What the payer pays.
   final double amount;
+
+  /// The gateway fee kept out of [amount], fixed when the top-up started.
+  final double fee;
+  final double? _creditAmount;
+
+  /// What the wallet gets: [amount] less [fee].
+  double get creditAmount => _creditAmount ?? amount - fee;
   final WalletTopUpStatus status;
   final bool testMode;
   final DateTime createdAt;

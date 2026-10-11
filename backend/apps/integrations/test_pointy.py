@@ -1363,7 +1363,7 @@ class PointySettleTests(PointyMixin, TestCase):
             payload["order"]["lines"][0]["integration"]["printed"]["code"], "ABCD-1234-EFGH"
         )
 
-    def test_a_purchase_the_relay_never_recorded_is_retryable_once_old_enough(self):
+    def test_a_purchase_the_relay_never_recorded_is_closed_once_old_enough(self):
         self.sent(seconds=30)
         settle_relay_attempts()
         self.row.refresh_from_db()
@@ -1373,10 +1373,9 @@ class PointySettleTests(PointyMixin, TestCase):
         self.sent(seconds=ATTEMPT_SETTLE_AFTER.total_seconds() + 1)
         settle_relay_attempts()
         self.row.refresh_from_db()
-        self.assertEqual(self.row.status, IntegrationFulfillment.Status.PENDING)
-        # The next attempt is a new key: it can never be answered with this one.
-        self.row.attempt_count += 1
-        self.assertNotEqual(recharge.attempt_key(self.row), self.relay.outcome_reads[-1])
+        # Proved never bought: closed for good, never sent again.
+        self.assertEqual(self.row.status, IntegrationFulfillment.Status.FAILED)
+        self.assertEqual(self.row.attempt_count, 1)
 
     def test_a_refunded_purchase_goes_back_with_its_reason(self):
         key = recharge.attempt_key(self.row)
@@ -1386,7 +1385,7 @@ class PointySettleTests(PointyMixin, TestCase):
         }
         settle_relay_attempts()
         self.row.refresh_from_db()
-        self.assertEqual(self.row.status, IntegrationFulfillment.Status.PENDING)
+        self.assertEqual(self.row.status, IntegrationFulfillment.Status.FAILED)
         self.assertEqual(self.row.last_error_code, ERROR_OUT_OF_STOCK)
 
     def test_the_two_minute_task_settles_them(self):
@@ -1507,17 +1506,22 @@ class PointyChargeTests(PointyMixin, TransactionTestCase):
         self.assertEqual(printed["code"], "ABCD-1234-EFGH")
         self.assertEqual(printed["brand"], "آيتونز")
 
-    def test_a_refusal_leaves_the_line_to_try_again_under_a_new_key(self):
+    def test_a_refusal_gives_the_card_back_and_the_next_sale_buys_it(self):
+        # An empty «رصيد الكروت»: nothing bought, so the sale is given back in
+        # its drawer, and selling it again once the balance is filled works.
         order = self.sell("itunes-us-10")
         self.relay.purchase = refusal(402, "insufficient_balance", balance="10.00", amount="50.00")
         result = self.charge(order)["results"][0]
         self.assertEqual(result["outcome"], recharge.OUTCOME_REFUSED)
         self.assertEqual(result["error_code"], ERROR_INSUFFICIENT_FLOAT)
+        self.assertTrue(result["refunded"])
+        order.refresh_from_db()
+        self.assertEqual(order.status, Order.Status.VOID)
         self.relay.purchase = (201, {"purchase": purchase(), "balance": "200.00"})
-        self.assertEqual(self.charge(order)["results"][0]["outcome"], recharge.OUTCOME_CHARGED)
+        again = self.sell("itunes-us-10")
+        self.assertEqual(self.charge(again)["results"][0]["outcome"], recharge.OUTCOME_CHARGED)
         first, second = (sent["idempotency_key"] for sent in self.relay.purchases_sent)
         self.assertNotEqual(first, second)
-        self.assertTrue(first.endswith("-1") and second.endswith("-2"))
 
 
 class AttemptKeyTests(SimpleTestCase):

@@ -1193,9 +1193,13 @@ class DashboardAiDigestView(APIView):
 
             # Bump the version to invalidate every shop's cached digest at once
             # when the figures shape or generation prompt changes.
+            # «اليوم» is still moving, so its digest refreshes hourly, not daily.
+            freshness = timezone.localtime().strftime(
+                "%Y-%m-%dT%H" if period_days == 1 else "%Y-%m-%d"
+            )
             cache_key = (
                 f"ai_dashboard_digest:v2:{request.user.pk}:"
-                f"{period_days}:{timezone.localdate().isoformat()}"
+                f"{period_days}:{freshness}"
             )
             try:
                 cached = cache.get(cache_key)

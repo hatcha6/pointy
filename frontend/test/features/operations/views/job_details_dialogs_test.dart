@@ -90,6 +90,60 @@ void main() {
   });
 
   group('the invoice dialog', () {
+    // Annaseem 2026-10-12: a 250 repair with a 100 labour line on it. The
+    // invoice opened with an empty labour box; the 250 typed into it billed
+    // 350. The job now says 250 up front, and the invoice opens on 250.
+    const quotedRepair = {
+      'quoted_price': '250.00',
+      'services_total': '100.00',
+      'materials_total': '0.00',
+    };
+
+    testWidgets('the job says what the invoice will be', (tester) async {
+      await _pumpJob(
+        tester,
+        repository: _FakeOperationsRepository(quotedRepair),
+        user: manager,
+      );
+      final total = find.byKey(const ValueKey('job_bill_total'));
+      await tester.ensureVisible(total);
+      expect(
+        find.descendant(of: total, matching: find.textContaining('250.00')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const ValueKey('job_bill_remainder')), findsOneWidget);
+    });
+
+    testWidgets('the invoice opens on the quoted price, not on top of it', (
+      tester,
+    ) async {
+      final repository = _FakeOperationsRepository(quotedRepair);
+      await _pumpJob(tester, repository: repository, user: manager);
+      final l10n = _l10n(tester);
+
+      await _openInvoiceDialog(tester, l10n);
+      final field = tester.widget<TextField>(_laborField(l10n));
+      expect(field.controller!.text, '150.00');
+      final total = find.byKey(const ValueKey('job_invoice_total'));
+      expect(
+        find.descendant(of: total, matching: find.textContaining('250.00')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('250.00'), findsWidgets);
+      expect(
+        find.byKey(const ValueKey('job_invoice_over_agreed')),
+        findsNothing,
+      );
+
+      // Typing the whole price again on top is called out before it bills.
+      await tester.enterText(_laborField(l10n), '250');
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('job_invoice_over_agreed')),
+        findsOneWidget,
+      );
+    });
+
     testWidgets('cancelling it leaves the screen standing', (tester) async {
       final repository = _FakeOperationsRepository();
       await _pumpJob(tester, repository: repository, user: manager);
@@ -244,10 +298,8 @@ Future<void> _openCancelDialog(
 
 /// The labour box — the invoice dialog's first field, and the only one there
 /// until the invoice goes on credit.
-Finder _laborField(AppLocalizations l10n) => find.ancestor(
-  of: find.text(l10n.jobLaborTotalLabel),
-  matching: find.byType(TextField),
-);
+Finder _laborField(AppLocalizations l10n) =>
+    find.byKey(const ValueKey('job_invoice_extra_field'));
 
 Future<void> _openInvoiceDialog(
   WidgetTester tester,
@@ -278,13 +330,14 @@ Future<void> _openMaterialDialog(
 AppLocalizations _l10n(WidgetTester tester) =>
     AppLocalizations.of(tester.element(find.byType(JobDetailsScreen)))!;
 
-OperationsJob _openJob() {
+OperationsJob _openJob([Map<String, Object?> priced = const {}]) {
   return OperationsJob.fromJson({
     'id': 12,
     'job_number': 'JOB-12',
     'job_type': 'repair',
     'status': 'open',
     'customer_name': 'زبون',
+    ...priced,
   });
 }
 
@@ -322,14 +375,17 @@ Future<void> _pumpJob(
 }
 
 class _FakeOperationsRepository extends OperationsRepository {
-  _FakeOperationsRepository() : super(PosApiService());
+  _FakeOperationsRepository([this.priced = const {}]) : super(PosApiService());
+
+  final Map<String, Object?> priced;
 
   String? cancelledWith;
   double? addedQuantity;
   JobInvoiceDraft? invoicedDraft;
 
   @override
-  Future<Result<OperationsJob>> loadJob(int jobId) async => Ok(_openJob());
+  Future<Result<OperationsJob>> loadJob(int jobId) async =>
+      Ok(_openJob(priced));
 
   @override
   Future<Result<OperationsJob>> cancelJob(

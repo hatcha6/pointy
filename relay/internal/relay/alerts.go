@@ -250,7 +250,8 @@ func walletTopUpAlert(topUp control.WalletTopUp, event, detail string) (alerts.M
 
 // handleActiveAlerts serves GET /v1/alerts/active: the conditions the alert
 // channel marked and has not seen end (a supplier balance still at or under
-// its floor, a balance that cannot be read), for the console's home page.
+// its floor or short of what the shops hold against it, a balance that cannot
+// be read), for the console's home page.
 // Marks exist only where the channel is set up; "watching" says so.
 func (s HTTPServer) handleActiveAlerts(w http.ResponseWriter, r *http.Request) {
 	store, ok := s.Store.(control.AlertStore)
@@ -269,7 +270,7 @@ func (s HTTPServer) handleActiveAlerts(w http.ResponseWriter, r *http.Request) {
 		Since  time.Time `json:"since"`
 	}
 	out := []activeAlert{}
-	for _, kind := range []string{"balance_low", "balance_unreadable"} {
+	for _, kind := range []string{"balance_low", "balance_short", "balance_unreadable"} {
 		marks, err := store.ListAlertMarks(r.Context(), kind+":")
 		if err != nil {
 			writeStoreError(w, err)

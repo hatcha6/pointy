@@ -622,6 +622,14 @@ When the console is served (`POINTY_RELAY_CONSOLE_ORIGIN`), every alert carries
 a link: tapping it on the phone opens the page it is about (the top-up, the
 suppliers' balances).
 
+The BN Plus LYD balance is also checked against what the shops hold in their
+card balances («رصيد الكروت») combined, on the same sweep: when BN Plus cannot
+cover them all, an alert names the shortfall (urgent once BN Plus is empty),
+repeats every 12 hours while it lasts, and says when it is covered again. A shop
+moving money into its card balance triggers the same check right away instead
+of waiting for the next sweep. This
+runs even with the BN Plus floor left empty, and shows on the console home.
+
 Several relay instances never double-send: balance alerts are claimed through
 the control store (`relay_alert_marks`), and payment alerts fire on the store's
 one applied state change.
@@ -1596,6 +1604,24 @@ company's credentials) and `reloadly/balance` (the gift card balance at Reloadly
 `catalog` lists, per item, every supplier with its offer, its cost in dinars at
 the stored settings, whether it can sell now and its rank; `offers` carries each
 offer's cost in dinars.
+
+**The company buying for itself** (console page «مشتريات الشركة»): a card, a
+top-up or a bill payment for the company's own use, to sell on for cash or to
+give away, bought from the same suppliers with the company's balance there.
+`POST company/cards` (`{item, quantity, idempotency_key, purpose, note}`) and
+`POST company/services` (a service order's fields plus `purpose`, `note`) ride
+the shops' purchase path with no shop: same ledger row (no installation), same
+cheapest-supplier choice, holds and reconciler, but no wallet is charged or
+refunded and the company's own card stock is never sold to it. `purpose` is
+`own_use`, `resale`, `gift` or `other`; `amount` is what it should cost in
+dinars when claimed. `purchases?buyer=company|shops` narrows the listing;
+`POST company/purchases/{id}/reveal` reads a company purchase's codes or
+receipt back from the supplier (a shop's purchase is refused: an operator never
+reads a shop's codes). All three take a passkey tap in the console. On the
+books its cost is `company_purchases` (the supplier's figure, dollars at the
+rate), apart from the services' cost of sale, and it lowers the money the
+owners may take; cash from a resale is a ledger income line
+(`voucher_resale`, reference = the purchase id).
 
 ### Configuration
 

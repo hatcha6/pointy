@@ -202,7 +202,20 @@ String integrationBlockedReasonText(String code, AppLocalizations l10n) {
   };
 }
 
-String integrationErrorText(String code, AppLocalizations l10n) {
+/// [provider] matters for one code: an empty float. A Daftar card or service
+/// is paid from «رصيد الكروت» in the wallet, not from an agency's float, and
+/// the generic «رصيد الوكالة» sent an owner off to top up Qareeb for a card
+/// that Qareeb never sells (Annaseem, 2026-10-11).
+String integrationErrorText(
+  String code,
+  AppLocalizations l10n, {
+  String provider = '',
+}) {
+  if (code == IntegrationErrorCode.insufficientFloat &&
+      integrationProviderKeyFromJson(provider) ==
+          IntegrationProviderKey.pointy) {
+    return l10n.posServiceReasonInsufficient;
+  }
   return switch (code) {
     IntegrationErrorCode.notConfigured => l10n.integrationErrorNotConfigured,
     IntegrationErrorCode.unavailable => l10n.integrationErrorUnavailable,

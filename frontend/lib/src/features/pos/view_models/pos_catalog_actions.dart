@@ -316,7 +316,7 @@ extension PosCatalogActions on PosViewModel {
   Future<PosProductSelectionResult> selectProductForSale(
     Product product,
   ) async {
-    if (_isCheckingOut) {
+    if (_isCartFrozen) {
       return const PosProductSelectionResult.unavailable();
     }
 

@@ -97,6 +97,12 @@ class _WalletCodeStepState extends State<WalletCodeStep> {
                   ),
                 ),
               ),
+              if (walletCreditLine(l10n, topUp) case final credit?)
+                Text(
+                  credit,
+                  textAlign: TextAlign.center,
+                  style: textTheme.bodySmall?.copyWith(color: colors.mutedInk),
+                ),
             ],
             SizedBox(height: spacing.xs),
             Text(

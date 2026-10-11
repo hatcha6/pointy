@@ -1712,6 +1712,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get dashboardLastUpdatedUnknown => 'آخر تحديث غير معروف';
 
   @override
+  String get dashboardRangeToday => 'اليوم';
+
+  @override
   String get dashboardRange7Days => '٧ أيام';
 
   @override
@@ -3995,11 +3998,6 @@ class AppLocalizationsAr extends AppLocalizations {
       'ستُعاد الكمية إلى المخزون وتُحذف من حساب المهمة.';
 
   @override
-  String jobMaterialsTotalLabel(String amount) {
-    return 'إجمالي القطع: $amount';
-  }
-
-  @override
   String get jobQuotedPriceLabel => 'السعر المبدئي';
 
   @override
@@ -4050,11 +4048,58 @@ class AppLocalizationsAr extends AppLocalizations {
       'ستُنشأ فاتورة عادية بالقطع المستخدمة وأجور العمل، ويدخل المبلغ في جلسة الدرج الحالية.';
 
   @override
-  String get jobLaborTotalLabel => 'أجور العمل';
+  String get jobBillSectionTitle => 'الحساب';
 
   @override
-  String jobInvoiceTotalLabel(String amount) {
-    return 'الإجمالي: $amount';
+  String get jobBillPartsLabel => 'القطع';
+
+  @override
+  String get jobBillServicesLabel => 'الخدمات والأجور';
+
+  @override
+  String get jobBillAgreedPrice => 'السعر المتفق عليه';
+
+  @override
+  String get jobBillQuotedPrice => 'السعر المبدئي';
+
+  @override
+  String jobBillRemainderLabel(String price) {
+    return 'باقي $price';
+  }
+
+  @override
+  String get jobBillTotalLabel => 'مبلغ الفاتورة';
+
+  @override
+  String jobBillPriceLine(String price, String amount) {
+    return '$price: $amount';
+  }
+
+  @override
+  String jobBillRemainderHint(String price) {
+    return 'يُضاف الباقي كأجرة عند الفوترة، فتساوي الفاتورة $price.';
+  }
+
+  @override
+  String jobBillOverAgreed(String price, String amount) {
+    return 'البنود أعلى من $price بـ $amount. أخبر الزبون قبل الفوترة.';
+  }
+
+  @override
+  String get jobBillEmpty =>
+      'أضف القطع والخدمات أو اكتب السعر المتفق عليه، ويظهر هنا مبلغ الفاتورة.';
+
+  @override
+  String get jobInvoiceExtraLabel => 'مبلغ إضافي على الفاتورة';
+
+  @override
+  String jobInvoiceExtraFillsAgreed(String price, String amount) {
+    return 'يكمل $price ($amount). لا تُعد كتابة الأجور المسجلة على المهمة.';
+  }
+
+  @override
+  String jobInvoiceOverAgreed(String price, String amount) {
+    return 'الإجمالي أعلى من $price ($amount).';
   }
 
   @override
@@ -4914,9 +4959,6 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get jobInvoiceNeedsCustomerForCredit =>
       'الفاتورة الآجلة تحتاج زبوناً مسجَّلاً على المهمة.';
-
-  @override
-  String get jobInvoiceServicesLabel => 'الخدمات';
 
   @override
   String get jobOverQuoteTitle => 'المبلغ أعلى من السعر المتفق عليه';
@@ -11424,6 +11466,10 @@ class AppLocalizationsAr extends AppLocalizations {
       'لم تعد جلسة الدرج مفتوحة. يرجى فتح جلسة درج جديدة ثم إعادة المحاولة.';
 
   @override
+  String get saleCheckoutTotalChanged =>
+      'تغيّرت الفاتورة، راجع المبلغ ثم أكّد الدفع من جديد.';
+
+  @override
   String get oversellWarningTitle => 'تنبيه المخزون';
 
   @override
@@ -12265,6 +12311,14 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get saleVoidMessage =>
       'سيتم عكس كامل المبلغ وإرجاع الكميات المتبقية إلى المخزون.';
+
+  @override
+  String get saleClosedDrawerRefundTitle => 'الفاتورة من وردية مُغلقة';
+
+  @override
+  String saleClosedDrawerRefundMessage(String session) {
+    return 'سيُصرف المبلغ من درجك المفتوح الآن، لا من الوردية $session، ولن يتغيّر جردها. تابع فقط إن كنت ستعطي الزبون المال الآن.';
+  }
 
   @override
   String get saleVoidSuccess => 'تم إلغاء الفاتورة.';
@@ -21961,6 +22015,16 @@ class AppLocalizationsAr extends AppLocalizations {
   String get rechargeRefusedTitle => 'لم يُنفَّذ الشحن';
 
   @override
+  String rechargeRefundedLine(String amount) {
+    return 'أُلغي من الفاتورة تلقائياً — أعِد $amount للزبون.';
+  }
+
+  @override
+  String rechargeRefundedTotal(String amount) {
+    return 'المبلغ المُعاد للزبون: $amount';
+  }
+
+  @override
   String get rechargeUnknownTitle => 'نتيجة الشحن غير معروفة';
 
   @override
@@ -24629,6 +24693,43 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get walletTransferNote =>
       'بعد المتابعة نعرض لك حسابنا لتحوّل إليه، ثم ترسل الإيصال ويتحقق فريقنا منه.';
+
+  @override
+  String get walletFeeTitle => 'قبل أن تدفع';
+
+  @override
+  String get walletFeePaidLabel => 'المبلغ الذي ستدفعه';
+
+  @override
+  String walletFeeLabel(String percent) {
+    return 'رسوم بوابة الدفع ($percent٪)';
+  }
+
+  @override
+  String get walletFeeCreditLabel => 'يُضاف إلى محفظتك';
+
+  @override
+  String walletFeeNote(String percent) {
+    return 'تقتطع بوابة الدفع $percent٪ من كل عملية دفع إلكتروني، فتُخصم من المبلغ الذي تشحنه.';
+  }
+
+  @override
+  String walletFeeEmptyHint(String percent) {
+    return 'تُخصم رسوم بوابة الدفع ($percent٪) من المبلغ، وسترى هنا ما يُضاف إلى محفظتك قبل الدفع.';
+  }
+
+  @override
+  String get walletFeeTransferTip => 'الشحن بتحويل مصرفي بلا رسوم.';
+
+  @override
+  String walletFeeCreditLine(String credit, String fee) {
+    return 'يُضاف إلى محفظتك $credit بعد خصم رسوم الدفع $fee.';
+  }
+
+  @override
+  String walletPaidMessageWithFee(String credit, String amount, String fee) {
+    return 'أُضيف $credit إلى رصيدك (دفعت $amount، ورسوم الدفع $fee).';
+  }
 
   @override
   String get walletTransferSend => 'أرسل للتحقق';

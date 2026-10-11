@@ -532,6 +532,30 @@ func (s HTTPServer) handleVoucherPurchase(w http.ResponseWriter, r *http.Request
 	if !ok {
 		return
 	}
+	s.placeCardPurchase(w, r, store, voucherBuyer{InstallationID: installation.ID}, request)
+}
+
+// voucherBuyer is who pays for a purchase: a shop, from its voucher balance,
+// or the company buying for itself (no installation, no wallet; see
+// vouchers_company.go), which must say why.
+type voucherBuyer struct {
+	InstallationID string
+	Purpose        string
+	Note           string
+}
+
+func (b voucherBuyer) company() bool { return b.InstallationID == "" }
+
+// placeCardPurchase buys cards of one item for a buyer: the shop's purchase
+// route, and the operator's purchase for the company.
+func (s HTTPServer) placeCardPurchase(
+	w http.ResponseWriter,
+	r *http.Request,
+	store control.VoucherStore,
+	buyer voucherBuyer,
+	request voucherPurchaseRequest,
+) {
+	installation := control.Installation{ID: buyer.InstallationID}
 	ctx := r.Context()
 	if existing, found, err := store.FindVoucherPurchaseByKey(ctx, installation.ID, request.IdempotencyKey); err != nil {
 		s.writeVoucherInternalError(w, installation.ID, "voucher purchase lookup failed", err)
@@ -540,7 +564,7 @@ func (s HTTPServer) handleVoucherPurchase(w http.ResponseWriter, r *http.Request
 		s.replayVoucherPurchase(w, r, store, existing)
 		return
 	}
-	if s.enforceVoucherRateLimit(w, r, installation.ID) {
+	if !buyer.company() && s.enforceVoucherRateLimit(w, r, installation.ID) {
 		return
 	}
 
@@ -569,6 +593,11 @@ func (s HTTPServer) handleVoucherPurchase(w http.ResponseWriter, r *http.Request
 		located = priced
 	}
 	ranking := s.Vouchers.rankSuppliers(located, offers, settings)
+	if buyer.company() {
+		// The company's own stock is the company's already: it buys from
+		// its suppliers.
+		ranking = ranking.withoutStock()
+	}
 	if reason, notify := ranking.unavailable(); reason != "" {
 		if notify {
 			s.logger().Warn("a card was refused for its supplier", "item", located.Item.Key, "reason", reason)
@@ -579,6 +608,12 @@ func (s HTTPServer) handleVoucherPurchase(w http.ResponseWriter, r *http.Request
 	first := ranking.Candidates[0]
 	now := s.clock().Now()
 	unitPrice, priced := vouchers.ChargePrice(located.Item, now, request.maxUnitPrice)
+	if buyer.company() {
+		// Nobody is charged: the row carries what the card should cost the
+		// company, as the cheapest supplier prices it (the shops' price
+		// when that is not known).
+		unitPrice, priced = companyCardCost(first, located.Item, now), true
+	}
 	if !priced {
 		current := vouchers.PriceAt(located.Item, now).UnitPrice
 		writeSMSError(w, http.StatusConflict, voucherCodePriceChanged,
@@ -598,6 +633,8 @@ func (s HTTPServer) handleVoucherPurchase(w http.ResponseWriter, r *http.Request
 		SupplierRef:    first.Ref.ID,
 		TestMode:       s.Vouchers.MarksTest(),
 		RequestedBy:    request.RequestedBy,
+		Purpose:        buyer.Purpose,
+		Note:           buyer.Note,
 	})
 	var balanceErr *control.WalletBalanceError
 	switch {
@@ -865,7 +902,7 @@ func voucherPurchasePayload(purchase control.VoucherPurchase, codes []vouchers.C
 // read leaves it out rather than failing a purchase already made.
 func (s HTTPServer) voucherBalance(ctx context.Context, installationID string) string {
 	store, ok := s.walletStore()
-	if !ok {
+	if !ok || installationID == "" {
 		return ""
 	}
 	wallet, err := store.GetWalletAccount(ctx, installationID, control.WalletAccountVouchers)

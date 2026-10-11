@@ -117,6 +117,9 @@ export type Purchase = {
   held_since?: string | null;
   created_at: string;
   completed_at?: string | null;
+  /** The company's own purchase (no installation): why, and what for. */
+  purpose?: string;
+  note?: string;
 };
 
 export type AuditEvent = {

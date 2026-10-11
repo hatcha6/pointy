@@ -1009,6 +1009,7 @@
     }
   },
   "dashboardLastUpdatedUnknown": "آخر تحديث غير معروف",
+  "dashboardRangeToday": "اليوم",
   "dashboardRange7Days": "٧ أيام",
   "dashboardRange30Days": "٣٠ يومًا",
   "dashboardRange90Days": "٩٠ يومًا",
@@ -2450,15 +2451,6 @@
   "reverseMaterialAction": "إرجاع للمخزون",
   "reverseMaterialConfirmTitle": "إرجاع القطعة للمخزون؟",
   "reverseMaterialConfirmMessage": "ستُعاد الكمية إلى المخزون وتُحذف من حساب المهمة.",
-  "jobMaterialsTotalLabel": "إجمالي القطع: {amount}",
-  "@jobMaterialsTotalLabel": {
-    "description": "Total price of materials used on a job.",
-    "placeholders": {
-      "amount": {
-        "type": "String"
-      }
-    }
-  },
   "jobQuotedPriceLabel": "السعر المبدئي",
   "jobApprovedPriceLabel": "السعر المعتمد من الزبون",
   "jobApprovalRequiredHint": "سجّل السعر الذي وافق عليه الزبون قبل بدء العمل.",
@@ -2475,11 +2467,99 @@
   "jobInvoiceButton": "تحصيل وفوترة",
   "jobInvoiceTitle": "فاتورة المهمة",
   "jobInvoiceExplainer": "ستُنشأ فاتورة عادية بالقطع المستخدمة وأجور العمل، ويدخل المبلغ في جلسة الدرج الحالية.",
-  "jobLaborTotalLabel": "أجور العمل",
-  "jobInvoiceTotalLabel": "الإجمالي: {amount}",
-  "@jobInvoiceTotalLabel": {
-    "description": "Job invoice grand total.",
+  "jobBillSectionTitle": "الحساب",
+  "@jobBillSectionTitle": {
+    "description": "Job screen card that adds up what the job's invoice will come to."
+  },
+  "jobBillPartsLabel": "القطع",
+  "@jobBillPartsLabel": {
+    "description": "Bill card row: parts fitted on the job."
+  },
+  "jobBillServicesLabel": "الخدمات والأجور",
+  "@jobBillServicesLabel": {
+    "description": "Bill card row: services and labour lines already charged on the job."
+  },
+  "jobBillAgreedPrice": "السعر المتفق عليه",
+  "@jobBillAgreedPrice": {
+    "description": "Name of the customer-approved price, used inside other bill sentences."
+  },
+  "jobBillQuotedPrice": "السعر المبدئي",
+  "@jobBillQuotedPrice": {
+    "description": "Name of the first quote, used inside other bill sentences when nothing was approved."
+  },
+  "jobBillRemainderLabel": "باقي {price}",
+  "@jobBillRemainderLabel": {
+    "description": "Bill card row: the part of the agreed/quoted price no line accounts for, billed as labour. {price} is jobBillAgreedPrice or jobBillQuotedPrice.",
     "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "jobBillTotalLabel": "مبلغ الفاتورة",
+  "@jobBillTotalLabel": {
+    "description": "Bill card total: exactly what the invoice will be."
+  },
+  "jobBillPriceLine": "{price}: {amount}",
+  "@jobBillPriceLine": {
+    "description": "Bill card note naming the agreed or quoted price.",
+    "placeholders": {
+      "price": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "jobBillRemainderHint": "يُضاف الباقي كأجرة عند الفوترة، فتساوي الفاتورة {price}.",
+  "@jobBillRemainderHint": {
+    "description": "Explains the remainder row.",
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "jobBillOverAgreed": "البنود أعلى من {price} بـ {amount}. أخبر الزبون قبل الفوترة.",
+  "@jobBillOverAgreed": {
+    "description": "Warning when parts + services already exceed the agreed/quoted price.",
+    "placeholders": {
+      "price": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "jobBillEmpty": "أضف القطع والخدمات أو اكتب السعر المتفق عليه، ويظهر هنا مبلغ الفاتورة.",
+  "@jobBillEmpty": {
+    "description": "Bill card when nothing is priced yet."
+  },
+  "jobInvoiceExtraLabel": "مبلغ إضافي على الفاتورة",
+  "@jobInvoiceExtraLabel": {
+    "description": "Invoice dialog field: an amount added on top of the job's lines. Replaces the old «أجور العمل» box, which read like the labour already charged on the job."
+  },
+  "jobInvoiceExtraFillsAgreed": "يكمل {price} ({amount}). لا تُعد كتابة الأجور المسجلة على المهمة.",
+  "@jobInvoiceExtraFillsAgreed": {
+    "description": "Helper under the extra-amount field when it was pre-filled to reach the agreed price; warns against typing labour already on the job again.",
+    "placeholders": {
+      "price": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "jobInvoiceOverAgreed": "الإجمالي أعلى من {price} ({amount}).",
+  "@jobInvoiceOverAgreed": {
+    "description": "Invoice dialog warning when the total runs past the agreed/quoted price.",
+    "placeholders": {
+      "price": {
+        "type": "String"
+      },
       "amount": {
         "type": "String"
       }
@@ -2942,7 +3022,6 @@
   "jobInvoiceAmountNowLabel": "المبلغ المستلم الآن",
   "jobInvoiceDueDateLabel": "تاريخ الاستحقاق",
   "jobInvoiceNeedsCustomerForCredit": "الفاتورة الآجلة تحتاج زبوناً مسجَّلاً على المهمة.",
-  "jobInvoiceServicesLabel": "الخدمات",
   "jobOverQuoteTitle": "المبلغ أعلى من السعر المتفق عليه",
   "jobOverQuoteMessage": "وافق الزبون على {approved} والفاتورة {total}. أكّد المبلغ الجديد معه أولاً.",
   "@jobOverQuoteMessage": {
@@ -7302,6 +7381,10 @@
   },
   "saleCheckoutError": "تعذر تسجيل البيع. تحقق من جلسة الدرج وحاول مرة أخرى.",
   "saleCheckoutSessionExpired": "لم تعد جلسة الدرج مفتوحة. يرجى فتح جلسة درج جديدة ثم إعادة المحاولة.",
+  "saleCheckoutTotalChanged": "تغيّرت الفاتورة، راجع المبلغ ثم أكّد الدفع من جديد.",
+  "@saleCheckoutTotalChanged": {
+    "description": "Shown when the payment sheet asked for an amount that no longer matches the cart total; nothing was sent and the sheet reopens with the right amount."
+  },
   "oversellWarningTitle": "تنبيه المخزون",
   "oversellWarningMessage": "تتجاوز بعض عناصر السلة الكمية المتاحة. هل تريد إتمام البيع رغم ذلك؟",
   "oversellBlockedMessage": "لا يمكن إتمام البيع لأن الكمية المطلوبة تتجاوز المخزون المتاح.",
@@ -7822,6 +7905,19 @@
   "saleVoidButton": "إلغاء الفاتورة",
   "saleVoidTitle": "إلغاء الفاتورة",
   "saleVoidMessage": "سيتم عكس كامل المبلغ وإرجاع الكميات المتبقية إلى المخزون.",
+  "saleClosedDrawerRefundTitle": "الفاتورة من وردية مُغلقة",
+  "@saleClosedDrawerRefundTitle": {
+    "description": "Warning title in the void/return dialog when the invoice was sold in a register session that is already closed."
+  },
+  "saleClosedDrawerRefundMessage": "سيُصرف المبلغ من درجك المفتوح الآن، لا من الوردية {session}، ولن يتغيّر جردها. تابع فقط إن كنت ستعطي الزبون المال الآن.",
+  "@saleClosedDrawerRefundMessage": {
+    "description": "Explains that a void or return of a closed session's sale is paid out of the drawer open now and does not change the closed session's count. {session} is the closed session's number, e.g. RS-36.",
+    "placeholders": {
+      "session": {
+        "type": "String"
+      }
+    }
+  },
   "saleVoidSuccess": "تم إلغاء الفاتورة.",
   "saleVoidError": "تعذر إلغاء الفاتورة.",
   "saleReturnButton": "إرجاع منتجات",
@@ -16013,6 +16109,24 @@
   "@rechargeRefusedTitle": {
     "description": ""
   },
+  "rechargeRefundedLine": "أُلغي من الفاتورة تلقائياً — أعِد {amount} للزبون.",
+  "@rechargeRefundedLine": {
+    "description": "Under a provider line the provider refused: the server already returned the line in this drawer, so the cashier hands this amount back. Do not ring the sale up again to retry without taking the money again.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "rechargeRefundedTotal": "المبلغ المُعاد للزبون: {amount}",
+  "@rechargeRefundedTotal": {
+    "description": "Bold line at the end of the refused-recharge dialog: the total the cashier hands back for every refused line of this sale.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "rechargeUnknownTitle": "نتيجة الشحن غير معروفة",
   "@rechargeUnknownTitle": {
     "description": ""
@@ -19548,6 +19662,76 @@
   "walletTransferNote": "بعد المتابعة نعرض لك حسابنا لتحوّل إليه، ثم ترسل الإيصال ويتحقق فريقنا منه.",
   "@walletTransferNote": {
     "description": "Under the top-up form when bank transfer is chosen."
+  },
+  "walletFeeTitle": "قبل أن تدفع",
+  "@walletFeeTitle": {
+    "description": "Heading of the fee breakdown card on the top-up form."
+  },
+  "walletFeePaidLabel": "المبلغ الذي ستدفعه",
+  "@walletFeePaidLabel": {
+    "description": "Fee breakdown row: what the payer pays."
+  },
+  "walletFeeLabel": "رسوم بوابة الدفع ({percent}٪)",
+  "@walletFeeLabel": {
+    "description": "Fee breakdown row: the gateway fee and its percent.",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "walletFeeCreditLabel": "يُضاف إلى محفظتك",
+  "@walletFeeCreditLabel": {
+    "description": "Fee breakdown total row: what the wallet gets."
+  },
+  "walletFeeNote": "تقتطع بوابة الدفع {percent}٪ من كل عملية دفع إلكتروني، فتُخصم من المبلغ الذي تشحنه.",
+  "@walletFeeNote": {
+    "description": "Why the wallet gets less than what is paid.",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "walletFeeEmptyHint": "تُخصم رسوم بوابة الدفع ({percent}٪) من المبلغ، وسترى هنا ما يُضاف إلى محفظتك قبل الدفع.",
+  "@walletFeeEmptyHint": {
+    "description": "Fee card before an amount is typed.",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "walletFeeTransferTip": "الشحن بتحويل مصرفي بلا رسوم.",
+  "@walletFeeTransferTip": {
+    "description": "Tip under the fee card when bank transfer is offered."
+  },
+  "walletFeeCreditLine": "يُضاف إلى محفظتك {credit} بعد خصم رسوم الدفع {fee}.",
+  "@walletFeeCreditLine": {
+    "description": "Line in the payer dialog and code step: credit after the fee.",
+    "placeholders": {
+      "credit": {
+        "type": "String"
+      },
+      "fee": {
+        "type": "String"
+      }
+    }
+  },
+  "walletPaidMessageWithFee": "أُضيف {credit} إلى رصيدك (دفعت {amount}، ورسوم الدفع {fee}).",
+  "@walletPaidMessageWithFee": {
+    "description": "Paid verdict when a fee was kept.",
+    "placeholders": {
+      "credit": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      },
+      "fee": {
+        "type": "String"
+      }
+    }
   },
   "walletTransferSend": "أرسل للتحقق",
   "@walletTransferSend": {

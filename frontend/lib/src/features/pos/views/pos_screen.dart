@@ -777,7 +777,7 @@ class _PosWorkspaceState extends State<_PosWorkspace> {
 
     final scanEnabled =
         capabilities.canCheckoutSale &&
-        !viewModel.isCheckingOut &&
+        !viewModel.isCartFrozen &&
         !viewModel.isResolvingBarcode;
 
     // Three scan sources, one listener. The counter wedge types; a camera on a

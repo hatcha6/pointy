@@ -32,6 +32,10 @@ import (
 const (
 	FinanceIncome  = "income"
 	FinanceExpense = "expense"
+	// FinanceWithdrawal is money the owners took out of what the company
+	// earned. It is neither income nor an expense: the profit and loss leaves
+	// it out, and the money that is the owners' to take goes down by it.
+	FinanceWithdrawal = "withdrawal"
 )
 
 // FinanceCurrency is the books' currency: every entry is booked in dinars,
@@ -119,11 +123,17 @@ type FinanceTrackedMonth struct {
 	// SMSCost is what Resala charged for the texts that went out.
 	SMSCost string `json:"sms_cost"`
 	// SupplierCost is what card, airtime and bill suppliers charged, by the
-	// currency they charged in.
+	// currency they charged in, for what shops bought.
 	SupplierCost map[string]string `json:"supplier_cost"`
-	// TopUps is money shops paid into their wallets, by method. It is the
-	// shops' money, held, not income.
+	// CompanyCost is what the same suppliers charged for what the company
+	// bought for itself, by currency: its own spending, not a service's cost.
+	CompanyCost map[string]string `json:"company_cost,omitempty"`
+	// TopUps is money shops paid into their wallets, by method, as credited:
+	// net of the gateway fee. It is the shops' money, held, not income.
 	TopUps map[string]string `json:"topups"`
+	// TopUpFees is the gateway fee kept out of those top-ups: what Dafa
+	// took from the company, and what the company charged the shops for it.
+	TopUpFees string `json:"topup_fees"`
 }
 
 // FinanceStore is an optional store capability (type-asserted, like
@@ -142,6 +152,9 @@ type FinanceStore interface {
 	// FinanceTracked rolls up the relay's own records in [from, to), oldest
 	// month first.
 	FinanceTracked(ctx context.Context, from, to time.Time) ([]FinanceTrackedMonth, error)
+	// FinancePosition reads, as of now, what stands between the company's
+	// profit and the money that is the owners' to take.
+	FinancePosition(ctx context.Context) (FinancePosition, error)
 }
 
 var (
@@ -214,8 +227,8 @@ func invalidFinance(format string, args ...any) error {
 // dinar amount, the id, the time.
 func prepareFinanceEntry(entry FinanceEntry, now time.Time) (FinanceEntry, error) {
 	entry.Direction = strings.ToLower(strings.TrimSpace(entry.Direction))
-	if entry.Direction != FinanceIncome && entry.Direction != FinanceExpense {
-		return FinanceEntry{}, invalidFinance("direction must be income or expense")
+	if entry.Direction != FinanceIncome && entry.Direction != FinanceExpense && entry.Direction != FinanceWithdrawal {
+		return FinanceEntry{}, invalidFinance("direction must be income, expense or withdrawal")
 	}
 	entry.Category = strings.ToLower(strings.TrimSpace(entry.Category))
 	if !financeCategoryPattern.MatchString(entry.Category) {
@@ -351,7 +364,9 @@ type financeRollupMonth struct {
 	revenue      map[string]*big.Rat
 	smsCost      *big.Rat
 	supplierCost map[string]*big.Rat
+	companyCost  map[string]*big.Rat
 	topUps       map[string]*big.Rat
+	topUpFees    *big.Rat
 }
 
 func newFinanceRollup() *financeRollup {
@@ -365,7 +380,9 @@ func (r *financeRollup) month(name string) *financeRollupMonth {
 			revenue:      map[string]*big.Rat{},
 			smsCost:      new(big.Rat),
 			supplierCost: map[string]*big.Rat{},
+			companyCost:  map[string]*big.Rat{},
 			topUps:       map[string]*big.Rat{},
+			topUpFees:    new(big.Rat),
 		}
 		r.months[name] = m
 	}
@@ -398,8 +415,28 @@ func (r *financeRollup) addSupplierCost(month, currency, cost string) {
 	addRat(r.month(month).supplierCost, strings.ToUpper(strings.TrimSpace(currency)), cost)
 }
 
+func (r *financeRollup) addCompanyCost(month, currency, cost string) {
+	addRat(r.month(month).companyCost, strings.ToUpper(strings.TrimSpace(currency)), cost)
+}
+
+// companyPurchaseCost is what the company's own purchase cost it: the
+// supplier's figure when it gave one, else the dinars estimated at the claim.
+func companyPurchaseCost(purchase VoucherPurchase) (currency, cost string) {
+	if _, ok := new(big.Rat).SetString(strings.TrimSpace(purchase.SupplierCost)); ok && purchase.SupplierCurrency != "" {
+		return purchase.SupplierCurrency, purchase.SupplierCost
+	}
+	return FinanceCurrency, purchase.Amount
+}
+
 func (r *financeRollup) addTopUp(month, method, amount string) {
 	addRat(r.month(month).topUps, method, amount)
+}
+
+func (r *financeRollup) addTopUpFee(month, fee string) {
+	if value, ok := new(big.Rat).SetString(strings.TrimSpace(fee)); ok && value.Sign() != 0 {
+		m := r.month(month)
+		m.topUpFees.Add(m.topUpFees, value)
+	}
 }
 
 func formatRats(values map[string]*big.Rat) map[string]string {
@@ -426,7 +463,9 @@ func (r *financeRollup) result() []FinanceTrackedMonth {
 			Revenue:      formatRats(m.revenue),
 			SMSCost:      FormatWalletAmount(m.smsCost),
 			SupplierCost: formatRats(m.supplierCost),
+			CompanyCost:  formatRats(m.companyCost),
 			TopUps:       formatRats(m.topUps),
+			TopUpFees:    FormatWalletAmount(m.topUpFees),
 		})
 	}
 	return out
@@ -573,15 +612,22 @@ func (s *FileStore) FinanceTracked(_ context.Context, from, to time.Time) ([]Fin
 		if purchase.CompletedAt != nil {
 			at = *purchase.CompletedAt
 		}
-		if purchase.Status == VoucherPurchaseSucceeded && !purchase.TestMode && within(at, from, to) {
-			rollup.addSupplierCost(FinanceMonth(at), purchase.SupplierCurrency, purchase.SupplierCost)
+		if purchase.Status != VoucherPurchaseSucceeded || purchase.TestMode || !within(at, from, to) {
+			continue
 		}
+		if purchase.ForCompany() {
+			currency, cost := companyPurchaseCost(purchase)
+			rollup.addCompanyCost(FinanceMonth(at), currency, cost)
+			continue
+		}
+		rollup.addSupplierCost(FinanceMonth(at), purchase.SupplierCurrency, purchase.SupplierCost)
 	}
 	for _, topUp := range s.data.WalletTopUps {
 		if topUp.Status != WalletTopUpPaid || topUp.TestMode || topUp.PaidAt == nil || !within(*topUp.PaidAt, from, to) {
 			continue
 		}
-		rollup.addTopUp(FinanceMonth(*topUp.PaidAt), topUp.Method, topUp.Amount)
+		rollup.addTopUp(FinanceMonth(*topUp.PaidAt), topUp.Method, WalletTopUpCredit(topUp))
+		rollup.addTopUpFee(FinanceMonth(*topUp.PaidAt), topUp.Fee)
 	}
 	return rollup.result(), nil
 }
@@ -776,17 +822,39 @@ func (s *PostgresStore) FinanceTracked(ctx context.Context, from, to time.Time) 
 			`SELECT ` + financeMonthSQL("COALESCE(completed_at, created_at)") + `, upper(supplier_currency),
 				SUM(CASE WHEN supplier_cost ~ '^\s*[0-9]+(\.[0-9]+)?\s*$' THEN trim(supplier_cost)::numeric ELSE 0 END)::text
 			FROM relay_voucher_purchases
-			WHERE status = 'succeeded' AND NOT test_mode
+			WHERE status = 'succeeded' AND NOT test_mode AND installation_id IS NOT NULL
 				AND COALESCE(completed_at, created_at) >= $1 AND COALESCE(completed_at, created_at) < $2
 			GROUP BY 1, 2`,
 			rollup.addSupplierCost,
 		},
 		{
-			`SELECT ` + financeMonthSQL("paid_at") + `, method, SUM(amount)::text
+			// The company's own purchases, as companyPurchaseCost reads them.
+			`SELECT ` + financeMonthSQL("COALESCE(completed_at, created_at)") + `,
+				CASE WHEN supplier_cost ~ '^\s*[0-9]+(\.[0-9]+)?\s*$' AND supplier_currency <> ''
+					THEN upper(supplier_currency) ELSE 'LYD' END,
+				SUM(CASE WHEN supplier_cost ~ '^\s*[0-9]+(\.[0-9]+)?\s*$' AND supplier_currency <> ''
+					THEN trim(supplier_cost)::numeric ELSE amount END)::text
+			FROM relay_voucher_purchases
+			WHERE status = 'succeeded' AND NOT test_mode AND installation_id IS NULL
+				AND COALESCE(completed_at, created_at) >= $1 AND COALESCE(completed_at, created_at) < $2
+			GROUP BY 1, 2`,
+			rollup.addCompanyCost,
+		},
+		{
+			// As credited: the gateway fee kept out of a top-up was never the
+			// shop's money.
+			`SELECT ` + financeMonthSQL("paid_at") + `, method, SUM(amount - fee)::text
 			FROM relay_wallet_topups
 			WHERE status = 'paid' AND NOT test_mode AND paid_at >= $1 AND paid_at < $2
 			GROUP BY 1, 2`,
 			rollup.addTopUp,
+		},
+		{
+			`SELECT ` + financeMonthSQL("paid_at") + `, '', SUM(fee)::text
+			FROM relay_wallet_topups
+			WHERE status = 'paid' AND NOT test_mode AND fee > 0 AND paid_at >= $1 AND paid_at < $2
+			GROUP BY 1`,
+			func(month, _, fee string) { rollup.addTopUpFee(month, fee) },
 		},
 	}
 	for _, query := range queries {
@@ -858,4 +926,12 @@ func (s *CachedInstallationStore) FinanceTracked(ctx context.Context, from, to t
 		return nil, err
 	}
 	return store.FinanceTracked(ctx, from, to)
+}
+
+func (s *CachedInstallationStore) FinancePosition(ctx context.Context) (FinancePosition, error) {
+	store, err := s.financeStore()
+	if err != nil {
+		return FinancePosition{}, err
+	}
+	return store.FinancePosition(ctx)
 }

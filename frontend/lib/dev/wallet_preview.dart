@@ -8,7 +8,7 @@
 //
 //   make frontend-wallet-preview
 //
-// Scenarios: page | test_mode | empty | unavailable | sheet | sheet_sadad |
+// Scenarios: page | test_mode | empty | unavailable | sheet | sheet_sadad | sheet_fee |
 //            payer_dialog | payer_dialog_card | sheet_error | code |
 //            code_error | code_test | waiting | paid | declined | canceled |
 //            unconfirmed | history | sms_empty | sms_sheet | sms_sheet_poor |
@@ -101,6 +101,7 @@ class _PreviewApp extends StatelessWidget {
         'history' => _HistoryHost(wallet: wallet),
         'sheet' ||
         'sheet_sadad' ||
+        'sheet_fee' ||
         'payer_dialog' ||
         'payer_dialog_card' ||
         'sheet_error' ||
@@ -165,11 +166,12 @@ class _SheetHostState extends State<_SheetHost> {
       final sheet = showWalletTopUpSheet(
         context: context,
         viewModel: widget.wallet,
+        initialAmount: widget.screen == 'sheet_fee' ? 100 : null,
       );
       await Future<void>.delayed(const Duration(milliseconds: 300));
       final wallet = widget.wallet;
       switch (widget.screen) {
-        case 'sheet_sadad':
+        case 'sheet_sadad' || 'sheet_fee':
           wallet.selectMethod('dafa_sadad');
         case 'payer_dialog' || 'payer_dialog_card':
           wallet.selectMethod(
@@ -330,6 +332,8 @@ WalletTopUp _topUp(
         : WalletTopUpMethod.kindOtp,
     payerHint: payerHint,
     amount: amount,
+    // The relay's 2% gateway fee, rounded up to the dirham.
+    fee: (amount * 20).ceil() / 1000,
     status: status,
     testMode: testMode,
     createdAt: _now.subtract(ago),
@@ -498,6 +502,7 @@ class _FakeWalletRepository extends WalletRepository {
     maxDecimals: 2,
     quickAmounts: [50, 100, 200, 500],
     pendingTtl: Duration(minutes: 30),
+    feePercent: 2,
     bankTransfer: WalletBankTransferOffer(
       // Made up: the real account is set in the operator console.
       accounts: [

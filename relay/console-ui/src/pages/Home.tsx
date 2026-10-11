@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowDownLeft, ArrowLeft, ArrowUpRight, CalendarClock, CheckCircle2, CreditCard, Landmark, PlusCircle, Store, TrendingUp, Wallet as WalletIcon } from "lucide-react";
+import { ArrowDownLeft, ArrowLeft, ArrowUpRight, CalendarClock, CheckCircle2, CreditCard, Landmark, PiggyBank, PlusCircle, Store, TrendingUp, Wallet as WalletIcon } from "lucide-react";
 import { InboxRow, useInbox } from "../components/Inbox";
 import { useConsoleAudit, useInstallations, useMe, usePurchases, useTopUps, useWallets } from "../lib/queries";
 import { Link } from "../lib/router";
@@ -7,7 +7,7 @@ import { auditLabel } from "../lib/labels";
 import { count } from "../lib/format";
 import { Button, Card, Empty, Money, Skeleton, TimeAgo } from "../components/ui";
 import { Delta } from "../components/finance/charts";
-import { change, periodRange, useFinanceSummary } from "../lib/finance";
+import { change, periodRange, useFinancePosition, useFinanceSummary } from "../lib/finance";
 import { draftForMonth } from "../components/finance/Recurring";
 import { useEntryDialog } from "./Finance";
 import { openPalette } from "../components/CommandPalette";
@@ -32,6 +32,8 @@ export function Home() {
   const finance = useFinanceSummary(month.from, month.to);
   const entry = useEntryDialog();
   const net = Number(finance.data?.totals.net ?? 0);
+  const position = useFinancePosition();
+  const available = Number(position.data?.available ?? 0);
 
   const shops = installations.data ?? [];
   const active = shops.filter((s) => s.subscription_active).length;
@@ -85,6 +87,15 @@ export function Home() {
           <div className="kpi-foot">
             {finance.data ? <Delta value={change(finance.data.totals.net, finance.data.previous.totals.net)} suffix="عن الشهر الماضي" /> : "الدخل ناقص المصروف"}
           </div>
+        </Link>
+        <Link to="/finance" className="card kpi kpi-link">
+          <div className="kpi-label">
+            <PiggyBank /> متاح لك للسحب
+          </div>
+          <div className="kpi-value">
+            {position.isLoading ? <Skeleton height={30} width={120} /> : position.data ? <Money value={Math.max(available, 0)} /> : "—"}
+          </div>
+          <div className="kpi-foot">ربح دخل فعلاً، بعد ما سحبته</div>
         </Link>
         <Link to="/shops" className="card kpi kpi-link">
           <div className="kpi-label">

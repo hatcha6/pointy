@@ -15,7 +15,7 @@ import (
 // voucherPurchaseColumns is the canonical column order for scanVoucherPurchase.
 // Every query aliases relay_voucher_purchases as p.
 const voucherPurchaseColumns = `p.id,
-	p.installation_id,
+	COALESCE(p.installation_id, ''),
 	p.idempotency_key,
 	p.item_key,
 	p.brand_key,
@@ -39,7 +39,9 @@ const voucherPurchaseColumns = `p.id,
 	p.completed_at,
 	p.kind,
 	p.target,
-	COALESCE(p.details::text, '')`
+	COALESCE(p.details::text, ''),
+	p.purpose,
+	p.note`
 
 const selectVoucherPurchaseSQL = `SELECT ` + voucherPurchaseColumns + ` FROM relay_voucher_purchases p`
 
@@ -423,7 +425,7 @@ func (s *PostgresStore) BeginVoucherPurchase(ctx context.Context, purchase Vouch
 	}
 	existing, err := scanVoucherPurchase(tx.QueryRow(
 		ctx,
-		selectVoucherPurchaseSQL+` WHERE p.installation_id = $1 AND p.idempotency_key = $2`,
+		selectVoucherPurchaseSQL+voucherKeyWhere(claim.InstallationID),
 		claim.InstallationID,
 		claim.IdempotencyKey,
 	), false)
@@ -436,12 +438,14 @@ func (s *PostgresStore) BeginVoucherPurchase(ctx context.Context, purchase Vouch
 	if !errors.Is(err, ErrVoucherPurchaseNotFound) {
 		return VoucherPurchase{}, false, err
 	}
-	posting, err := prepareWalletPosting(voucherChargePosting(claim))
-	if err != nil {
-		return VoucherPurchase{}, false, err
-	}
-	if _, _, err := s.postWalletEntryTx(ctx, tx, posting); err != nil {
-		return VoucherPurchase{}, false, err
+	if !claim.ForCompany() {
+		posting, err := prepareWalletPosting(voucherChargePosting(claim))
+		if err != nil {
+			return VoucherPurchase{}, false, err
+		}
+		if _, _, err := s.postWalletEntryTx(ctx, tx, posting); err != nil {
+			return VoucherPurchase{}, false, err
+		}
 	}
 	// No details is NULL, not an empty document.
 	var details any
@@ -454,12 +458,12 @@ func (s *PostgresStore) BeginVoucherPurchase(ctx context.Context, purchase Vouch
 			id, installation_id, idempotency_key, item_key, brand_key, item_name,
 			quantity, unit_price, amount, supplier, supplier_ref, status,
 			test_mode, requested_by, created_at, updated_at,
-			kind, target, details
+			kind, target, details, purpose, note
 		) VALUES (
-			$1, $2, $3, $4, $5, $6,
+			$1, NULLIF($2, ''), $3, $4, $5, $6,
 			$7, $8::text::numeric, $9::text::numeric, $10, $11, $12,
 			$13, $14, $15::timestamptz, $16::timestamptz,
-			$17, $18, $19::text::jsonb
+			$17, $18, $19::text::jsonb, $20, $21
 		) RETURNING `+voucherPurchaseColumns,
 		claim.ID,
 		claim.InstallationID,
@@ -480,6 +484,8 @@ func (s *PostgresStore) BeginVoucherPurchase(ctx context.Context, purchase Vouch
 		claim.Kind,
 		claim.Target,
 		details,
+		claim.Purpose,
+		claim.Note,
 	), false)
 	if err != nil {
 		if code, _ := pgErrorCode(err); code == pgForeignKeyViolation {
@@ -497,10 +503,11 @@ func (s *PostgresStore) FindVoucherPurchaseByKey(
 	ctx context.Context,
 	installationID, idempotencyKey string,
 ) (VoucherPurchase, bool, error) {
+	installationID = strings.TrimSpace(installationID)
 	purchase, err := scanVoucherPurchase(s.pool.QueryRow(
 		ctx,
-		selectVoucherPurchaseSQL+` WHERE p.installation_id = $1 AND p.idempotency_key = $2`,
-		strings.TrimSpace(installationID),
+		selectVoucherPurchaseSQL+voucherKeyWhere(installationID),
+		installationID,
 		strings.TrimSpace(idempotencyKey),
 	), false)
 	if errors.Is(err, ErrVoucherPurchaseNotFound) {
@@ -680,6 +687,7 @@ func (s *PostgresStore) ListVoucherPurchases(ctx context.Context, filter Voucher
 			AND ($2 = '' OR p.status = $2)
 			AND (NOT $3 OR p.held_since IS NOT NULL)
 			AND ($4 = '' OR p.kind = $4)
+			AND ($6 = '' OR ($6 = 'company') = (p.installation_id IS NULL))
 		ORDER BY p.created_at DESC, p.id DESC
 		LIMIT $5`,
 		strings.TrimSpace(filter.InstallationID),
@@ -687,7 +695,26 @@ func (s *PostgresStore) ListVoucherPurchases(ctx context.Context, filter Voucher
 		filter.HeldOnly,
 		voucherKindFilter(filter.Kind),
 		normalizedVoucherListLimit(filter.Limit),
+		voucherBuyerFilter(filter.Buyer),
 	)
+}
+
+// voucherKeyWhere finds a purchase by (installation $1, idempotency key $2).
+// The company's own purchases have no installation (NULL), and the key is
+// theirs alone: unique among them by an index of its own.
+func voucherKeyWhere(installationID string) string {
+	if installationID == "" {
+		return ` WHERE p.installation_id IS NULL AND $1 = '' AND p.idempotency_key = $2`
+	}
+	return ` WHERE p.installation_id = $1 AND p.idempotency_key = $2`
+}
+
+func voucherBuyerFilter(buyer string) string {
+	switch buyer = strings.TrimSpace(buyer); buyer {
+	case VoucherBuyerCompany, VoucherBuyerShops:
+		return buyer
+	}
+	return ""
 }
 
 func (s *PostgresStore) ListVoucherPurchasesAwaitingCheck(
@@ -790,6 +817,8 @@ func scanVoucherPurchase(row pgx.Row, withShop bool) (VoucherPurchase, error) {
 		&purchase.Kind,
 		&purchase.Target,
 		&details,
+		&purchase.Purpose,
+		&purchase.Note,
 	}
 	if withShop {
 		dest = append(dest, &purchase.ShopName)

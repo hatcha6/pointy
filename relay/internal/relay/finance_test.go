@@ -119,6 +119,50 @@ func TestFinanceEntriesAndSummary(t *testing.T) {
 	}
 }
 
+func TestFinanceBooksTheGatewayFeeBothWays(t *testing.T) {
+	store, provisioned := provisionRelayInstallation(t)
+	server := HTTPServer{
+		Store:      store,
+		Hub:        NewHub(),
+		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
+		AdminToken: "admin-token",
+	}
+	ctx := context.Background()
+	// A shop pays 100 through Sadad: Dafa keeps 2, the wallet gets 98.
+	topUp, _, err := store.BeginWalletTopUp(ctx, control.WalletTopUp{
+		InstallationID: provisioned.Installation.ID, Method: control.WalletTopUpMethodDafaSadad,
+		Amount: "100", Fee: "2", IdempotencyKey: "fee",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := store.SettleWalletTopUp(ctx, topUp.ID, control.WalletTopUpSettlement{ConfirmedBy: "dafa"}); err != nil {
+		t.Fatal(err)
+	}
+	code, summary := financeRequest(t, server, http.MethodGet, "/v1/finance/summary?from=2026-06-01&to=2026-06-30", "")
+	if code != http.StatusOK {
+		t.Fatalf("summary %d %v", code, summary)
+	}
+	totals := summary["totals"].(map[string]any)
+	if totals["income"] != "2.000" || totals["expense"] != "2.000" || totals["net"] != "0.000" {
+		t.Fatalf("the fee is a cost and the charge that covers it: %v", totals)
+	}
+	lines := map[string]string{}
+	for _, direction := range []string{"income", "expense"} {
+		for _, raw := range summary[direction].([]any) {
+			line := raw.(map[string]any)
+			lines[direction+":"+line["key"].(string)] = line["amount"].(string)
+		}
+	}
+	if lines["income:topup_fee"] != "2.000" || lines["expense:gateway_fee"] != "2.000" {
+		t.Fatalf("fee lines %v", lines)
+	}
+	topups := summary["topups"].(map[string]any)
+	if topups["total"] != "98.000" || topups["fees"] != "2.000" {
+		t.Fatalf("the shops hold what was credited: %v", topups)
+	}
+}
+
 func TestFinanceRecurringPostsItselfAndWaitsForConfirm(t *testing.T) {
 	store, _ := provisionRelayInstallation(t)
 	server := HTTPServer{Store: store, Hub: NewHub(), Logger: slog.New(slog.NewTextHandler(io.Discard, nil)), AdminToken: "admin-token",

@@ -76,6 +76,12 @@ class WalletAwaitingPayment extends StatelessWidget {
                 ),
               ),
             ),
+            if (walletCreditLine(l10n, topUp) case final credit?)
+              Text(
+                credit,
+                textAlign: TextAlign.center,
+                style: textTheme.bodySmall?.copyWith(color: colors.mutedInk),
+              ),
             Text(
               l10n.walletTopUpInvoice(walletInvoiceText(topUp.invoiceNo)),
               textAlign: TextAlign.center,
@@ -164,7 +170,15 @@ class WalletTopUpVerdict extends StatelessWidget {
             ? l10n.walletTransferPaidTitle
             : l10n.walletPaidTitle;
         if (topUp != null) {
-          lines.add(l10n.walletPaidMessage(formatWalletMoney(topUp.amount)));
+          lines.add(
+            topUp.fee > 0
+                ? l10n.walletPaidMessageWithFee(
+                    formatWalletMoney(topUp.creditAmount),
+                    formatWalletMoney(topUp.amount),
+                    formatWalletMoney(topUp.fee),
+                  )
+                : l10n.walletPaidMessage(formatWalletMoney(topUp.amount)),
+          );
         }
         final balance = overview?.balance;
         if (balance != null) {

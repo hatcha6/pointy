@@ -491,6 +491,7 @@ class SaleOrder {
     this.receiptNumber,
     this.registerSession,
     this.registerSessionNumber,
+    this.registerSessionStatus,
     this.cashierId,
     this.cashierName,
     this.customer,
@@ -539,6 +540,14 @@ class SaleOrder {
   final int amendmentIndex;
   final int? registerSession;
   final String? registerSessionNumber;
+
+  /// `open` or `closed`: whether the drawer that sold this is still counting.
+  /// Null from a server that does not say.
+  final String? registerSessionStatus;
+
+  /// A void or return of this sale is paid out of the drawer open now, not
+  /// the closed one that sold it — the till says so before it is done.
+  bool get soldInClosedDrawer => registerSessionStatus == 'closed';
 
   /// Who rang this sale up — the register session's owner, resolved server-side
   /// so a till and the invoices list can never name different people. Null on a
@@ -631,6 +640,7 @@ class SaleOrder {
     receiptNumber: receiptNumber,
     registerSession: registerSession,
     registerSessionNumber: registerSessionNumber,
+    registerSessionStatus: registerSessionStatus,
     cashierId: cashierId,
     cashierName: cashierName,
     customer: customer,
@@ -687,6 +697,7 @@ class SaleOrder {
       amendmentIndex: (json['amendment_index'] as num?)?.toInt() ?? 0,
       registerSession: _nullableIntFromJson(json['register_session']),
       registerSessionNumber: json['register_session_number']?.toString(),
+      registerSessionStatus: json['register_session_status']?.toString(),
       cashierId: _nullableIntFromJson(json['cashier']),
       cashierName: json['cashier_name']?.toString(),
       customer: _nullableIntFromJson(json['customer']),

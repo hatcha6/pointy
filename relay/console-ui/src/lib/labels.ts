@@ -66,6 +66,14 @@ export const purchaseKind: Record<string, string> = {
   bill: "فاتورة",
 };
 
+/** Why the company bought something for itself. */
+export const purchasePurpose: Record<string, { label: string; tone: Tone }> = {
+  own_use: { label: "لاستخدامنا", tone: "info" },
+  resale: { label: "للبيع نقداً", tone: "money" },
+  gift: { label: "هدية", tone: "neutral" },
+  other: { label: "أخرى", tone: "neutral" },
+};
+
 export const entryKind: Record<string, string> = {
   topup: "شحن",
   charge: "خصم خدمة",
@@ -137,6 +145,9 @@ export type Tone = "neutral" | "success" | "warning" | "danger" | "info" | "mone
 /** Arabic names for console audit events, matched by method and path. */
 const auditRules: [RegExp, string][] = [
   [/^POST \/v1\/wallet\/admin\/entries/, "حركة محفظة يدوية"],
+  [/^POST \/v1\/vouchers\/admin\/company\/cards/, "شراء بطاقة للشركة"],
+  [/^POST \/v1\/vouchers\/admin\/company\/services/, "شحن أو فاتورة للشركة"],
+  [/^POST \/v1\/vouchers\/admin\/company\/purchases\/[^/]+\/reveal/, "عرض أكواد مشتريات الشركة"],
   [/^POST \/v1\/finance\/entries\/[^/]+\/void/, "إلغاء قيد في الدفتر"],
   [/^POST \/v1\/finance\/entries\/[^/]+\/attachments/, "إرفاق إيصال بقيد"],
   [/^POST \/v1\/finance\/attachments$/, "رفع إيصال"],

@@ -191,16 +191,11 @@ class IntegrationsRepository {
   }
 
   /// Perform the recharges a sale sold. The guard lives on the server: a
-  /// repeat of this call cannot produce a second charge.
-  Future<Result<List<IntegrationChargeResult>>> charge({
-    int? orderId,
-    int? fulfillmentId,
-  }) {
+  /// repeat of this call cannot produce a second charge, and a refused line
+  /// is never tried again — it is given back.
+  Future<Result<List<IntegrationChargeResult>>> charge({required int orderId}) {
     return Result.guard(
-      () => _service.chargeIntegrationRecharges(
-        orderId: orderId,
-        fulfillmentId: fulfillmentId,
-      ),
+      () => _service.chargeIntegrationRecharges(orderId: orderId),
     );
   }
 

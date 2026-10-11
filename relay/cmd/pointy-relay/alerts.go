@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -219,15 +220,18 @@ func buildAlerts(
 		Logger:   logger,
 	}
 	add := func(key, name, unit, floor string, read func() alerts.BalanceSource) error {
+		source := read()
 		floor = strings.TrimSpace(floor)
-		if floor == "" {
+		if floor == "" && source.Owed == nil {
 			return nil
 		}
-		value, ok := new(big.Rat).SetString(floor)
-		if !ok {
-			return fmt.Errorf("alert floor for %s %q is not a number", key, floor)
+		var value *big.Rat
+		if floor != "" {
+			var ok bool
+			if value, ok = new(big.Rat).SetString(floor); !ok {
+				return fmt.Errorf("alert floor for %s %q is not a number", key, floor)
+			}
 		}
-		source := read()
 		source.Key, source.Name, source.Unit, source.Floor = key, name, unit, value
 		if source.Link == "" {
 			source.Link = "/suppliers?tab=balances"
@@ -238,12 +242,20 @@ func buildAlerts(
 	var errs []error
 	if vouchers.Reloadly != nil {
 		errs = append(errs, add("reloadly", "Reloadly", "USD", settings.ReloadlyFloor, func() alerts.BalanceSource {
-			return alerts.BalanceSource{Read: alerts.ReloadlyBalance(vouchers.Reloadly)}
+			source := alerts.BalanceSource{Read: alerts.ReloadlyBalance(vouchers.Reloadly)}
+			if vouchers.BNPlus != nil {
+				// Reloadly only fills in for BN Plus: while BN Plus is
+				// healthy, a Reloadly balance left low on purpose is quiet.
+				source.SupplementOf = "bnplus_lyd"
+			}
+			return source
 		}))
 	}
 	if vouchers.BNPlus != nil {
 		errs = append(errs, add("bnplus_lyd", "BN Plus", "LYD", settings.BNPlusFloor, func() alerts.BalanceSource {
-			return alerts.BalanceSource{Read: alerts.BNPlusBalance(vouchers.BNPlus, "LYD")}
+			// The shops' card balances are LYD the company owes them as BN
+			// Plus cards, so the LYD wallet must cover them all.
+			return alerts.BalanceSource{Read: alerts.BNPlusBalance(vouchers.BNPlus, "LYD"), Owed: shopVoucherBalances(store)}
 		}))
 	}
 	if strings.TrimSpace(settings.OpenRouterAPIKey) != "" || strings.TrimSpace(settings.OpenRouterManagementKey) != "" {
@@ -263,4 +275,16 @@ func buildAlerts(
 		}
 	}
 	return notifier, watcher, nil
+}
+
+// shopVoucherBalances answers what every shop together holds in «رصيد الكروت»,
+// or nil when the store keeps no wallets.
+func shopVoucherBalances(store control.InstallationStore) func(context.Context) (*big.Rat, int, error) {
+	totals, ok := store.(control.WalletTotals)
+	if !ok {
+		return nil
+	}
+	return func(ctx context.Context) (*big.Rat, int, error) {
+		return totals.WalletAccountTotal(ctx, control.WalletAccountVouchers)
+	}
 }

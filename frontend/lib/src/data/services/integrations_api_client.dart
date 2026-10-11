@@ -240,13 +240,10 @@ class IntegrationsApiClient {
   /// Safe to call more than once for the same order: the server allows each
   /// line one attempt ever, so a repeat finds nothing claimable and comes back
   /// with an empty list rather than charging again.
-  Future<List<IntegrationChargeResult>> charge({
-    int? orderId,
-    int? fulfillmentId,
-  }) async {
+  Future<List<IntegrationChargeResult>> charge({required int orderId}) async {
     final response = await _session.post(
       'integrations/fulfillments/charge/',
-      body: {'order': ?orderId, 'fulfillment': ?fulfillmentId},
+      body: {'order': orderId},
       timeout: chargeTimeout,
     );
     _session.throwApiException(

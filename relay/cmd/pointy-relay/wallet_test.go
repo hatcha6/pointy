@@ -34,6 +34,17 @@ func TestBuildWalletConfigAcceptsALiveKey(t *testing.T) {
 	}
 }
 
+func TestBuildWalletConfigReadsTheDafaFee(t *testing.T) {
+	settings := validWalletSettings()
+	if config, _, err := buildWalletConfig(settings); err != nil || config.FeePercent != "0" {
+		t.Fatalf("no fee set keeps nothing: %q %v", config.FeePercent, err)
+	}
+	settings.FeePercent = " 2.5 "
+	if config, _, err := buildWalletConfig(settings); err != nil || config.FeePercent != "2.5" {
+		t.Fatalf("fee: %q %v", config.FeePercent, err)
+	}
+}
+
 func TestBuildWalletConfigReadsTheEnvironmentFromTheKey(t *testing.T) {
 	settings := validWalletSettings()
 	settings.DafaAPIKey = "dafa_test_key"
@@ -94,6 +105,9 @@ func TestBuildWalletConfigRefusesWhatWouldGoWrongLater(t *testing.T) {
 		"public url scheme":   func(s *walletSettings) { s.PublicURL = "ftp://relay.example.com" },
 		"ttl under a minute":  func(s *walletSettings) { s.TopUpTTL = 10 * time.Second },
 		"malformed rate rule": func(s *walletSettings) { s.TopUpRateLimit = "lots" },
+		"fee of a hundred":    func(s *walletSettings) { s.FeePercent = "100" },
+		"negative fee":        func(s *walletSettings) { s.FeePercent = "-2" },
+		"fee not a number":    func(s *walletSettings) { s.FeePercent = "2%" },
 	} {
 		settings := validWalletSettings()
 		mutate(&settings)

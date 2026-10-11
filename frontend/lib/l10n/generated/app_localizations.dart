@@ -3206,6 +3206,12 @@ abstract class AppLocalizations {
   /// **'آخر تحديث غير معروف'**
   String get dashboardLastUpdatedUnknown;
 
+  /// No description provided for @dashboardRangeToday.
+  ///
+  /// In ar, this message translates to:
+  /// **'اليوم'**
+  String get dashboardRangeToday;
+
   /// No description provided for @dashboardRange7Days.
   ///
   /// In ar, this message translates to:
@@ -6994,12 +7000,6 @@ abstract class AppLocalizations {
   /// **'ستُعاد الكمية إلى المخزون وتُحذف من حساب المهمة.'**
   String get reverseMaterialConfirmMessage;
 
-  /// Total price of materials used on a job.
-  ///
-  /// In ar, this message translates to:
-  /// **'إجمالي القطع: {amount}'**
-  String jobMaterialsTotalLabel(String amount);
-
   /// No description provided for @jobQuotedPriceLabel.
   ///
   /// In ar, this message translates to:
@@ -7096,17 +7096,89 @@ abstract class AppLocalizations {
   /// **'ستُنشأ فاتورة عادية بالقطع المستخدمة وأجور العمل، ويدخل المبلغ في جلسة الدرج الحالية.'**
   String get jobInvoiceExplainer;
 
-  /// No description provided for @jobLaborTotalLabel.
+  /// Job screen card that adds up what the job's invoice will come to.
   ///
   /// In ar, this message translates to:
-  /// **'أجور العمل'**
-  String get jobLaborTotalLabel;
+  /// **'الحساب'**
+  String get jobBillSectionTitle;
 
-  /// Job invoice grand total.
+  /// Bill card row: parts fitted on the job.
   ///
   /// In ar, this message translates to:
-  /// **'الإجمالي: {amount}'**
-  String jobInvoiceTotalLabel(String amount);
+  /// **'القطع'**
+  String get jobBillPartsLabel;
+
+  /// Bill card row: services and labour lines already charged on the job.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخدمات والأجور'**
+  String get jobBillServicesLabel;
+
+  /// Name of the customer-approved price, used inside other bill sentences.
+  ///
+  /// In ar, this message translates to:
+  /// **'السعر المتفق عليه'**
+  String get jobBillAgreedPrice;
+
+  /// Name of the first quote, used inside other bill sentences when nothing was approved.
+  ///
+  /// In ar, this message translates to:
+  /// **'السعر المبدئي'**
+  String get jobBillQuotedPrice;
+
+  /// Bill card row: the part of the agreed/quoted price no line accounts for, billed as labour. {price} is jobBillAgreedPrice or jobBillQuotedPrice.
+  ///
+  /// In ar, this message translates to:
+  /// **'باقي {price}'**
+  String jobBillRemainderLabel(String price);
+
+  /// Bill card total: exactly what the invoice will be.
+  ///
+  /// In ar, this message translates to:
+  /// **'مبلغ الفاتورة'**
+  String get jobBillTotalLabel;
+
+  /// Bill card note naming the agreed or quoted price.
+  ///
+  /// In ar, this message translates to:
+  /// **'{price}: {amount}'**
+  String jobBillPriceLine(String price, String amount);
+
+  /// Explains the remainder row.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُضاف الباقي كأجرة عند الفوترة، فتساوي الفاتورة {price}.'**
+  String jobBillRemainderHint(String price);
+
+  /// Warning when parts + services already exceed the agreed/quoted price.
+  ///
+  /// In ar, this message translates to:
+  /// **'البنود أعلى من {price} بـ {amount}. أخبر الزبون قبل الفوترة.'**
+  String jobBillOverAgreed(String price, String amount);
+
+  /// Bill card when nothing is priced yet.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضف القطع والخدمات أو اكتب السعر المتفق عليه، ويظهر هنا مبلغ الفاتورة.'**
+  String get jobBillEmpty;
+
+  /// Invoice dialog field: an amount added on top of the job's lines. Replaces the old «أجور العمل» box, which read like the labour already charged on the job.
+  ///
+  /// In ar, this message translates to:
+  /// **'مبلغ إضافي على الفاتورة'**
+  String get jobInvoiceExtraLabel;
+
+  /// Helper under the extra-amount field when it was pre-filled to reach the agreed price; warns against typing labour already on the job again.
+  ///
+  /// In ar, this message translates to:
+  /// **'يكمل {price} ({amount}). لا تُعد كتابة الأجور المسجلة على المهمة.'**
+  String jobInvoiceExtraFillsAgreed(String price, String amount);
+
+  /// Invoice dialog warning when the total runs past the agreed/quoted price.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإجمالي أعلى من {price} ({amount}).'**
+  String jobInvoiceOverAgreed(String price, String amount);
 
   /// Snackbar after invoicing a job.
   ///
@@ -8649,12 +8721,6 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'الفاتورة الآجلة تحتاج زبوناً مسجَّلاً على المهمة.'**
   String get jobInvoiceNeedsCustomerForCredit;
-
-  /// No description provided for @jobInvoiceServicesLabel.
-  ///
-  /// In ar, this message translates to:
-  /// **'الخدمات'**
-  String get jobInvoiceServicesLabel;
 
   /// No description provided for @jobOverQuoteTitle.
   ///
@@ -19603,6 +19669,12 @@ abstract class AppLocalizations {
   /// **'لم تعد جلسة الدرج مفتوحة. يرجى فتح جلسة درج جديدة ثم إعادة المحاولة.'**
   String get saleCheckoutSessionExpired;
 
+  /// Shown when the payment sheet asked for an amount that no longer matches the cart total; nothing was sent and the sheet reopens with the right amount.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيّرت الفاتورة، راجع المبلغ ثم أكّد الدفع من جديد.'**
+  String get saleCheckoutTotalChanged;
+
   /// No description provided for @oversellWarningTitle.
   ///
   /// In ar, this message translates to:
@@ -21096,6 +21168,18 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'سيتم عكس كامل المبلغ وإرجاع الكميات المتبقية إلى المخزون.'**
   String get saleVoidMessage;
+
+  /// Warning title in the void/return dialog when the invoice was sold in a register session that is already closed.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفاتورة من وردية مُغلقة'**
+  String get saleClosedDrawerRefundTitle;
+
+  /// Explains that a void or return of a closed session's sale is paid out of the drawer open now and does not change the closed session's count. {session} is the closed session's number, e.g. RS-36.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيُصرف المبلغ من درجك المفتوح الآن، لا من الوردية {session}، ولن يتغيّر جردها. تابع فقط إن كنت ستعطي الزبون المال الآن.'**
+  String saleClosedDrawerRefundMessage(String session);
 
   /// No description provided for @saleVoidSuccess.
   ///
@@ -37396,6 +37480,18 @@ abstract class AppLocalizations {
   /// **'لم يُنفَّذ الشحن'**
   String get rechargeRefusedTitle;
 
+  /// Under a provider line the provider refused: the server already returned the line in this drawer, so the cashier hands this amount back. Do not ring the sale up again to retry without taking the money again.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُلغي من الفاتورة تلقائياً — أعِد {amount} للزبون.'**
+  String rechargeRefundedLine(String amount);
+
+  /// Bold line at the end of the refused-recharge dialog: the total the cashier hands back for every refused line of this sale.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ المُعاد للزبون: {amount}'**
+  String rechargeRefundedTotal(String amount);
+
   ///
   ///
   /// In ar, this message translates to:
@@ -41775,6 +41871,60 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'بعد المتابعة نعرض لك حسابنا لتحوّل إليه، ثم ترسل الإيصال ويتحقق فريقنا منه.'**
   String get walletTransferNote;
+
+  /// Heading of the fee breakdown card on the top-up form.
+  ///
+  /// In ar, this message translates to:
+  /// **'قبل أن تدفع'**
+  String get walletFeeTitle;
+
+  /// Fee breakdown row: what the payer pays.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ الذي ستدفعه'**
+  String get walletFeePaidLabel;
+
+  /// Fee breakdown row: the gateway fee and its percent.
+  ///
+  /// In ar, this message translates to:
+  /// **'رسوم بوابة الدفع ({percent}٪)'**
+  String walletFeeLabel(String percent);
+
+  /// Fee breakdown total row: what the wallet gets.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُضاف إلى محفظتك'**
+  String get walletFeeCreditLabel;
+
+  /// Why the wallet gets less than what is paid.
+  ///
+  /// In ar, this message translates to:
+  /// **'تقتطع بوابة الدفع {percent}٪ من كل عملية دفع إلكتروني، فتُخصم من المبلغ الذي تشحنه.'**
+  String walletFeeNote(String percent);
+
+  /// Fee card before an amount is typed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُخصم رسوم بوابة الدفع ({percent}٪) من المبلغ، وسترى هنا ما يُضاف إلى محفظتك قبل الدفع.'**
+  String walletFeeEmptyHint(String percent);
+
+  /// Tip under the fee card when bank transfer is offered.
+  ///
+  /// In ar, this message translates to:
+  /// **'الشحن بتحويل مصرفي بلا رسوم.'**
+  String get walletFeeTransferTip;
+
+  /// Line in the payer dialog and code step: credit after the fee.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُضاف إلى محفظتك {credit} بعد خصم رسوم الدفع {fee}.'**
+  String walletFeeCreditLine(String credit, String fee);
+
+  /// Paid verdict when a fee was kept.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُضيف {credit} إلى رصيدك (دفعت {amount}، ورسوم الدفع {fee}).'**
+  String walletPaidMessageWithFee(String credit, String amount, String fee);
 
   /// Send the transfer for checking.
   ///

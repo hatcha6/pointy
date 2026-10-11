@@ -123,6 +123,10 @@ type WalletConfig struct {
 	MinTopUp     string
 	MaxTopUp     string
 	QuickAmounts []string
+	// FeePercent is the share of every Dafa payment kept out of the credit,
+	// so the gateway's own cut is the shop's, not the company's ("2" keeps
+	// 2 dinars of a 100-dinar payment). Empty or "0" keeps nothing.
+	FeePercent string
 	// TopUpTTL is how long a top-up stays pending before the expiry sweep
 	// writes it off (a payment proven later still credits it).
 	TopUpTTL time.Duration
@@ -209,6 +213,35 @@ func (c WalletConfig) topUpBounds() (*big.Rat, *big.Rat) {
 		maximum, _ = control.ParseWalletAmount(defaultWalletMaxTopUp)
 	}
 	return minimum, maximum
+}
+
+// feePercent is the configured fee as a fraction of 100; zero when unset or
+// unreadable.
+func (c WalletConfig) feePercent() *big.Rat {
+	percent, err := control.ParseWalletAmount(c.FeePercent)
+	if err != nil || percent.Sign() < 0 || percent.Cmp(big.NewRat(100, 1)) >= 0 {
+		return new(big.Rat)
+	}
+	return percent
+}
+
+// topUpFee is the fee kept out of a payment of amount, rounded UP to the
+// dirham: a rounding never leaves the company paying part of the gateway's
+// cut.
+func (c WalletConfig) topUpFee(amount *big.Rat) *big.Rat {
+	fee := new(big.Rat).Mul(amount, c.feePercent())
+	fee.Quo(fee, big.NewRat(100, 1))
+	return ceilWalletAmount(fee)
+}
+
+// ceilWalletAmount rounds a non-negative amount up to three places.
+func ceilWalletAmount(value *big.Rat) *big.Rat {
+	scaled := new(big.Rat).Mul(value, big.NewRat(1000, 1))
+	quotient, remainder := new(big.Int).QuoRem(scaled.Num(), scaled.Denom(), new(big.Int))
+	if remainder.Sign() > 0 {
+		quotient.Add(quotient, big.NewInt(1))
+	}
+	return new(big.Rat).SetFrac(quotient, big.NewInt(1000))
 }
 
 func (c WalletConfig) dafaClient() *dafa.Client {
@@ -412,12 +445,15 @@ func (s HTTPServer) walletTopUpOptions() map[string]any {
 		})
 	}
 	return map[string]any{
-		"available":        len(methods) > 0,
-		"methods":          methods,
-		"min_amount":       minimum.FloatString(walletTopUpDecimals),
-		"max_amount":       maximum.FloatString(walletTopUpDecimals),
-		"max_decimals":     walletTopUpDecimals,
-		"quick_amounts":    s.Wallet.quickAmounts(),
+		"available":     len(methods) > 0,
+		"methods":       methods,
+		"min_amount":    minimum.FloatString(walletTopUpDecimals),
+		"max_amount":    maximum.FloatString(walletTopUpDecimals),
+		"max_decimals":  walletTopUpDecimals,
+		"quick_amounts": s.Wallet.quickAmounts(),
+		// The app shows the fee and what the wallet gets before the payer
+		// pays; the relay's own figure on the started top-up is the one kept.
+		"fee_percent":      s.Wallet.feePercent().FloatString(2),
 		"pending_ttl":      int(s.Wallet.topUpTTL().Seconds()),
 		"max_otp_attempts": maxWalletOTPAttempts,
 		"test_mode":        s.Wallet.TestMode && len(methods) > 0,
@@ -904,6 +940,8 @@ func walletTopUpPayload(topUp control.WalletTopUp) map[string]any {
 		"id":                      topUp.ID,
 		"method":                  topUp.Method,
 		"amount":                  topUp.Amount,
+		"fee":                     control.NormalizeWalletAmount(topUp.Fee),
+		"credit_amount":           control.WalletTopUpCredit(topUp),
 		"status":                  topUp.Status,
 		"invoice_no":              topUp.InvoiceNo,
 		"provider_transaction_id": topUp.ProviderTransactionID,

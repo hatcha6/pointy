@@ -20,7 +20,6 @@ import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/order/order.dart';
 import '../../../shared/responsive/responsive.dart';
-import '../../settings/views/integration_presentation.dart';
 import '../../treasury/view_models/bank_routing.dart';
 import '../view_models/pos_view_model.dart';
 import 'direct_services/service_charge_issue_dialog.dart';
@@ -41,6 +40,7 @@ import 'cart_totals.dart';
 import 'payment/payment.dart';
 import 'pos_sale_session_strip.dart';
 import 'public_invoice_dialog.dart';
+import 'recharge_outcome_dialog.dart';
 
 /// Lets an ancestor (the POS workspace) trigger the cart's checkout flow from a
 /// keyboard shortcut. The cart pane publishes its current checkout closure here
@@ -72,7 +72,7 @@ class PosCartPane extends StatelessWidget {
     return CheckoutCapabilityBuilder(
       capabilities: capabilities,
       builder: (context, canCheckout) {
-        final isCartLocked = viewModel.isCheckingOut || !canCheckout;
+        final isCartLocked = viewModel.isCartFrozen || !canCheckout;
         final spacing = AdaptiveSpacing.of(context);
         final colors = context.pointyColors;
         // A short till spends its height on cart lines, not on the margins
@@ -82,9 +82,7 @@ class PosCartPane extends StatelessWidget {
         // Publish the current checkout closure so the workspace's Ctrl/Cmd+Enter
         // shortcut runs the exact same flow as the footer button.
         final canCheckoutNow =
-            canCheckout &&
-            viewModel.cart.isNotEmpty &&
-            !viewModel.isCheckingOut;
+            canCheckout && viewModel.cart.isNotEmpty && !viewModel.isCartFrozen;
         checkoutController?.onCheckout = canCheckoutNow
             ? () => _checkout(context)
             : null;
@@ -137,6 +135,32 @@ class PosCartPane extends StatelessWidget {
   }
 
   Future<void> _checkout(BuildContext context) async {
+    // The whole Pay flow runs with the cart frozen. The payment sheet reads
+    // the total once, when it opens: a line tapped in while the forced preview
+    // was still in flight once left it asking for the old cart's total, and the
+    // server refused the payment as short.
+    final step = await viewModel.whilePreparingCheckout(
+      () => _takePayment(context),
+    );
+    if (step == null || !context.mounted) {
+      return;
+    }
+    switch (step) {
+      case _ServiceLinesRequoted(:final changes):
+        await resolveServiceRequotes(context, viewModel, changes);
+      case _PaymentTaken(:final outcome, :final payment, :final soldInTestMode):
+        await _settleOutcome(
+          context,
+          outcome,
+          payment: payment,
+          soldInTestMode: soldInTestMode,
+        );
+    }
+  }
+
+  /// Everything from Pay to the sale being sent. Null when the cashier backs
+  /// out anywhere along the way.
+  Future<_PayStep?> _takePayment(BuildContext context) async {
     final l10n = AppLocalizations.of(context)!;
     final messenger = ScaffoldMessenger.of(context);
     final shortages = viewModel.checkoutStockShortages();
@@ -154,10 +178,10 @@ class PosCartPane extends StatelessWidget {
           canOversell: canOversell,
         );
         if (shouldContinue != true) {
-          return;
+          return null;
         }
         if (!context.mounted) {
-          return;
+          return null;
         }
       }
     }
@@ -167,13 +191,14 @@ class PosCartPane extends StatelessWidget {
     // cashier's to decide, not something to find out from a refused charge.
     final requoted = await viewModel.requoteServiceLines();
     if (!context.mounted) {
-      return;
+      return null;
     }
     if (requoted.isNotEmpty) {
-      await resolveServiceRequotes(context, viewModel, requoted);
-      // Stop here whatever was decided: the total the customer is about to be
-      // asked for has either changed or been left on purpose.
-      return;
+      // Resolved once the cart is unfrozen, since dropping a moved price
+      // removes its line. Stop the sale here whatever is decided: the total the
+      // customer is about to be asked for has either changed or been left on
+      // purpose.
+      return _ServiceLinesRequoted(requoted);
     }
 
     // Force one live preview so loss warnings and coupon validation are as
@@ -181,7 +206,7 @@ class PosCartPane extends StatelessWidget {
     // sale: the checkout itself recomputes discounts server-side.
     await viewModel.refreshDiscountPreview(forceServer: true);
     if (!context.mounted) {
-      return;
+      return null;
     }
     if (viewModel.hasDiscountPreviewError) {
       if (viewModel.couponCode.trim().isNotEmpty) {
@@ -192,7 +217,7 @@ class PosCartPane extends StatelessWidget {
           ..showSnackBar(
             SnackBar(content: Text(l10n.discountPreviewUnavailable)),
           );
-        return;
+        return null;
       }
       // Rules may exist but can't be verified right now. The server applies
       // the real discounts at checkout either way — let the cashier decide
@@ -216,10 +241,10 @@ class PosCartPane extends StatelessWidget {
         ),
       );
       if (proceed != true) {
-        return;
+        return null;
       }
       if (!context.mounted) {
-        return;
+        return null;
       }
     }
     if (viewModel.unappliedCouponCodes.isNotEmpty) {
@@ -234,7 +259,7 @@ class PosCartPane extends StatelessWidget {
             ),
           ),
         );
-      return;
+      return null;
     }
     final lossLines = viewModel.checkoutLossLines();
     if (lossLines.isNotEmpty) {
@@ -245,35 +270,66 @@ class PosCartPane extends StatelessWidget {
         showAmounts: capabilities.canViewLossAmounts,
       );
       if (shouldContinue != true) {
-        return;
+        return null;
       }
       if (!context.mounted) {
-        return;
+        return null;
       }
     }
 
-    final payment = await _showPaymentDialog(context);
-    if (payment == null) {
-      return;
-    }
+    // Shown again, once, when the sale refuses a tender that no longer matches
+    // the cart's total — with the total re-read, so the second sheet asks for
+    // the right amount.
+    var reopened = false;
+    while (true) {
+      final payment = await _showPaymentDialog(context);
+      if (payment == null) {
+        return null;
+      }
 
-    // The lines are gone from the cart once the sale is made: whether any was
-    // added while the relay was in test mode is told to the dialog from here.
-    final soldInTestMode = viewModel.cart.any(
-      (line) => line.integration?.testMode == true,
-    );
-    final outcome = await viewModel.checkoutCurrentSale(
-      payments: payment.payments,
-      saleType: payment.saleType,
-      validUntil: payment.validUntil,
-      dueDate: payment.dueDate,
-      reserveStock: payment.reserveStock,
-      printProof: payment.printProof,
-    );
-
-    if (!context.mounted) {
-      return;
+      // The lines are gone from the cart once the sale is made: whether any
+      // was added while the relay was in test mode is told to the dialog from
+      // here.
+      final soldInTestMode = viewModel.cart.any(
+        (line) => line.integration?.testMode == true,
+      );
+      final outcome = await viewModel.checkoutCurrentSale(
+        payments: payment.payments,
+        saleType: payment.saleType,
+        validUntil: payment.validUntil,
+        dueDate: payment.dueDate,
+        reserveStock: payment.reserveStock,
+        printProof: payment.printProof,
+      );
+      if (!outcome.isTotalChanged) {
+        return _PaymentTaken(
+          outcome,
+          payment: payment,
+          soldInTestMode: soldInTestMode,
+        );
+      }
+      messenger
+        ..clearSnackBars()
+        ..showSnackBar(SnackBar(content: Text(l10n.saleCheckoutTotalChanged)));
+      if (reopened || !context.mounted) {
+        return null;
+      }
+      reopened = true;
+      await viewModel.refreshDiscountPreview(forceServer: true);
+      if (!context.mounted) {
+        return null;
+      }
     }
+  }
+
+  Future<void> _settleOutcome(
+    BuildContext context,
+    SaleCheckoutOutcome outcome, {
+    required PaymentSheetResult payment,
+    required bool soldInTestMode,
+  }) async {
+    final l10n = AppLocalizations.of(context)!;
+    final messenger = ScaffoldMessenger.of(context);
 
     if (outcome.isStockRejected) {
       await _showStockWarningDialog(
@@ -319,7 +375,7 @@ class PosCartPane extends StatelessWidget {
         .where((row) => row.isDirectService && !row.isCharged)
         .toList(growable: false);
     if (outcome.isSuccess && cardRows.any((row) => !row.isCharged)) {
-      await _showRechargeOutcomeDialog(context, cardRows);
+      await showRechargeOutcomeDialog(context, cardRows);
       if (!context.mounted) return;
     }
     if (outcome.isSuccess && unperformedServices.isNotEmpty) {
@@ -1373,7 +1429,7 @@ class _CheckoutFooter extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final spacing = AdaptiveSpacing.of(context);
-    final canSubmit = viewModel.cart.isNotEmpty && !viewModel.isCheckingOut;
+    final canSubmit = viewModel.cart.isNotEmpty && !viewModel.isCartFrozen;
 
     return PointyStickyActionFooter(
       padding: EdgeInsetsDirectional.fromSTEB(spacing.sm, 6, spacing.sm, 6),
@@ -1418,83 +1474,6 @@ class _CheckoutFooter extends StatelessWidget {
       ),
     );
   }
-}
-
-/// What the provider did about each recharge, when it was not simply "done".
-///
-/// The three outcomes need three different reactions and the dialog says so
-/// outright, because the wrong reaction to the third one spends the shop's
-/// money twice:
-///
-/// * refused for want of float — top up, then retry the line;
-/// * refused for any other reason — the float is untouched, retry is safe;
-/// * **unknown** — the request left and never answered. Do not retry. Check
-///   the card with the provider; reconciliation will settle it against their
-///   own purchase log.
-Future<void> _showRechargeOutcomeDialog(
-  BuildContext context,
-  List<IntegrationChargeResult> rows,
-) {
-  final l10n = AppLocalizations.of(context)!;
-  final colors = context.pointyColors;
-  final unresolved = rows.where((row) => row.needsAttention).toList();
-  final failed = rows.where((row) => row.isRefused).toList();
-
-  return showDialog<void>(
-    context: context,
-    // The unknown case is not dismissable by tapping away: it is the one
-    // state where doing nothing about it is a real risk.
-    barrierDismissible: unresolved.isEmpty,
-    builder: (dialogContext) => AlertDialog(
-      icon: Icon(
-        unresolved.isEmpty ? Icons.error_outline : Icons.help_outline,
-        color: unresolved.isEmpty ? colors.danger : colors.warning,
-      ),
-      title: Text(
-        unresolved.isEmpty
-            ? l10n.rechargeRefusedTitle
-            : l10n.rechargeUnknownTitle,
-      ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (unresolved.isNotEmpty) ...[
-            Text(l10n.rechargeUnknownBody),
-            const SizedBox(height: 12),
-          ],
-          for (final row in [...unresolved, ...failed])
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    [
-                      row.subscriberRef,
-                      row.optionLabel,
-                    ].where((part) => part.trim().isNotEmpty).join(' · '),
-                    style: Theme.of(dialogContext).textTheme.titleSmall,
-                  ),
-                  Text(
-                    integrationErrorText(row.errorCode, l10n),
-                    style: Theme.of(
-                      dialogContext,
-                    ).textTheme.bodySmall?.copyWith(color: colors.mutedInk),
-                  ),
-                ],
-              ),
-            ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(dialogContext).pop(),
-          child: Text(l10n.closeButton),
-        ),
-      ],
-    ),
-  );
 }
 
 /// The PINs of the cards a sale just bought, for when the receipt that
@@ -1565,4 +1544,29 @@ Future<void> _showVoucherCodesDialog(
       );
     },
   );
+}
+
+/// What the frozen half of the Pay flow hands back to the rest of it.
+sealed class _PayStep {
+  const _PayStep();
+}
+
+/// A held top-up or bill came back at a new price; the cashier decides once
+/// the cart may change again.
+final class _ServiceLinesRequoted extends _PayStep {
+  const _ServiceLinesRequoted(this.changes);
+
+  final List<ServiceRequote> changes;
+}
+
+final class _PaymentTaken extends _PayStep {
+  const _PaymentTaken(
+    this.outcome, {
+    required this.payment,
+    required this.soldInTestMode,
+  });
+
+  final SaleCheckoutOutcome outcome;
+  final PaymentSheetResult payment;
+  final bool soldInTestMode;
 }

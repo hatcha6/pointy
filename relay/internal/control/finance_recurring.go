@@ -127,6 +127,9 @@ func prepareFinanceRecurring(r FinanceRecurring, now time.Time) (FinanceRecurrin
 	if err != nil {
 		return FinanceRecurring{}, err
 	}
+	if probe.Direction == FinanceWithdrawal {
+		return FinanceRecurring{}, invalidFinance("a monthly line is income or an expense")
+	}
 	r.Direction, r.Category, r.Amount, r.Currency, r.Rate = probe.Direction, probe.Category, probe.OriginalAmount, probe.Currency, probe.Rate
 	if r.Currency == FinanceCurrency {
 		r.Rate = ""

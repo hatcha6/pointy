@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ArrowDownLeft, ArrowUpRight, Ban, Copy, Download, NotebookPen, Paperclip, Repeat, Search } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Ban, Copy, Download, NotebookPen, Paperclip, PiggyBank, Repeat, Search } from "lucide-react";
 import { Button, Card, Empty, Field, Money, Segmented, Switch, Tabs } from "../components/ui";
 import { AttachmentStrip } from "../components/finance/Attachments";
 import { DueStrip, RecurringList } from "../components/finance/Recurring";
@@ -17,6 +17,7 @@ import {
   financeKeys,
   incomeCategories,
   monthLabel,
+  withdrawalCategories,
   shortDay,
   uploadAttachment,
   useFinanceEntries,
@@ -39,7 +40,7 @@ function exportCsv(entries: FinanceEntry[], from: string, to: string) {
   const header = ["التاريخ", "النوع", "الفئة", "المبلغ (د.ل)", "العملة", "المبلغ الأصلي", "السعر", "الوصف", "الجهة", "المتجر", "المرجع", "سجّله", "ملغى", "سبب الإلغاء"];
   const rows = entries.map((e) => [
     e.occurred_on,
-    e.direction === "income" ? "دخل" : "مصروف",
+    e.direction === "income" ? "دخل" : e.direction === "withdrawal" ? "سحب" : "مصروف",
     categoryOf(e.direction, e.category).label,
     e.amount,
     e.currency,
@@ -90,7 +91,15 @@ export function Ledger() {
   const live = rows.filter((e) => !e.voided_at);
   const income = live.filter((e) => e.direction === "income").reduce((s, e) => s + Number(e.amount), 0);
   const expense = live.filter((e) => e.direction === "expense").reduce((s, e) => s + Number(e.amount), 0);
-  const categories = direction === "income" ? incomeCategories : direction === "expense" ? expenseCategories : [...expenseCategories, ...incomeCategories];
+  const withdrawn = live.filter((e) => e.direction === "withdrawal").reduce((s, e) => s + Number(e.amount), 0);
+  const categories =
+    direction === "income"
+      ? incomeCategories
+      : direction === "expense"
+        ? expenseCategories
+        : direction === "withdrawal"
+          ? withdrawalCategories
+          : [...expenseCategories, ...incomeCategories, ...withdrawalCategories];
 
   const columns: Column<FinanceEntry>[] = [
     {
@@ -172,11 +181,14 @@ export function Ledger() {
       <div className="page-head">
         <div className="titles">
           <h1>دفتر الحسابات</h1>
-          <p>ما سجّلته بيدك من دخل ومصروف. لا يُحذف قيد: الخطأ يُلغى بسببه ويُسجَّل من جديد.</p>
+          <p>ما سجّلته بيدك من دخل ومصروف وسحب. لا يُحذف قيد: الخطأ يُلغى بسببه ويُسجَّل من جديد.</p>
         </div>
         <div className="actions">
           <Button icon={<Download />} disabled={!rows.length} onClick={() => exportCsv(rows, from, to)}>
             تصدير
+          </Button>
+          <Button icon={<PiggyBank />} onClick={() => entry.open({ direction: "withdrawal" })}>
+            سحب لك
           </Button>
           <Button icon={<ArrowDownLeft />} onClick={() => entry.open({ direction: "income" })}>
             دخل
@@ -213,6 +225,7 @@ export function Ledger() {
               { id: "", label: "الكل" },
               { id: "expense", label: "المصروف" },
               { id: "income", label: "الدخل" },
+              { id: "withdrawal", label: "السحوبات" },
             ]}
           />
           <select className="select toolbar-select" value={category} onChange={(e) => setCategory(e.target.value)} aria-label="الفئة">
@@ -249,6 +262,11 @@ export function Ledger() {
             <span>
               الصافي <Money value={income - expense} signed />
             </span>
+            {withdrawn > 0 && (
+              <span>
+                سحبت <Money value={withdrawn} />
+              </span>
+            )}
             <span className="muted">{live.length} قيد</span>
           </div>
         )}

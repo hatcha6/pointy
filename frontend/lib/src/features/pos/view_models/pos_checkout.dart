@@ -205,6 +205,39 @@ extension PosCheckoutActions on PosViewModel {
     if (_activeRegisterSession == null || _cart.isEmpty) {
       return const SaleCheckoutOutcome.failure();
     }
+    // A standard sale is paid exactly in full — the server refuses anything
+    // else. The payment sheet took its total when it opened; if the cart's
+    // total has moved since, the tender is for a different sale. Refused here,
+    // before anything is sent, so the cashier is shown the right amount
+    // instead of a bare rejection they cannot act on.
+    if (saleType == SaleType.standard) {
+      final tenderedCents =
+          (payments.fold<double>(0, (sum, payment) => sum + payment.amount) *
+                  100)
+              .round();
+      final totalCents = (total * 100).round();
+      if (tenderedCents != totalCents) {
+        unawaited(
+          _analyticsEngine?.trackUsage(
+                AnalyticsEventName.posCheckoutFailed,
+                severity: AnalyticsEventSeverity.warning,
+                attributes: {
+                  'failure_reason': 'total_changed',
+                  'register_session_id': _activeRegisterSession?.id,
+                  'line_count': _cart.length,
+                },
+                metrics: {
+                  'tendered_total': tenderedCents / 100,
+                  'total': totalCents / 100,
+                  'line_count': _cart.length,
+                },
+                flushImmediately: true,
+              ) ??
+              Future<void>.value(),
+        );
+        return const SaleCheckoutOutcome.totalChanged();
+      }
+    }
 
     _isCheckingOut = true;
     _notifyChanged();
@@ -777,6 +810,11 @@ extension PosCheckoutActions on PosViewModel {
     } on Object {
       // Printing the sale as it was recorded still beats printing nothing.
     }
+    // Every line refused and given back: the server voided the sale, and a
+    // slip for it would read as money taken.
+    if (printable.status == 'void' && recharges.any((row) => row.isRefunded)) {
+      return InvoicePrintStatus.notRequested;
+    }
     // Overlay what the provider answered THIS checkout onto the order, so a
     // card's PIN reaches the receipt from the charge response we already hold —
     // not from the re-read above, which can still show the line unconfirmed for
@@ -962,6 +1000,7 @@ class SaleCheckoutOutcome {
     required this.isStockRejected,
     required this.isLossRejected,
     this.isSessionExpired = false,
+    this.isTotalChanged = false,
     this.order,
     this.printStatus = InvoicePrintStatus.notRequested,
     this.shortages = const [],
@@ -1003,6 +1042,15 @@ class SaleCheckoutOutcome {
         isSessionExpired: true,
       );
 
+  /// Nothing was sent: the tender no longer matches the cart's total.
+  const SaleCheckoutOutcome.totalChanged()
+    : this._(
+        isSuccess: false,
+        isStockRejected: false,
+        isLossRejected: false,
+        isTotalChanged: true,
+      );
+
   const SaleCheckoutOutcome.stockRejected(List<SaleStockShortage> shortages)
     : this._(
         isSuccess: false,
@@ -1032,6 +1080,7 @@ class SaleCheckoutOutcome {
   final bool isStockRejected;
   final bool isLossRejected;
   final bool isSessionExpired;
+  final bool isTotalChanged;
   final SaleOrder? order;
   final InvoicePrintStatus printStatus;
   final List<SaleStockShortage> shortages;

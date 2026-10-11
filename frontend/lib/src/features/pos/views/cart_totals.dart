@@ -32,7 +32,7 @@ class CartTotals extends StatelessWidget {
     // the cashier is reading the total back to the customer.
     final showsInvoiceDiscountRow = viewModel.canDiscountInvoice;
     final canEditInvoiceDiscount =
-        !viewModel.isCheckingOut && viewModel.cart.isNotEmpty;
+        !viewModel.isCartFrozen && viewModel.cart.isNotEmpty;
 
     return Padding(
       padding: EdgeInsets.only(top: compact ? 0 : 8),

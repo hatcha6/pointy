@@ -159,13 +159,20 @@ func TestFileStoreFinanceTrackedRollsUpLibyanMonths(t *testing.T) {
 		"c": {ID: "c", Status: SMSStatusSent, Cost: "0.0800", CreatedAt: october, TestMode: true},
 	}
 	store.data.VoucherPurchases = map[string]VoucherPurchase{
-		"p1": {ID: "p1", Status: VoucherPurchaseSucceeded, SupplierCost: "10.5", SupplierCurrency: "usd", CreatedAt: october},
-		"p2": {ID: "p2", Status: VoucherPurchaseSucceeded, SupplierCost: "40", SupplierCurrency: "LYD", CreatedAt: october},
-		"p3": {ID: "p3", Status: VoucherPurchaseFailed, SupplierCost: "99", SupplierCurrency: "LYD", CreatedAt: october},
+		"p1": {ID: "p1", InstallationID: "shop", Status: VoucherPurchaseSucceeded, SupplierCost: "10.5", SupplierCurrency: "usd", CreatedAt: october},
+		"p2": {ID: "p2", InstallationID: "shop", Status: VoucherPurchaseSucceeded, SupplierCost: "40", SupplierCurrency: "LYD", CreatedAt: october},
+		"p3": {ID: "p3", InstallationID: "shop", Status: VoucherPurchaseFailed, SupplierCost: "99", SupplierCurrency: "LYD", CreatedAt: october},
+		// The company's own: its spending, never a service's cost. One the
+		// supplier priced, one only estimated in dinars at the claim.
+		"c1": {ID: "c1", Purpose: VoucherPurposeOwnUse, Status: VoucherPurchaseSucceeded, SupplierCost: "20", SupplierCurrency: "USD", Amount: "200", CreatedAt: october},
+		"c2": {ID: "c2", Purpose: VoucherPurposeResale, Status: VoucherPurchaseSucceeded, Amount: "15", CreatedAt: october},
+		"c3": {ID: "c3", Purpose: VoucherPurposeGift, Status: VoucherPurchaseFailed, Amount: "99", CreatedAt: october},
 	}
 	store.data.WalletTopUps = map[string]WalletTopUp{
 		"t1": {ID: "t1", Status: WalletTopUpPaid, Method: WalletTopUpMethodBankTransfer, Amount: "200", PaidAt: &october},
 		"t2": {ID: "t2", Status: WalletTopUpReview, Method: WalletTopUpMethodBankTransfer, Amount: "500"},
+		// Dafa kept 2 of a 100 Sadad payment; the wallet got 98.
+		"t3": {ID: "t3", Status: WalletTopUpPaid, Method: WalletTopUpMethodDafaSadad, Amount: "100", Fee: "2", PaidAt: &october},
 	}
 
 	from := time.Date(2026, 10, 1, 0, 0, 0, 0, financeZone)
@@ -183,11 +190,17 @@ func TestFileStoreFinanceTrackedRollsUpLibyanMonths(t *testing.T) {
 	if m.SMSCost != "0.080" {
 		t.Fatalf("sms cost %s", m.SMSCost)
 	}
-	if m.SupplierCost["USD"] != "10.500" || m.SupplierCost["LYD"] != "40.000" {
+	if m.SupplierCost["USD"] != "10.500" || m.SupplierCost["LYD"] != "40.000" || len(m.SupplierCost) != 2 {
 		t.Fatalf("supplier cost %+v", m.SupplierCost)
 	}
-	if m.TopUps[WalletTopUpMethodBankTransfer] != "200.000" || len(m.TopUps) != 1 {
-		t.Fatalf("top-ups %+v", m.TopUps)
+	if m.CompanyCost["USD"] != "20.000" || m.CompanyCost["LYD"] != "15.000" || len(m.CompanyCost) != 2 {
+		t.Fatalf("company cost %+v", m.CompanyCost)
+	}
+	if m.TopUps[WalletTopUpMethodBankTransfer] != "200.000" || m.TopUps[WalletTopUpMethodDafaSadad] != "98.000" || len(m.TopUps) != 2 {
+		t.Fatalf("top-ups, as credited: %+v", m.TopUps)
+	}
+	if m.TopUpFees != "2.000" {
+		t.Fatalf("gateway fees %s", m.TopUpFees)
 	}
 }
 
@@ -281,6 +294,18 @@ func TestPostgresStoreFinance(t *testing.T) {
 	from := time.Date(2026, 10, 1, 0, 0, 0, 0, financeZone)
 	if _, err := store.FinanceTracked(ctx, from, from.AddDate(0, 1, 0)); err != nil {
 		t.Fatal(err)
+	}
+
+	// A withdrawal is written, and the position adds the lines by direction.
+	if _, _, err := store.CreateFinanceEntry(ctx, financeEntry(FinanceWithdrawal, "owner_draw", "75", "2026-10-04", "pg-w")); err != nil {
+		t.Fatal(err)
+	}
+	position, err := store.FinancePosition(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if position.Manual[FinanceWithdrawal] != "75.000" || position.Manual[FinanceIncome] != "300.000" {
+		t.Fatalf("position manual %+v", position.Manual)
 	}
 }
 

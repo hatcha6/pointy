@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"pointy/relay/internal/bnplus"
@@ -15,11 +17,22 @@ import (
 // BNPlusSupplier buys from BN Plus with the company's merchant account.
 type BNPlusSupplier struct {
 	Client *bnplus.Client
+
+	// The company's dinar balance at BN Plus as the offer sync last read it,
+	// less what was bought since.
+	mu        sync.Mutex
+	balance   *big.Rat
+	balanceAt time.Time
 }
 
-func (s BNPlusSupplier) Key() string { return SupplierBNPlus }
+var (
+	_ Supplier      = (*BNPlusSupplier)(nil)
+	_ BalanceReader = (*BNPlusSupplier)(nil)
+)
 
-func (s BNPlusSupplier) Buy(ctx context.Context, ref Ref, quantity int, _ string) (Purchase, error) {
+func (s *BNPlusSupplier) Key() string { return SupplierBNPlus }
+
+func (s *BNPlusSupplier) Buy(ctx context.Context, ref Ref, quantity int, _ string) (Purchase, error) {
 	cardID, err := bnplusCardID(ref)
 	if err != nil {
 		return Purchase{}, &Failure{Code: FailureRefused, Detail: err.Error(), Definite: true}
@@ -29,6 +42,7 @@ func (s BNPlusSupplier) Buy(ctx context.Context, ref Ref, quantity int, _ string
 		return Purchase{}, bnplusFailure(err)
 	}
 	purchase := bnplusPurchase(order)
+	s.spent(purchase)
 	if len(purchase.Codes) < quantity {
 		// BN Plus took the order but handed back fewer codes than bought.
 		// The rest may still come; the order is read back until it settles.
@@ -37,7 +51,7 @@ func (s BNPlusSupplier) Buy(ctx context.Context, ref Ref, quantity int, _ string
 	return purchase, nil
 }
 
-func (s BNPlusSupplier) Lookup(ctx context.Context, _ Ref, orderID string) (Purchase, error) {
+func (s *BNPlusSupplier) Lookup(ctx context.Context, _ Ref, orderID string) (Purchase, error) {
 	id, err := strconv.ParseInt(strings.TrimSpace(orderID), 10, 64)
 	if err != nil || id <= 0 {
 		return Purchase{}, fmt.Errorf("bnplus order id %q is not a number", orderID)
@@ -49,7 +63,7 @@ func (s BNPlusSupplier) Lookup(ctx context.Context, _ Ref, orderID string) (Purc
 	return bnplusPurchase(order), nil
 }
 
-func (s BNPlusSupplier) Find(
+func (s *BNPlusSupplier) Find(
 	ctx context.Context,
 	ref Ref,
 	quantity int,
@@ -91,7 +105,11 @@ func (s BNPlusSupplier) Find(
 	return purchases, nil
 }
 
-func (s BNPlusSupplier) Offers(ctx context.Context) ([]Offer, error) {
+func (s *BNPlusSupplier) Offers(ctx context.Context) ([]Offer, error) {
+	// The balance rides along: a card the account cannot pay for is not offered.
+	// A read that fails leaves the last one, which the relay stops believing
+	// after a while.
+	s.readBalance(ctx)
 	companies, err := s.Client.Companies(ctx, 0)
 	if err != nil {
 		return nil, err
@@ -116,6 +134,53 @@ func (s BNPlusSupplier) Offers(ctx context.Context) ([]Offer, error) {
 		}
 	}
 	return offers, nil
+}
+
+// readBalance reads the company's dinar wallet (every BN Plus card is priced in
+// dinars) and keeps it with the time it was read.
+func (s *BNPlusSupplier) readBalance(ctx context.Context) {
+	wallets, err := s.Client.Wallets(ctx)
+	if err != nil {
+		return
+	}
+	for _, wallet := range wallets {
+		if wallet.Currency != "LYD" {
+			continue
+		}
+		amount, ok := new(big.Rat).SetString(strings.TrimSpace(wallet.Balance))
+		if !ok {
+			return
+		}
+		s.mu.Lock()
+		s.balance, s.balanceAt = amount, time.Now()
+		s.mu.Unlock()
+		return
+	}
+}
+
+// spent takes a card just bought off the last read balance, so the cards the
+// rest of it cannot pay for leave the shelf before the next read.
+func (s *BNPlusSupplier) spent(purchase Purchase) {
+	cost, ok := new(big.Rat).SetString(strings.TrimSpace(purchase.Cost))
+	currency := strings.ToUpper(strings.TrimSpace(purchase.Currency))
+	if !ok || purchase.Status == StatusFailed || (currency != "" && currency != "LYD") {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.balance != nil {
+		s.balance = new(big.Rat).Sub(s.balance, cost)
+	}
+}
+
+// LastBalance is the company's dinar balance at BN Plus as last read.
+func (s *BNPlusSupplier) LastBalance() (*big.Rat, string, time.Time, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.balance == nil {
+		return nil, "", time.Time{}, false
+	}
+	return new(big.Rat).Set(s.balance), "LYD", s.balanceAt, true
 }
 
 func bnplusCardID(ref Ref) (int64, error) {

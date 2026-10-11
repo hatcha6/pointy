@@ -1,5 +1,8 @@
 // The card shop as the relay's admin routes describe it.
 
+import { money } from "./format";
+import { supplier } from "./labels";
+
 export type ShopItem = {
   key: string;
   country: string;
@@ -96,8 +99,34 @@ const reasonPrefixes: [string, string][] = [
   ["this relay keeps no stock", "الخادم لا يحفظ مخزوناً"],
 ];
 
-export function reasonText(reason?: string): string {
-  if (!reason) return "";
+/** "the supplier's price 163.76 LYD is above max_cost 163.47", or "… 10.70 USD (107.00 LYD) …". */
+const overGuard = /^the supplier's price (\S+) (\S*) ?(?:\((\S+) LYD\) )?is above max_cost (\S+)$/;
+
+/** Several suppliers each give their reason: "bnplus: …; reloadly: …". */
+const perSupplier = /^([a-z0-9_]+): (.*)$/;
+
+function oneReason(reason: string): string {
+  const over = overGuard.exec(reason);
+  if (over) {
+    const [, price, currency, lyd, guard] = over;
+    const cost = lyd ?? (currency === "" || currency.toUpperCase() === "LYD" ? price : undefined);
+    const quoted = cost === undefined ? `${price} ${currency}` : money(cost);
+    return `سعر المورّد ${quoted} أعلى من حد التكلفة ${money(guard)}`;
+  }
   for (const [prefix, arabic] of reasonPrefixes) if (reason.startsWith(prefix)) return arabic;
   return reason;
+}
+
+export function reasonText(reason?: string): string {
+  if (!reason) return "";
+  const parts = reason.split("; ");
+  if (parts.length > 1 || perSupplier.test(reason)) {
+    return parts
+      .map((part) => {
+        const named = perSupplier.exec(part);
+        return named ? `${supplier[named[1]] ?? named[1]}: ${oneReason(named[2])}` : oneReason(part);
+      })
+      .join(" · ");
+  }
+  return oneReason(reason);
 }

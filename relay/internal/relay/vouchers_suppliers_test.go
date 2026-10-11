@@ -882,3 +882,12 @@ func TestAFallbackThatHidesABrokenSupplierAccountIsLoudInTheLog(t *testing.T) {
 		t.Fatalf("log:\n%s", logs.String())
 	}
 }
+
+// A supplier may quote a float's full expansion; the reason rounds it.
+func TestOverGuardReasonRoundsThePrice(t *testing.T) {
+	offer := control.VoucherOffer{Price: "163.7645625000000109139364212751388549804687", Currency: "LYD"}
+	got := overGuardReason(offer, nil, "163.47")
+	if want := "the supplier's price 163.76 LYD is above max_cost 163.47"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}

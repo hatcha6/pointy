@@ -570,13 +570,13 @@ class _PosProductLookupControlsState extends State<_PosProductLookupControls> {
             onSearchChanged: viewModel.updateSearch,
             onOpenCameraScanner:
                 canCheckout &&
-                    !viewModel.isCheckingOut &&
+                    !viewModel.isCartFrozen &&
                     !viewModel.isResolvingBarcode
                 ? () => _openCameraScanner(context)
                 : null,
             onSearchSubmitted:
                 canCheckout &&
-                    !viewModel.isCheckingOut &&
+                    !viewModel.isCartFrozen &&
                     !viewModel.isResolvingBarcode
                 ? viewModel.submitLookup
                 : null,
@@ -601,14 +601,14 @@ class _PosProductLookupControlsState extends State<_PosProductLookupControls> {
       return;
     }
     for (final entry in entries) {
-      if (_viewModel.isCheckingOut) {
+      if (_viewModel.isCartFrozen) {
         return;
       }
       // A serialized model read off its box is one article per pick, chosen
       // in the picker — never a quantity of "some" handsets.
       if (entry.variant.trackingMode.tracksUnits) {
         for (var picked = 0; picked < entry.quantity; picked += 1) {
-          if (!context.mounted || _viewModel.isCheckingOut) {
+          if (!context.mounted || _viewModel.isCartFrozen) {
             return;
           }
           final before = _viewModel.cart.length;

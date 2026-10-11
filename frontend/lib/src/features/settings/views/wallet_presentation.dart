@@ -10,9 +10,19 @@ import '../../../shared/formatters.dart';
 /// A wallet amount. Two places like the rest of the app, three only when the
 /// dirhams need them — a service charged per message can cost 0.045.
 String formatWalletMoney(double value) {
+  return '${_walletNumber(value)} $currencySymbol';
+}
+
+/// An amount taken off, "−2.00 د.ل", with the minus kept before the digits
+/// in a right-to-left line.
+String formatWalletDeduction(double value) {
+  return '${ltrIsolated('−${_walletNumber(value)}')} $currencySymbol';
+}
+
+String _walletNumber(double value) {
   final thousandths = (value * 1000).round();
   final decimals = thousandths % 10 == 0 ? 2 : 3;
-  return '${value.toStringAsFixed(decimals)} $currencySymbol';
+  return value.toStringAsFixed(decimals);
 }
 
 /// A gateway reference, DFW-XXXXXXXXXX, kept on one line and in its own order
@@ -42,6 +52,25 @@ String formatWalletBound(double value) {
   return value == value.roundToDouble()
       ? value.toStringAsFixed(0)
       : value.toStringAsFixed(2);
+}
+
+/// A fee percent without trailing zeros: "2", "2.5".
+String formatWalletPercent(double value) {
+  return value == value.roundToDouble()
+      ? value.toStringAsFixed(0)
+      : value.toStringAsFixed(2).replaceFirst(RegExp(r'0+$'), '');
+}
+
+/// What a started top-up puts in the wallet after the gateway fee, or null
+/// when it keeps none.
+String? walletCreditLine(AppLocalizations l10n, WalletTopUp topUp) {
+  if (topUp.fee <= 0) {
+    return null;
+  }
+  return l10n.walletFeeCreditLine(
+    formatWalletMoney(topUp.creditAmount),
+    formatWalletMoney(topUp.fee),
+  );
 }
 
 String walletTopUpStatusLabel(WalletTopUpStatus status, AppLocalizations l10n) {

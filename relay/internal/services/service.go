@@ -119,6 +119,9 @@ type Service struct {
 
 	notedMu sync.Mutex
 	noted   map[string]time.Time
+
+	// funds is the company's balance at the supplier (see funds.go).
+	funds funds
 }
 
 type renderKey struct {

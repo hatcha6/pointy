@@ -129,7 +129,7 @@ func attachVoucherSuppliers(config *relayserver.VoucherConfig, credentials bnplu
 		credentials.HTTPClient = withoutRedirects(client)
 		bn := bnplus.New(credentials)
 		config.BNPlus = bn
-		config.Suppliers[vouchers.SupplierBNPlus] = vouchers.BNPlusSupplier{Client: bn}
+		config.Suppliers[vouchers.SupplierBNPlus] = &vouchers.BNPlusSupplier{Client: bn}
 	}
 }
 

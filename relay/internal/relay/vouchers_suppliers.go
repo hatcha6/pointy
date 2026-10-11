@@ -352,13 +352,18 @@ func balanceReason(
 }
 
 // overGuardReason says a supplier's price is above the item's max_cost, in the
-// supplier's own currency and, when that is not dinars, in dinars too.
+// supplier's own currency and, when that is not dinars, in dinars too. Prices
+// are rounded to two decimals: a supplier may quote a float's full expansion.
 func overGuardReason(offer control.VoucherOffer, cost *big.Rat, guard string) string {
+	price := strings.TrimSpace(offer.Price)
+	if parsed, ok := new(big.Rat).SetString(price); ok {
+		price = parsed.FloatString(2)
+	}
 	if currency := strings.ToUpper(strings.TrimSpace(offer.Currency)); currency == "" || currency == "LYD" {
-		return fmt.Sprintf("the supplier's price %s %s is above max_cost %s", offer.Price, offer.Currency, guard)
+		return fmt.Sprintf("the supplier's price %s %s is above max_cost %s", price, offer.Currency, guard)
 	}
 	return fmt.Sprintf("the supplier's price %s %s (%s LYD) is above max_cost %s",
-		offer.Price, offer.Currency, cost.FloatString(2), guard)
+		price, offer.Currency, cost.FloatString(2), guard)
 }
 
 // offerCostLYD is a supplier's price for one card in dinars at the current
