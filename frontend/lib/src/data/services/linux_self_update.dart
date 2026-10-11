@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 
 /// Linux self-update: applies a downloaded portable `.tar.gz` client build.
@@ -122,11 +121,16 @@ bool isLinuxPackageInstall({String? executable}) {
 
 /// Opens a downloaded `.deb` in the desktop's package installer (Mint's
 /// Captain/GDebi, Ubuntu's App Center), which asks for the password and
-/// installs it over the running version. Tries `xdg-open`, then `gio open`.
-/// The opener is left running on its own: `xdg-open` can stay in the
-/// foreground for as long as the installer window is open, so only a quick
-/// failure counts — a launcher that is still running after a few seconds has
-/// opened the file.
+/// installs it, then exits the app — as the Windows and Android installers
+/// take over — so the package replaces an app that is no longer running and
+/// the next launch is the new version. Tries `xdg-open`, then `gio open`.
+/// Throws (without exiting) when neither can open the file.
+///
+/// `xdg-open` can stay in the foreground for as long as the installer window
+/// is open, so only a quick failure counts: a launcher still running after a
+/// few seconds has opened the file. Its stdio is /dev/null rather than pipes
+/// to this process, so it and the installer outlive the exit below instead of
+/// dying on a broken pipe (a detached process would have no exit code).
 Future<void> openLinuxPackage(String debPath) async {
   const openers = [
     ['xdg-open'],
@@ -135,18 +139,19 @@ Future<void> openLinuxPackage(String debPath) async {
   Object? lastError;
   for (final opener in openers) {
     try {
-      // Not detached: a detached process has no exit code to read.
-      final process = await Process.start(opener.first, [
-        ...opener.skip(1),
+      final process = await Process.start('/bin/sh', [
+        '-c',
+        r'exec "$@" </dev/null >/dev/null 2>&1',
+        'pointy-open-package',
+        ...opener,
         debPath,
       ]);
-      unawaited(process.stdout.drain<void>());
-      unawaited(process.stderr.drain<void>());
       final code = await process.exitCode.timeout(
         const Duration(seconds: 5),
         onTimeout: () => 0,
       );
-      if (code == 0) return;
+      // 127: sh could not find the opener; try the next one.
+      if (code == 0) exit(0);
       lastError = Exception('${opener.join(' ')} exited with $code');
     } on ProcessException catch (error) {
       lastError = error;
