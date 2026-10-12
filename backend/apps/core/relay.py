@@ -1381,7 +1381,7 @@ def sync_relay_installation(installation, *, client=None, timeout=None, push_sho
     # platform environment, a custom domain) left every shop handing phones
     # the old public URL at pairing, so remote access failed everywhere at
     # once while the shop itself, configured with the new address, was fine.
-    _mirror_relay_addresses(installation, relay_client.config)
+    _mirror_relay_addresses(installation, relay_client.config, relay_installation)
     installation.last_synced_at = timezone.now()
     installation.save(
         update_fields=[
@@ -1396,6 +1396,7 @@ def sync_relay_installation(installation, *, client=None, timeout=None, push_sho
             "sms_balance",
             "sms_price",
             "relay_public_api_url",
+            "relay_public_pages_url",
             "relay_connector_address",
             "last_synced_at",
             "updated_at",
@@ -1459,18 +1460,37 @@ def _entitlement_snapshot(installation):
     )
 
 
-def _mirror_relay_addresses(installation, config):
-    """Copy the configured relay addresses onto ``installation`` when set.
+def _mirror_relay_addresses(installation, config, advertised=None):
+    """Copy the relay's public addresses onto ``installation``.
 
-    Empty config values are left alone: a backend that sets neither (tests, a
-    developer machine) keeps whatever the row was enrolled with.
+    What the relay advertises on the status read wins: that is how a relay
+    that moved to a new domain moves every shop with it. Otherwise the
+    configured value is used. Empty values are left alone: a backend that
+    sets neither (tests, a developer machine) keeps whatever the row was
+    enrolled with.
     """
-    public_api_url = str(getattr(config, "public_api_url", "") or "").strip()
+    advertised = advertised if isinstance(advertised, dict) else {}
+    public_api_url = _advertised_origin(advertised.get("public_api_url")) or str(
+        getattr(config, "public_api_url", "") or ""
+    ).strip()
     if public_api_url:
         installation.relay_public_api_url = public_api_url
+    pages_url = _advertised_origin(advertised.get("public_pages_url"))
+    if pages_url:
+        installation.relay_public_pages_url = pages_url
     connector_address = str(getattr(config, "connector_address", "") or "").strip()
     if connector_address:
         installation.relay_connector_address = connector_address
+
+
+def _advertised_origin(value):
+    """An https origin from the relay, or "" for anything else."""
+    if not isinstance(value, str):
+        return ""
+    parsed = urlparse(value.strip())
+    if parsed.scheme != "https" or not parsed.hostname or parsed.path not in ("", "/"):
+        return ""
+    return f"https://{parsed.netloc.lower()}"
 
 
 def issue_pairing_ticket(

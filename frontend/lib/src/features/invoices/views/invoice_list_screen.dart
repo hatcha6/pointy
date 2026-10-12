@@ -159,61 +159,85 @@ class _InvoiceListBodyState extends State<_InvoiceListBody> {
   Widget _buildList(BuildContext context, bool isDualPane) {
     final l10n = AppLocalizations.of(context)!;
     final spacing = AdaptiveSpacing.of(context);
+    final horizontal = EdgeInsetsDirectional.symmetric(
+      horizontal: spacing.pageHorizontal,
+    );
 
-    return Padding(
-      padding: spacing.pagePadding,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          InvoiceQueryControls(
-            query: viewModel.query,
-            contactRepository: widget.contactRepository,
-            userRepository: widget.userRepository,
-            onSearchChanged: viewModel.updateSearch,
-            onQueryChanged: viewModel.applyQuery,
-            enabled: !viewModel.isLoading,
-          ),
-          SizedBox(height: spacing.md),
-          Expanded(
-            child: PointyDataList<SaleOrder>(
-              items: viewModel.invoices,
-              onLoadMore: viewModel.loadMoreInvoices,
-              hasMore: viewModel.hasMoreInvoices,
-              isLoadingInitial: viewModel.isLoading,
-              isLoadingMore: viewModel.isLoadingMore,
-              hasError: viewModel.hasLoadError,
-              errorBuilder: (context) => PointyErrorState(
-                title: l10n.invoicesLoadError,
-                icon: Icons.receipt_long_outlined,
-                action: FilledButton.tonalIcon(
-                  onPressed: viewModel.loadInvoices,
-                  icon: const Icon(Icons.sync),
-                  label: Text(l10n.retryButton),
-                ),
+    // One sliver page: the filters float above the rows (gone while reading
+    // down, back on the first scroll up), and the wheel scrolls the page from
+    // anywhere on it rather than only over the rows.
+    return PointyDataList<SaleOrder>(
+      items: viewModel.invoices,
+      onLoadMore: viewModel.loadMoreInvoices,
+      hasMore: viewModel.hasMoreInvoices,
+      isLoadingInitial: viewModel.isLoading,
+      isLoadingMore: viewModel.isLoadingMore,
+      hasError: viewModel.hasLoadError,
+      padding: horizontal.add(
+        EdgeInsetsDirectional.only(bottom: spacing.pageVertical),
+      ),
+      headerSlivers: [
+        SliverFloatingHeader(
+          child: ColoredBox(
+            color: context.pointyColors.page,
+            child: Padding(
+              padding: EdgeInsetsDirectional.fromSTEB(
+                spacing.pageHorizontal,
+                spacing.pageVertical,
+                spacing.pageHorizontal,
+                spacing.sm,
               ),
-              emptyBuilder: (context) => QueryEmptyState(
-                icon: Icons.receipt_long_outlined,
-                search: viewModel.query.search,
-                hasFilters:
-                    InvoiceQueryControls.narrowingFilterCount(viewModel.query) >
-                    0,
-                emptyTitle: l10n.emptyInvoices,
-                onClear: () => viewModel.applyQuery(
-                  InvoiceQueryControls.cleared(viewModel.query),
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  InvoiceQueryControls(
+                    query: viewModel.query,
+                    contactRepository: widget.contactRepository,
+                    userRepository: widget.userRepository,
+                    onSearchChanged: viewModel.updateSearch,
+                    onQueryChanged: viewModel.applyQuery,
+                    enabled: !viewModel.isLoading,
+                  ),
+                  SizedBox(height: spacing.sm),
+                  PointyDocumentListHeader(
+                    documentLabel: l10n.documentListColumnDocument,
+                    partyLabel: l10n.documentListColumnCustomer,
+                    statusLabel: l10n.documentListColumnStatus,
+                    amountLabel: l10n.documentListColumnAmount,
+                  ),
+                ],
               ),
-              itemBuilder: (context, invoice) {
-                return InvoiceTile(
-                  invoice: invoice,
-                  onTap: () => _openInvoice(invoice, isDualPane),
-                  onPrint: () => _printInvoice(context, invoice),
-                  onShare: () => _shareInvoice(context, invoice),
-                );
-              },
             ),
           ),
-        ],
+        ),
+      ],
+      errorBuilder: (context) => PointyErrorState(
+        title: l10n.invoicesLoadError,
+        icon: Icons.receipt_long_outlined,
+        action: FilledButton.tonalIcon(
+          onPressed: viewModel.loadInvoices,
+          icon: const Icon(Icons.sync),
+          label: Text(l10n.retryButton),
+        ),
       ),
+      emptyBuilder: (context) => QueryEmptyState(
+        icon: Icons.receipt_long_outlined,
+        search: viewModel.query.search,
+        hasFilters:
+            InvoiceQueryControls.narrowingFilterCount(viewModel.query) > 0,
+        emptyTitle: l10n.emptyInvoices,
+        onClear: () =>
+            viewModel.applyQuery(InvoiceQueryControls.cleared(viewModel.query)),
+      ),
+      itemBuilder: (context, invoice) {
+        return InvoiceTile(
+          invoice: invoice,
+          onTap: () => _openInvoice(invoice, isDualPane),
+          onPrint: () => _printInvoice(context, invoice),
+          onShare: () => _shareInvoice(context, invoice),
+        );
+      },
     );
   }
 
@@ -275,28 +299,36 @@ class InvoiceTile extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final colors = context.pointyColors;
     final receiptNumber = invoice.receiptNumber ?? l10n.saleReceiptFallback;
+    final customer = (invoice.customerName ?? '').trim();
+    final cashier = (invoice.cashierName ?? '').trim();
+    final session = (invoice.registerSessionNumber ?? '').trim();
+    final isVoid = invoice.status == 'void';
+    final owing = !isVoid && invoice.balanceDue > 0;
+    final profit = invoice.profit;
 
-    return PointyDataRow(
-      leading: Icon(
-        saleOrderStatusIcon(invoice.status),
-        color: colors.primaryStrong,
-      ),
-      title: l10n.invoiceNumberValue(receiptNumber),
-      subtitle: [
-        if (invoice.createdAt != null) formatDateTime(invoice.createdAt!),
-        l10n.lineItemCount(invoice.lineCount),
-        if (invoice.customerName != null && invoice.customerName!.isNotEmpty)
-          invoice.customerName!,
-        if ((invoice.cashierName ?? '').trim().isNotEmpty)
-          l10n.invoiceCashierValue(invoice.cashierName!.trim()),
-        if (invoice.registerSessionNumber != null &&
-            invoice.registerSessionNumber!.isNotEmpty)
-          l10n.invoiceRegisterSessionValue(invoice.registerSessionNumber!),
-      ].join(' • '),
+    return PointyDocumentRow(
+      party: customer.isEmpty ? l10n.walkInCustomerLabel : customer,
+      reference: l10n.invoiceNumberValue(receiptNumber),
+      date: invoice.createdAt == null
+          ? null
+          : formatDateTime(invoice.createdAt!),
+      amount: formatMoney(invoice.total),
+      // What is still owed is the figure a credit sale is opened for; the
+      // profit (owners only — null for everyone else) otherwise.
+      secondaryAmount: owing
+          ? l10n.invoiceBalanceDueValue(formatMoney(invoice.balanceDue))
+          : profit == null
+          ? null
+          : l10n.invoiceProfitValue(formatMoney(profit)),
+      secondaryAmountColor: owing ? colors.warning : colors.primaryStrong,
+      accentColor: invoice.isOverdue
+          ? colors.danger
+          : _invoiceStatusColor(colors, invoice.status),
       badges: [
         PointyStatusPill(
           label: saleOrderStatusLabel(l10n, invoice.status),
           icon: saleOrderStatusIcon(invoice.status),
+          color: _invoiceStatusColor(colors, invoice.status),
         ),
         // Whether the card money on this sale is backed by a receipt the
         // shop could show someone. Draws nothing on a cash sale.
@@ -316,71 +348,70 @@ class InvoiceTile extends StatelessWidget {
             icon: Icons.event_available_outlined,
           ),
       ],
-      actions: [
-        if (onPrint != null || onShare != null)
-          PopupMenuButton<_InvoiceRowAction>(
-            tooltip: l10n.invoiceRowActionsTooltip,
-            icon: const Icon(Icons.more_vert),
-            onSelected: (action) {
-              switch (action) {
-                case _InvoiceRowAction.print:
-                  onPrint?.call();
-                case _InvoiceRowAction.share:
-                  onShare?.call();
-              }
-            },
-            itemBuilder: (context) => [
-              if (onPrint != null)
-                PopupMenuItem<_InvoiceRowAction>(
-                  value: _InvoiceRowAction.print,
-                  child: ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.print_outlined),
-                    title: Text(l10n.invoiceReprintButton),
-                  ),
-                ),
-              if (onShare != null)
-                PopupMenuItem<_InvoiceRowAction>(
-                  value: _InvoiceRowAction.share,
-                  child: ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.ios_share_outlined),
-                    title: Text(l10n.invoiceShareButton),
-                  ),
-                ),
-            ],
+      meta: [
+        PointyDocumentMeta(
+          icon: Icons.shopping_basket_outlined,
+          label: l10n.lineItemCount(invoice.lineCount),
+        ),
+        if (cashier.isNotEmpty)
+          PointyDocumentMeta(
+            icon: Icons.person_outline,
+            label: l10n.invoiceCashierValue(cashier),
+          ),
+        if (session.isNotEmpty)
+          PointyDocumentMeta(
+            icon: Icons.point_of_sale_outlined,
+            label: l10n.invoiceRegisterSessionValue(session),
           ),
       ],
-      trailing: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Text(
-            formatMoney(invoice.total),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: colors.ink,
-              fontWeight: FontWeight.w800,
+      menu: onPrint == null && onShare == null
+          ? null
+          : PopupMenuButton<_InvoiceRowAction>(
+              tooltip: l10n.invoiceRowActionsTooltip,
+              icon: const Icon(Icons.more_vert),
+              onSelected: (action) {
+                switch (action) {
+                  case _InvoiceRowAction.print:
+                    onPrint?.call();
+                  case _InvoiceRowAction.share:
+                    onShare?.call();
+                }
+              },
+              itemBuilder: (context) => [
+                if (onPrint != null)
+                  PopupMenuItem<_InvoiceRowAction>(
+                    value: _InvoiceRowAction.print,
+                    child: ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.print_outlined),
+                      title: Text(l10n.invoiceReprintButton),
+                    ),
+                  ),
+                if (onShare != null)
+                  PopupMenuItem<_InvoiceRowAction>(
+                    value: _InvoiceRowAction.share,
+                    child: ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.ios_share_outlined),
+                      title: Text(l10n.invoiceShareButton),
+                    ),
+                  ),
+              ],
             ),
-          ),
-          if (invoice.profit != null)
-            Text(
-              l10n.invoiceProfitValue(formatMoney(invoice.profit!)),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: colors.primaryStrong,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-        ],
-      ),
       onTap: onTap,
     );
   }
+}
+
+Color _invoiceStatusColor(PointySemanticColors colors, String status) {
+  return switch (status) {
+    'paid' => colors.success,
+    'open' => colors.warning,
+    'void' => colors.danger,
+    _ => colors.mutedInk,
+  };
 }
 
 enum _InvoiceRowAction { print, share }

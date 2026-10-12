@@ -46578,6 +46578,66 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'طُبّق تسعير الشركة على البطاقات المتوقفة'**
   String get smartNotificationBelowCostCompanyDone;
+
+  /// Column title over the document number and date in the invoices / purchase orders table.
+  ///
+  /// In ar, this message translates to:
+  /// **'المستند'**
+  String get documentListColumnDocument;
+
+  /// No description provided for @documentListColumnCustomer.
+  ///
+  /// In ar, this message translates to:
+  /// **'العميل'**
+  String get documentListColumnCustomer;
+
+  /// No description provided for @documentListColumnSupplier.
+  ///
+  /// In ar, this message translates to:
+  /// **'المورد'**
+  String get documentListColumnSupplier;
+
+  /// No description provided for @documentListColumnStatus.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحالة'**
+  String get documentListColumnStatus;
+
+  /// No description provided for @documentListColumnAmount.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ'**
+  String get documentListColumnAmount;
+
+  /// Unpaid remainder under an invoice's total in the invoices list.
+  ///
+  /// In ar, this message translates to:
+  /// **'متبقي {amount}'**
+  String invoiceBalanceDueValue(String amount);
+
+  /// No description provided for @purchaseOrderNoSupplierLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدون مورد'**
+  String get purchaseOrderNoSupplierLabel;
+
+  /// When a drawer session was closed, on its row in the sessions list.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُغلقت {time}'**
+  String registerSessionClosedAtValue(String time);
+
+  /// How long a drawer session was open, e.g. «8 س 15 د».
+  ///
+  /// In ar, this message translates to:
+  /// **'{hours} س {minutes} د'**
+  String registerSessionDurationValue(int hours, int minutes);
+
+  /// Under an open session's cash: the drawer has not been counted yet, so there is no variance to show.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارية الآن'**
+  String get registerSessionInProgressValue;
 }
 
 class _AppLocalizationsDelegate

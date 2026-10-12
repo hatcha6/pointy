@@ -324,7 +324,9 @@ and is embedded in the relay binary (`internal/console/dist`, built from
 **Off until `POINTY_RELAY_CONSOLE_ORIGIN` is set** to the console's public origin,
 e.g. `https://relay.example.com`. Passkeys are bound to that host name: changing
 it later means every operator registers again, so use the stable domain, not a
-platform-generated one.
+platform-generated one. `POINTY_RELAY_CONSOLE_RP_ID` may name a parent domain
+instead (`dftr.ly` for `https://my.dftr.ly`), so the passkeys keep working if the
+console moves to another subdomain of it.
 
 Security model:
 
@@ -1414,7 +1416,8 @@ Error `code`s: `topups_unconfigured` (503), `invalid_amount` (422, with
 | `POINTY_RELAY_DAFA_BASE_URL` | `https://dev.dafa.ly/api/v1` | as the project's **Integration** page shows it |
 | `POINTY_RELAY_DAFA_REQUEST_TIMEOUT` | `20s` | one Dafa call |
 | `POINTY_RELAY_WALLET_METHODS` | all seven | methods to offer, in order (`moamalat,sadad,edfali` or `dafa_…` keys) |
-| `POINTY_RELAY_PUBLIC_URL` | derived per request | the relay's public **https** origin, where Dafa's webhook is sent — set it in production |
+| `POINTY_RELAY_PUBLIC_URL` | derived per request | the relay's public **https** origin, where Dafa's webhook is sent — set it in production. Also advertised to every shop on its status sync as `public_api_url`, which the shop hands phones at pairing |
+| `POINTY_RELAY_PUBLIC_PAGES_URL` | empty | https origin of customer-facing pages (public invoice links), e.g. `https://shop.dftr.ly`; advertised to every shop as `public_pages_url`. Empty keeps each shop's own setting |
 | `POINTY_RELAY_WALLET_TOPUP_MIN` / `_MAX` | `10` / `5000` | bounds of one top-up |
 | `POINTY_RELAY_WALLET_QUICK_AMOUNTS` | `50,100,200,500` | one-tap amounts in the app |
 | `POINTY_RELAY_WALLET_TOPUP_TTL` | `30m` | pending → expired |

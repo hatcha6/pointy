@@ -27675,4 +27675,40 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get smartNotificationBelowCostCompanyDone =>
       'طُبّق تسعير الشركة على البطاقات المتوقفة';
+
+  @override
+  String get documentListColumnDocument => 'المستند';
+
+  @override
+  String get documentListColumnCustomer => 'العميل';
+
+  @override
+  String get documentListColumnSupplier => 'المورد';
+
+  @override
+  String get documentListColumnStatus => 'الحالة';
+
+  @override
+  String get documentListColumnAmount => 'المبلغ';
+
+  @override
+  String invoiceBalanceDueValue(String amount) {
+    return 'متبقي $amount';
+  }
+
+  @override
+  String get purchaseOrderNoSupplierLabel => 'بدون مورد';
+
+  @override
+  String registerSessionClosedAtValue(String time) {
+    return 'أُغلقت $time';
+  }
+
+  @override
+  String registerSessionDurationValue(int hours, int minutes) {
+    return '$hours س $minutes د';
+  }
+
+  @override
+  String get registerSessionInProgressValue => 'جارية الآن';
 }

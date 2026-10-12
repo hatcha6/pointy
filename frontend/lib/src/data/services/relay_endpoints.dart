@@ -10,11 +10,10 @@
 /// platform-generated host without a code change:
 ///   flutter build … --dart-define=POINTY_RELAY_API_BASE_URL=https://relay.example/api
 ///
-/// NOTE: the default points at a LibyanSpider JPaaS environment — the env id and
-/// node/endpoint port are platform-generated and will change if the environment
-/// or its TCP endpoint is recreated. Prefer a stable DNS name you control for
-/// long-lived client builds (Android/Windows ship this value baked in).
+/// The default is the relay's own domain. Builds already in the field carry
+/// the older platform host (env-9493505.tip2.libyanspider.cloud), which stays
+/// bound to the same relay, so it must never be removed.
 const String kDefaultRelayApiBaseUrl = String.fromEnvironment(
   'POINTY_RELAY_API_BASE_URL',
-  defaultValue: 'https://env-9493505.tip2.libyanspider.cloud/api',
+  defaultValue: 'https://my.dftr.ly/api',
 );

@@ -673,3 +673,23 @@ func TestCompanyBooks(t *testing.T) {
 		t.Fatalf("stepped-up void: %d", code)
 	}
 }
+
+func TestPasskeyDomainIsTheHostOrOneOfItsParents(t *testing.T) {
+	origin, err := parseOrigin("https://my.dftr.ly")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for rpID, want := range map[string]string{"": "my.dftr.ly", "my.dftr.ly": "my.dftr.ly", "dftr.ly": "dftr.ly", " DFTR.LY. ": "dftr.ly"} {
+		got, err := relyingPartyID(origin, rpID)
+		if err != nil || got != want {
+			t.Fatalf("%q: got %q, %v; want %q", rpID, got, err, want)
+		}
+	}
+	// A browser refuses an id that is not the host or a parent of it, and a
+	// bare TLD would bind the passkey to every .ly site.
+	for _, rpID := range []string{"ly", "other.ly", "y.dftr.ly", "xmy.dftr.ly", "shop.dftr.ly"} {
+		if _, err := relyingPartyID(origin, rpID); err == nil {
+			t.Fatalf("accepted %q", rpID)
+		}
+	}
+}

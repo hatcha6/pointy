@@ -780,6 +780,9 @@ class RelayInstallation(TimeStampedModel):
     installation_id = models.CharField(max_length=80, unique=True)
     shop_name = models.CharField(max_length=120, blank=True)
     relay_public_api_url = models.URLField(max_length=500)
+    # Origin of customer-facing pages (public invoice links), as the relay
+    # advertises it. Empty falls back to relay_public_api_url.
+    relay_public_pages_url = models.URLField(max_length=500, blank=True, default="")
     relay_connector_address = models.CharField(max_length=255, blank=True)
     connector_token = models.TextField()
     access_token = models.TextField()

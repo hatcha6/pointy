@@ -99,6 +99,8 @@ class FakeRelayControlClient:
         self.issued_connector_certificate_request = None
         self.enrolled_with_token = None
         self.metadata_update = None
+        # Extra fields the relay's status read carries (public addresses).
+        self.advertised = {}
 
     def enroll_installation(self, *, enrollment_token, shop_name):
         self.enrolled_with_token = enrollment_token
@@ -141,6 +143,7 @@ class FakeRelayControlClient:
             "subscription_active": self.subscription_active,
             "ai_enabled": self.ai_enabled,
             "subscription_ends_at": self.subscription_ends_at,
+            **self.advertised,
         }
 
     def update_installation_metadata(self, installation_id, *, shop_name):
@@ -1110,6 +1113,65 @@ class RelayBackendApiTests(TestCase):
         installation.refresh_from_db()
         self.assertEqual(installation.relay_public_api_url, "https://relay.example")
         self.assertEqual(installation.relay_connector_address, "relay.example:443")
+
+    def _sync_with(self, fake_relay):
+        client = APIClient()
+        client.force_authenticate(user=self.manager)
+        with self.captureOnCommitCallbacks(execute=True):
+            with mock.patch("apps.core.relay.RelayControlClient", return_value=fake_relay):
+                response = client.post(
+                    reverse("relay-installation"),
+                    {"sync": True},
+                    format="json",
+                )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_sync_takes_the_addresses_the_relay_advertises(self):
+        # The relay moved to its own domain: what it advertises on the status
+        # read beats each shop's configured URL, so the whole fleet moves
+        # without anyone editing a shop's settings.
+        installation = RelayInstallation.objects.create(
+            installation_id="installation-1",
+            relay_public_api_url="https://old-relay.example",
+            connector_token="ptc1.installation-1.connector-secret",
+            access_token="ptr1.installation-1.access-secret",
+            relay_enabled=True,
+            subscription_active=True,
+        )
+        fake_relay = FakeRelayControlClient(relay_enabled=True, subscription_active=True)
+        fake_relay.advertised = {
+            "public_api_url": "https://My.dftr.ly/",
+            "public_pages_url": "https://shop.dftr.ly",
+        }
+
+        self._sync_with(fake_relay)
+
+        installation.refresh_from_db()
+        self.assertEqual(installation.relay_public_api_url, "https://my.dftr.ly")
+        self.assertEqual(installation.relay_public_pages_url, "https://shop.dftr.ly")
+
+    def test_sync_ignores_an_advertised_address_that_is_not_an_https_origin(self):
+        installation = RelayInstallation.objects.create(
+            installation_id="installation-1",
+            relay_public_api_url="https://enrolled.example",
+            relay_public_pages_url="https://pages.example",
+            connector_token="ptc1.installation-1.connector-secret",
+            access_token="ptr1.installation-1.access-secret",
+            relay_enabled=True,
+            subscription_active=True,
+        )
+        fake_relay = FakeRelayControlClient(relay_enabled=True, subscription_active=True)
+        fake_relay.config = mock.Mock(public_api_url="", connector_address="")
+        fake_relay.advertised = {
+            "public_api_url": "http://relay.example",
+            "public_pages_url": "https://shop.dftr.ly/invoices",
+        }
+
+        self._sync_with(fake_relay)
+
+        installation.refresh_from_db()
+        self.assertEqual(installation.relay_public_api_url, "https://enrolled.example")
+        self.assertEqual(installation.relay_public_pages_url, "https://pages.example")
 
     def test_sync_keeps_the_enrolled_addresses_when_none_are_configured(self):
         installation = RelayInstallation.objects.create(

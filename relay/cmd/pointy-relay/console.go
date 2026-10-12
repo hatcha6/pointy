@@ -12,6 +12,7 @@ import (
 
 type consoleSettings struct {
 	Origin            string
+	RPID              string
 	AdminToken        string
 	Store             control.InstallationStore
 	RateLimiter       ratelimit.Limiter
@@ -40,6 +41,7 @@ func buildConsole(settings consoleSettings, adminHandler http.Handler, publicHan
 	}
 	wrapped, err := console.New(console.Config{
 		Origin:            settings.Origin,
+		RPID:              settings.RPID,
 		AdminToken:        settings.AdminToken,
 		Store:             store,
 		Admin:             inner,
@@ -50,6 +52,6 @@ func buildConsole(settings consoleSettings, adminHandler http.Handler, publicHan
 	if err != nil {
 		return nil, err
 	}
-	settings.Logger.Info("operator console enabled", "origin", settings.Origin)
+	settings.Logger.Info("operator console enabled", "origin", settings.Origin, "passkey_domain", settings.RPID)
 	return wrapped, nil
 }

@@ -25,7 +25,7 @@ cd "$ROOT"
 
 MANAGE=(backend/.venv/bin/python backend/manage.py)
 BACKEND_HEALTH_URL="${BACKEND_HEALTH_URL:-http://127.0.0.1:8000/healthz/}"
-RELAY_REMOTE_HOST="${RELAY_REMOTE_HOST:-env-9493505.tip2.libyanspider.cloud}"
+RELAY_REMOTE_HOST="${RELAY_REMOTE_HOST:-my.dftr.ly}"
 ADMIN_TOKEN="${RELAY_REMOTE_ADMIN_TOKEN:-}"
 CONTROL_URL="${RELAY_REMOTE_CONTROL_URL:-https://$RELAY_REMOTE_HOST}"
 

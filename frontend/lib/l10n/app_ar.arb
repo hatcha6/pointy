@@ -23661,5 +23661,48 @@
   "smartNotificationBelowCostCompanyDone": "طُبّق تسعير الشركة على البطاقات المتوقفة",
   "@smartNotificationBelowCostCompanyDone": {
     "description": "Snackbar after the alert's bulk action."
+  },
+  "documentListColumnDocument": "المستند",
+  "@documentListColumnDocument": {
+    "description": "Column title over the document number and date in the invoices / purchase orders table."
+  },
+  "documentListColumnCustomer": "العميل",
+  "documentListColumnSupplier": "المورد",
+  "documentListColumnStatus": "الحالة",
+  "documentListColumnAmount": "المبلغ",
+  "invoiceBalanceDueValue": "متبقي {amount}",
+  "@invoiceBalanceDueValue": {
+    "description": "Unpaid remainder under an invoice's total in the invoices list.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "purchaseOrderNoSupplierLabel": "بدون مورد",
+  "registerSessionClosedAtValue": "أُغلقت {time}",
+  "@registerSessionClosedAtValue": {
+    "description": "When a drawer session was closed, on its row in the sessions list.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "registerSessionDurationValue": "{hours} س {minutes} د",
+  "@registerSessionDurationValue": {
+    "description": "How long a drawer session was open, e.g. «8 س 15 د».",
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      },
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "registerSessionInProgressValue": "جارية الآن",
+  "@registerSessionInProgressValue": {
+    "description": "Under an open session's cash: the drawer has not been counted yet, so there is no variance to show."
   }
 }

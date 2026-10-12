@@ -302,6 +302,8 @@ type HTTPServer struct {
 	// Wallet (Dafa). The company's payment gateway account that shops top up
 	// their prepaid balance through; the API key lives only here.
 	Wallet WalletConfig
+	// Public is the relay's stable public origins, told to every shop.
+	Public PublicAddresses
 	// Alerts is the company's ntfy alert channel; nil sends nothing.
 	Alerts *alerts.Ntfy
 	// Balances watches the company's supplier balances; the server asks it
@@ -1427,9 +1429,9 @@ func (s HTTPServer) handleInstallation(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// The status read is what every shop's backend syncs from, so it also
-		// carries the fleet's switched-off integrations and the shop's SMS
-		// balance down to it.
-		payload := s.withDisabledIntegrations(r, adminInstallationPayload(installation, s.clock().Now()))
+		// carries the fleet's switched-off integrations, the relay's public
+		// addresses and the shop's SMS balance down to it.
+		payload := s.withPublicAddresses(r, s.withDisabledIntegrations(r, adminInstallationPayload(installation, s.clock().Now())))
 		if balance := s.smsBalance(r.Context(), installation.ID); balance != "" {
 			payload["sms"] = s.smsWalletPayload(balance)
 		}

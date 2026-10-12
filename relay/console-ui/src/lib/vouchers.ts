@@ -102,6 +102,22 @@ const reasonPrefixes: [string, string][] = [
 /** "the supplier's price 163.76 LYD is above max_cost 163.47", or "… 10.70 USD (107.00 LYD) …". */
 const overGuard = /^the supplier's price (\S+) (\S*) ?(?:\((\S+) LYD\) )?is above max_cost (\S+)$/;
 
+/** "the company's balance at bnplus is 1500.00 LYD (read 6m0s ago), below this card's price of 1901.44 LYD". */
+const lowBalance =
+  /^the company's balance at (\S+) is (\S+) (\S*) \(read (\S+) ago\), below this card's price of (\S+) ?(\S*)$/;
+
+/** An amount in its own currency: dinars as money() writes them, anything else as given. */
+function priced(value: string, currency: string): string {
+  return currency === "" || currency.toUpperCase() === "LYD" ? money(value) : money(value, currency.toUpperCase());
+}
+
+/** Go's rounded duration ("6m0s", "1h5m0s", "0s") as whole minutes. */
+function minutesAgo(duration: string): string {
+  const hours = Number(/(\d+)h/.exec(duration)?.[1] ?? 0);
+  const minutes = Number(/(\d+)m/.exec(duration)?.[1] ?? 0) + hours * 60;
+  return minutes < 1 ? "قبل أقل من دقيقة" : `قبل ${minutes} دقيقة`;
+}
+
 /** Several suppliers each give their reason: "bnplus: …; reloadly: …". */
 const perSupplier = /^([a-z0-9_]+): (.*)$/;
 
@@ -112,6 +128,11 @@ function oneReason(reason: string): string {
     const cost = lyd ?? (currency === "" || currency.toUpperCase() === "LYD" ? price : undefined);
     const quoted = cost === undefined ? `${price} ${currency}` : money(cost);
     return `سعر المورّد ${quoted} أعلى من حد التكلفة ${money(guard)}`;
+  }
+  const low = lowBalance.exec(reason);
+  if (low) {
+    const [, key, balance, balanceCurrency, ago, price, priceCurrency] = low;
+    return `رصيد الشركة لدى ${supplier[key] ?? key} ${priced(balance, balanceCurrency)} (${minutesAgo(ago)}) أقل من سعر البطاقة ${priced(price, priceCurrency)}`;
   }
   for (const [prefix, arabic] of reasonPrefixes) if (reason.startsWith(prefix)) return arabic;
   return reason;

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../design/design.dart';
 import '../infinite_scroll_grid.dart';
+import 'pointy_document_row.dart';
 import 'pointy_skeleton.dart';
 
 class PointyDataList<T> extends StatelessWidget {
@@ -19,6 +20,7 @@ class PointyDataList<T> extends StatelessWidget {
     this.padding = const EdgeInsets.all(8),
     this.separatorBuilder,
     this.header,
+    this.headerSlivers = const [],
     this.framed = true,
     this.loadMoreExtent = 480,
     this.skeletonItemBuilder,
@@ -42,6 +44,13 @@ class PointyDataList<T> extends StatelessWidget {
   /// Scrolls with the items above the first row, and stays visible in the
   /// loading, error, and empty states.
   final Widget? header;
+
+  /// Slivers scrolled together with the rows — see
+  /// [InfiniteScrollView.headerSlivers]. With any, the list is built as one
+  /// sliver page and [framed] does not apply: the frame would have to wrap the
+  /// header slivers too, so rows should carry their own card (as
+  /// [PointyDocumentRow] does).
+  final List<Widget> headerSlivers;
   final bool framed;
   final double loadMoreExtent;
 
@@ -60,6 +69,10 @@ class PointyDataList<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (headerSlivers.isNotEmpty) {
+      return _sliverPage(context);
+    }
+
     // A content-shaped skeleton (not a spinner) makes the first paint feel
     // instant; framed so it matches the loaded list.
     if (isLoadingInitial && items.isEmpty) {
@@ -102,6 +115,29 @@ class PointyDataList<T> extends StatelessWidget {
     );
 
     return _framed(context, list);
+  }
+
+  Widget _sliverPage(BuildContext context) {
+    final showError =
+        !isLoadingInitial && hasError && items.isEmpty && errorBuilder != null;
+    return InfiniteScrollList<T>(
+      items: items,
+      itemBuilder: itemBuilder,
+      onLoadMore: onLoadMore,
+      hasMore: hasMore,
+      isLoadingInitial: isLoadingInitial,
+      isLoadingMore: isLoadingMore,
+      emptyBuilder: showError ? errorBuilder! : emptyBuilder,
+      headerSlivers: headerSlivers,
+      padding: padding,
+      loadMoreExtent: loadMoreExtent,
+      loadMoreFailed: loadMoreFailed,
+      loadMoreErrorMessage: loadMoreErrorMessage,
+      skeletonItemBuilder:
+          skeletonItemBuilder ?? (_) => const PointySkeletonListTile(),
+      skeletonItemCount: skeletonItemCount,
+      separatorBuilder: separatorBuilder ?? (_, _) => const SizedBox(height: 8),
+    );
   }
 
   Widget _framed(BuildContext context, Widget child) {

@@ -65,6 +65,10 @@ type Config struct {
 	// Passkeys are bound to its host name: changing it later means every
 	// operator registers again. http is accepted for localhost only.
 	Origin string
+	// RPID is the passkeys' relying-party id. Empty binds them to the
+	// origin's host name; a parent domain of it (dftr.ly for my.dftr.ly)
+	// keeps them working if the console moves to another subdomain.
+	RPID string
 	// AdminToken authorizes forwarded requests on the server side and gates
 	// the CLI's /v1/console bootstrap routes.
 	AdminToken string
@@ -126,8 +130,12 @@ func New(cfg Config) (*Console, error) {
 	if limiter == nil {
 		limiter = ratelimit.NewMemoryLimiter(cfg.Now)
 	}
+	rpID, err := relyingPartyID(origin, cfg.RPID)
+	if err != nil {
+		return nil, err
+	}
 	wa, err := webauthn.New(&webauthn.Config{
-		RPID:          origin.Hostname(),
+		RPID:          rpID,
 		RPDisplayName: "دفتر — لوحة التشغيل",
 		RPOrigins:     []string{origin.String()},
 		Timeouts: webauthn.TimeoutsConfig{
@@ -152,6 +160,20 @@ func New(cfg Config) (*Console, error) {
 		secure:     secure,
 		limiter:    limiter,
 	}, nil
+}
+
+// relyingPartyID is the origin's host, or rpID when that is the host itself
+// or one of its parent domains: a browser refuses any other id.
+func relyingPartyID(origin *url.URL, rpID string) (string, error) {
+	host := strings.ToLower(origin.Hostname())
+	rpID = strings.ToLower(strings.Trim(strings.TrimSpace(rpID), "."))
+	if rpID == "" || rpID == host {
+		return host, nil
+	}
+	if !strings.Contains(rpID, ".") || !strings.HasSuffix(host, "."+rpID) {
+		return "", fmt.Errorf("console: passkey domain %q must be %q or one of its parent domains (POINTY_RELAY_CONSOLE_RP_ID)", rpID, host)
+	}
+	return rpID, nil
 }
 
 func parseOrigin(raw string) (*url.URL, error) {

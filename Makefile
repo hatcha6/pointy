@@ -102,13 +102,15 @@ RELAY_SUBSCRIPTION_CLEAR_END ?= false
 # The backend self-enrolls on first run using POINTY_RELAY_ENROLLMENT_TOKEN from
 # backend/.env; subsequent runs reuse the stored installation from the local DB.
 # To mint a fresh enrollment token: make relay-remote-provision ... (operator only).
-RELAY_REMOTE_HOST ?= env-9493505.tip2.libyanspider.cloud
+RELAY_REMOTE_HOST ?= my.dftr.ly
 RELAY_REMOTE_ADMIN_TOKEN ?=
 RELAY_REMOTE_SHOP_NAME ?= Dev Remote Shop
 RELAY_REMOTE_BUSINESS_ID ?= dev-remote
 # Connector dial target: the Jelastic L4 TCP endpoint that forwards to the relay's
-# 8092 connector listener (the env hostname only carries HTTP/443 via the SLB).
-RELAY_REMOTE_CONNECTOR_DIAL ?= node11166-env-9493505.tip2.libyanspider.cloud:11061
+# 8092 connector listener (the HTTPS names only carry HTTP/443 via the SLB).
+# tunnel.dftr.ly is a CNAME to node11166-env-9493505…, so a recreated endpoint
+# is a DNS edit; the port is still the platform's.
+RELAY_REMOTE_CONNECTOR_DIAL ?= tunnel.dftr.ly:11061
 RELAY_REMOTE_CONNECTOR_STATE_FILE ?= $(abspath $(RELAY_DIR)/.connector-state-remote.json)
 RELAY_REMOTE_TOKEN_FILE ?= $(abspath $(RELAY_DIR)/.remote-setup-token)
 POSTGRES_HOST ?= 127.0.0.1

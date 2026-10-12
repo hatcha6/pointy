@@ -34,7 +34,9 @@ def public_invoice_url_for_order(
     if installation is None or not installation.remote_access_supported:
         return ""
 
-    base_url = installation.relay_public_api_url.rstrip("/") + "/"
+    # Customer-facing links go on the relay's pages origin when it has one.
+    origin = installation.relay_public_pages_url or installation.relay_public_api_url
+    base_url = origin.rstrip("/") + "/"
     path = (
         "invoices/"
         f"{quote(installation.installation_id, safe='')}/"

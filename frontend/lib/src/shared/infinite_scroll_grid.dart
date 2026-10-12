@@ -17,6 +17,7 @@ class InfiniteScrollView<T> extends StatefulWidget {
     required this.emptyBuilder,
     required this.sliverBuilder,
     this.header,
+    this.headerSlivers = const [],
     this.padding = EdgeInsets.zero,
     this.loadMoreExtent = 480,
     this.skeletonItemBuilder,
@@ -38,6 +39,13 @@ class InfiniteScrollView<T> extends StatefulWidget {
   /// Scrolls with the content above the first item, and stays visible in the
   /// loading and empty states.
   final Widget? header;
+
+  /// Slivers above the items in the same scroll view — a summary card, a
+  /// floating filter bar. Unlike [header] these stay in one [CustomScrollView]
+  /// through the loading, empty and loaded states, so the whole page scrolls
+  /// as one: the wheel works anywhere on it, not only over the rows, and
+  /// pagination still keys off the end of the rows.
+  final List<Widget> headerSlivers;
   final EdgeInsetsGeometry padding;
   final double loadMoreExtent;
 
@@ -116,6 +124,9 @@ class _InfiniteScrollViewState<T> extends State<InfiniteScrollView<T>> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.headerSlivers.isNotEmpty) {
+      return _buildWithHeaderSlivers(context);
+    }
     if (widget.isLoadingInitial && widget.items.isEmpty) {
       final skeletonItemBuilder = widget.skeletonItemBuilder;
       if (skeletonItemBuilder != null) {
@@ -179,6 +190,77 @@ class _InfiniteScrollViewState<T> extends State<InfiniteScrollView<T>> {
           else if (widget.loadMoreFailed)
             SliverToBoxAdapter(child: _loadMoreErrorFooter(context)),
         ],
+      ),
+    );
+  }
+
+  Widget _buildWithHeaderSlivers(BuildContext context) {
+    final List<Widget> body;
+    if (widget.isLoadingInitial && widget.items.isEmpty) {
+      final skeletonItemBuilder = widget.skeletonItemBuilder;
+      body = [
+        SliverPadding(
+          padding: widget.padding,
+          sliver: SliverToBoxAdapter(
+            // Shimmer only the placeholders: a PointySkeleton around the
+            // whole view would paint the header slivers as shimmer too.
+            child: skeletonItemBuilder == null
+                ? const Padding(
+                    padding: EdgeInsets.all(24),
+                    child: Center(child: PointySpinner()),
+                  )
+                : PointySkeleton(
+                    child: Column(
+                      children: [
+                        for (var i = 0; i < widget.skeletonItemCount; i++)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: skeletonItemBuilder(context),
+                          ),
+                      ],
+                    ),
+                  ),
+          ),
+        ),
+      ];
+    } else if (widget.items.isEmpty) {
+      body = [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: Padding(
+            padding: widget.padding,
+            child: widget.emptyBuilder(context),
+          ),
+        ),
+      ];
+    } else {
+      final delegate = SliverChildBuilderDelegate(
+        (context, index) => widget.itemBuilder(context, widget.items[index]),
+        childCount: widget.items.length,
+      );
+      body = [
+        SliverPadding(
+          padding: widget.padding,
+          sliver: widget.sliverBuilder(context, delegate),
+        ),
+        if (widget.isLoadingMore)
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(child: PointySpinner()),
+            ),
+          )
+        else if (widget.loadMoreFailed)
+          SliverToBoxAdapter(child: _loadMoreErrorFooter(context)),
+      ];
+    }
+
+    // One scroll view in every state, so the scroll position and the header
+    // slivers' own state (a focused search field) survive a reload.
+    return RepaintBoundary(
+      child: CustomScrollView(
+        controller: _controller,
+        slivers: [...widget.headerSlivers, ...body],
       ),
     );
   }
@@ -308,6 +390,7 @@ class InfiniteScrollList<T> extends StatelessWidget {
     required this.emptyBuilder,
     this.separatorBuilder,
     this.header,
+    this.headerSlivers = const [],
     this.padding = EdgeInsets.zero,
     this.loadMoreExtent = 480,
     this.skeletonItemBuilder,
@@ -325,6 +408,9 @@ class InfiniteScrollList<T> extends StatelessWidget {
   final bool isLoadingMore;
   final WidgetBuilder emptyBuilder;
   final Widget? header;
+
+  /// See [InfiniteScrollView.headerSlivers].
+  final List<Widget> headerSlivers;
   final EdgeInsetsGeometry padding;
   final double loadMoreExtent;
   final WidgetBuilder? skeletonItemBuilder;
@@ -347,6 +433,7 @@ class InfiniteScrollList<T> extends StatelessWidget {
       isLoadingMore: isLoadingMore,
       emptyBuilder: emptyBuilder,
       header: header,
+      headerSlivers: headerSlivers,
       padding: padding,
       loadMoreExtent: loadMoreExtent,
       skeletonItemBuilder: skeletonItemBuilder,

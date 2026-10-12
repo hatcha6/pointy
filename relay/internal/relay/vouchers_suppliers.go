@@ -348,17 +348,23 @@ func balanceReason(
 		return ""
 	}
 	return fmt.Sprintf("the company's balance at %s is %s %s (read %s ago), below this card's price of %s %s",
-		key, balance.FloatString(2), strings.ToUpper(currency), now.Sub(readAt).Round(time.Minute), offer.Price, offer.Currency)
+		key, balance.FloatString(2), strings.ToUpper(currency), now.Sub(readAt).Round(time.Minute), offerPrice(offer), offer.Currency)
+}
+
+// offerPrice is a supplier's price rounded to two decimals for a reason: a
+// supplier may quote a float's full expansion (1901.4449999999997…).
+func offerPrice(offer control.VoucherOffer) string {
+	price := strings.TrimSpace(offer.Price)
+	if parsed, ok := new(big.Rat).SetString(price); ok {
+		return parsed.FloatString(2)
+	}
+	return price
 }
 
 // overGuardReason says a supplier's price is above the item's max_cost, in the
-// supplier's own currency and, when that is not dinars, in dinars too. Prices
-// are rounded to two decimals: a supplier may quote a float's full expansion.
+// supplier's own currency and, when that is not dinars, in dinars too.
 func overGuardReason(offer control.VoucherOffer, cost *big.Rat, guard string) string {
-	price := strings.TrimSpace(offer.Price)
-	if parsed, ok := new(big.Rat).SetString(price); ok {
-		price = parsed.FloatString(2)
-	}
+	price := offerPrice(offer)
 	if currency := strings.ToUpper(strings.TrimSpace(offer.Currency)); currency == "" || currency == "LYD" {
 		return fmt.Sprintf("the supplier's price %s %s is above max_cost %s", price, offer.Currency, guard)
 	}

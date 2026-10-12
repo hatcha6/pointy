@@ -966,6 +966,33 @@ class OrderCheckoutApiTests(TestCase):
             f"https://relay.example/invoices/installation-1/{order.public_token}",
         )
 
+    def test_public_invoice_url_uses_the_relays_pages_origin(self):
+        self.start_session()
+        ShopSettings.load()
+        ShopSettings.objects.filter(pk=1).update(enable_online_invoices=True)
+        RelayInstallation.objects.create(
+            installation_id="installation-1",
+            relay_public_api_url="https://my.dftr.ly",
+            relay_public_pages_url="https://shop.dftr.ly",
+            connector_token="connector-token",
+            access_token="access-token",
+            relay_enabled=True,
+            subscription_active=True,
+        )
+
+        response = self.client.post(
+            reverse("order-checkout"),
+            self.checkout_payload(),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        order = Order.objects.get(pk=response.data["id"])
+        self.assertEqual(
+            response.data["public_invoice_url"],
+            f"https://shop.dftr.ly/invoices/installation-1/{order.public_token}",
+        )
+
     def test_checkout_hides_public_invoice_url_when_setting_disabled(self):
         self.start_session()
         RelayInstallation.objects.create(

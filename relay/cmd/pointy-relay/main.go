@@ -529,10 +529,20 @@ func runServer(args []string) error {
 		envString("POINTY_RELAY_PUBLIC_URL", ""),
 		"the relay's public origin (https://...), where Dafa's payment webhook reaches it; empty derives it per request",
 	)
+	publicPagesURL := flags.String(
+		"public-pages-url",
+		envString("POINTY_RELAY_PUBLIC_PAGES_URL", ""),
+		"the https origin of customer-facing pages (public invoices), e.g. https://shop.dftr.ly; shops put it on their links. Empty keeps each shop's own setting",
+	)
 	consoleOrigin := flags.String(
 		"console-origin",
 		envString("POINTY_RELAY_CONSOLE_ORIGIN", ""),
 		"the operator console's origin (https://relay.example.com); passkeys bind to its host name, so use the stable domain. Empty turns the console off",
+	)
+	consoleRPID := flags.String(
+		"console-rp-id",
+		envString("POINTY_RELAY_CONSOLE_RP_ID", ""),
+		"the domain passkeys bind to: the console origin's host or a parent of it (dftr.ly for https://my.dftr.ly); empty uses the host",
 	)
 	consoleTrustForwardedFor := flags.Bool(
 		"console-trust-forwarded-for",
@@ -792,6 +802,10 @@ func runServer(args []string) error {
 			os.Getenv("POINTY_RELAY_PLUTU_ACCESS_TOKEN") != "" ||
 			os.Getenv("POINTY_RELAY_PLUTU_SECRET_KEY") != "",
 	})
+	if err != nil {
+		return err
+	}
+	publicAddresses, err := buildPublicAddresses(*publicURL, *publicPagesURL)
 	if err != nil {
 		return err
 	}
@@ -1242,6 +1256,7 @@ func runServer(args []string) error {
 		},
 		SMS:                  smsConfig,
 		Wallet:               walletConfig,
+		Public:               publicAddresses,
 		Alerts:               alertNotifier,
 		Balances:             balanceWatcher,
 		Vouchers:             voucherConfig,
@@ -1293,6 +1308,7 @@ func runServer(args []string) error {
 	if origin := strings.TrimSpace(*consoleOrigin); origin != "" {
 		wrapped, err := buildConsole(consoleSettings{
 			Origin:                        origin,
+			RPID:                          *consoleRPID,
 			AdminToken:                    *adminToken,
 			Store:                         store,
 			RateLimiter:                   rateLimiter,

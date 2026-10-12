@@ -124,90 +124,124 @@ class _PurchaseOrderListBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final spacing = AdaptiveSpacing.of(context);
+    final horizontal = EdgeInsetsDirectional.symmetric(
+      horizontal: spacing.pageHorizontal,
+    );
 
-    return Padding(
-      padding: spacing.pagePadding,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _PayablesStrip(
-            viewModel: viewModel,
-            onOpenPurchaseOrder: onOpenPurchaseOrder,
+    // One sliver page. The dues card scrolls away with the rows and the
+    // filters float back on the first scroll up, so the wheel scrolls the
+    // page from anywhere on it — the rows used to be a nested list under a
+    // fixed header that only scrolled with the pointer over them.
+    return PointyDataList<PurchaseOrder>(
+      items: viewModel.orders,
+      onLoadMore: viewModel.loadMoreOrders,
+      hasMore: viewModel.hasMoreOrders,
+      isLoadingInitial: viewModel.isLoading,
+      isLoadingMore: viewModel.isLoadingMore,
+      hasError: viewModel.hasLoadError,
+      padding: horizontal.add(
+        EdgeInsetsDirectional.only(bottom: spacing.pageVertical + 72),
+      ),
+      headerSlivers: [
+        SliverPadding(
+          padding: EdgeInsetsDirectional.fromSTEB(
+            spacing.pageHorizontal,
+            spacing.pageVertical,
+            spacing.pageHorizontal,
+            0,
           ),
-          PurchaseOrderQueryControls(
-            query: viewModel.query,
-            contactRepository: contactRepository,
-            onSearchChanged: viewModel.updateSearch,
-            onQueryChanged: viewModel.applyQuery,
-            enabled: !viewModel.isLoading,
-          ),
-          SizedBox(height: spacing.sm),
-          _StatusFilterStrip(
-            query: viewModel.query,
-            onApply: viewModel.applyQuery,
-          ),
-          SizedBox(height: spacing.md),
-          Expanded(
-            child: PointyDataList<PurchaseOrder>(
-              items: viewModel.orders,
-              onLoadMore: viewModel.loadMoreOrders,
-              hasMore: viewModel.hasMoreOrders,
-              isLoadingInitial: viewModel.isLoading,
-              isLoadingMore: viewModel.isLoadingMore,
-              hasError: viewModel.hasLoadError,
-              errorBuilder: (context) => PointyErrorState(
-                title: l10n.purchaseOrdersLoadError,
-                icon: Icons.receipt_long_outlined,
-                action: FilledButton.tonalIcon(
-                  onPressed: viewModel.loadOrders,
-                  icon: const Icon(Icons.sync),
-                  label: Text(l10n.retryButton),
-                ),
-              ),
-              emptyBuilder: (context) => QueryEmptyState(
-                icon: Icons.receipt_long_outlined,
-                search: viewModel.query.search,
-                hasFilters:
-                    PurchaseOrderQueryControls.narrowingFilterCount(
-                      viewModel.query,
-                    ) >
-                    0,
-                emptyTitle: l10n.emptyPurchaseOrders,
-                onClear: () => viewModel.applyQuery(
-                  PurchaseOrderQueryControls.cleared(viewModel.query),
-                ),
-                emptyAction: capabilities.canCreatePurchaseOrder
-                    ? FilledButton.icon(
-                        onPressed: onCreatePurchaseOrder,
-                        icon: const Icon(Icons.add),
-                        label: Text(l10n.newPurchaseOrderButton),
-                      )
-                    : null,
-              ),
-              itemBuilder: (context, order) {
-                // Same pair the details screen and the backend ask for: a
-                // delivered order is edited by re-recording its receipt.
-                final canEdit =
-                    capabilities.canEditDraftPurchaseOrder &&
-                    order.isEditable &&
-                    (!order.hasReceivedStock ||
-                        capabilities.canReceivePurchaseOrder);
-                return TutorTarget(
-                  anchor: TutorAnchor.purchaseOrderRow,
-                  id: order.orderNumber,
-                  child: PurchaseOrderTile(
-                    order: order,
-                    onTap: () => onOpenPurchaseOrder(order),
-                    onPrint: () => _printOrder(context, order),
-                    onShare: () => _shareOrder(context, order),
-                    onEdit: canEdit ? () => onEditPurchaseOrder(order) : null,
-                  ),
-                );
-              },
+          sliver: SliverToBoxAdapter(
+            child: _PayablesStrip(
+              viewModel: viewModel,
+              onOpenPurchaseOrder: onOpenPurchaseOrder,
             ),
           ),
-        ],
+        ),
+        SliverFloatingHeader(
+          child: ColoredBox(
+            color: context.pointyColors.page,
+            child: Padding(
+              padding: EdgeInsetsDirectional.fromSTEB(
+                spacing.pageHorizontal,
+                spacing.sm,
+                spacing.pageHorizontal,
+                spacing.sm,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  PurchaseOrderQueryControls(
+                    query: viewModel.query,
+                    contactRepository: contactRepository,
+                    onSearchChanged: viewModel.updateSearch,
+                    onQueryChanged: viewModel.applyQuery,
+                    enabled: !viewModel.isLoading,
+                  ),
+                  SizedBox(height: spacing.sm),
+                  _StatusFilterStrip(
+                    query: viewModel.query,
+                    onApply: viewModel.applyQuery,
+                  ),
+                  SizedBox(height: spacing.sm),
+                  PointyDocumentListHeader(
+                    documentLabel: l10n.documentListColumnDocument,
+                    partyLabel: l10n.documentListColumnSupplier,
+                    statusLabel: l10n.documentListColumnStatus,
+                    amountLabel: l10n.documentListColumnAmount,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+      errorBuilder: (context) => PointyErrorState(
+        title: l10n.purchaseOrdersLoadError,
+        icon: Icons.receipt_long_outlined,
+        action: FilledButton.tonalIcon(
+          onPressed: viewModel.loadOrders,
+          icon: const Icon(Icons.sync),
+          label: Text(l10n.retryButton),
+        ),
       ),
+      emptyBuilder: (context) => QueryEmptyState(
+        icon: Icons.receipt_long_outlined,
+        search: viewModel.query.search,
+        hasFilters:
+            PurchaseOrderQueryControls.narrowingFilterCount(viewModel.query) >
+            0,
+        emptyTitle: l10n.emptyPurchaseOrders,
+        onClear: () => viewModel.applyQuery(
+          PurchaseOrderQueryControls.cleared(viewModel.query),
+        ),
+        emptyAction: capabilities.canCreatePurchaseOrder
+            ? FilledButton.icon(
+                onPressed: onCreatePurchaseOrder,
+                icon: const Icon(Icons.add),
+                label: Text(l10n.newPurchaseOrderButton),
+              )
+            : null,
+      ),
+      itemBuilder: (context, order) {
+        // Same pair the details screen and the backend ask for: a
+        // delivered order is edited by re-recording its receipt.
+        final canEdit =
+            capabilities.canEditDraftPurchaseOrder &&
+            order.isEditable &&
+            (!order.hasReceivedStock || capabilities.canReceivePurchaseOrder);
+        return TutorTarget(
+          anchor: TutorAnchor.purchaseOrderRow,
+          id: order.orderNumber,
+          child: PurchaseOrderTile(
+            order: order,
+            onTap: () => onOpenPurchaseOrder(order),
+            onPrint: () => _printOrder(context, order),
+            onShare: () => _shareOrder(context, order),
+            onEdit: canEdit ? () => onEditPurchaseOrder(order) : null,
+          ),
+        );
+      },
     );
   }
 
@@ -615,34 +649,37 @@ class PurchaseOrderTile extends StatelessWidget {
     final title = order.orderNumber.isEmpty
         ? l10n.purchaseOrderFallbackTitle(order.id)
         : order.orderNumber;
-    final submittedAt = order.submittedAt;
-    final receivedAt = order.receivedAt;
-    final date = receivedAt ?? submittedAt ?? order.createdAt;
-    final owing = order.balanceDue > 0;
+    final date = order.receivedAt ?? order.submittedAt ?? order.createdAt;
+    final supplier = order.supplierName?.trim() ?? '';
+    // Nothing is owed on a draft or an order still on its way: the balance
+    // and payment state only mean something once stock has arrived.
+    final payable = order.hasReceivedStock && order.status != 'cancelled';
+    final owing = payable && order.balanceDue > 0;
+    final statusColor = _statusColor(colors, order.status);
 
-    return PointyDataRow(
-      leading: Icon(_statusIcon(order.status), color: colors.primaryStrong),
-      title: l10n.purchaseOrderNumberValue(title),
-      subtitle: [
-        if (order.supplierInvoiceNumber.isNotEmpty)
-          l10n.supplierInvoiceNumberValue(order.supplierInvoiceNumber),
-        if (order.supplierInvoiceDate != null)
-          l10n.supplierInvoiceDateValue(formatDate(order.supplierInvoiceDate!)),
-        if (order.paymentStatus.isNotEmpty)
-          _paymentStatusLabel(l10n, order.paymentStatus),
-        l10n.lineItemCount(order.lineCount),
-        if (date != null) formatDateTime(date),
-        if (order.dueDate != null)
-          l10n.purchaseOrderDueDateValue(formatDate(order.dueDate!)),
-        if (order.supplierName != null && order.supplierName!.isNotEmpty)
-          order.supplierName!,
-      ].join(' • '),
+    return PointyDocumentRow(
+      party: supplier.isEmpty ? l10n.purchaseOrderNoSupplierLabel : supplier,
+      reference: l10n.purchaseOrderNumberValue(title),
+      date: date == null ? null : formatDateTime(date),
+      amount: formatMoney(order.total),
+      // The open balance is the number a payables run is looking for.
+      secondaryAmount: owing
+          ? l10n.purchaseOutstandingAmountValue(formatMoney(order.balanceDue))
+          : null,
+      secondaryAmountColor: order.isOverdue ? colors.danger : colors.warning,
+      accentColor: order.isOverdue ? colors.danger : statusColor,
       badges: [
         PointyStatusPill(
           label: purchaseOrderStatusLabel(l10n, order.status),
           icon: _statusIcon(order.status),
-          color: _statusColor(colors, order.status),
+          color: statusColor,
         ),
+        if (payable && order.paymentStatus.isNotEmpty)
+          PointyStatusPill(
+            label: _paymentStatusLabel(l10n, order.paymentStatus),
+            icon: Icons.payments_outlined,
+            color: _paymentStatusColor(colors, order.paymentStatus),
+          ),
         if (order.isOverdue)
           PointyStatusPill(
             label: l10n.purchaseOrderOverdueValue,
@@ -650,64 +687,72 @@ class PurchaseOrderTile extends StatelessWidget {
             color: colors.danger,
           ),
       ],
-      actions: [
-        if (onPrint != null || onShare != null || onEdit != null)
-          PopupMenuButton<_PurchaseOrderRowAction>(
-            tooltip: l10n.purchaseOrderRowActionsTooltip,
-            icon: const Icon(Icons.more_vert),
-            onSelected: (action) {
-              switch (action) {
-                case _PurchaseOrderRowAction.edit:
-                  onEdit?.call();
-                case _PurchaseOrderRowAction.print:
-                  onPrint?.call();
-                case _PurchaseOrderRowAction.share:
-                  onShare?.call();
-              }
-            },
-            itemBuilder: (context) => [
-              if (onEdit != null)
-                PopupMenuItem<_PurchaseOrderRowAction>(
-                  value: _PurchaseOrderRowAction.edit,
-                  child: ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.edit_outlined),
-                    title: Text(l10n.editPurchaseOrderAction),
-                  ),
-                ),
-              if (onPrint != null)
-                PopupMenuItem<_PurchaseOrderRowAction>(
-                  value: _PurchaseOrderRowAction.print,
-                  child: ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.print_outlined),
-                    title: Text(l10n.purchaseOrderPrintAction),
-                  ),
-                ),
-              if (onShare != null)
-                PopupMenuItem<_PurchaseOrderRowAction>(
-                  value: _PurchaseOrderRowAction.share,
-                  child: ListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.ios_share_outlined),
-                    title: Text(l10n.purchaseOrderShareAction),
-                  ),
-                ),
-            ],
+      meta: [
+        PointyDocumentMeta(
+          icon: Icons.inventory_2_outlined,
+          label: l10n.lineItemCount(order.lineCount),
+        ),
+        if (order.supplierInvoiceNumber.isNotEmpty)
+          PointyDocumentMeta(
+            icon: Icons.receipt_outlined,
+            label: order.supplierInvoiceDate == null
+                ? l10n.supplierInvoiceNumberValue(order.supplierInvoiceNumber)
+                : '${l10n.supplierInvoiceNumberValue(order.supplierInvoiceNumber)} · ${formatDate(order.supplierInvoiceDate!)}',
+          ),
+        if (order.dueDate != null)
+          PointyDocumentMeta(
+            icon: Icons.event_outlined,
+            label: l10n.purchaseOrderDueDateValue(formatDate(order.dueDate!)),
           ),
       ],
-      trailing: Text(
-        owing ? formatMoney(order.balanceDue) : formatMoney(order.total),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-          color: owing ? colors.warning : colors.ink,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
+      menu: onPrint == null && onShare == null && onEdit == null
+          ? null
+          : PopupMenuButton<_PurchaseOrderRowAction>(
+              tooltip: l10n.purchaseOrderRowActionsTooltip,
+              icon: const Icon(Icons.more_vert),
+              onSelected: (action) {
+                switch (action) {
+                  case _PurchaseOrderRowAction.edit:
+                    onEdit?.call();
+                  case _PurchaseOrderRowAction.print:
+                    onPrint?.call();
+                  case _PurchaseOrderRowAction.share:
+                    onShare?.call();
+                }
+              },
+              itemBuilder: (context) => [
+                if (onEdit != null)
+                  PopupMenuItem<_PurchaseOrderRowAction>(
+                    value: _PurchaseOrderRowAction.edit,
+                    child: ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.edit_outlined),
+                      title: Text(l10n.editPurchaseOrderAction),
+                    ),
+                  ),
+                if (onPrint != null)
+                  PopupMenuItem<_PurchaseOrderRowAction>(
+                    value: _PurchaseOrderRowAction.print,
+                    child: ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.print_outlined),
+                      title: Text(l10n.purchaseOrderPrintAction),
+                    ),
+                  ),
+                if (onShare != null)
+                  PopupMenuItem<_PurchaseOrderRowAction>(
+                    value: _PurchaseOrderRowAction.share,
+                    child: ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.ios_share_outlined),
+                      title: Text(l10n.purchaseOrderShareAction),
+                    ),
+                  ),
+              ],
+            ),
       onTap: onTap,
     );
   }
@@ -731,6 +776,15 @@ Color _statusColor(PointySemanticColors colors, String status) {
     'partial' || 'partially_received' => colors.warning,
     'received' => colors.success,
     'cancelled' => colors.danger,
+    _ => colors.mutedInk,
+  };
+}
+
+Color _paymentStatusColor(PointySemanticColors colors, String status) {
+  return switch (status) {
+    'paid' => colors.success,
+    'partial' => colors.warning,
+    'credit' => colors.primaryStrong,
     _ => colors.mutedInk,
   };
 }

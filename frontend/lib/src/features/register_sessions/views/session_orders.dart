@@ -12,6 +12,8 @@ import '../../../shared/contact_picker_sheet.dart';
 import '../../../shared/date_formatters.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
+import '../../../shared/order/sale_order_details_content.dart'
+    show saleOrderStatusIcon, saleOrderStatusLabel;
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/register_session_history_view_model.dart';
 import 'card_receipt_verification_section.dart';
@@ -38,18 +40,27 @@ class SessionOrders extends StatelessWidget {
     final showReconciliation = capabilities.canViewRegisterReconciliation;
     final spacing = AdaptiveSpacing.of(context);
 
+    final inset = EdgeInsetsDirectional.symmetric(
+      horizontal: spacing.pageHorizontal,
+    );
+
+    // Only the title and the tab bar are inset: each tab is a scroll view that
+    // runs to the pane's edges, so the wheel works over its margins too.
     return Padding(
-      padding: spacing.pagePadding,
+      padding: EdgeInsetsDirectional.only(top: spacing.pageVertical),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          PointySectionHeader(
-            title: session == null
-                ? l10n.sessionSalesPlaceholderTitle
-                : session.ownerName.isEmpty
-                ? l10n.sessionSalesTitle(session.sessionNumber)
-                : '${l10n.sessionSalesTitle(session.sessionNumber)} — '
-                      '${session.ownerName}',
+          Padding(
+            padding: inset,
+            child: PointySectionHeader(
+              title: session == null
+                  ? l10n.sessionSalesPlaceholderTitle
+                  : session.ownerName.isEmpty
+                  ? l10n.sessionSalesTitle(session.sessionNumber)
+                  : '${l10n.sessionSalesTitle(session.sessionNumber)} — '
+                        '${session.ownerName}',
+            ),
           ),
           SizedBox(height: spacing.sm),
           Expanded(
@@ -64,13 +75,16 @@ class SessionOrders extends StatelessWidget {
                       length: showReconciliation ? 3 : 2,
                       child: Column(
                         children: [
-                          TabBar(
-                            tabs: [
-                              if (showReconciliation)
-                                Tab(text: l10n.sessionSummaryTab),
-                              Tab(text: l10n.sessionSalesTab),
-                              Tab(text: l10n.sessionCashMovementsTab),
-                            ],
+                          Padding(
+                            padding: inset,
+                            child: TabBar(
+                              tabs: [
+                                if (showReconciliation)
+                                  Tab(text: l10n.sessionSummaryTab),
+                                Tab(text: l10n.sessionSalesTab),
+                                Tab(text: l10n.sessionCashMovementsTab),
+                              ],
+                            ),
                           ),
                           Expanded(
                             child: TabBarView(
@@ -128,8 +142,14 @@ class _SessionSummaryPanel extends StatelessWidget {
       );
     }
 
+    final spacing = AdaptiveSpacing.of(context);
     return ListView(
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      padding: EdgeInsetsDirectional.fromSTEB(
+        spacing.pageHorizontal,
+        12,
+        spacing.pageHorizontal,
+        spacing.pageVertical,
+      ),
       children: [
         _ZReportActions(viewModel: viewModel),
         const SizedBox(height: 12),
@@ -584,56 +604,73 @@ class _SessionSalesList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _SessionOrderFilters(
-          viewModel: viewModel,
-          contactRepository: contactRepository,
-        ),
-        const SizedBox(height: 8),
-        Expanded(
-          child: PointyDataList<SaleOrder>(
-            items: viewModel.orders,
-            onLoadMore: viewModel.loadMoreOrders,
-            hasMore: viewModel.hasMoreOrders,
-            isLoadingInitial: viewModel.isLoadingOrders,
-            isLoadingMore: viewModel.isLoadingMoreOrders,
-            hasError: viewModel.hasOrderLoadError,
-            errorBuilder: (context) => PointyErrorState(
-              title: l10n.sessionSalesLoadError,
-              icon: Icons.receipt_long_outlined,
-              action: OutlinedButton.icon(
-                onPressed: viewModel.retrySelectedSessionOrders,
-                icon: const Icon(Icons.refresh),
-                label: Text(l10n.retryButton),
-              ),
+    final spacing = AdaptiveSpacing.of(context);
+    return PointyDataList<SaleOrder>(
+      items: viewModel.orders,
+      onLoadMore: viewModel.loadMoreOrders,
+      hasMore: viewModel.hasMoreOrders,
+      isLoadingInitial: viewModel.isLoadingOrders,
+      isLoadingMore: viewModel.isLoadingMoreOrders,
+      hasError: viewModel.hasOrderLoadError,
+      padding: _tabListPadding(spacing),
+      headerSlivers: [
+        SliverPadding(
+          padding: EdgeInsetsDirectional.fromSTEB(
+            spacing.pageHorizontal,
+            12,
+            spacing.pageHorizontal,
+            8,
+          ),
+          sliver: SliverToBoxAdapter(
+            child: _SessionOrderFilters(
+              viewModel: viewModel,
+              contactRepository: contactRepository,
             ),
-            emptyBuilder: (context) => PointyEmptyState(
-              icon: Icons.receipt_long_outlined,
-              title: l10n.emptySessionSales,
-            ),
-            itemBuilder: (context, order) {
-              final hasReturnableItems = order.hasReturnableItems;
-              final canManagerAdjust =
-                  capabilities.canManageShopSettings &&
-                  order.status == 'paid' &&
-                  hasReturnableItems;
-              final canVoid = order.canVoid || canManagerAdjust;
-              final canReturn = order.canReturn || canManagerAdjust;
-              return SessionOrderTile(
-                order: order,
-                loadDetail: viewModel.loadOrderDetail,
-                onReprint: viewModel.requestReprint,
-                onVoid: canVoid ? viewModel.voidOrder : null,
-                onReturn: canReturn ? viewModel.returnItems : null,
-              );
-            },
           ),
         ),
       ],
+      errorBuilder: (context) => PointyErrorState(
+        title: l10n.sessionSalesLoadError,
+        icon: Icons.receipt_long_outlined,
+        action: OutlinedButton.icon(
+          onPressed: viewModel.retrySelectedSessionOrders,
+          icon: const Icon(Icons.refresh),
+          label: Text(l10n.retryButton),
+        ),
+      ),
+      emptyBuilder: (context) => PointyEmptyState(
+        icon: Icons.receipt_long_outlined,
+        title: l10n.emptySessionSales,
+      ),
+      itemBuilder: (context, order) {
+        final hasReturnableItems = order.hasReturnableItems;
+        final canManagerAdjust =
+            capabilities.canManageShopSettings &&
+            order.status == 'paid' &&
+            hasReturnableItems;
+        final canVoid = order.canVoid || canManagerAdjust;
+        final canReturn = order.canReturn || canManagerAdjust;
+        return SessionOrderTile(
+          order: order,
+          loadDetail: viewModel.loadOrderDetail,
+          onReprint: viewModel.requestReprint,
+          onVoid: canVoid ? viewModel.voidOrder : null,
+          onReturn: canReturn ? viewModel.returnItems : null,
+        );
+      },
     );
   }
+}
+
+/// The rows of a session tab: inset like the tab bar above them, inside a
+/// scroll view that runs to the pane's edges.
+EdgeInsetsGeometry _tabListPadding(AdaptiveSpacing spacing) {
+  return EdgeInsetsDirectional.fromSTEB(
+    spacing.pageHorizontal,
+    0,
+    spacing.pageHorizontal,
+    spacing.pageVertical,
+  );
 }
 
 class _SessionOrderFilters extends StatelessWidget {
@@ -694,8 +731,11 @@ class _SessionCashMovementList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
     return PointyDataList<RegisterCashMovement>(
       items: viewModel.cashMovements,
+      padding: _tabListPadding(spacing),
+      headerSlivers: const [SliverToBoxAdapter(child: SizedBox(height: 12))],
       onLoadMore: viewModel.loadMoreCashMovements,
       hasMore: viewModel.hasMoreCashMovements,
       isLoadingInitial: viewModel.isLoadingCashMovements,
@@ -748,34 +788,38 @@ class SessionOrderTile extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final colors = context.pointyColors;
     final receiptNumber = order.receiptNumber ?? l10n.saleReceiptFallback;
+    final customer = (order.customerName ?? '').trim();
+    final profit = order.profit;
+    final statusColor = switch (order.status) {
+      'paid' => colors.success,
+      'open' => colors.warning,
+      'void' => colors.danger,
+      _ => colors.mutedInk,
+    };
 
-    return PointyDataRow(
-      leading: const Icon(Icons.receipt_long_outlined),
-      title: l10n.saleReceiptTitle(receiptNumber),
-      subtitle: [
-        if (order.createdAt != null) formatDateTime(order.createdAt!),
-        l10n.lineItemCount(order.lineCount),
-        if (order.customerName != null && order.customerName!.isNotEmpty)
-          order.customerName!,
-      ].join(' • '),
-      trailing: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Text(
-            formatMoney(order.total),
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          if (order.profit != null)
-            Text(
-              l10n.invoiceProfitValue(formatMoney(order.profit!)),
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: colors.primaryStrong,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-        ],
-      ),
+    return PointyDocumentRow(
+      party: customer.isEmpty ? l10n.walkInCustomerLabel : customer,
+      reference: l10n.saleReceiptTitle(receiptNumber),
+      date: order.createdAt == null ? null : formatDateTime(order.createdAt!),
+      amount: formatMoney(order.total),
+      secondaryAmount: profit == null
+          ? null
+          : l10n.invoiceProfitValue(formatMoney(profit)),
+      secondaryAmountColor: colors.primaryStrong,
+      accentColor: statusColor,
+      badges: [
+        PointyStatusPill(
+          label: saleOrderStatusLabel(l10n, order.status),
+          icon: saleOrderStatusIcon(order.status),
+          color: statusColor,
+        ),
+      ],
+      meta: [
+        PointyDocumentMeta(
+          icon: Icons.shopping_basket_outlined,
+          label: l10n.lineItemCount(order.lineCount),
+        ),
+      ],
       onTap: () => showSaleOrderDetailsSheet(
         context,
         order,
@@ -807,22 +851,20 @@ class SessionCashMovementTile extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final colors = context.pointyColors;
     final isPayIn = movement.movementType == RegisterCashMovementType.payIn;
+    final color = isPayIn ? colors.success : colors.danger;
+    final reason = movement.reason.trim();
 
-    return PointyDataRow(
-      leading: Icon(isPayIn ? Icons.input : Icons.output),
-      title: isPayIn
+    return PointyDocumentRow(
+      party: isPayIn
           ? l10n.cashMovementPayInLabel
           : l10n.cashMovementPayOutLabel,
-      subtitle: [
-        if (movement.createdAt != null) formatDateTime(movement.createdAt!),
-        movement.reason,
-      ].join(' • '),
-      trailing: Text(
-        formatMoney(movement.amount),
-        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-          color: isPayIn ? colors.primaryStrong : colors.danger,
-        ),
-      ),
+      reference: reason.isEmpty ? '—' : reason,
+      date: movement.createdAt == null
+          ? null
+          : formatDateTime(movement.createdAt!),
+      amount: '${isPayIn ? '+' : '−'} ${formatMoney(movement.amount)}',
+      amountColor: color,
+      accentColor: color,
     );
   }
 }

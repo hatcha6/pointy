@@ -29,67 +29,70 @@ class RegisterSessionList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final colors = context.pointyColors;
     final spacing = AdaptiveSpacing.of(context);
 
-    return ColoredBox(
-      color: colors.surface,
-      child: Padding(
-        padding: spacing.pagePadding,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            PointySectionHeader(title: l10n.registerSessionsListTitle),
-            SizedBox(height: spacing.sm),
-            Expanded(
-              child: PointyDataList<RegisterSession>(
-                items: viewModel.sessions,
-                onLoadMore: viewModel.loadMoreSessions,
-                hasMore: viewModel.hasMoreSessions,
-                isLoadingInitial: viewModel.isLoadingSessions,
-                isLoadingMore: viewModel.isLoadingMoreSessions,
-                hasError: viewModel.hasSessionLoadError,
-                errorBuilder: (context) => PointyErrorState(
-                  title: l10n.registerSessionHistoryLoadError,
-                  icon: Icons.manage_history_outlined,
-                  action: OutlinedButton.icon(
-                    onPressed: viewModel.loadSessions,
-                    icon: const Icon(Icons.refresh),
-                    label: Text(l10n.retryButton),
-                  ),
-                ),
-                emptyBuilder: (context) => PointyEmptyState(
-                  icon: Icons.manage_history_outlined,
-                  title: l10n.emptyRegisterSessionHistory,
-                ),
-                itemBuilder: (context, session) {
-                  return RegisterSessionOrdersCapabilityBuilder(
-                    capabilities: capabilities,
-                    builder: (context, canViewOrders) {
-                      void handleTap() {
-                        final handler = onSessionSelected;
-                        if (handler != null) {
-                          handler(session);
-                          return;
-                        }
-                        unawaited(viewModel.selectSession(session));
-                      }
-
-                      return RegisterSessionTile(
-                        session: session,
-                        isSelected: viewModel.selectedSession?.id == session.id,
-                        showCashVariance:
-                            capabilities.canViewRegisterReconciliation,
-                        onTap: canViewOrders ? handleTap : null,
-                      );
-                    },
-                  );
-                },
-              ),
-            ),
-          ],
+    // A sliver page, so the pane scrolls from anywhere on it, title included.
+    return PointyDataList<RegisterSession>(
+      items: viewModel.sessions,
+      onLoadMore: viewModel.loadMoreSessions,
+      hasMore: viewModel.hasMoreSessions,
+      isLoadingInitial: viewModel.isLoadingSessions,
+      isLoadingMore: viewModel.isLoadingMoreSessions,
+      hasError: viewModel.hasSessionLoadError,
+      padding: EdgeInsetsDirectional.fromSTEB(
+        spacing.pageHorizontal,
+        0,
+        spacing.pageHorizontal,
+        spacing.pageVertical,
+      ),
+      headerSlivers: [
+        SliverPadding(
+          padding: EdgeInsetsDirectional.fromSTEB(
+            spacing.pageHorizontal,
+            spacing.pageVertical,
+            spacing.pageHorizontal,
+            spacing.sm,
+          ),
+          sliver: SliverToBoxAdapter(
+            child: PointySectionHeader(title: l10n.registerSessionsListTitle),
+          ),
+        ),
+      ],
+      errorBuilder: (context) => PointyErrorState(
+        title: l10n.registerSessionHistoryLoadError,
+        icon: Icons.manage_history_outlined,
+        action: OutlinedButton.icon(
+          onPressed: viewModel.loadSessions,
+          icon: const Icon(Icons.refresh),
+          label: Text(l10n.retryButton),
         ),
       ),
+      emptyBuilder: (context) => PointyEmptyState(
+        icon: Icons.manage_history_outlined,
+        title: l10n.emptyRegisterSessionHistory,
+      ),
+      itemBuilder: (context, session) {
+        return RegisterSessionOrdersCapabilityBuilder(
+          capabilities: capabilities,
+          builder: (context, canViewOrders) {
+            void handleTap() {
+              final handler = onSessionSelected;
+              if (handler != null) {
+                handler(session);
+                return;
+              }
+              unawaited(viewModel.selectSession(session));
+            }
+
+            return RegisterSessionTile(
+              session: session,
+              isSelected: viewModel.selectedSession?.id == session.id,
+              showCashVariance: capabilities.canViewRegisterReconciliation,
+              onTap: canViewOrders ? handleTap : null,
+            );
+          },
+        );
+      },
     );
   }
 }
@@ -112,63 +115,83 @@ class RegisterSessionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final colors = context.pointyColors;
-    final statusLabel = session.status == 'closed'
-        ? l10n.registerSessionStatusClosed
-        : l10n.registerSessionStatusOpen;
-    final statusIcon = session.status == 'closed'
-        ? Icons.lock_outline
-        : Icons.point_of_sale_outlined;
+    final isClosed = session.status == 'closed';
+    final openedAt = session.openedAt;
+    final closedAt = session.closedAt;
+    final closingCash = session.closingCash;
+    // The count against the drawer is the reconciliation viewer's figure; a
+    // cashier who closed blind sees the float they started with.
+    final showCount = showCashVariance && isClosed && closingCash != null;
+    final variance = session.cashVariance ?? 0;
+    final varianceColor = sessionCashVarianceColor(context, variance);
 
-    return PointyDataRow(
+    return PointyDocumentRow(
       selected: isSelected,
-      leading: Icon(statusIcon, color: colors.primaryStrong),
-      title: l10n.resumeRegisterSessionTitle(session.sessionNumber),
-      subtitle: [
-        // Accountability first: whose drawer this was.
-        if (session.ownerName.isNotEmpty) session.ownerName,
-        if (session.openedAt != null) formatDateTime(session.openedAt!),
-        l10n.registerSessionOpeningCash(formatMoney(session.openingCash)),
-      ].join(' • '),
-      badges: [PointyStatusPill(label: statusLabel, icon: statusIcon)],
-      trailing: onTap == null
-          ? null
-          : Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (showCashVariance && session.hasCashVariance) ...[
-                  _VarianceChip(amount: session.cashVariance ?? 0),
-                  const SizedBox(width: 8),
-                ],
-                const PointyDisclosureChevron(),
-              ],
+      // Accountability first: whose drawer this was.
+      party: session.ownerName.isEmpty
+          ? l10n.resumeRegisterSessionTitle(session.sessionNumber)
+          : session.ownerName,
+      // Without an owner the session number is already the title.
+      reference: session.ownerName.isEmpty
+          ? ''
+          : l10n.invoiceRegisterSessionValue(session.sessionNumber),
+      date: openedAt == null ? null : formatDateTime(openedAt),
+      amountLabel: showCount
+          ? l10n.sessionClosingCashMetric
+          : l10n.sessionOpeningCashMetric,
+      amount: formatMoney(showCount ? closingCash : session.openingCash),
+      // An open drawer has not been counted, so it has no variance yet —
+      // a live one would always read as a shortage.
+      secondaryAmount: !isClosed
+          ? l10n.registerSessionInProgressValue
+          : showCount && session.hasCashVariance
+          ? sessionCashVarianceFlag(l10n, variance)
+          : showCount
+          ? l10n.sessionCashMatchedValue
+          : null,
+      secondaryAmountColor: !isClosed ? colors.success : varianceColor,
+      accentColor: !isClosed
+          ? colors.success
+          : showCount && session.hasCashVariance
+          ? varianceColor
+          : colors.lineStrong,
+      badges: [
+        PointyStatusPill(
+          label: isClosed
+              ? l10n.registerSessionStatusClosed
+              : l10n.registerSessionStatusOpen,
+          icon: isClosed ? Icons.lock_outline : Icons.point_of_sale_outlined,
+          color: isClosed ? colors.mutedInk : colors.success,
+        ),
+      ],
+      meta: [
+        if (closedAt != null)
+          PointyDocumentMeta(
+            icon: Icons.lock_clock_outlined,
+            label: l10n.registerSessionClosedAtValue(
+              openedAt != null && _sameDay(openedAt, closedAt)
+                  ? formatTime(closedAt)
+                  : formatDateTime(closedAt),
             ),
+          ),
+        if (openedAt != null && closedAt != null)
+          PointyDocumentMeta(
+            icon: Icons.timelapse_outlined,
+            label: _duration(l10n, closedAt.difference(openedAt)),
+          ),
+      ],
       onTap: onTap,
     );
   }
 }
 
-class _VarianceChip extends StatelessWidget {
-  const _VarianceChip({required this.amount});
+bool _sameDay(DateTime a, DateTime b) {
+  final x = a.toLocal();
+  final y = b.toLocal();
+  return x.year == y.year && x.month == y.month && x.day == y.day;
+}
 
-  final double amount;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final color = sessionCashVarianceColor(context, amount);
-
-    return Tooltip(
-      message: sessionCashVarianceMetric(l10n, amount),
-      child: Chip(
-        // No avatar: the row is tight, and the word plus its colour already
-        // say which way the count went.
-        label: Text(
-          sessionCashVarianceFlag(l10n, amount),
-          style: TextStyle(color: color),
-        ),
-        side: BorderSide(color: color),
-        visualDensity: VisualDensity.compact,
-      ),
-    );
-  }
+String _duration(AppLocalizations l10n, Duration duration) {
+  final minutes = duration.inMinutes < 0 ? 0 : duration.inMinutes;
+  return l10n.registerSessionDurationValue(minutes ~/ 60, minutes % 60);
 }
