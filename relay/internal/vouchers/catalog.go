@@ -670,7 +670,7 @@ func Find(document Document, key string) (Located, bool) {
 				return Located{}, false
 			}
 			located := Located{Brand: brand, Category: categories[brand.Category], Item: item, Ref: refs[0], Refs: refs,
-				PriceFollowsCost: document.AutoPriced(item) && !strings.EqualFold(strings.TrimSpace(item.FaceCurrency), "LYD")}
+				PriceFollowsCost: document.priceFollowsCost(item)}
 			if item.Country != "" {
 				for _, country := range document.Countries {
 					if country.Code == item.Country {
@@ -893,7 +893,8 @@ func Shop(document Document, catalogSHA string, now time.Time, testMode bool, av
 				usedCountries[item.Country] = true
 			}
 			pricing := PriceAt(item, now)
-			located := Located{Brand: brand, Category: categories[brand.Category], Item: item}
+			located := Located{Brand: brand, Category: categories[brand.Category], Item: item,
+				PriceFollowsCost: document.priceFollowsCost(item)}
 			if refs, err := ParseRefs(item); err == nil {
 				located.Ref, located.Refs = refs[0], refs
 			}
@@ -1021,6 +1022,13 @@ func (d Document) AutoPriced(item Item) bool {
 		mode = strings.ToLower(strings.TrimSpace(d.PriceMode))
 	}
 	return mode == PriceModeAuto
+}
+
+// priceFollowsCost reports whether the item's price moves with its supplier's
+// cost (see Located.PriceFollowsCost): auto-priced, and not a dinar card held
+// at its face value.
+func (d Document) priceFollowsCost(item Item) bool {
+	return d.AutoPriced(item) && !strings.EqualFold(strings.TrimSpace(item.FaceCurrency), "LYD")
 }
 
 // WithPrices is a copy of the document in which every item for which price

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"pointy/relay/internal/control"
 	"pointy/relay/internal/vouchers"
@@ -179,6 +180,18 @@ func TestMaxCostGuardsOnlyStaticPricedCards(t *testing.T) {
 		t.Fatalf("a dinar card costing more than its face must be withheld, got %q", reason)
 	}
 	server := HTTPServer{Vouchers: config}
+	// The shelf shops are sent judges each card the same way.
+	view := vouchers.Shop(server.autoPricedDocument(document, offers, settings), "sha", time.Now(), false,
+		server.voucherAvailability(offers, settings))
+	shelf := map[string]bool{}
+	for _, brand := range view.Brands {
+		for _, item := range brand.Items {
+			shelf[item.Key] = item.Available
+		}
+	}
+	if !shelf["psn-auto"] || shelf["psn-static"] || shelf["lyd-10"] {
+		t.Fatalf("shop shelf availability: %v", shelf)
+	}
 	priced := autoItem(t, server.autoPricedDocument(document, offers, settings), "psn-auto")
 	if shop, _ := new(big.Rat).SetString(priced.Price); shop.Cmp(big.NewRat(10450, 100)) <= 0 {
 		t.Fatalf("the auto price %s must sit above the risen cost", priced.Price)
