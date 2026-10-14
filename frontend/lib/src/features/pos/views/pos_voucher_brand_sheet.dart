@@ -190,7 +190,11 @@ class _Header extends StatelessWidget {
           width: 88,
           child: AspectRatio(
             aspectRatio: kVoucherArtAspectRatio,
-            child: VoucherCardArt(brand: brand, radius: 8),
+            child: VoucherCardArt(
+              brand: brand,
+              radius: 8,
+              muted: !brand.isAvailable,
+            ),
           ),
         ),
         SizedBox(width: spacing.sm),
@@ -485,7 +489,8 @@ class _DenominationTile extends StatelessWidget {
                     ),
                 ],
               ),
-              if (profit != null && sellable) ...[
+              // Shown on a card that cannot be sold too: what it would earn.
+              if (profit != null) ...[
                 const SizedBox(height: 4),
                 Text(
                   l10n.posVoucherMenuProfit(formatMoney(profit)),

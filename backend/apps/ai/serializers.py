@@ -3,7 +3,7 @@ import json
 from django.urls import reverse
 from rest_framework import serializers
 
-from .models import AiConversation, AiMessage
+from .models import AiConversation, AiMemory, AiMessage
 from .relay_stream import favicon_url_for
 
 
@@ -65,6 +65,7 @@ class AiMessageSerializer(serializers.ModelSerializer):
             "web_searched",
             # Generative-UI cards drawn on this turn, replayed on reload.
             "ui_surfaces",
+            "plan",
             "model",
             "tier",
             "prompt_tokens",
@@ -135,6 +136,12 @@ class AiChatRequestSerializer(serializers.Serializer):
     # Whether this client can render generated UI surfaces. An older client never
     # gets a `ui` event it would have to ignore.
     supports_ui = serializers.BooleanField(required=False, default=False)
+    # Whether this client renders the step checklist (`plan` events). Only then is
+    # the model given update_plan.
+    supports_plan = serializers.BooleanField(required=False, default=False)
+    # Whether this client shows memory changes (chips + the memory screen).
+    # Only then may the model write memories; everyone's prompt still reads them.
+    supports_memory = serializers.BooleanField(required=False, default=False)
 
 
 class AiAnswerSerializer(serializers.Serializer):
@@ -169,3 +176,33 @@ class AiChatResumeRequestSerializer(serializers.Serializer):
     supports_actions = serializers.BooleanField(required=False, default=True)
     supports_navigation = serializers.BooleanField(required=False, default=True)
     supports_ui = serializers.BooleanField(required=False, default=False)
+    supports_plan = serializers.BooleanField(required=False, default=False)
+    # Whether this client shows memory changes (chips + the memory screen).
+    # Only then may the model write memories; everyone's prompt still reads them.
+    supports_memory = serializers.BooleanField(required=False, default=False)
+
+
+class AiMemorySerializer(serializers.ModelSerializer):
+    """One memory for the memory screen. ``editable`` says whether this user may
+    change it: their own personal notes always, shop notes only as a manager."""
+
+    editable = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AiMemory
+        fields = ["id", "scope", "category", "content", "editable", "created_at", "updated_at"]
+        read_only_fields = ["id", "scope", "editable", "created_at", "updated_at"]
+
+    def get_editable(self, obj):
+        from .memory import can_edit
+
+        request = self.context.get("request")
+        return bool(request and can_edit(request.user, obj))
+
+    def validate_content(self, value):
+        from .memory import MAX_CONTENT_CHARS, _normalise
+
+        value = _normalise(value)[:MAX_CONTENT_CHARS]
+        if not value:
+            raise serializers.ValidationError("content is required.")
+        return value

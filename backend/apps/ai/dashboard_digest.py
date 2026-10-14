@@ -19,7 +19,7 @@ import logging
 from django.utils import timezone
 
 from apps.core.models import ShopSettings
-from apps.core.relay import RelayControlClient, RelayControlError
+from apps.core.relay import RelayControlError
 
 from .relay_stream import _advice_playbook, _shop_context_sentence, iter_relay_sse
 
@@ -261,19 +261,22 @@ def _parse_digest(text):
     return {"brief": brief, "explainers": explainers}
 
 
-def generate_dashboard_digest(installation, sections, period_days, *, client=None):
+def generate_dashboard_digest(installation, sections, period_days, *, client):
     """Generate the inline dashboard digest from the dashboard ``sections``.
 
     Returns ``{"brief": str, "explainers": {key: str}, "generated_at": iso}`` or
     ``None`` when there's nothing to say or the relay call fails (the caller then
-    simply renders no inline AI text — never an error)."""
+    simply renders no inline AI text — never an error).
+
+    ``client`` is required and must be scoped to ``installation``
+    (``scoped_relay_client``): there is no safe default, because a bare
+    ``RelayControlClient()`` cannot authenticate on an enrolled backend."""
     figures = compact_figures(sections, period_days)
     if not figures:
         return None
 
     shop = ShopSettings.load()
     messages = _digest_messages(figures, shop)
-    client = client or RelayControlClient()
     try:
         response = client.open_ai_stream(
             access_token=installation.access_token,

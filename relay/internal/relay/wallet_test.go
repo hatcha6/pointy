@@ -701,6 +701,11 @@ func TestWalletPaidPaymentThatDoesNotMatchIsHeldForTheOperator(t *testing.T) {
 		h.balance(t) != "0.000" {
 		t.Fatalf("another amount is held: %v balance %s", body, h.balance(t))
 	}
+	// The first pass claimed the urgent alert: a redelivered webhook, the next
+	// poll or another relay instance meeting the same payment stays quiet.
+	if h.server.walletGateway(h.store).firstHeldAlert(context.Background(), id) {
+		t.Fatal("a held top-up is alerted again on every pass")
+	}
 
 	h.dafa.mu.Lock()
 	h.dafa.testWorkspace = false

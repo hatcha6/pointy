@@ -122,8 +122,31 @@ func (g walletGateway) hold(
 			"top_up_id", topUp.ID, "status", closed.Status, "reason", code, "detail", detail)
 	}
 	logWalletTopUpEvent(g.logger, closed.InstallationID, closed, "held_"+source, detail)
-	alertWalletTopUp(g.config.Alerts, closed, "held_"+source, detail)
+	if g.firstHeldAlert(ctx, closed.ID) {
+		alertWalletTopUp(g.config.Alerts, closed, "held_"+source, detail)
+	}
 	return closed, false, nil
+}
+
+// heldAlertCooldown outlasts any webhook redelivery: a held top-up stays held
+// until the operator reconciles it, so its alert is said once.
+const heldAlertCooldown = 30 * 24 * time.Hour
+
+// firstHeldAlert reports whether this pass is the first to meet the held
+// top-up. Dafa redelivers webhooks, and the webhook, the app's poll and other
+// relay instances all reach hold for the same payment, so without a mark every
+// pass re-sends the urgent alert. An unreadable mark errs on the loud side.
+func (g walletGateway) firstHeldAlert(ctx context.Context, id string) bool {
+	marks, ok := g.store.(control.AlertStore)
+	if !ok {
+		return true
+	}
+	won, err := marks.ClaimAlert(ctx, "wallet_held:"+id, heldAlertCooldown)
+	if err != nil {
+		g.logger.Warn("held top-up alert mark unclaimable; alerting anyway", "top_up_id", id, "error", err)
+		return true
+	}
+	return won
 }
 
 // walletTopUpWorthChecking reports whether reading the payment back can tell

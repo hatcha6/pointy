@@ -35,6 +35,7 @@ var forwardPrefixes = []string{
 	"/v1/wallet/admin/",
 	"/v1/services/admin/",
 	"/v1/vouchers/admin/",
+	"/v1/moamalat/admin/",
 }
 
 func forwardable(route string) bool {

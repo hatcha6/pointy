@@ -797,6 +797,7 @@ def apply_attendance_to_run(payroll_run, *, request=None):
         "rate",
         "gross_amount",
         "absence_deduction_amount",
+        "not_employed_deduction_amount",
         "overtime_multiplier",
         "overtime_amount",
         "additions_amount",

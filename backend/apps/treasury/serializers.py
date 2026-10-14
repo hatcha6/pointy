@@ -419,6 +419,13 @@ class AccountPositionSerializer(serializers.Serializer):
     # Clearing accounts only, and only on today's position: which held days
     # are waiting and whether any is late. ``None`` everywhere else.
     held = serializers.SerializerMethodField()
+    # Bank accounts only, and only on today's position once the shop holds card
+    # money somewhere: card takings land here at once, with nothing holding
+    # them. A note for the owner, never a rule the money obeys.
+    card_direct = serializers.SerializerMethodField()
+
+    def get_card_direct(self, position) -> bool:
+        return bool(position.get("card_direct", False))
 
     def get_expected_balance(self, position) -> str:
         return _money(position["expected_balance"])

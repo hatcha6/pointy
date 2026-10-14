@@ -612,6 +612,19 @@ CELERY_BEAT_SCHEDULE = {
         "task": "payments.sweep_unverified_card_receipts",
         "schedule": crontab(minute="*/20"),
     },
+    # The backend's half of the Moamalat token keepalive. Beats often but pokes
+    # only when the link's own cadence says so (every ~4 min, faster when a
+    # call failed) — see apps.payments.moamalat and TOKEN_CUSTODY_DESIGN.md.
+    "payments.moamalat-keepalive": {
+        "task": "payments.moamalat_keepalive",
+        "schedule": timedelta(seconds=10),
+    },
+    # Card payments the live reads missed (or that waited out a dead token)
+    # are looked for again, back to the oldest one still pending.
+    "payments.moamalat-sweep": {
+        "task": "payments.moamalat_sweep",
+        "schedule": crontab(minute="7,37"),
+    },
     "notifications.sync-business-notifications": {
         "task": "notifications.sync_business_notifications",
         "schedule": timedelta(minutes=POINTY_NOTIFICATION_SYNC_INTERVAL_MINUTES),
@@ -1092,6 +1105,10 @@ POINTY_PRODUCT_IMAGE_IMPORT_MAX_BYTES = env("POINTY_PRODUCT_IMAGE_IMPORT_MAX_BYT
 # provider config lives here. See apps.attachments.image_search.
 POINTY_IMAGE_FETCH_TIMEOUT_SECONDS = env("POINTY_IMAGE_FETCH_TIMEOUT_SECONDS")
 POINTY_IMAGE_IMPORT_TOKEN_MAX_AGE_SECONDS = env("POINTY_IMAGE_IMPORT_TOKEN_MAX_AGE_SECONDS")
+# Moamalat live card verification. The token is sealed with this key (falls back
+# to SECRET_KEY); the base URL is overridable for tests.
+POINTY_MOAMALAT_SECRET_KEY = env("POINTY_MOAMALAT_SECRET_KEY", default="")
+POINTY_MOAMALAT_BASE_URL = env("POINTY_MOAMALAT_BASE_URL", default="")
 POINTY_RELAY_CONTROL_URL = env("POINTY_RELAY_CONTROL_URL", default="")
 POINTY_RELAY_PUBLIC_API_URL = env("POINTY_RELAY_PUBLIC_API_URL", default="")
 POINTY_RELAY_CONNECTOR_ADDR = env("POINTY_RELAY_CONNECTOR_ADDR", default="")

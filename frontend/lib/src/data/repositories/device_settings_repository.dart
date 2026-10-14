@@ -13,8 +13,7 @@ class DeviceSettingsRepository {
   Future<Result<DeviceSettings>> loadSettings() async {
     return Result.guard(() async {
       final usageMode = await _storageService.loadDeviceUsageMode();
-      final cameraWedgeEnabled =
-          await _storageService.loadCameraWedgeEnabled();
+      final cameraWedgeEnabled = await _storageService.loadCameraWedgeEnabled();
       return DeviceSettings(
         usageMode: usageMode ?? DeviceSettings.defaults().usageMode,
         cameraWedgeEnabled:
@@ -44,9 +43,7 @@ class DeviceSettingsRepository {
   }
 
   Future<Result<void>> saveCameraWedgeEnabled(bool enabled) async {
-    return Result.guard(
-      () => _storageService.saveCameraWedgeEnabled(enabled),
-    );
+    return Result.guard(() => _storageService.saveCameraWedgeEnabled(enabled));
   }
 
   Future<Result<String?>> loadCameraWedgeDeviceId() async {

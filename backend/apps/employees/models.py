@@ -1,3 +1,4 @@
+from datetime import timedelta
 from decimal import Decimal
 
 from django.conf import settings
@@ -142,6 +143,23 @@ class Employee(TimeStampedModel):
             raise ValidationError(
                 {"termination_date": "Termination date is required for terminated employees."}
             )
+
+    def days_not_employed(self, period_start, period_end):
+        """Days of the period before the hire date or after the termination
+        date. A new hire's first month is paid from the day they started --
+        how shops here pay someone who joins mid-month.
+        """
+        period_days = (period_end - period_start).days + 1
+        if period_days <= 0:
+            return 0
+        days = 0
+        if self.hire_date and self.hire_date > period_start:
+            days += (min(self.hire_date, period_end + timedelta(days=1)) - period_start).days
+        if self.termination_date and self.termination_date < period_end:
+            days += (
+                period_end - max(self.termination_date, period_start - timedelta(days=1))
+            ).days
+        return min(days, period_days)
 
 
 class CompensationPlan(TimeStampedModel):
@@ -584,6 +602,22 @@ class PayrollLine(TimeStampedModel):
         default=Decimal("0.00"),
         validators=[MinValueValidator(Decimal("0.00"))],
     )
+    # Days of the period the employee was not yet hired, or had already left
+    # (``Employee.days_not_employed``). Priced like an absence, at the period's
+    # daily rate, but kept apart: attendance never counts those days, so
+    # stamping it onto the line would otherwise write the proration away.
+    days_not_employed = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
+    not_employed_deduction_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        validators=[MinValueValidator(Decimal("0.00"))],
+    )
     overtime_hours = models.DecimalField(
         max_digits=7,
         decimal_places=2,
@@ -647,6 +681,18 @@ class PayrollLine(TimeStampedModel):
             raise ValidationError(
                 {"absence_days": "Absence days cannot exceed the payroll period."}
             )
+        if period_days and (
+            Decimal(self.absence_days or "0.00")
+            + Decimal(self.days_not_employed or "0.00")
+        ) > Decimal(period_days):
+            raise ValidationError(
+                {
+                    "days_not_employed": (
+                        "Absence days and days not employed cannot exceed "
+                        "the payroll period."
+                    )
+                }
+            )
 
     @property
     def period_days(self):
@@ -702,6 +748,16 @@ class PayrollLine(TimeStampedModel):
         self.absence_deduction_amount = (
             self.absence_day_rate * Decimal(self.absence_days or "0.00")
         ).quantize(self.MONEY_PLACES)
+        # Prorated from the unrounded daily rate, so 14 of 31 days of 1500 is
+        # 677.42 and not 14 x 48.39.
+        period_days = self.period_days
+        self.not_employed_deduction_amount = (
+            self.gross_amount
+            * Decimal(self.days_not_employed or "0.00")
+            / Decimal(period_days)
+            if period_days and period_days > 0
+            else Decimal("0.00")
+        ).quantize(self.MONEY_PLACES)
         # Overtime pays the hourly wage times the per-employee multiplier. The
         # multiplier is snapshotted onto the line so the figure is auditable.
         self.overtime_multiplier = self.resolved_overtime_multiplier
@@ -715,8 +771,10 @@ class PayrollLine(TimeStampedModel):
             + Decimal(self.manual_addition_amount or "0.00")
             + Decimal(self.overtime_amount or "0.00")
         )
-        deductions = Decimal(self.absence_deduction_amount or "0.00") + Decimal(
-            self.manual_deduction_amount or "0.00"
+        deductions = (
+            Decimal(self.absence_deduction_amount or "0.00")
+            + Decimal(self.not_employed_deduction_amount or "0.00")
+            + Decimal(self.manual_deduction_amount or "0.00")
         )
         staff_purchases = []
         balance_debts = []
@@ -762,6 +820,7 @@ class PayrollLine(TimeStampedModel):
                     "rate",
                     "gross_amount",
                     "absence_deduction_amount",
+                    "not_employed_deduction_amount",
                     "overtime_multiplier",
                     "overtime_amount",
                     "additions_amount",

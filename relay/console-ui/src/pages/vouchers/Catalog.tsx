@@ -8,7 +8,8 @@ import { matches } from "../../lib/search";
 import { count, dateTime } from "../../lib/format";
 import { saveText, useVoucherImage } from "../../lib/files";
 import { label, supplier as supplierLabels } from "../../lib/labels";
-import { reasonText, type CatalogAnswer, type CatalogRecord, type ShopBrand, type ShopItem, type Supply } from "../../lib/vouchers";
+import { ProfitCell } from "../../components/profit";
+import { reasonText, splitOf, type CatalogAnswer, type CatalogRecord, type ShopBrand, type ShopItem, type Supply } from "../../lib/vouchers";
 import { Badge, Button, Card, CopyText, Empty, Money, Segmented, Skeleton, TimeAgo } from "../../components/ui";
 import { DataTable, Stacked, type Column } from "../../components/DataTable";
 import { PageHeader } from "../../components/PageHeader";
@@ -16,6 +17,12 @@ import { PublishCatalogDialog } from "./PublishCatalog";
 
 export function useCatalog() {
   return useQuery({ queryKey: ["vouchers", "catalog"], queryFn: () => api.get<CatalogAnswer>("/v1/vouchers/admin/catalog"), retry: false, staleTime: 60_000 });
+}
+
+/** What the company pays for an item: the cost at the supplier it is bought from now. */
+export function winnerCost(s: Supply | undefined): number | undefined {
+  const winner = s?.suppliers?.find((o) => o.supplier === s.winner);
+  return winner?.cost_lyd ? Number(winner.cost_lyd) : undefined;
 }
 
 export function BrandLogo({ refId, name }: { refId?: string; name: string }) {
@@ -142,6 +149,7 @@ export function Catalog() {
 }
 
 function BrandCard({ brand, supplyOf }: { brand: ShopBrand; supplyOf: Map<string, Supply> }) {
+  const costOf = (i: ShopItem) => winnerCost(supplyOf.get(i.key));
   const columns: Column<ShopItem>[] = [
     {
       key: "item",
@@ -159,7 +167,18 @@ function BrandCard({ brand, supplyOf }: { brand: ShopBrand; supplyOf: Map<string
         />
       ),
     },
-    { key: "price", header: "سعر المتجر", align: "end", mobile: "trailing", cell: (i) => <Money value={i.unit_price} /> },
+    { key: "cost", header: "تكلفتنا", align: "end", cell: (i) => (costOf(i) !== undefined ? <Money value={costOf(i)!.toFixed(2)} /> : <span className="faint">—</span>) },
+    { key: "ours", header: "ربحنا", align: "end", cell: (i) => <ProfitCell value={splitOf(costOf(i), i.unit_price, i.retail_price).company} of={costOf(i)} /> },
+    { key: "price", header: "يدفع المتجر", align: "end", mobile: "trailing", cell: (i) => <Money value={i.unit_price} /> },
+    { key: "theirs", header: "ربح المتجر", align: "end", cell: (i) => <ProfitCell value={splitOf(costOf(i), i.unit_price, i.retail_price).shop} of={Number(i.unit_price)} /> },
+    { key: "retail", header: "للزبون", align: "end", cell: (i) => <Money value={i.retail_price} /> },
+    {
+      key: "regular",
+      header: "قبل العرض",
+      align: "end",
+      wideOnly: true,
+      cell: (i) => (i.promo && i.regular_unit_price ? <span className="faint">{i.regular_unit_price}</span> : null),
+    },
     {
       key: "available",
       header: "التوفّر",
@@ -178,24 +197,6 @@ function BrandCard({ brand, supplyOf }: { brand: ShopBrand; supplyOf: Map<string
             <span className="faint" style={{ fontSize: 12.5 }}>{reasonText(s?.reason)}</span>
           </span>
         );
-      },
-    },
-    { key: "retail", header: "للزبون", align: "end", cell: (i) => <Money value={i.retail_price} /> },
-    {
-      key: "regular",
-      header: "قبل العرض",
-      align: "end",
-      wideOnly: true,
-      cell: (i) => (i.promo && i.regular_unit_price ? <span className="faint">{i.regular_unit_price}</span> : null),
-    },
-    {
-      key: "cost",
-      header: "التكلفة",
-      align: "end",
-      cell: (i) => {
-        const s = supplyOf.get(i.key);
-        const winner = s?.suppliers?.find((o) => o.supplier === s.winner);
-        return winner?.cost_lyd ? <Money value={Number(winner.cost_lyd).toFixed(2)} /> : <span className="faint">—</span>;
       },
     },
   ];

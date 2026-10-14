@@ -280,4 +280,29 @@ void main() {
       name: 'account_wide',
     );
   }, skip: !_capture);
+
+  // The payroll tab's month card: what preparing still needs, last month's
+  // run while it is due, and the sheets the card leads to.
+  for (final (screen, size, name) in const [
+    ('payroll', Size(390, 1100), 'payroll_checklist_phone'),
+    ('payroll', Size(1280, 1000), 'payroll_checklist_wide'),
+    ('payroll-empty', Size(390, 900), 'payroll_empty_phone'),
+    ('payroll-due', Size(390, 900), 'payroll_due_phone'),
+    ('add-plan', Size(390, 1100), 'payroll_add_plan_phone'),
+    ('custom-run', Size(1280, 1000), 'payroll_custom_run_wide'),
+  ]) {
+    testWidgets('payroll card: $name', (tester) async {
+      await shoot(tester, screen: screen, size: size, name: name);
+    }, skip: !_capture);
+  }
+
+  testWidgets('payroll card: dark, wide', (tester) async {
+    await shoot(
+      tester,
+      screen: 'payroll',
+      size: const Size(1280, 1000),
+      name: 'payroll_checklist_wide_dark',
+      dark: true,
+    );
+  }, skip: !_capture);
 }

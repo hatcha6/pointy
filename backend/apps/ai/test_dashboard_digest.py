@@ -138,7 +138,7 @@ class DashboardAiDigestViewTests(TestCase):
     def test_returns_generated_digest(self):
         lines = fake_sse_lines(['{"brief": "ملخص اليوم", "explainers": {"low_stock": "أعد الطلب"}}'])
         with patch("apps.ai.views.build_dashboard_snapshot") as snapshot, patch(
-            "apps.ai.dashboard_digest.RelayControlClient"
+            "apps.ai.views.scoped_relay_client"
         ) as relay:
             snapshot.return_value = {"period": {"days": 30}, "sections": _sections()}
             relay.return_value.open_ai_stream.return_value = FakeRelayResponse(lines)
@@ -147,11 +147,19 @@ class DashboardAiDigestViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["brief"], "ملخص اليوم")
         self.assertEqual(response.data["explainers"], {"low_stock": "أعد الطلب"})
+        # The relay client is built for THIS installation: a bare client reads
+        # the process config, which on an enrolled backend holds only the spent
+        # enrollment key, and the view would hide the failure as an empty digest.
+        relay.assert_called_once_with(self.installation)
+        self.assertEqual(
+            relay.return_value.open_ai_stream.call_args.kwargs["access_token"],
+            "ptr1.inst-1.secret",
+        )
 
     def test_caches_per_day_so_the_relay_runs_once(self):
         lines = fake_sse_lines(['{"brief": "ملخص", "explainers": {"low_stock": "أعد الطلب"}}'])
         with patch("apps.ai.views.build_dashboard_snapshot") as snapshot, patch(
-            "apps.ai.dashboard_digest.RelayControlClient"
+            "apps.ai.views.scoped_relay_client"
         ) as relay:
             snapshot.return_value = {"period": {"days": 30}, "sections": _sections()}
             relay.return_value.open_ai_stream.return_value = FakeRelayResponse(lines)

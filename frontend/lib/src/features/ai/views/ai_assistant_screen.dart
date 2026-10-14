@@ -5,12 +5,12 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
-import 'package:gpt_markdown/gpt_markdown.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/result.dart';
 import '../../../data/models/ai_chat.dart';
+import '../../../data/models/ai_memory.dart';
 import '../../../shared/app_navigation_drawer.dart';
 import '../../../shared/async_selection/async_multi_select_picker.dart';
 import '../../../shared/navigation/ai_deep_link.dart';
@@ -26,6 +26,11 @@ import '../../companion/companion_scope.dart';
 import '../../companion/views/companion_capture_sheet.dart';
 import '../view_models/ai_chat_view_model.dart';
 import '../voice_recording.dart';
+import '../view_models/ai_memory_view_model.dart';
+import 'ai_approval_card.dart';
+import 'ai_memory_sheet.dart';
+import 'ai_plan_checklist.dart';
+import 'ai_streaming_markdown.dart';
 import 'voice_recorder_bar.dart';
 
 const double _maxContentWidth = 860;
@@ -131,6 +136,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
       if (mounted) {
         unawaited(widget.viewModel.loadHistory());
         unawaited(widget.viewModel.loadUsage());
+        unawaited(widget.viewModel.loadSuggestions());
         _applyInitialPrompt();
       }
     });
@@ -182,6 +188,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
 
   @override
   void dispose() {
+    _memory?.dispose();
     unawaited(_surfaceActions?.cancel());
     _surfaceHost.dispose();
     _followedMessage?.removeListener(_handleStreamTick);
@@ -466,6 +473,13 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     unawaited(widget.viewModel.sendMessage(text));
   }
 
+  AiMemoryViewModel? _memory;
+
+  Future<void> _openMemory() => showAiMemorySheet(
+    context,
+    _memory ??= widget.viewModel.createMemoryViewModel(),
+  );
+
   Future<void> _openHistory() async {
     await showModalBottomSheet<void>(
       context: context,
@@ -508,6 +522,12 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
             ),
             actions: [
               IconButton(
+                key: const ValueKey('ai_memory_open'),
+                tooltip: l10n.aiMemoryOpen,
+                onPressed: _openMemory,
+                icon: const Icon(Icons.psychology_outlined),
+              ),
+              IconButton(
                 tooltip: l10n.aiAssistantHistoryTitle,
                 onPressed: viewModel.isStreaming ? null : _openHistory,
                 icon: const Icon(Icons.history),
@@ -543,7 +563,10 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                             onLinkTap: _handleAssistantLink,
                             surfaceHost: _surfaceHost,
                           )
-                        : _EmptyState(onSuggestion: _sendSuggestion),
+                        : _EmptyState(
+                            suggestions: viewModel.suggestions,
+                            onSuggestion: _sendSuggestion,
+                          ),
                   ),
                   if (viewModel.errorKind != null)
                     Padding(
@@ -780,9 +803,14 @@ class _AssistantMessage extends StatelessWidget {
       listenable: message,
       builder: (context) {
         final showTyping = message.isStreaming && message.content.isEmpty;
+        final segments = message.segments;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (message.plan.isNotEmpty) ...[
+              AiPlanChecklist(steps: message.plan, active: message.isStreaming),
+              SizedBox(height: spacing.sm),
+            ],
             if (message.toolRuns.isNotEmpty) ...[
               _ToolRunChips(runs: message.toolRuns),
               SizedBox(height: spacing.sm),
@@ -803,10 +831,12 @@ class _AssistantMessage extends StatelessWidget {
               // so a card drawn mid-answer stays mid-answer. Cards arrive once
               // per tool result, never per token, so this stays off the
               // streaming rebuild path.
-              for (final segment in message.segments)
+              for (final (index, segment) in segments.indexed)
                 if (segment.isText)
                   _AssistantTextSegment(
                     text: segment.text,
+                    streaming:
+                        message.isStreaming && index == segments.length - 1,
                     onLinkTap: onLinkTap,
                   )
                 else
@@ -908,106 +938,72 @@ class _CoalescedBuilderState extends State<_CoalescedBuilder> {
 
 /// Renders the assistant's reply as formatted markdown (headings, lists, tables,
 /// code, bold/italic, links) via gpt_markdown — which tolerates the partial,
-/// mid-stream markdown a live reply produces, so it renders progressively as
-/// tokens arrive. Wrapped in a SelectionArea so the rendered text stays
+/// mid-stream markdown a live reply produces. While the reply streams, new words
+/// fade in one after another (see [AiStreamingMarkdown]); once settled it is a
+/// memoized plain render. Wrapped in a SelectionArea so the text stays
 /// selectable. RTL/LTR follows the ambient direction.
-class _AssistantText extends StatefulWidget {
+class _AssistantText extends StatelessWidget {
   const _AssistantText({required this.message, required this.onLinkTap});
 
   final AiMessage message;
   final ValueChanged<String> onLinkTap;
 
   @override
-  State<_AssistantText> createState() => _AssistantTextState();
-}
-
-/// One prose run of a turn that also contains generated cards.
-///
-/// Separate from [_AssistantText] because it renders a slice of the answer
-/// rather than the whole message, but it memoizes on exactly the same terms —
-/// a settled slice never re-parses when a sibling slice grows.
-class _AssistantTextSegment extends StatefulWidget {
-  const _AssistantTextSegment({required this.text, required this.onLinkTap});
-
-  final String text;
-  final ValueChanged<String> onLinkTap;
-
-  @override
-  State<_AssistantTextSegment> createState() => _AssistantTextSegmentState();
-}
-
-class _AssistantTextSegmentState extends State<_AssistantTextSegment> {
-  Widget? _cached;
-  String? _content;
-  TextStyle? _style;
-  TextDirection? _direction;
-
-  void _handleLinkTap(String url, String title) => widget.onLinkTap(url);
-
-  @override
   Widget build(BuildContext context) {
-    final colors = context.pointyColors;
-    final base = Theme.of(context).textTheme.bodyMedium ?? const TextStyle();
-    final style = base.copyWith(color: colors.ink, height: 1.55);
-    final direction = Directionality.of(context);
-    final content = widget.text.trim();
-    if (_cached == null ||
-        content != _content ||
-        style != _style ||
-        direction != _direction) {
-      _content = content;
-      _style = style;
-      _direction = direction;
-      _cached = GptMarkdown(
-        content,
-        style: style,
-        textDirection: direction,
-        onLinkTap: _handleLinkTap,
-      );
-    }
-    return SelectionArea(child: _cached!);
+    return _AssistantProse(
+      text: message.content,
+      streaming: message.isStreaming,
+      onLinkTap: onLinkTap,
+    );
   }
 }
 
-class _AssistantTextState extends State<_AssistantText> {
-  Widget? _cached;
-  String? _content;
-  TextStyle? _style;
-  TextDirection? _direction;
+/// One prose run of a turn that also contains generated cards. Only the run
+/// still growing — the last one of a streaming turn — animates.
+class _AssistantTextSegment extends StatelessWidget {
+  const _AssistantTextSegment({
+    required this.text,
+    required this.streaming,
+    required this.onLinkTap,
+  });
 
-  // A stable method reference (not a fresh closure), so it's NOT a memoization
-  // input — the cached GptMarkdown keeps it across rebuilds, and it reads the
-  // current widget's callback at tap time (links stay live even when memoized).
-  void _handleLinkTap(String url, String title) => widget.onLinkTap(url);
+  final String text;
+  final bool streaming;
+  final ValueChanged<String> onLinkTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return _AssistantProse(
+      text: text.trim(),
+      streaming: streaming,
+      onLinkTap: onLinkTap,
+    );
+  }
+}
+
+class _AssistantProse extends StatelessWidget {
+  const _AssistantProse({
+    required this.text,
+    required this.streaming,
+    required this.onLinkTap,
+  });
+
+  final String text;
+  final bool streaming;
+  final ValueChanged<String> onLinkTap;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.pointyColors;
     final base = Theme.of(context).textTheme.bodyMedium ?? const TextStyle();
-    final style = base.copyWith(color: colors.ink, height: 1.55);
-    final direction = Directionality.of(context);
-    final content = widget.message.content;
-
-    // GptMarkdown re-parses its entire input on every build. Memoize the rendered
-    // tree by its inputs and hand back the *same* widget instance when nothing
-    // changed — the framework then short-circuits the rebuild, so a structural
-    // rebuild (or a sibling streaming) never re-parses a settled reply. Only
-    // genuinely new text (this turn while it streams) pays the parse cost.
-    if (_cached == null ||
-        content != _content ||
-        style != _style ||
-        direction != _direction) {
-      _content = content;
-      _style = style;
-      _direction = direction;
-      _cached = GptMarkdown(
-        content,
-        style: style,
-        textDirection: direction,
-        onLinkTap: _handleLinkTap,
-      );
-    }
-    return SelectionArea(child: _cached!);
+    return SelectionArea(
+      child: AiStreamingMarkdown(
+        text: text,
+        streaming: streaming,
+        style: base.copyWith(color: colors.ink, height: 1.55),
+        onLinkTap: (url, _) => onLinkTap(url),
+      ),
+    );
   }
 }
 
@@ -1279,6 +1275,9 @@ class _QuestionCardState extends State<_QuestionCard> {
     final colors = context.pointyColors;
     final spacing = AdaptiveSpacing.of(context);
     final answered = widget.message.submittedAnswers != null;
+    final approval = _questions.length == 1 && _questions.single.isApproval
+        ? _questions.single
+        : null;
 
     return Container(
       width: double.infinity,
@@ -1289,7 +1288,26 @@ class _QuestionCardState extends State<_QuestionCard> {
         borderRadius: BorderRadius.circular(PointyRadii.card),
         border: Border.all(color: colors.line),
       ),
-      child: answered
+      child: approval != null
+          ? AiApprovalCard(
+              question: approval,
+              decision: answered ? _approvalDecision(approval) : null,
+              submitting: _submitting,
+              onDecide: (approve) {
+                if (_submitting) {
+                  return;
+                }
+                setState(() => _submitting = true);
+                widget.onSubmit([
+                  AiAnswer(
+                    questionId: approval.id,
+                    type: approval.type,
+                    value: approve,
+                  ),
+                ]);
+              },
+            )
+          : answered
           ? _AnswerSummary(message: widget.message)
           : Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1304,6 +1322,18 @@ class _QuestionCardState extends State<_QuestionCard> {
               ],
             ),
     );
+  }
+
+  /// Only an explicit yes counts as approved — a skip or a "no" is a refusal,
+  /// the same rule the server applies before running anything.
+  bool _approvalDecision(AiQuestion approval) {
+    for (final answer
+        in widget.message.submittedAnswers ?? const <AiAnswer>[]) {
+      if (answer.questionId == approval.id) {
+        return answer.value == true;
+      }
+    }
+    return false;
   }
 
   Widget _buildQuestion(AiQuestion question) {
@@ -2652,8 +2682,11 @@ class _TypingIndicatorState extends State<_TypingIndicator>
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.onSuggestion});
+  const _EmptyState({required this.suggestions, required this.onSuggestion});
 
+  /// The assistant's own suggestions for this shop; the built-in three until
+  /// (unless) they arrive.
+  final List<AiSuggestion> suggestions;
   final ValueChanged<String> onSuggestion;
 
   @override
@@ -2662,11 +2695,17 @@ class _EmptyState extends StatelessWidget {
     final spacing = AdaptiveSpacing.of(context);
     final l10n = AppLocalizations.of(context)!;
     final textTheme = Theme.of(context).textTheme;
-    final suggestions = [
-      l10n.aiAssistantSuggestion1,
-      l10n.aiAssistantSuggestion2,
-      l10n.aiAssistantSuggestion3,
-    ];
+    final personal = suggestions.isNotEmpty;
+    final shown = personal
+        ? suggestions
+        : [
+            for (final text in [
+              l10n.aiAssistantSuggestion1,
+              l10n.aiAssistantSuggestion2,
+              l10n.aiAssistantSuggestion3,
+            ])
+              AiSuggestion(title: text, prompt: text),
+          ];
 
     return Center(
       child: SingleChildScrollView(
@@ -2709,16 +2748,31 @@ class _EmptyState extends StatelessWidget {
             SizedBox(height: spacing.xl),
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 460),
-              child: Column(
-                children: [
-                  for (final suggestion in suggestions) ...[
-                    _SuggestionChip(
-                      label: suggestion,
-                      onTap: () => onSuggestion(suggestion),
-                    ),
-                    SizedBox(height: spacing.sm),
+              // Fades from the built-in set to the shop's own when it lands.
+              child: AnimatedSwitcher(
+                duration: PointyMotion.standard,
+                child: Column(
+                  key: ValueKey(personal),
+                  children: [
+                    if (personal) ...[
+                      Text(
+                        l10n.aiAssistantSuggestionsForShop,
+                        style: textTheme.labelMedium?.copyWith(
+                          color: colors.mutedInk,
+                        ),
+                      ),
+                      SizedBox(height: spacing.sm),
+                    ],
+                    for (final suggestion in shown) ...[
+                      _SuggestionChip(
+                        label: suggestion.title,
+                        icon: _suggestionIcon(suggestion.icon),
+                        onTap: () => onSuggestion(suggestion.prompt),
+                      ),
+                      SizedBox(height: spacing.sm),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ],
@@ -2728,10 +2782,26 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
+IconData _suggestionIcon(String icon) => switch (icon) {
+  'sales' => Icons.trending_up_rounded,
+  'stock' => Icons.inventory_2_outlined,
+  'customers' => Icons.people_outline,
+  'purchasing' => Icons.local_shipping_outlined,
+  'marketing' => Icons.campaign_outlined,
+  'money' => Icons.payments_outlined,
+  'report' => Icons.insights_outlined,
+  _ => Icons.auto_awesome_outlined,
+};
+
 class _SuggestionChip extends StatelessWidget {
-  const _SuggestionChip({required this.label, required this.onTap});
+  const _SuggestionChip({
+    required this.label,
+    required this.onTap,
+    this.icon = Icons.auto_awesome_outlined,
+  });
 
   final String label;
+  final IconData icon;
   final VoidCallback onTap;
 
   @override
@@ -2756,11 +2826,7 @@ class _SuggestionChip extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Icon(
-                  Icons.auto_awesome_outlined,
-                  size: 17,
-                  color: colors.primaryStrong,
-                ),
+                Icon(icon, size: 17, color: colors.primaryStrong),
                 SizedBox(width: spacing.sm),
                 Expanded(
                   child: Text(

@@ -75,7 +75,8 @@ class _PosVoucherBrandCardState extends State<PosVoucherBrandCard> {
     final textTheme = Theme.of(context).textTheme;
     final brand = widget.brand;
     final available = brand.isAvailable;
-    final enabled = widget.onTap != null && available;
+    // Opens even when nothing sells: the cashier may still read its prices.
+    final enabled = widget.onTap != null;
     final lifted = enabled && (_hovered || _focused);
     final price = _priceLine(l10n, brand);
 
@@ -195,7 +196,7 @@ class _PosVoucherBrandCardState extends State<PosVoucherBrandCard> {
       button: true,
       enabled: enabled,
       child: Opacity(
-        opacity: available ? 1 : 0.62,
+        opacity: available ? 1 : 0.85,
         child: InkWell(
           onTap: enabled ? widget.onTap : null,
           onHover: (value) => setState(() => _hovered = value),
@@ -238,10 +239,8 @@ class _Stickers extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     if (!available) {
-      return VoucherSticker(
-        tone: VoucherStickerTone.muted,
-        label: l10n.posVoucherMenuUnavailable,
-      );
+      // The art says «غير متوفر»; a promotion on it would only tease.
+      return const SizedBox.shrink();
     }
     final promo = brand.onPromo
         ? (brand.promoBadge ?? l10n.posVoucherMenuPromo)

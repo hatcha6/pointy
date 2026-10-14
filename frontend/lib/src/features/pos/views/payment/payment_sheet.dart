@@ -5,6 +5,11 @@ import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../../data/models/card_payment_receipt.dart';
+import '../../../../data/repositories/moamalat_repository.dart';
+import '../../../card_verification/view_models/moamalat_live_watch.dart';
+import '../../../card_verification/view_models/swipe_plan.dart';
+import '../../../card_verification/views/moamalat_live_line.dart';
+import '../../../card_verification/views/moamalat_swipe_notice.dart';
 import '../../../../data/models/money_position.dart';
 import '../../../../data/models/sale_order.dart';
 import '../../../../shared/barcode/barcode_scan_listener.dart';
@@ -80,6 +85,7 @@ Future<PaymentSheetResult?> showPosPaymentSheet({
   bool enableCredit = true,
   DateTime? proposedDueDate,
   bool isStaffAccount = false,
+  MoamalatRepository? moamalatRepository,
 }) {
   final width = MediaQuery.sizeOf(context).width;
   Widget childBuilder(BuildContext modalContext) {
@@ -104,6 +110,7 @@ Future<PaymentSheetResult?> showPosPaymentSheet({
       enableCredit: enableCredit,
       proposedDueDate: proposedDueDate,
       isStaffAccount: isStaffAccount,
+      moamalatRepository: moamalatRepository,
       onCancel: () => Navigator.of(modalContext).pop(),
       onSubmit: (result) => Navigator.of(modalContext).pop(result),
     );
@@ -144,6 +151,7 @@ class PaymentSheet extends StatefulWidget {
     this.enableCredit = true,
     this.proposedDueDate,
     this.isStaffAccount = false,
+    this.moamalatRepository,
     @visibleForTesting this.clock = DateTime.now,
   });
 
@@ -195,6 +203,11 @@ class PaymentSheet extends StatefulWidget {
   /// employee's next payroll run — so the sheet opens on آجل and says so.
   final bool isStaffAccount;
 
+  /// Live card verification: while a card tender is entered, the sheet shows
+  /// whether the terminal's swipe for it has reached Moamalat. Null shows
+  /// nothing (no link wired, a preview, a test).
+  final MoamalatRepository? moamalatRepository;
+
   /// Injectable time source so tests can drive scanner-burst timing.
   final DateTime Function() clock;
 
@@ -241,8 +254,129 @@ class _PaymentSheetState extends State<PaymentSheet> {
   DateTime? _lastKeyDownAt;
   var _fastKeyRun = 0;
 
+  /// Polls only while a card amount is on the sheet; disposed with it, which
+  /// is what stops the backend's fast loop when the checkout ends.
+  late final MoamalatLiveWatch? _cardWatch = widget.moamalatRepository == null
+      ? null
+      : MoamalatLiveWatch(widget.moamalatRepository!);
+
   bool get _isCredit => _saleType == SaleType.credit;
   bool get _isQuotation => _saleType == SaleType.quotation;
+
+  /// Swipes the cashier said are not this sale's.
+  final _ignoredSwipes = <String>{};
+
+  /// Swipes whose automatic correction the cashier undid: offered, never
+  /// re-applied by themselves.
+  final _declinedSwipes = <String>{};
+
+  /// The correction made from a swipe, kept for its notice and its undo.
+  _SwipeCorrection? _swipeCorrection;
+
+  List<SwipeTender> get _swipeTenders => [
+    for (final (index, tender) in _tenders.indexed)
+      SwipeTender(
+        index: index,
+        isCard: tender.method == PaymentMethod.card,
+        amount: _calculator.parseAmount(tender.amountController.text),
+      ),
+  ];
+
+  /// The terminal's unclaimed swipes paired with this sheet's lines.
+  SwipePlan get _swipePlan {
+    final watch = _cardWatch;
+    if (watch == null || _isQuotation) return const SwipePlan();
+    final plan = planSwipes(
+      tenders: _swipeTenders,
+      swipes: watch.swipes,
+      ignored: _ignoredSwipes,
+      activeIndex: _activeTenderIndex,
+    );
+    final automatic = plan.automatic;
+    if (automatic != null && _declinedSwipes.contains(automatic.swipe.rrn)) {
+      return SwipePlan(seen: plan.seen, suggestions: [automatic]);
+    }
+    return plan;
+  }
+
+  void _onSwipesChanged() {
+    if (!mounted) return;
+    final automatic = _swipePlan.automatic;
+    if (automatic != null) {
+      // The one unambiguous case: a single stray swipe for less than the
+      // single card line still waiting. The cashier keyed the wrong figure
+      // into the terminal; fix the sheet before the sale is confirmed.
+      _applySwipe(automatic);
+    } else {
+      setState(() {});
+    }
+  }
+
+  void _applySwipe(SwipeSuggestion suggestion) {
+    final index = suggestion.tenderIndex;
+    if (index == null || index >= _tenders.length) return;
+    if (suggestion.action == SwipeAction.overcharged) return;
+    final swipe = suggestion.swipe;
+    final snapshot = [for (final tender in _tenders) tender.snapshot()];
+    setState(() {
+      // Not marked ignored: once applied the line equals the swipe, so the
+      // planner pairs them and the line shows it as proved.
+      final tender = _tenders[index];
+      final intended = _calculator.parseAmount(tender.amountController.text);
+      final originalMethod = tender.method;
+      tender.method = PaymentMethod.card;
+      _setTenderAmount(
+        index,
+        swipe.amount.toStringAsFixed(2),
+        rebalance: false,
+      );
+      final rest = intended - swipe.amount;
+      if (rest > 0.004) {
+        _tenders.insert(
+          index + 1,
+          _TenderLineInput(
+            // A shortfall is most often swiped again; a swipe taken before
+            // the sheet opened leaves the rest on the method it was on.
+            method: suggestion.action == SwipeAction.splitShortfall
+                ? PaymentMethod.card
+                : originalMethod,
+            amount: rest.toStringAsFixed(2),
+            moneyAccountId: _defaultBankAccountId,
+          ),
+        );
+        _activeTenderIndex = index + 1;
+        _swipeCorrection = _SwipeCorrection(
+          rrn: swipe.rrn,
+          charged: swipe.amount,
+          intended: intended,
+          snapshot: snapshot,
+        );
+      } else {
+        _activeTenderIndex = index;
+      }
+      _showPaymentError = false;
+    });
+  }
+
+  void _undoSwipeCorrection() {
+    final correction = _swipeCorrection;
+    if (correction == null) return;
+    setState(() {
+      for (final tender in _tenders) {
+        tender.dispose();
+      }
+      _tenders
+        ..clear()
+        ..addAll(correction.snapshot.map(_TenderLineInput.restore));
+      _activeTenderIndex = math.min(_activeTenderIndex, _tenders.length - 1);
+      _declinedSwipes.add(correction.rrn);
+      _swipeCorrection = null;
+    });
+  }
+
+  void _ignoreSwipe(SwipeSuggestion suggestion) {
+    setState(() => _ignoredSwipes.add(suggestion.swipe.rrn));
+  }
 
   /// A credit or quotation sale needs a customer when the shop requires one;
   /// confirming is blocked until one is attached to the cart.
@@ -254,6 +388,11 @@ class _PaymentSheetState extends State<PaymentSheet> {
   @override
   void initState() {
     super.initState();
+    // Watch the terminal for the whole time the sheet is open — including
+    // swipes taken before it opened, which the watch asks for too.
+    _cardWatch
+      ?..addListener(_onSwipesChanged)
+      ..start();
     if (widget.isStaffAccount && widget.enableCredit) {
       // Picking a staff account is how a cashier charges a purchase to
       // payroll, so the sale starts on آجل with nothing tendered. Switching to
@@ -281,6 +420,8 @@ class _PaymentSheetState extends State<PaymentSheet> {
 
   @override
   void dispose() {
+    _cardWatch?.removeListener(_onSwipesChanged);
+    _cardWatch?.dispose();
     for (final tender in _tenders) {
       tender.dispose();
     }
@@ -660,6 +801,7 @@ class _PaymentSheetState extends State<PaymentSheet> {
   }) {
     final spacing = AdaptiveSpacing.of(context);
     final activeTender = _activeTender;
+    final swipePlan = _swipePlan;
 
     if (_enabledMethods.isEmpty) {
       return PointyErrorState(
@@ -723,6 +865,30 @@ class _PaymentSheetState extends State<PaymentSheet> {
           SizedBox(height: spacing.md),
         ],
         ..._buildScanNotice(l10n, spacing),
+        if (_swipeCorrection case final correction?) ...[
+          SwipeCorrectionNotice(
+            charged: correction.charged,
+            intended: correction.intended,
+            onUndo: _undoSwipeCorrection,
+          ),
+          SizedBox(height: spacing.sm),
+        ],
+        if (swipePlan.suggestions.isNotEmpty) ...[
+          SwipeSuggestionsNotice(
+            suggestions: swipePlan.suggestions,
+            tenderAmount: (suggestion) {
+              final index = suggestion.tenderIndex;
+              return index == null || index >= _tenders.length
+                  ? 0
+                  : _calculator.parseAmount(
+                      _tenders[index].amountController.text,
+                    );
+            },
+            onApply: _applySwipe,
+            onIgnore: _ignoreSwipe,
+          ),
+          SizedBox(height: spacing.sm),
+        ],
         for (final entry in _tenders.indexed) ...[
           if (entry.$1 > 0) SizedBox(height: spacing.sm),
           TenderLineEditor(
@@ -756,6 +922,14 @@ class _PaymentSheetState extends State<PaymentSheet> {
             onMoneyAccountChanged: (accountId) =>
                 _updateTenderAccount(entry.$1, accountId),
           ),
+          if (_cardWatch != null &&
+              !_isQuotation &&
+              entry.$2.method == PaymentMethod.card &&
+              _calculator.parseAmount(entry.$2.amountController.text) > 0)
+            MoamalatLiveLine(
+              watch: _cardWatch,
+              swipe: swipePlan.seen[entry.$1],
+            ),
         ],
         SizedBox(height: spacing.sm),
         TutorTarget(
@@ -1722,7 +1896,47 @@ class _TenderLineInput {
   /// the till decided something a person overruled.
   String? autoSelectedTerminal;
 
+  _TenderSnapshot snapshot() => (
+    method: method,
+    amount: amountController.text,
+    moneyAccountId: moneyAccountId,
+    cardReceipt: cardReceipt,
+    autoSelectedTerminal: autoSelectedTerminal,
+  );
+
+  static _TenderLineInput restore(_TenderSnapshot snapshot) =>
+      _TenderLineInput(
+          method: snapshot.method,
+          amount: snapshot.amount,
+          moneyAccountId: snapshot.moneyAccountId,
+        )
+        ..cardReceipt = snapshot.cardReceipt
+        ..autoSelectedTerminal = snapshot.autoSelectedTerminal;
+
   void dispose() {
     amountController.dispose();
   }
+}
+
+typedef _TenderSnapshot = ({
+  PaymentMethod method,
+  String amount,
+  int? moneyAccountId,
+  CardPaymentReceipt? cardReceipt,
+  String? autoSelectedTerminal,
+});
+
+/// A swipe-driven correction of the sheet, and how to take it back.
+class _SwipeCorrection {
+  const _SwipeCorrection({
+    required this.rrn,
+    required this.charged,
+    required this.intended,
+    required this.snapshot,
+  });
+
+  final String rrn;
+  final double charged;
+  final double intended;
+  final List<_TenderSnapshot> snapshot;
 }

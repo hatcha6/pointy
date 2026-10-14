@@ -88,6 +88,7 @@ class PayrollLineInline(admin.TabularInline):
     extra = 0
     readonly_fields = (
         "absence_deduction_amount",
+        "not_employed_deduction_amount",
         "gross_amount",
         "additions_amount",
         "deductions_amount",

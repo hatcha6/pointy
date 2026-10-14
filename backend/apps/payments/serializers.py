@@ -361,12 +361,27 @@ class PaymentLedgerSerializer(serializers.ModelSerializer):
             "order_sale_type",
             "customer",
             "customer_name",
+            "card_verification",
         ]
         read_only_fields = fields
+
+    # ``verified`` (a Moamalat transaction proves it), ``pending`` (waiting for
+    # one), or null (not a payment the shop's Moamalat link checks).
+    card_verification = serializers.SerializerMethodField()
 
     def get_customer_name(self, payment):
         customer = payment.order.customer if payment.order_id else None
         return customer.full_name if customer is not None else None
+
+    def get_card_verification(self, payment):
+        from apps.payments.moamalat import matching
+
+        if "moamalat_link" not in self.context:
+            from apps.payments.models import MoamalatLink
+
+            # One read per response, not per row.
+            self.context["moamalat_link"] = MoamalatLink.objects.filter(pk=1).first()
+        return matching.verification_state(payment, self.context["moamalat_link"])
 
 
 class PaymentReplacementSerializer(serializers.Serializer):

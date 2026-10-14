@@ -13,10 +13,11 @@ identified stock was once built and unreachable because every test called the
 service directly.
 """
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -195,12 +196,14 @@ class BatchLineTests(CounterLotCaptureTestCase):
         variant = self.lot_product(
             Product.TrackingMode.BATCH, sku="LOT-BREAD", expiry_required=True
         )
+        # Relative to today: a fixed date would expire the lot and stop the sale.
+        expiry = timezone.localdate() + timedelta(days=5)
         response = self.buy(
             {
                 "variant": variant.pk,
                 "quantity": "20",
                 "unit_cost": "0.35",
-                "expiry_date": "2026-10-12",
+                "expiry_date": expiry.isoformat(),
             }
         )
 
@@ -208,7 +211,7 @@ class BatchLineTests(CounterLotCaptureTestCase):
         lot = StockBatch.objects.get(variant=variant)
         self.assertTrue(lot.code_is_generated)
         self.assertTrue(lot.code.startswith("LOT-PO"))
-        self.assertEqual(lot.expiry_date, date(2026, 10, 12))
+        self.assertEqual(lot.expiry_date, expiry)
         balance = StockBatchBalance.objects.get(batch=lot)
         self.assertEqual(balance.remaining_quantity, Decimal("20"))
         self.assertEqual(balance.incoming_rate, Decimal("0.350000"))

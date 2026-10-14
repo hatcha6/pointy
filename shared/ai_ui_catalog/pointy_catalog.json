@@ -824,6 +824,190 @@
         "code",
         "product"
       ]
+    },
+    "ProductCard": {
+      "description": "One product. Drawn by the app from show_product; never compose it yourself.",
+      "properties": {
+        "productId": {
+          "description": "The product id.",
+          "type": "integer"
+        },
+        "name": {
+          "description": "Product name.",
+          "type": "string"
+        },
+        "price": {
+          "description": "Selling price, in shop money.",
+          "type": "number"
+        },
+        "code": {
+          "description": "Barcode or SKU.",
+          "type": "string"
+        },
+        "category": {
+          "description": "Category names.",
+          "type": "string"
+        },
+        "stock": {
+          "description": "Quantity on hand.",
+          "type": "number"
+        },
+        "soldLast30Days": {
+          "description": "Units sold in 30 days.",
+          "type": "number"
+        },
+        "daysOfCover": {
+          "description": "Days the stock lasts at the 30-day pace.",
+          "type": "integer"
+        },
+        "isService": {
+          "description": "A service or made-to-order item.",
+          "type": "boolean"
+        },
+        "active": {
+          "description": "False when inactive or archived.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "productId",
+        "name"
+      ]
+    },
+    "CustomerCard": {
+      "description": "One customer. Drawn by the app from show_customer; never compose it yourself.",
+      "properties": {
+        "customerId": {
+          "description": "The customer id.",
+          "type": "integer"
+        },
+        "name": {
+          "description": "Full name.",
+          "type": "string"
+        },
+        "phone": {
+          "description": "Phone number.",
+          "type": "string"
+        },
+        "segment": {
+          "description": "RFM segment key.",
+          "type": "string"
+        },
+        "segmentLabel": {
+          "description": "RFM segment, in Arabic.",
+          "type": "string"
+        },
+        "balanceDue": {
+          "description": "What they owe now, shop money.",
+          "type": "number"
+        },
+        "creditLimit": {
+          "description": "Their credit ceiling.",
+          "type": "number"
+        },
+        "lastPurchase": {
+          "description": "Last purchase, YYYY-MM-DD.",
+          "type": "string"
+        },
+        "lifetimeSpend": {
+          "description": "Total they have spent.",
+          "type": "number"
+        },
+        "orderCount": {
+          "description": "How many purchases.",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "customerId",
+        "name"
+      ]
+    },
+    "SalesSummaryCard": {
+      "description": "Sales for one period against the one before it. Drawn by the app from show_sales_summary; never compose it yourself.",
+      "properties": {
+        "periodLabel": {
+          "description": "The period, in Arabic.",
+          "type": "string"
+        },
+        "revenue": {
+          "description": "Revenue, shop money.",
+          "type": "number"
+        },
+        "orders": {
+          "description": "Number of sales.",
+          "type": "integer"
+        },
+        "averageTicket": {
+          "description": "Average sale, shop money.",
+          "type": "number"
+        },
+        "revenueChange": {
+          "description": "Percent change against the previous period.",
+          "type": "number"
+        },
+        "ordersChange": {
+          "description": "Percent change in sales count.",
+          "type": "number"
+        },
+        "profit": {
+          "description": "Profit, reporting roles only.",
+          "type": "number"
+        },
+        "marginPercent": {
+          "description": "Margin percent.",
+          "type": "number"
+        },
+        "trend": {
+          "description": "Revenue per day (or month) across the period.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "value": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "label",
+              "value"
+            ]
+          }
+        },
+        "topProducts": {
+          "description": "Best sellers by revenue.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "productId": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              },
+              "revenue": {
+                "type": "number"
+              },
+              "units": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "name",
+              "revenue"
+            ]
+          }
+        }
+      },
+      "required": [
+        "periodLabel",
+        "revenue",
+        "orders"
+      ]
     }
   }
 }

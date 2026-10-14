@@ -3,6 +3,7 @@ package relay
 import (
 	"math/big"
 	"net/http"
+	"strings"
 	"testing"
 
 	"pointy/relay/internal/control"
@@ -134,5 +135,52 @@ func TestThePurchaseChargesTheAutoPrice(t *testing.T) {
 		purchaseRequest("psn-20", "auto-2", "100.00"))
 	if status != http.StatusConflict {
 		t.Fatalf("a quote below the auto price must be refused: %d %v", status, body)
+	}
+}
+
+// max_cost protects a fixed price (a written one, a dinar card's face); an
+// auto-priced card's price follows the cost, so a supplier price above max_cost
+// does not take it off the shelf.
+func TestMaxCostGuardsOnlyStaticPricedCards(t *testing.T) {
+	const guarded = `{
+  "price_mode": "auto",
+  "categories": [{"key": "gaming", "name": "ألعاب", "sort": 1}],
+  "brands": [{
+    "key": "psn", "name": "بلايستيشن", "category": "gaming", "logo": {},
+    "items": [
+      {"key": "psn-auto", "country": "US", "face_value": "20", "face_currency": "USD", "price": "110.00", "retail_price": "115.00",
+       "supplier": {"key": "bnplus", "card_id": 201, "max_cost": "100.00"}},
+      {"key": "psn-static", "country": "US", "face_value": "20", "face_currency": "USD", "price": "110.00", "retail_price": "115.00",
+       "price_mode": "static", "supplier": {"key": "bnplus", "card_id": 202, "max_cost": "100.00"}},
+      {"key": "lyd-10", "country": "LY", "face_value": "10", "face_currency": "LYD", "price": "10.00", "retail_price": "10.00",
+       "supplier": {"key": "bnplus", "card_id": 203, "max_cost": "10.00"}}
+    ]
+  }]
+}`
+	document, err := vouchers.ParseDocument([]byte(guarded))
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := VoucherConfig{Suppliers: map[string]vouchers.Supplier{vouchers.SupplierBNPlus: newFakeSupplier()}}
+	offers := autoOffers(map[string]string{"201": "104.50", "202": "104.50", "203": "10.20"})
+	settings := vouchers.DefaultSettings()
+
+	auto, _ := vouchers.Find(document, "psn-auto")
+	if reason, _ := config.rankSuppliers(auto, offers, settings).unavailable(); reason != "" {
+		t.Fatalf("an auto-priced card must stay on sale above max_cost: %s", reason)
+	}
+	static, _ := vouchers.Find(document, "psn-static")
+	if reason, _ := config.rankSuppliers(static, offers, settings).unavailable(); !strings.Contains(reason, "above max_cost 100.00") {
+		t.Fatalf("a static card above max_cost must be withheld, got %q", reason)
+	}
+	// A dinar card sells at its face whatever it costs: above max_cost it is a loss.
+	local, _ := vouchers.Find(document, "lyd-10")
+	if reason, _ := config.rankSuppliers(local, offers, settings).unavailable(); !strings.Contains(reason, "above max_cost 10.00") {
+		t.Fatalf("a dinar card costing more than its face must be withheld, got %q", reason)
+	}
+	server := HTTPServer{Vouchers: config}
+	priced := autoItem(t, server.autoPricedDocument(document, offers, settings), "psn-auto")
+	if shop, _ := new(big.Rat).SetString(priced.Price); shop.Cmp(big.NewRat(10450, 100)) <= 0 {
+		t.Fatalf("the auto price %s must sit above the risen cost", priced.Price)
 	}
 }

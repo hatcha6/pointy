@@ -48,6 +48,23 @@ SandboxReply handleBoot(SandboxShop shop, SandboxRequest request) {
       request.on('GET', 'card-terminals/') != null) {
     return (200, page(const []));
   }
+  if (request.on('POST', 'moamalat/watch/') != null ||
+      request.on('GET', 'moamalat/status/') != null) {
+    // The practice shop has no Moamalat link: the card lesson's sheet shows no
+    // live line, exactly as in a shop that never linked one.
+    return (
+      200,
+      {
+        'linked': false,
+        'state': 'unlinked',
+        'at_risk': false,
+        'switched_off': false,
+        'can_manage': false,
+        'watching': false,
+        'transactions': const <Object?>[],
+      },
+    );
+  }
   if (request.on('GET', 'currencies/') != null) {
     return (200, page(const []));
   }

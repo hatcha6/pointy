@@ -47,6 +47,18 @@ type viewContext struct {
 	// rawLogos keeps the supplier's URL: only the snapshot's own fingerprint
 	// is made that way, never anything a shop reads.
 	rawLogos bool
+	// withCost writes the company's cost beside each price: the operator's
+	// directory only, never anything a shop reads.
+	withCost bool
+}
+
+// costOf is the company's cost as the operator's directory shows it, "" in a
+// shop's directory.
+func (vc *viewContext) costOf(p Prices) string {
+	if !vc.withCost || p.CostLYD == nil {
+		return ""
+	}
+	return p.CostLYD.FloatString(3)
 }
 
 // logoFor is the logo a shop is shown for a supplier's logo URL.
@@ -59,8 +71,9 @@ func (vc *viewContext) logoFor(url string) string {
 
 // render makes the directory a shop reads from a snapshot: priced by the
 // settings, flagged from the catalog, ordered popular countries first.
-func (s *snapshot) render(in PricingInput, test, configured bool) *Rendered {
+func (s *snapshot) render(in PricingInput, test, configured, withCost bool) *Rendered {
 	vc := &viewContext{
+		withCost: withCost,
 		settings: in.Settings,
 		priced:   in.Settings.Priced(),
 		flags:    in.Flags,
@@ -200,6 +213,7 @@ func (e *operatorEntry) view(vc *viewContext) (Operator, bool) {
 				continue
 			}
 			amount.UnitPrice, amount.RetailPrice = prices.UnitString(), prices.RetailString()
+			amount.CostLYD = vc.costOf(prices)
 		}
 		view.Amounts = append(view.Amounts, amount)
 	}
@@ -258,6 +272,7 @@ func (b *billerEntry) view(vc *viewContext) (Biller, bool) {
 					continue
 				}
 				entry.UnitPrice, entry.RetailPrice = prices.UnitString(), prices.RetailString()
+				entry.CostLYD = vc.costOf(prices)
 			}
 			view.Plans = append(view.Plans, entry)
 		}
@@ -272,6 +287,7 @@ func (b *billerEntry) view(vc *viewContext) (Biller, bool) {
 				continue
 			}
 			entry.UnitPrice, entry.RetailPrice = prices.UnitString(), prices.RetailString()
+			entry.CostLYD = vc.costOf(prices)
 		}
 		view.Suggested = append(view.Suggested, entry)
 	}

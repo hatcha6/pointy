@@ -290,6 +290,7 @@ class MoneyAccountPosition {
     this.components = const [],
     this.lastCount,
     this.held,
+    this.cardDirect = false,
   });
 
   final MoneyAccount account;
@@ -300,6 +301,11 @@ class MoneyAccountPosition {
   /// A clearing account's held days at a glance — how many, and how late.
   /// Null for every other account, and on a past position.
   final HeldSummary? held;
+
+  /// A bank whose card takings land at once, with no clearing account holding
+  /// them — sent only once the shop holds card money for some bank. A note for
+  /// the owner: paying out the same day is a real setup.
+  final bool cardDirect;
 
   bool get hasBeenCounted => lastCount != null;
 
@@ -332,6 +338,7 @@ class MoneyAccountPosition {
       held: rawHeld is Map
           ? HeldSummary.fromJson(rawHeld.cast<String, Object?>())
           : null,
+      cardDirect: json['card_direct'] == true,
     );
   }
 }

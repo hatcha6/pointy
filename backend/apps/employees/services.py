@@ -131,6 +131,12 @@ def save_payroll_run_with_lines(
     if lines_data is not None:
         for line_data in lines_data:
             adjustments_data = line_data.pop("adjustments", [])
+            if "days_not_employed" not in line_data:
+                # A new hire's first run pays from their hire date unless the
+                # client said otherwise.
+                line_data["days_not_employed"] = line_data[
+                    "employee"
+                ].days_not_employed(payroll_run.period_start, payroll_run.period_end)
             line = PayrollLine.objects.create(payroll_run=payroll_run, **line_data)
             PayrollAdjustment.objects.bulk_create(
                 [
@@ -219,6 +225,7 @@ def draft_monthly_payroll_run(
             employee=line_input["employee"],
             compensation_plan=line_input["plan"],
             units=line_input["units"],
+            days_not_employed=line_input["days_not_employed"],
             description=line_input["description"],
         )
         if line_input["commission_amount"] > Decimal("0.00"):
@@ -300,15 +307,23 @@ def _monthly_payroll_line_inputs(period_start, period_end):
             else Decimal("1.00")
         )
         gross_amount = plan.amount_for_units(units)
+        period_days = (period_end - period_start).days + 1
+        days_not_employed = employee.days_not_employed(period_start, period_end)
+        # The pay for the days they were employed: what an instalment can
+        # come out of.
+        employed_pay = (
+            gross_amount * (period_days - days_not_employed) / period_days
+        ).quantize(MONEY_PLACES)
         loan_deductions = _loan_deduction_inputs(
             employee,
-            available_pay=gross_amount + commission_amount,
+            available_pay=employed_pay + commission_amount,
         )
         line_inputs.append(
             {
                 "employee": employee,
                 "plan": plan,
                 "units": units,
+                "days_not_employed": days_not_employed,
                 "gross_amount": gross_amount,
                 "commission_base": commission_base,
                 "commission_basis": commission_basis,

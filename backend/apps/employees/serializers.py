@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from django.utils import timezone
 from rest_framework import serializers
 
 from apps.balances.opening import OpeningBalanceField
@@ -109,10 +110,21 @@ class CompensationPlanSerializer(serializers.ModelSerializer):
         read_only_fields = [
             "id",
             "employee_name",
-            "effective_from",
             "created_at",
             "updated_at",
         ]
+        # Omitted, a plan starts today. A new hire's first plan is dated from
+        # the day they started, so the month they joined is still paid.
+        extra_kwargs = {"effective_from": {"required": False}}
+
+    def validate_effective_from(self, value):
+        # Saving a plan retires the one before it at once, so a start date
+        # ahead would leave the months until then with no plan at all.
+        if value is not None and value > timezone.localdate():
+            raise serializers.ValidationError(
+                "A salary plan cannot start in the future."
+            )
+        return value
 
     def validate(self, attrs):
         employee = attrs.get("employee", getattr(self.instance, "employee", None))
@@ -704,6 +716,8 @@ class PayrollLineSerializer(serializers.ModelSerializer):
             "absence_days",
             "absence_day_rate",
             "absence_deduction_amount",
+            "days_not_employed",
+            "not_employed_deduction_amount",
             "overtime_hours",
             "overtime_hourly_rate",
             "overtime_multiplier",
@@ -728,6 +742,7 @@ class PayrollLineSerializer(serializers.ModelSerializer):
             "gross_amount",
             "absence_day_rate",
             "absence_deduction_amount",
+            "not_employed_deduction_amount",
             "overtime_hourly_rate",
             "overtime_multiplier",
             "overtime_amount",
@@ -759,6 +774,7 @@ class PayrollLineAdjustmentUpdateSerializer(serializers.ModelSerializer):
         model = PayrollLine
         fields = [
             "absence_days",
+            "days_not_employed",
             "overtime_hours",
             "raise_amount",
             "manual_addition_amount",
@@ -774,6 +790,25 @@ class PayrollLineAdjustmentUpdateSerializer(serializers.ModelSerializer):
             )
         return value
 
+    def validate(self, attrs):
+        period_days = self.instance.period_days if self.instance is not None else None
+        absence = attrs.get("absence_days", getattr(self.instance, "absence_days", 0))
+        not_employed = attrs.get(
+            "days_not_employed", getattr(self.instance, "days_not_employed", 0)
+        )
+        if period_days and Decimal(absence or 0) + Decimal(not_employed or 0) > Decimal(
+            period_days
+        ):
+            raise serializers.ValidationError(
+                {
+                    "days_not_employed": (
+                        "Absence days and days not employed cannot exceed "
+                        "the payroll period."
+                    )
+                }
+            )
+        return attrs
+
     def update(self, instance, validated_data):
         for field, value in validated_data.items():
             setattr(instance, field, value)
@@ -785,6 +820,8 @@ class PayrollLineAdjustmentUpdateSerializer(serializers.ModelSerializer):
                 "gross_amount",
                 "absence_days",
                 "absence_deduction_amount",
+                "days_not_employed",
+                "not_employed_deduction_amount",
                 "overtime_hours",
                 "overtime_multiplier",
                 "overtime_amount",

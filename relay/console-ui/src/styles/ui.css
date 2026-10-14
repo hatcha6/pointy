@@ -403,6 +403,25 @@ a.kpi-link:hover {
   transform: translateY(-1px);
 }
 
+/* A KPI that filters the list below it when tapped. */
+button.kpi {
+  font: inherit;
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s;
+}
+
+button.kpi:hover {
+  border-color: var(--line-strong);
+  transform: translateY(-1px);
+}
+
+button.kpi.selected {
+  border-color: var(--success);
+  box-shadow: inset 0 0 0 1px var(--success);
+}
+
 /* ---------- definition list ---------- */
 
 .facts {

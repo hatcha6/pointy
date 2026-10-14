@@ -55,6 +55,7 @@ class PaymentViewSet(
         "order",
         "order__customer",
         "created_by",
+        "moamalat_transaction",
     )
     # Dict form so ``paid_at`` also exposes range/day lookups (mirrors
     # OrderViewSet) — lets the Payments hub filter by date window and party.

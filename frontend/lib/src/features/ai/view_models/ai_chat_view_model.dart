@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart';
 import '../../../core/result.dart';
 import '../../../data/models/ai_chat.dart';
 import '../../../data/repositories/ai_chat_repository.dart';
+import '../../../data/models/ai_memory.dart';
+import 'ai_memory_view_model.dart';
 import '../ai_attachment_picker.dart';
 import '../ui/ai_surface_action.dart';
 import '../ui/ai_surface_host.dart';
@@ -55,6 +57,11 @@ class AiChatViewModel extends ChangeNotifier {
   List<AiConversationSummary> get conversations => _conversations;
   int? get conversationId => _conversationId;
   AiUsage? get usage => _usage;
+
+  /// Opening suggestions the assistant wrote for this shop; empty until they
+  /// arrive (or when it had nothing), in which case the screen keeps its own.
+  List<AiSuggestion> _suggestions = const [];
+  List<AiSuggestion> get suggestions => _suggestions;
   bool get isStreaming => _isStreaming;
   bool get isLoadingHistory => _isLoadingHistory;
   bool get hasMessages => _messages.isNotEmpty;
@@ -132,6 +139,14 @@ class AiChatViewModel extends ChangeNotifier {
     }
     _isLoadingHistory = false;
     notifyListeners();
+  }
+
+  Future<void> loadSuggestions() async {
+    final result = await _repository.loadSuggestions();
+    if (result case Ok(:final value) when value.isNotEmpty) {
+      _suggestions = value;
+      notifyListeners();
+    }
   }
 
   Future<void> loadUsage() async {
@@ -384,6 +399,9 @@ class AiChatViewModel extends ChangeNotifier {
   /// Answer the pending ask_user question and resume the agentic turn: a fresh
   /// assistant bubble streams the model's continuation. [declined] resumes with a
   /// skip instead of answers, so a flow never deadlocks on an ignored question.
+  /// A view model for the memory screen, sharing this chat's repository.
+  AiMemoryViewModel createMemoryViewModel() => AiMemoryViewModel(_repository);
+
   Future<void> submitAnswer(
     List<AiAnswer> answers, {
     bool declined = false,
@@ -403,11 +421,15 @@ class AiChatViewModel extends ChangeNotifier {
     _errorKind = null;
     pending.resolveQuestion(declined ? const [] : answers);
     _pendingMessage = null;
+    // The task checklist moves down with the work: the resumed turn carries
+    // on from it, and the paused bubble keeps only its question recap.
     final assistant = AiMessage(
       role: AiMessageRole.assistant,
       content: '',
       isStreaming: true,
+      plan: pending.plan,
     );
+    pending.updatePlan(const []);
     _messages.add(assistant);
     _isStreaming = true;
     notifyListeners();
@@ -491,7 +513,10 @@ class AiChatViewModel extends ChangeNotifier {
             ),
           );
           _pendingMessage = assistant;
+        case AiChatPlan(:final steps):
+          assistant.updatePlan(steps);
         case AiChatToolActivity(
+          :final id,
           :final name,
           :final resource,
           :final label,
@@ -503,6 +528,7 @@ class AiChatViewModel extends ChangeNotifier {
           if (event.isStart) {
             assistant.startToolRun(
               AiToolRun(
+                id: id,
                 name: name,
                 resource: resource,
                 label: label,
@@ -511,6 +537,7 @@ class AiChatViewModel extends ChangeNotifier {
             );
           } else {
             assistant.finishToolRun(
+              id: id,
               name: name,
               resource: resource,
               ok: ok,
@@ -530,6 +557,7 @@ class AiChatViewModel extends ChangeNotifier {
     if (assistant.content.isEmpty &&
         assistant.reasoning.isEmpty &&
         assistant.toolRuns.isEmpty &&
+        assistant.plan.isEmpty &&
         assistant.pendingQuestion == null) {
       _messages.remove(assistant);
     }

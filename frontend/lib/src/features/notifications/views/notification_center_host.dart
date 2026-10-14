@@ -13,9 +13,14 @@ class NotificationCenterHost extends StatefulWidget {
     required this.child,
     this.onOpenAlert,
     this.onSecondaryAlertAction,
+    this.canManageMoamalatLink = false,
   });
 
   final NotificationCenterViewModel viewModel;
+
+  /// Whether the Moamalat alerts offer the re-link (supervisors) or only say
+  /// what the dead link means at the till (cashiers).
+  final bool canManageMoamalatLink;
   final Widget child;
   final Future<void> Function(BuildContext context, BusinessAlert alert)?
   onOpenAlert;
@@ -52,6 +57,7 @@ class _NotificationCenterHostState extends State<NotificationCenterHost> {
           viewModel: widget.viewModel,
           onOpenAlert: widget.onOpenAlert,
           onSecondaryAlertAction: widget.onSecondaryAlertAction,
+          canManageMoamalatLink: widget.canManageMoamalatLink,
         );
       },
       child: widget.child,

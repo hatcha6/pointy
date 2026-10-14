@@ -127,6 +127,10 @@ enum AppCapability {
   /// `sales.view_order`.
   sendSms,
   manageIntegrations,
+
+  /// Links the shop's Moamalat merchant account (username, password, OTP) for
+  /// live card verification, and unlinks it. A supervisor's by role.
+  manageMoamalatLink,
   useIntegrations,
   recordIntegrationTopUp,
 
@@ -187,6 +191,7 @@ enum AppCapability {
   recordCardSettlement,
   cancelCardSettlement,
   viewExchangeRates,
+  recordExchangeRates,
   viewAttendance,
   manageAttendance,
   viewOperations,
@@ -1014,6 +1019,12 @@ class AuthorizationCapabilities {
       ])) {
         capabilities.add(AppCapability.manageIntegrations);
       }
+      if (_hasAny(user, const [
+        'manage_moamalat_link',
+        'payments.manage_moamalat_link',
+      ])) {
+        capabilities.add(AppCapability.manageMoamalatLink);
+      }
       // Selling a top-up is till work, so a cashier has it. Whether the button
       // appears at all is a separate question, answered by whether the shop
       // has actually connected a provider (ShopSettings.hasIntegrations).
@@ -1332,6 +1343,12 @@ class AuthorizationCapabilities {
       if (_hasAny(user, const ['view_exchangerate', 'fx.view_exchangerate'])) {
         capabilities.add(AppCapability.viewExchangeRates);
       }
+      // The full rates page is a workbench — sync, typed rates, repricing —
+      // so it opens for the people who may write one, not for a till that
+      // reads rates only to convert an amount for a customer.
+      if (_hasAny(user, const ['add_exchangerate', 'fx.add_exchangerate'])) {
+        capabilities.add(AppCapability.recordExchangeRates);
+      }
       if (_hasAny(user, const [
         'add_expense',
         'change_expense',
@@ -1435,6 +1452,7 @@ class AuthorizationCapabilities {
 
   bool get canViewDashboard => allows(AppCapability.viewDashboard);
   bool get canViewExchangeRates => allows(AppCapability.viewExchangeRates);
+  bool get canRecordExchangeRates => allows(AppCapability.recordExchangeRates);
   bool get canViewSalesDashboard => allows(AppCapability.viewSalesDashboard);
   bool get canViewPaymentDashboard =>
       allows(AppCapability.viewPaymentDashboard);
@@ -1547,6 +1565,7 @@ class AuthorizationCapabilities {
   bool get canManageMessaging => allows(AppCapability.manageMessaging);
   bool get canSendSms => allows(AppCapability.sendSms);
   bool get canManageIntegrations => allows(AppCapability.manageIntegrations);
+  bool get canManageMoamalatLink => allows(AppCapability.manageMoamalatLink);
   bool get canUseIntegrations => allows(AppCapability.useIntegrations);
   bool get canRecordIntegrationTopUp =>
       allows(AppCapability.recordIntegrationTopUp);

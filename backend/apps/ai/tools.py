@@ -1521,6 +1521,11 @@ WRITE_TOOL_NAMES = frozenset(
         "record_customer_payment",
         "convert_quotation",
         "record_supplier_payment",
+        # Memory writes: they change what every later turn starts from, so they
+        # show as persistent action chips like any other write.
+        "remember",
+        "update_memory",
+        "forget_memory",
     }
 )
 
@@ -1808,7 +1813,7 @@ def create_sale(
     Because a sale is irreversible, this is two-step: with ``confirm`` false (the
     default) it only PREVIEWS — returning exact subtotal/discount/total and the
     auto-applied discounts WITHOUT creating anything, so the model can show the
-    numbers and confirm with the user (via ask_user). With ``confirm`` true it
+    numbers. With ``confirm`` true (held behind the approval card, see approvals.py) it
     commits via the checkout action, which requires an open register session for
     the user (a clear error is returned otherwise)."""
     from apps.sales.views import OrderViewSet
@@ -1844,8 +1849,8 @@ def create_sale(
             "needs_confirmation": True,
             "preview": result["data"],
             "message": (
-                "هذه معاينة فقط ولم يُنشأ بيع. اعرض الإجمالي والخصومات للمستخدم وأكّد عبر "
-                "ask_user، ثم استدعِ create_sale مرة أخرى مع confirm=true لإتمام البيع."
+                "هذه معاينة فقط ولم يُنشأ بيع. لإتمامه استدعِ create_sale مرة أخرى مع "
+                "confirm=true — سيعرض التطبيق على المستخدم بطاقة موافقة بهذه الأرقام."
             ),
         }
 
@@ -1970,8 +1975,8 @@ def record_customer_payment(
                 "payment_status": data.get("payment_status"),
             },
             "message": (
-                "هذه معاينة فقط. اعرض الرصيد المستحق وأكّد المبلغ مع المستخدم عبر "
-                "ask_user، ثم أعد الاستدعاء مع confirm=true لتسجيل الدفعة."
+                "هذه معاينة فقط. لتسجيل الدفعة أعد الاستدعاء مع confirm=true — سيعرض "
+                "التطبيق على المستخدم بطاقة موافقة بالمبلغ."
             ),
         }
     try:
@@ -2027,8 +2032,8 @@ def convert_quotation(
                 "sale_type": data.get("sale_type"),
             },
             "message": (
-                "هذه معاينة فقط. أكّد التحويل إلى بيع مع المستخدم عبر ask_user ثم أعد "
-                "الاستدعاء مع confirm=true. التحويل إلى بيع عادي (standard) يتطلّب سداد "
+                "هذه معاينة فقط. للتحويل أعد الاستدعاء مع confirm=true (يعرض التطبيق بطاقة "
+                "موافقة). التحويل إلى بيع عادي (standard) يتطلّب سداد "
                 "الإجمالي كاملًا عبر amount_received."
             ),
         }
@@ -2085,8 +2090,8 @@ def record_supplier_payment(
             "needs_confirmation": True,
             "payment": body,
             "message": (
-                "هذه معاينة فقط. أكّد دفع المورّد مع المستخدم عبر ask_user ثم أعد "
-                "الاستدعاء مع confirm=true."
+                "هذه معاينة فقط. لتسجيل الدفعة أعد الاستدعاء مع confirm=true — يعرض "
+                "التطبيق على المستخدم بطاقة موافقة بالمبلغ."
             ),
         }
     try:
@@ -2503,6 +2508,12 @@ _TOOL_LABELS = {
     "suggest_sale_price": "اقتراح سعر",
     "lookup_stock_unit": "بحث عن جهاز",
     "stock_unit_ageing": "أعمار الأجهزة",
+    "show_product": "بطاقة المنتج",
+    "show_customer": "بطاقة العميل",
+    "show_sales_summary": "ملخّص المبيعات",
+    "remember": "حفظ في الذاكرة",
+    "update_memory": "تحديث الذاكرة",
+    "forget_memory": "حذف من الذاكرة",
     ASK_USER_TOOL_NAME: "بانتظار ردك",
 }
 
@@ -2987,8 +2998,8 @@ def action_tool_definitions():
                     "سجّل عملية بيع كاملة عبر مسار الدفع الحقيقي: تُطبَّق الخصومات المؤهَّلة "
                     "تلقائيًا، ويُخصَم المخزون، ويُسجَّل الدفع والإيصال. عملية غير قابلة للتراجع، "
                     "لذلك على خطوتين: استدعِها أولًا بـ confirm=false لتُرجع معاينة (الإجمالي "
-                    "والخصومات المطبَّقة) دون إنشاء، اعرض الأرقام وأكّد مع المستخدم عبر ask_user، "
-                    "ثم استدعِها مجددًا بـ confirm=true لإتمام البيع. يتطلّب الإتمام وردية صندوق مفتوحة."
+                    "والخصومات المطبَّقة) دون إنشاء، ثم استدعِها بـ confirm=true لإتمام البيع — "
+                    "يعرض التطبيق على المستخدم بطاقة موافقة ولا يُنفَّذ البيع إلا بموافقته. يتطلّب الإتمام وردية صندوق مفتوحة."
                 ),
                 "parameters": {
                     "type": "object",
@@ -3077,8 +3088,8 @@ def action_tool_definitions():
                 "name": "record_customer_payment",
                 "description": (
                     "سجّل دفعة على رصيد فاتورة آجلة (دين) لعميل. على خطوتين: confirm=false "
-                    "يُرجع الرصيد المستحق للمعاينة، ثم بعد التأكيد عبر ask_user استدعِها بـ "
-                    "confirm=true. لا يمكن تجاوز الرصيد، وتُسوّى الفاتورة تلقائيًا عند اكتمال السداد."
+                    "يُرجع الرصيد المستحق للمعاينة، ثم استدعِها بـ confirm=true (تحرسه بطاقة "
+                    "موافقة يعرضها التطبيق). لا يمكن تجاوز الرصيد، وتُسوّى الفاتورة تلقائيًا عند اكتمال السداد."
                 ),
                 "parameters": {
                     "type": "object",
@@ -3510,7 +3521,14 @@ def render_ui_tool_definition():
     }
 
 
-def tools_definitions(*, supports_ask_user=False, supports_actions=False, supports_ui=False):
+def tools_definitions(
+    *,
+    supports_ask_user=False,
+    supports_actions=False,
+    supports_ui=False,
+    supports_plan=False,
+    supports_memory=False,
+):
     """The OpenAI tool/function-calling array advertised to the model.
 
     ``ask_user`` and the create/edit action tools are each appended only when the
@@ -3867,8 +3885,19 @@ def tools_definitions(*, supports_ask_user=False, supports_actions=False, suppor
         definitions.extend(action_tool_definitions())
     if supports_ask_user:
         definitions.append(ask_user_tool_definition())
+    if supports_plan:
+        from .plan_tool import plan_tool_definition
+
+        definitions.append(plan_tool_definition())
+    if supports_memory:
+        from .memory import memory_tool_definitions
+
+        definitions.extend(memory_tool_definitions())
     if supports_ui and catalog_available():
+        from .ui_pos_cards import pos_card_tool_definitions
+
         definitions.append(render_ui_tool_definition())
+        definitions.extend(pos_card_tool_definitions())
     if supports_actions and supports_ui:
         # Reading an invoice both writes data and needs the review card, so it is
         # offered only to a client that can do both.

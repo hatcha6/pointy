@@ -12,12 +12,16 @@ import { PageHeader } from "../../components/PageHeader";
 import { ConfigList, testOrLive, yesNo } from "../../components/ConfigList";
 import { useAction } from "../../components/guarded";
 import { useToast } from "../../components/toast";
+import { ProfitCell } from "../../components/profit";
+import { splitOf } from "../../lib/vouchers";
 
-type Amount = { amount: string; receive: string; receive_currency: string; unit_price?: string; retail_price?: string };
-type Operator = { id: number; name: string; name_en: string; mode: string; amount_currency: string; receive_currency: string; approximate: boolean; min?: string; max?: string; amounts: Amount[] };
-type Plan = { id: number; amount: string; description: string; description_en: string; unit_price?: string; retail_price?: string };
-type Biller = { id: number; name: string; name_en: string; type: string; service: string; mode: string; requires_invoice: boolean; amount_currency: string; min?: string; max?: string; plans?: Plan[] };
-type Country = { code: string; name: string; name_en: string; dial: string; currency: string; currency_name: string; popular: boolean; airtime?: Operator[]; bills?: Biller[] };
+/** cost_lyd is the company's cost: the operator's directory carries it, a shop's never does. */
+export type Amount = { amount: string; receive: string; receive_currency: string; unit_price?: string; retail_price?: string; cost_lyd?: string };
+export type Operator = { id: number; name: string; name_en: string; mode: string; amount_currency: string; receive_currency: string; approximate: boolean; min?: string; max?: string; amounts: Amount[] };
+export type Plan = { id: number; amount: string; description: string; description_en: string; unit_price?: string; retail_price?: string; cost_lyd?: string };
+export type Suggestion = { amount: string; unit_price?: string; retail_price?: string; cost_lyd?: string };
+export type Biller = { id: number; name: string; name_en: string; type: string; service: string; mode: string; requires_invoice: boolean; amount_currency: string; min?: string; max?: string; plans?: Plan[]; suggested?: Suggestion[] };
+export type Country = { code: string; name: string; name_en: string; dial: string; currency: string; currency_name: string; popular: boolean; airtime?: Operator[]; bills?: Biller[] };
 /** A country as the relay sends it: operators and billers nested, dial codes a list. */
 type WireCountry = Omit<Country, "dial" | "popular" | "airtime" | "bills"> & {
   dial?: string[] | null;
@@ -71,7 +75,7 @@ export function Services() {
   );
 }
 
-function useDirectory() {
+export function useDirectory() {
   return useQuery({
     queryKey: ["services", "directory"],
     queryFn: () =>
@@ -184,8 +188,11 @@ function CountryCard({ country, currency, onQuote }: { country: Country; currenc
                 rowKey={(a) => a.amount}
                 columns={[
                   { key: "amount", header: "المبلغ", mobile: "title", cell: (a) => <span className="num">{a.amount} {op.amount_currency}</span> },
-                  { key: "shop", header: "يدفع المتجر", align: "end", mobile: "trailing", cell: (a) => (a.unit_price ? <Money value={a.unit_price} currency={currency === "LYD" ? undefined : currency} /> : "—") },
                   { key: "receive", header: "يستلم", cell: (a) => <span className="num">{a.receive} {a.receive_currency}</span> },
+                  { key: "cost", header: "تكلفتنا", align: "end", cell: (a) => (a.cost_lyd ? <Money value={Number(a.cost_lyd).toFixed(2)} /> : "—") },
+                  { key: "ours", header: "ربحنا", align: "end", cell: (a) => (a.unit_price ? <ProfitCell value={splitOf(a.cost_lyd, a.unit_price, a.retail_price ?? a.unit_price).company} of={Number(a.cost_lyd)} /> : "—") },
+                  { key: "shop", header: "يدفع المتجر", align: "end", mobile: "trailing", cell: (a) => (a.unit_price ? <Money value={a.unit_price} currency={currency === "LYD" ? undefined : currency} /> : "—") },
+                  { key: "theirs", header: "ربح المتجر", align: "end", cell: (a) => (a.unit_price && a.retail_price ? <ProfitCell value={splitOf(a.cost_lyd, a.unit_price, a.retail_price).shop} of={Number(a.unit_price)} /> : "—") },
                   { key: "retail", header: "للزبون", align: "end", cell: (a) => (a.retail_price ? <Money value={a.retail_price} /> : "—") },
                   {
                     key: "q",
@@ -321,6 +328,12 @@ function QuoteTab({ preset }: { preset: QuoteInput | null }) {
               <dt>ربح الشركة</dt>
               <dd className={Number(answer.quote.unit_price) - Number(answer.cost_lyd) < 0 ? "negative" : "positive"}>
                 {money((Number(answer.quote.unit_price) - Number(answer.cost_lyd)).toFixed(3))}
+              </dd>
+            </div>
+            <div className="fact">
+              <dt>ربح المتجر</dt>
+              <dd className={Number(answer.quote.retail_price) - Number(answer.quote.unit_price) < 0 ? "negative" : "positive"}>
+                {money((Number(answer.quote.retail_price) - Number(answer.quote.unit_price)).toFixed(2))}
               </dd>
             </div>
             <div className="fact">

@@ -722,7 +722,17 @@ MoneyPosition _clearingPosition() {
   final net = held.fold<int>(0, (sum, day) => sum + day.netCents) / 100;
   return MoneyPosition(
     accounts: [
-      ...base.accounts,
+      // The second bank's card takings land at once: nothing holds them.
+      for (final entry in base.accounts)
+        entry.account.id == 3
+            ? MoneyAccountPosition(
+                account: entry.account,
+                expectedBalance: entry.expectedBalance,
+                components: entry.components,
+                lastCount: entry.lastCount,
+                cardDirect: true,
+              )
+            : entry,
       MoneyAccountPosition(
         account: MoneyAccount(
           id: _clearingId,

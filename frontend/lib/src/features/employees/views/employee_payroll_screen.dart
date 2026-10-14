@@ -19,13 +19,14 @@ import 'employee_account_screen.dart';
 import 'employee_loan_review_actions.dart';
 import 'employee_loan_row.dart';
 import 'employee_loan_sheet.dart';
-import 'payroll_forms.dart';
+import 'employee_sheets.dart';
 import 'payroll_labels.dart';
+import 'payroll_month_card.dart';
 import 'payroll_run_details_screen.dart';
 
 /// Employees & payroll workspace. The payroll tab is task-first: a single
-/// "this month" card walks the owner through prepare → approve → pay, with
-/// pending loan requests surfaced underneath and history below.
+/// month card ([PayrollMonthCard]) walks the owner through prepare → approve
+/// → pay, with pending loan requests surfaced underneath and history below.
 class EmployeePayrollScreen extends StatelessWidget {
   const EmployeePayrollScreen({
     super.key,
@@ -150,6 +151,7 @@ class _EmployeePayrollBody extends StatelessWidget {
                     _PayrollHomeTab(
                       viewModel: viewModel,
                       attendanceViewModel: attendanceViewModel,
+                      userRepository: userRepository,
                       capabilities: capabilities,
                     ),
                     _EmployeesTab(
@@ -179,11 +181,13 @@ class _PayrollHomeTab extends StatelessWidget {
   const _PayrollHomeTab({
     required this.viewModel,
     required this.attendanceViewModel,
+    required this.userRepository,
     required this.capabilities,
   });
 
   final EmployeePayrollViewModel viewModel;
   final AttendanceViewModel attendanceViewModel;
+  final UserRepository userRepository;
   final AuthorizationCapabilities capabilities;
 
   @override
@@ -196,10 +200,22 @@ class _PayrollHomeTab extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SizedBox(height: spacing.xs),
-        _MonthWorkflowCard(
+        PayrollMonthCard(
           viewModel: viewModel,
-          attendanceViewModel: attendanceViewModel,
           capabilities: capabilities,
+          onOpenRun: (run) => _openRunDetails(context, run),
+          onAddEmployee: () => showAddEmployeeFlow(
+            context,
+            viewModel: viewModel,
+            userRepository: userRepository,
+            allowOpeningBalance: capabilities.canManageEmployeeBalances,
+          ),
+          onSetSalary: (employee) => showCompensationPlanSheet(
+            context,
+            viewModel: viewModel,
+            employee: employee,
+          ),
+          onShowEmployees: () => DefaultTabController.of(context).animateTo(1),
         ),
         if (pendingLoans.isNotEmpty && capabilities.canManageEmployeeLoans) ...[
           SizedBox(height: spacing.md),
@@ -210,14 +226,19 @@ class _PayrollHomeTab extends StatelessWidget {
           title: l10n.payrollHistoryTitle,
           leading: const Icon(Icons.history_outlined),
           actions: [
+            // The exception path — a leaver, a late hire, another period —
+            // so it sits with the history, not on the month's task card.
             if (capabilities.canManagePayroll)
-              OutlinedButton.icon(
+              TextButton.icon(
                 key: const ValueKey('payroll_custom_run_button'),
                 onPressed: viewModel.isSaving
                     ? null
-                    : () => _showCreatePayrollSheet(context),
-                icon: const Icon(Icons.add_outlined),
-                label: Text(l10n.customPayrollRunButton),
+                    : () => showCustomPayrollRunSheet(
+                        context,
+                        viewModel: viewModel,
+                      ),
+                icon: const Icon(Icons.tune_outlined, size: 18),
+                label: Text(l10n.payrollOtherRunButton),
               ),
           ],
         ),
@@ -279,17 +300,6 @@ class _PayrollHomeTab extends StatelessWidget {
     );
   }
 
-  Future<void> _showCreatePayrollSheet(BuildContext context) {
-    return showAdaptiveFormSurface<void>(
-      context: context,
-      size: AdaptiveModalSize.standard,
-      builder: (sheetContext) => CreatePayrollRunForm(
-        viewModel: viewModel,
-        onCreated: () => Navigator.of(sheetContext).pop(),
-      ),
-    );
-  }
-
   void _openRunDetails(BuildContext context, PayrollRun run) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -299,341 +309,6 @@ class _PayrollHomeTab extends StatelessWidget {
           capabilities: capabilities,
           initialRun: run,
         ),
-      ),
-    );
-  }
-}
-
-class _MonthWorkflowCard extends StatelessWidget {
-  const _MonthWorkflowCard({
-    required this.viewModel,
-    required this.attendanceViewModel,
-    required this.capabilities,
-  });
-
-  final EmployeePayrollViewModel viewModel;
-  final AttendanceViewModel attendanceViewModel;
-  final AuthorizationCapabilities capabilities;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final spacing = AdaptiveSpacing.of(context);
-    final theme = Theme.of(context);
-    final colors = context.pointyColors;
-    final run = viewModel.currentMonthRun;
-    final monthLabel = payrollMonthLabel(
-      context,
-      viewModel.currentMonthPeriod.start,
-    );
-    final needsOnboarding =
-        run == null &&
-        viewModel.employees.isEmpty &&
-        !viewModel.isLoadingEmployees &&
-        !viewModel.hasEmployeeError;
-
-    return Card(
-      key: const ValueKey('payroll_month_workflow_card'),
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: spacing.compactPadding,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.calendar_month_outlined,
-                  color: colors.primaryStrong,
-                ),
-                SizedBox(width: spacing.sm),
-                Expanded(
-                  child: Text(
-                    l10n.payrollMonthCardTitle(monthLabel),
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-                if (run != null)
-                  PointyStatusPill(
-                    label: payrollStatusLabel(l10n, run.status),
-                    icon: payrollStatusIcon(run.status),
-                    color: payrollStatusColor(context, run.status),
-                  ),
-              ],
-            ),
-            SizedBox(height: spacing.md),
-            _WorkflowStepper(status: run?.status),
-            SizedBox(height: spacing.md),
-            if (run != null) ...[
-              Row(
-                children: [
-                  Expanded(
-                    child: _WorkflowMetric(
-                      label: l10n.payrollRunNetTotalLabel,
-                      value: formatMoney(run.netTotal),
-                    ),
-                  ),
-                  SizedBox(width: spacing.sm),
-                  Expanded(
-                    child: _WorkflowMetric(
-                      label: l10n.payrollRunEmployeesSection,
-                      value: l10n.payrollLineCount(run.lineCount),
-                    ),
-                  ),
-                ],
-              ),
-              SizedBox(height: spacing.md),
-            ],
-            Text(
-              _statusMessage(l10n, run, needsOnboarding),
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: run?.status == PayrollStatus.paid
-                    ? colors.success
-                    : colors.mutedInk,
-                fontWeight: run?.status == PayrollStatus.paid
-                    ? FontWeight.w700
-                    : null,
-              ),
-            ),
-            SizedBox(height: spacing.sm),
-            if (run == null && viewModel.monthDraftFoundNoPlans) ...[
-              PointyInlineMessage.warning(
-                key: const ValueKey('payroll_month_no_plans_message'),
-                message: l10n.payrollMonthNoPlansMessage(monthLabel),
-              ),
-              SizedBox(height: spacing.sm),
-            ],
-            _buildAction(context, l10n, run, needsOnboarding),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _statusMessage(
-    AppLocalizations l10n,
-    PayrollRun? run,
-    bool needsOnboarding,
-  ) {
-    if (needsOnboarding) {
-      return l10n.payrollMonthOnboardingMessage;
-    }
-    return switch (run?.status) {
-      null => l10n.payrollMonthNoRunMessage,
-      PayrollStatus.draft => l10n.payrollMonthDraftMessage,
-      PayrollStatus.approved => l10n.payrollMonthApprovedMessage,
-      PayrollStatus.paid => l10n.payrollMonthPaidMessage,
-      PayrollStatus.voided => l10n.payrollMonthNoRunMessage,
-    };
-  }
-
-  Widget _buildAction(
-    BuildContext context,
-    AppLocalizations l10n,
-    PayrollRun? run,
-    bool needsOnboarding,
-  ) {
-    if (needsOnboarding) {
-      return FilledButton.tonalIcon(
-        onPressed: capabilities.canManageEmployees
-            ? () => DefaultTabController.of(context).animateTo(1)
-            : null,
-        icon: const Icon(Icons.person_add_alt_1),
-        label: Text(l10n.addEmployeeButton),
-      );
-    }
-
-    if (run == null) {
-      return FilledButton.icon(
-        key: const ValueKey('payroll_prepare_month_button'),
-        onPressed: capabilities.canManagePayroll && !viewModel.isSaving
-            ? () => _prepareMonth(context)
-            : null,
-        icon: const Icon(Icons.play_circle_outline),
-        label: Text(l10n.preparePayrollMonthButton),
-      );
-    }
-
-    return switch (run.status) {
-      PayrollStatus.draft => FilledButton.icon(
-        key: const ValueKey('payroll_review_approve_button'),
-        onPressed: () => _openRunDetails(context, run),
-        icon: const Icon(Icons.fact_check_outlined),
-        label: Text(l10n.reviewAndApprovePayrollButton),
-      ),
-      PayrollStatus.approved => FilledButton.icon(
-        key: const ValueKey('payroll_record_payment_button'),
-        onPressed: () => _openRunDetails(context, run),
-        icon: const Icon(Icons.price_check_outlined),
-        label: Text(l10n.recordPayrollPaymentButton),
-      ),
-      _ => FilledButton.tonalIcon(
-        key: const ValueKey('payroll_view_run_button'),
-        onPressed: () => _openRunDetails(context, run),
-        icon: const Icon(Icons.visibility_outlined),
-        label: Text(l10n.viewPayrollRunButton),
-      ),
-    };
-  }
-
-  Future<void> _prepareMonth(BuildContext context) async {
-    final run = await viewModel.draftMonthlyPayrollRun();
-    if (run != null && context.mounted) {
-      _openRunDetails(context, run);
-    }
-  }
-
-  void _openRunDetails(BuildContext context, PayrollRun run) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => PayrollRunDetailsScreen(
-          viewModel: viewModel,
-          attendanceViewModel: attendanceViewModel,
-          capabilities: capabilities,
-          initialRun: run,
-        ),
-      ),
-    );
-  }
-}
-
-class _WorkflowMetric extends StatelessWidget {
-  const _WorkflowMetric({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = context.pointyColors;
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.subtleFill,
-        borderRadius: BorderRadius.circular(PointyRadii.chip),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: colors.mutedInk,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              value,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _WorkflowStepper extends StatelessWidget {
-  const _WorkflowStepper({required this.status});
-
-  /// Null when this month has no run yet (nothing done, first step active).
-  final PayrollStatus? status;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final completedSteps = switch (status) {
-      null || PayrollStatus.voided => 0,
-      PayrollStatus.draft => 1,
-      PayrollStatus.approved => 2,
-      PayrollStatus.paid => 3,
-    };
-    final labels = [
-      l10n.payrollMonthStepPrepare,
-      l10n.payrollMonthStepApprove,
-      l10n.payrollMonthStepPay,
-    ];
-
-    return Row(
-      children: [
-        for (var index = 0; index < labels.length; index++) ...[
-          if (index > 0)
-            Expanded(
-              child: Divider(
-                thickness: 2,
-                color: index < completedSteps + 1
-                    ? context.pointyColors.success
-                    : context.pointyColors.line,
-              ),
-            ),
-          _WorkflowStep(
-            label: labels[index],
-            isDone: index < completedSteps,
-            isActive: index == completedSteps,
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-class _WorkflowStep extends StatelessWidget {
-  const _WorkflowStep({
-    required this.label,
-    required this.isDone,
-    required this.isActive,
-  });
-
-  final String label;
-  final bool isDone;
-  final bool isActive;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.pointyColors;
-    final theme = Theme.of(context);
-    final color = isDone
-        ? colors.success
-        : isActive
-        ? colors.primaryStrong
-        : colors.mutedInk;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 6),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          DecoratedBox(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: isDone ? colors.success : Colors.transparent,
-              border: Border.all(color: color, width: 2),
-            ),
-            child: SizedBox.square(
-              dimension: 26,
-              child: Icon(
-                isDone ? Icons.check : Icons.circle,
-                size: isDone ? 16 : 8,
-                color: isDone ? colors.surface : color,
-              ),
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: color,
-              fontWeight: isActive || isDone ? FontWeight.w800 : null,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -796,7 +471,13 @@ class _EmployeesTab extends StatelessWidget {
               key: const ValueKey('add_employee_button'),
               onPressed: viewModel.isSaving
                   ? null
-                  : () => _showCreateEmployeeSheet(context),
+                  : () => showAddEmployeeFlow(
+                      context,
+                      viewModel: viewModel,
+                      userRepository: userRepository,
+                      allowOpeningBalance:
+                          capabilities.canManageEmployeeBalances,
+                    ),
               icon: const Icon(Icons.person_add_alt_1),
               label: Text(l10n.addEmployeeButton),
             ),
@@ -885,7 +566,11 @@ class _EmployeesTab extends StatelessWidget {
                       key: ValueKey('employee_plan_button_${employee.id}'),
                       onPressed: viewModel.isSaving
                           ? null
-                          : () => _showCompensationSheet(context, employee),
+                          : () => showCompensationPlanSheet(
+                              context,
+                              viewModel: viewModel,
+                              employee: employee,
+                            ),
                       icon: const Icon(Icons.price_change_outlined),
                       label: Text(l10n.employeeCompensationButton),
                     ),
@@ -907,19 +592,6 @@ class _EmployeesTab extends StatelessWidget {
     return parts.isEmpty ? l10n.employeeNoDetails : parts.join(' - ');
   }
 
-  Future<void> _showCreateEmployeeSheet(BuildContext context) {
-    return showAdaptiveFormSurface<void>(
-      context: context,
-      size: AdaptiveModalSize.standard,
-      builder: (sheetContext) => CreateEmployeeForm(
-        viewModel: viewModel,
-        userRepository: userRepository,
-        allowOpeningBalance: capabilities.canManageEmployeeBalances,
-        onCreated: () => Navigator.of(sheetContext).pop(),
-      ),
-    );
-  }
-
   void _openAccount(
     BuildContext context,
     Employee employee,
@@ -933,18 +605,6 @@ class _EmployeesTab extends StatelessWidget {
           contactRepository: repository,
           capabilities: capabilities,
         ),
-      ),
-    );
-  }
-
-  Future<void> _showCompensationSheet(BuildContext context, Employee employee) {
-    return showAdaptiveFormSurface<void>(
-      context: context,
-      size: AdaptiveModalSize.standard,
-      builder: (sheetContext) => CompensationPlanForm(
-        viewModel: viewModel,
-        employee: employee,
-        onCreated: () => Navigator.of(sheetContext).pop(),
       ),
     );
   }

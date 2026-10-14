@@ -613,6 +613,7 @@ class _PayrollLineTile extends StatelessWidget {
         line.additionsAmount > 0 ||
         line.deductionsAmount > 0 ||
         line.absenceDays > 0 ||
+        line.daysNotEmployed > 0 ||
         line.overtimeHours > 0;
 
     return Card(
@@ -719,6 +720,22 @@ class _PayrollLineTile extends StatelessWidget {
                           ),
                         ),
                         icon: Icons.event_busy_outlined,
+                        color: colors.warning,
+                      ),
+                    // A new hire's first month: paid from their hire date.
+                    if (line.daysNotEmployed > 0)
+                      PointyStatusPill(
+                        key: ValueKey('payroll_line_not_employed_${line.id}'),
+                        label: l10n.payrollNotEmployedChipLabel(
+                          line.daysNotEmployed.toStringAsFixed(
+                            line.daysNotEmployed.truncateToDouble() ==
+                                    line.daysNotEmployed
+                                ? 0
+                                : 1,
+                          ),
+                          formatMoney(line.notEmployedDeductionAmount),
+                        ),
+                        icon: Icons.person_add_alt_outlined,
                         color: colors.warning,
                       ),
                     if (line.overtimeHours > 0)

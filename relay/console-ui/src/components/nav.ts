@@ -1,7 +1,9 @@
 import {
   Activity,
+  BadgeCheck,
   BookOpen,
   Boxes,
+  Coins,
   CreditCard,
   Home,
   KeyRound,
@@ -47,6 +49,7 @@ export const navGroups: NavGroup[] = [
       { to: "/purchases", label: "عمليات البطاقات", icon: CreditCard, hint: "عمليات البطاقات والشحن والفواتير", badge: "purchases" },
       { to: "/company", label: "مشتريات الشركة", icon: ShoppingBag, hint: "شراء بطاقة أو شحن أو فاتورة لنا، أو للبيع نقداً" },
       { to: "/sms", label: "الرسائل النصية", icon: MessageSquare, hint: "الاستهلاك والسجل والإعداد" },
+      { to: "/moamalat", label: "معاملات", icon: BadgeCheck, hint: "جلسات التحقق من البطاقات في كل متجر" },
     ],
   },
   {
@@ -56,6 +59,7 @@ export const navGroups: NavGroup[] = [
       { to: "/catalog", label: "الكتالوج", icon: BookOpen, hint: "ما تراه المتاجر، ونشر نسخة جديدة" },
       { to: "/stock", label: "مخزون البطاقات", icon: Boxes, hint: "أكواد اشتريناها بأنفسنا، تُباع قبل الموردين" },
       { to: "/suppliers", label: "الموردون", icon: Truck, hint: "عروض الموردين والمقارنة والأرصدة" },
+      { to: "/margins", label: "الأسعار والأرباح", icon: Coins, hint: "تكلفتنا وربحنا وربح المتجر وسعر الزبون لكل صنف" },
       { to: "/pricing", label: "التسعير", icon: PercentCircle, hint: "سعر الدولار والهوامش ونشر الإعدادات" },
       { to: "/services", label: "الشحن والفواتير", icon: Smartphone, hint: "دليل المشغّلين والمفوترين وحساب سعر" },
     ],

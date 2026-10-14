@@ -140,6 +140,9 @@ type Amount struct {
 	// directory is not priced.
 	UnitPrice   string `json:"unit_price,omitempty"`
 	RetailPrice string `json:"retail_price,omitempty"`
+	// CostLYD is what the company pays, in dinars: only in the operator's
+	// directory (AdminDirectory), never in what a shop reads.
+	CostLYD string `json:"cost_lyd,omitempty"`
 }
 
 // Biller is a utility or subscription provider that takes payments.
@@ -170,6 +173,8 @@ type Suggestion struct {
 	Amount      string `json:"amount"`
 	UnitPrice   string `json:"unit_price,omitempty"`
 	RetailPrice string `json:"retail_price,omitempty"`
+	// CostLYD: as Amount.CostLYD, operator only.
+	CostLYD string `json:"cost_lyd,omitempty"`
 }
 
 // Plan is one package of a fixed biller (a TV subscription).
@@ -180,6 +185,8 @@ type Plan struct {
 	DescriptionEN string `json:"description_en"`
 	UnitPrice     string `json:"unit_price,omitempty"`
 	RetailPrice   string `json:"retail_price,omitempty"`
+	// CostLYD: as Amount.CostLYD, operator only.
+	CostLYD string `json:"cost_lyd,omitempty"`
 }
 
 // Money is an amount of a foreign currency.

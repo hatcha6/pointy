@@ -88,6 +88,53 @@ void main() {
     expect(find.text('0.00 د.ل'), findsNothing);
   });
 
+  group('a bank whose card takings nothing holds', () {
+    // Holding nothing is a real setup, so this is a quiet line, not a warning,
+    // and the owner decides whether to open a clearing account.
+    testWidgets('says so only when the server flags it', (tester) async {
+      await _pumpPosition(tester, position: _position());
+      expect(
+        find.byKey(const ValueKey('treasury_card_direct_note')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('offers a clearing account already pointed at this bank', (
+      tester,
+    ) async {
+      await _pumpPosition(
+        tester,
+        position: _position(cardDirect: true),
+        user: userWithRole(UserRole.accountant, accountantPermissions),
+      );
+
+      expect(
+        find.text('مبيعات البطاقة تُضاف لهذا الحساب فوراً، بلا حساب تسوية.'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('إنشاء حساب تسوية'));
+      await tester.pumpAndSettle();
+
+      expect(find.widgetWithText(TextFormField, 'معاملات'), findsOneWidget);
+    });
+
+    testWidgets('an auditor reads the note and is offered no button', (
+      tester,
+    ) async {
+      await _pumpPosition(
+        tester,
+        position: _position(cardDirect: true),
+        user: userWithRole(UserRole.auditor, auditorPermissions),
+      );
+
+      expect(
+        find.byKey(const ValueKey('treasury_card_direct_note')),
+        findsOneWidget,
+      );
+      expect(find.text('إنشاء حساب تسوية'), findsNothing);
+    });
+  });
+
   group('each write is offered only to someone the server will let do it', () {
     // The auditor role reads every account, transfer and count, and holds
     // none of the writes. Before, the screen offered it all of them.
@@ -237,7 +284,11 @@ class _FakeTreasuryRepository extends TreasuryRepository {
   }
 }
 
-MoneyPosition _position({MoneyCount? cashCount, int accountsWithVariance = 0}) {
+MoneyPosition _position({
+  MoneyCount? cashCount,
+  int accountsWithVariance = 0,
+  bool cardDirect = false,
+}) {
   return MoneyPosition(
     accounts: [
       MoneyAccountPosition(
@@ -273,6 +324,7 @@ MoneyPosition _position({MoneyCount? cashCount, int accountsWithVariance = 0}) {
         components: const [
           MoneyPositionComponent(code: 'opening', amount: 750, isInflow: true),
         ],
+        cardDirect: cardDirect,
       ),
     ],
     totals: MoneyPositionTotals(

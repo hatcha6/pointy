@@ -207,6 +207,12 @@ CASHIER_PERMISSION_CODES = (
     # Front-desk staff can read and reply to customer SMS conversations.
     "crm.view_conversations",
     "crm.manage_conversations",
+    # The calculator's currency converter: "how much is that in dollars?" is
+    # asked at the counter. Read-only — the published Fulus rates are public
+    # market prices, not costs; typing a rate (add_exchangerate) stays with the
+    # people who maintain them.
+    "fx.view_currency",
+    "fx.view_exchangerate",
 )
 TECHNICIAN_PERMISSION_CODES = (
     "operations.add_job",
@@ -349,6 +355,9 @@ ACCOUNTANT_PERMISSION_CODES = (
 # no fraud management; those stay manager-only.
 SUPERVISOR_PERMISSION_CODES = (
     "reports.view_reportrun",
+    # Runs a register too: the calculator's converter (see the cashier's).
+    "fx.view_currency",
+    "fx.view_exchangerate",
     "analytics.view_analyticsevent",
     "core.view_shopsettings",
     # Sales floor: can operate a register and oversee every session.
@@ -361,6 +370,9 @@ SUPERVISOR_PERMISSION_CODES = (
     "sales.add_registercashmovement",
     "payments.view_payment",
     "payments.add_payment",
+    # Links the shop's Moamalat account for live card verification: the OTP
+    # goes to the merchant's phone, so whoever holds it on shift does it.
+    "payments.manage_moamalat_link",
     "printing.add_printjob",
     "printing.change_printjob",
     "printing.view_printjob",

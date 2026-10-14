@@ -235,3 +235,114 @@ class CardTerminal(TimeStampedModel):
     @property
     def display_name(self) -> str:
         return self.label or self.terminal_id
+
+
+class MoamalatLink(TimeStampedModel):
+    """The shop's link to its Moamalat merchant-portal account (one row).
+
+    Holds a live portal token so card payments can be checked against the
+    terminal's own transactions as they happen. The token is a ~15-minute
+    sliding session with no refresh and an OTP on every login, so it is kept
+    warm by two independent holders — this backend and the relay — on their own
+    clocks (``tools/moamalat-capture/TOKEN_CUSTODY_DESIGN.md``,
+    ``apps.payments.moamalat``).
+
+    Only the username is kept. **The password is never stored**: OTP is
+    mandatory on every login, so a stored password would buy nothing unattended
+    and would only be a secret at rest. The token lives sealed in
+    ``secrets_encrypted``; ``token_id`` is its name on both holders — every
+    state change is compare-and-set on it, so an answer about a replaced token
+    is dropped.
+    """
+
+    class State(models.TextChoices):
+        UNLINKED = "unlinked", "Unlinked"
+        ALIVE = "alive", "Alive"
+        NEEDS_REAUTH = "needs_reauth", "Needs re-link"
+
+    username = models.CharField(max_length=120, blank=True)
+    mid = models.CharField(max_length=32, blank=True)
+    merchant_name = models.CharField(max_length=200, blank=True)
+    # The token, and an OTP challenge in flight; sealed (SecretBox).
+    secrets_encrypted = models.TextField(blank=True, default="")
+    token_id = models.CharField(max_length=64, blank=True)
+    state = models.CharField(max_length=16, choices=State.choices, default=State.UNLINKED)
+    linked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        blank=True,
+        null=True,
+    )
+    linked_at = models.DateTimeField(blank=True, null=True)
+    # Card payments from here on are checked. Set at the first link and kept
+    # across re-links, so payments taken while the token was dead are still
+    # swept once it lives again.
+    verify_since = models.DateTimeField(blank=True, null=True)
+    # This backend's own keepalive, on this backend's own clock.
+    last_ok_at = models.DateTimeField(blank=True, null=True)
+    last_attempt_at = models.DateTimeField(blank=True, null=True)
+    failures = models.PositiveIntegerField(default=0)
+    last_error = models.CharField(max_length=300, blank=True)
+    next_poke_at = models.DateTimeField(blank=True, null=True)
+    died_at = models.DateTimeField(blank=True, null=True)
+    # Who saw the token die: "backend" or "relay".
+    death_source = models.CharField(max_length=16, blank=True)
+    # The relay's copy, as last read: which token it holds and its state.
+    relay_token_id = models.CharField(max_length=64, blank=True)
+    relay_state = models.CharField(max_length=16, blank=True)
+    relay_last_ok_at = models.DateTimeField(blank=True, null=True)
+    relay_checked_at = models.DateTimeField(blank=True, null=True)
+    relay_error = models.CharField(max_length=300, blank=True)
+    # A till has a checkout open: poll every few seconds until then.
+    hot_until = models.DateTimeField(blank=True, null=True)
+    # When the current hot stretch began: no stretch outlives
+    # ``watch.MAX_HOT_STRETCH`` from here, whatever the tills keep asking.
+    hot_since = models.DateTimeField(blank=True, null=True)
+    last_fetch_at = models.DateTimeField(blank=True, null=True)
+    last_fetch_error = models.CharField(max_length=300, blank=True)
+
+    class Meta:
+        permissions = [
+            ("manage_moamalat_link", "Can link the shop's Moamalat merchant account"),
+        ]
+
+    def __str__(self) -> str:
+        return f"Moamalat {self.mid or '-'} ({self.state})"
+
+
+class MoamalatTransaction(TimeStampedModel):
+    """One card transaction as the shop's Moamalat account reports it.
+
+    Read from the portal's transaction list (``/transformerch``) and matched to
+    the card payment it proves. The RRN is the processor's own unique id, so a
+    transaction can prove at most one payment.
+    """
+
+    rrn = models.CharField(max_length=32, unique=True)
+    mid = models.CharField(max_length=32, blank=True)
+    terminal_id = models.CharField(max_length=32, blank=True)
+    amount = models.DecimalField(max_digits=12, decimal_places=3)
+    # The terminal's local sale time, read in the shop's business timezone.
+    transaction_at = models.DateTimeField()
+    processing_date = models.DateField(blank=True, null=True)
+    settlement_amount = models.DecimalField(max_digits=12, decimal_places=3, blank=True, null=True)
+    transaction_type = models.CharField(max_length=16, blank=True)
+    card_mask = models.CharField(max_length=32, blank=True)
+    payment = models.OneToOneField(
+        Payment,
+        on_delete=models.SET_NULL,
+        related_name="moamalat_transaction",
+        blank=True,
+        null=True,
+    )
+    matched_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ["-transaction_at"]
+        indexes = [
+            models.Index(fields=["payment", "-transaction_at"], name="payments_moamalat_open_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.rrn} {self.amount}"

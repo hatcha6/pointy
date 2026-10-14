@@ -163,6 +163,19 @@ export type Me = {
   idle_timeout_seconds: number;
 };
 
+export type MoamalatLink = {
+  installation_id: string;
+  shop_name?: string;
+  mid: string;
+  state: "alive" | "needs_reauth";
+  at_risk: boolean;
+  failures: number;
+  last_ok_at?: string;
+  last_error?: string;
+  died_at?: string;
+  death_source?: "relay" | "backend";
+};
+
 export type IntegrationSwitch = {
   provider: string;
   disabled: boolean;

@@ -104,6 +104,7 @@ import '../models/user_activity.dart';
 import '../models/workflow.dart';
 import '../models/attendance.dart';
 import '../models/ai_chat.dart';
+import '../models/ai_memory.dart';
 import '../models/camera.dart';
 import 'api_session.dart';
 import 'companion_api_client.dart';
@@ -123,6 +124,7 @@ import '../models/warehouse.dart';
 import 'document_trail_api_client.dart';
 import 'warehouse_api_client.dart';
 import 'expense_api_client.dart';
+import 'moamalat_api_client.dart';
 import 'treasury_api_client.dart';
 import 'fraud_api_client.dart';
 import 'inventory_api_client.dart';
@@ -206,6 +208,7 @@ class PosApiService {
     _employees = EmployeeApiClient(_session);
     _expenses = ExpenseApiClient(_session);
     _treasury = TreasuryApiClient(_session);
+    _moamalat = MoamalatApiClient(_session);
     _fraud = FraudApiClient(_session);
     _inventory = InventoryApiClient(_session);
     _operations = OperationsApiClient(_session);
@@ -303,6 +306,7 @@ class PosApiService {
   late final WarehouseApiClient _warehouses;
   late final ExpenseApiClient _expenses;
   late final TreasuryApiClient _treasury;
+  late final MoamalatApiClient _moamalat;
   late final FraudApiClient _fraud;
   late final InventoryApiClient _inventory;
   late final OperationsApiClient _operations;
@@ -2530,6 +2534,7 @@ class PosApiService {
 
   /// The Daftar wallet: balance, top-ups through the payment gateway, history.
   WalletApiClient get wallet => _wallet;
+  MoamalatApiClient get moamalat => _moamalat;
 
   Future<UnitOfMeasure> createUnitOfMeasure(UnitOfMeasureDraft draft) {
     return _unitsOfMeasure.createUnit(draft);
@@ -3444,6 +3449,15 @@ class PosApiService {
   Future<void> deleteAiConversation(int id) {
     return _ai.deleteConversation(id);
   }
+
+  Future<List<AiMemory>> fetchAiMemories() => _ai.fetchMemories();
+
+  Future<List<AiSuggestion>> fetchAiSuggestions() => _ai.fetchSuggestions();
+
+  Future<AiMemory> updateAiMemory(int id, String content) =>
+      _ai.updateMemory(id, content);
+
+  Future<void> deleteAiMemory(int id) => _ai.deleteMemory(id);
 
   Future<void> truncateAiConversation(int conversationId, int messageId) {
     return _ai.truncateConversation(conversationId, messageId);

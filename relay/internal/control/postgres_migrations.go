@@ -988,6 +988,38 @@ CREATE UNIQUE INDEX IF NOT EXISTS relay_voucher_purchases_company_key
 	ON relay_voucher_purchases (idempotency_key) WHERE installation_id IS NULL;
 `,
 	},
+	{
+		version: 32,
+		name:    "moamalat token keepalive",
+		sql: `
+-- The relay's copy of each shop's Moamalat merchant token, kept warm on the
+-- relay's own clock as the second keepalive behind the shop's backend. One per
+-- shop. The token is sealed (AES-256-GCM, POINTY_RELAY_MOAMALAT_TOKEN_KEY) and
+-- emptied once it is dead. token_id is the backend's name for the token: every
+-- state change is compare-and-set on it.
+CREATE TABLE IF NOT EXISTS relay_moamalat_links (
+	installation_id text PRIMARY KEY,
+	mid text NOT NULL,
+	token_id text NOT NULL,
+	sealed_token text NOT NULL DEFAULT '',
+	state text NOT NULL DEFAULT 'alive',
+	last_ok_at timestamptz,
+	last_attempt_at timestamptz,
+	last_error text NOT NULL DEFAULT '',
+	failures integer NOT NULL DEFAULT 0,
+	next_poke_at timestamptz NOT NULL DEFAULT now(),
+	died_at timestamptz,
+	death_source text NOT NULL DEFAULT '',
+	linked_at timestamptz NOT NULL DEFAULT now(),
+	updated_at timestamptz NOT NULL DEFAULT now(),
+	CONSTRAINT relay_moamalat_links_state_valid CHECK (state IN ('alive', 'needs_reauth')),
+	CONSTRAINT relay_moamalat_links_alive_has_token CHECK (state <> 'alive' OR sealed_token <> '')
+);
+-- The claim queue: the due alive links, soonest first.
+CREATE INDEX IF NOT EXISTS relay_moamalat_links_due_idx
+	ON relay_moamalat_links (next_poke_at) WHERE state = 'alive';
+`,
+	},
 }
 
 // migrationsAdvisoryLockKey serializes concurrent migrators (e.g. autoscaled

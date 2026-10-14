@@ -223,8 +223,7 @@ Future<DiscoveredRecorder?> _identify(
   );
   // Only asked when neither vendor answered: it is the fallback identity, and
   // a box that named itself has already told us something better.
-  final onvif =
-      hikvision == null && dahua == null
+  final onvif = hikvision == null && dahua == null
       ? await _probeOnvif(client, endpoint, timeout)
       : false;
   if (hikvision == null && dahua == null && !onvif) {

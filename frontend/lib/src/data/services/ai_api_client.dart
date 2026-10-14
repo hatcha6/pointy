@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 
 import '../models/ai_chat.dart';
+import '../models/ai_memory.dart';
 import 'api_session.dart';
 
 /// Talks to the on-prem AI endpoints. Chat replies stream as SSE
@@ -32,6 +33,8 @@ class AiApiClient {
       // backend may tell the model it can link the user to pages.
       'supports_navigation': true,
       'supports_ui': true,
+      'supports_plan': true,
+      'supports_memory': true,
       if (attachments.isNotEmpty)
         'attachments': attachments.map((a) => a.toJson()).toList(),
     };
@@ -65,6 +68,8 @@ class AiApiClient {
       'supports_actions': true,
       'supports_navigation': true,
       'supports_ui': true,
+      'supports_plan': true,
+      'supports_memory': true,
       if (!declined) 'answers': answers.map((a) => a.toJson()).toList(),
     };
     await for (final event in _session.openEventStream(
@@ -106,6 +111,7 @@ class AiApiClient {
         return AiChatReasoning((data['text'] as String?) ?? '');
       case 'tool':
         return AiChatToolActivity(
+          id: (data['id'] as String?) ?? '',
           name: (data['name'] as String?) ?? '',
           resource: data['resource'] as String?,
           label: data['label'] as String?,
@@ -115,6 +121,8 @@ class AiApiClient {
           arguments: data['arguments'],
           output: data['output'] as String?,
         );
+      case 'plan':
+        return AiChatPlan(AiPlanStep.listFrom(data['steps']));
       case 'ui':
         // A surface the backend already validated against the Pointy catalog.
         // An unparseable payload is dropped rather than rendered half-built.
@@ -205,6 +213,49 @@ class AiApiClient {
     return AiConversation.fromJson(
       decoded is Map<String, Object?> ? decoded : const {},
     );
+  }
+
+  /// The assistant's opening suggestions for this user; empty means "keep the
+  /// built-in ones".
+  Future<List<AiSuggestion>> fetchSuggestions() async {
+    final response = await _session.get('ai/suggestions/');
+    _session.ensureSuccess(
+      response,
+      'AI suggestions request failed with status',
+    );
+    final decoded = _session.decodedBody(response);
+    return AiSuggestion.listFrom(
+      decoded is Map<String, Object?> ? decoded['suggestions'] : null,
+    );
+  }
+
+  Future<List<AiMemory>> fetchMemories() async {
+    final response = await _session.get('ai/memories/');
+    _session.ensureSuccess(response, 'AI memories request failed with status');
+    final decoded = _session.decodedBody(response);
+    return decoded is List
+        ? decoded
+              .whereType<Map<String, Object?>>()
+              .map(AiMemory.fromJson)
+              .toList(growable: false)
+        : const <AiMemory>[];
+  }
+
+  Future<AiMemory> updateMemory(int id, String content) async {
+    final response = await _session.patch(
+      'ai/memories/$id/',
+      body: {'content': content},
+    );
+    _session.ensureSuccess(response, 'AI memory update failed with status');
+    final decoded = _session.decodedBody(response);
+    return AiMemory.fromJson(
+      decoded is Map<String, Object?> ? decoded : const {},
+    );
+  }
+
+  Future<void> deleteMemory(int id) async {
+    final response = await _session.delete('ai/memories/$id/');
+    _session.ensureSuccess(response, 'AI memory delete failed with status');
   }
 
   Future<void> deleteConversation(int id) async {

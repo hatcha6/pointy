@@ -208,6 +208,228 @@ abstract class AppLocalizations {
   /// **'بدء جرد'**
   String get commandPaletteActionStockCount;
 
+  /// Quick action: open the floating calculator (also F12).
+  ///
+  /// In ar, this message translates to:
+  /// **'الآلة الحاسبة'**
+  String get commandPaletteActionCalculator;
+
+  /// Title of the floating calculator panel
+  ///
+  /// In ar, this message translates to:
+  /// **'الآلة الحاسبة'**
+  String get calculatorTitle;
+
+  /// Close button of the floating calculator
+  ///
+  /// In ar, this message translates to:
+  /// **'إغلاق الآلة الحاسبة'**
+  String get calculatorClose;
+
+  /// Toggles the list of earlier calculations
+  ///
+  /// In ar, this message translates to:
+  /// **'السجل'**
+  String get calculatorShowHistory;
+
+  /// Calculator history list has nothing in it
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد عمليات بعد'**
+  String get calculatorHistoryEmpty;
+
+  /// Clears the calculator's list of earlier calculations
+  ///
+  /// In ar, this message translates to:
+  /// **'مسح السجل'**
+  String get calculatorClearHistory;
+
+  /// Copies the calculator result to the clipboard
+  ///
+  /// In ar, this message translates to:
+  /// **'نسخ'**
+  String get calculatorCopy;
+
+  /// Shown briefly after the calculator result was copied
+  ///
+  /// In ar, this message translates to:
+  /// **'تم النسخ'**
+  String get calculatorCopied;
+
+  /// Types the calculator result into the field the user was typing in
+  ///
+  /// In ar, this message translates to:
+  /// **'إدراج في الحقل'**
+  String get calculatorInsert;
+
+  /// Tooltip when there is no field to insert the result into
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر حقلاً في الصفحة أولاً ثم افتح الآلة الحاسبة'**
+  String get calculatorInsertUnavailable;
+
+  /// The target field refused the inserted value (e.g. a negative number)
+  ///
+  /// In ar, this message translates to:
+  /// **'الحقل لا يقبل هذه القيمة'**
+  String get calculatorInsertRejected;
+
+  /// Calculator display after dividing by zero
+  ///
+  /// In ar, this message translates to:
+  /// **'غير معرّف'**
+  String get calculatorUndefined;
+
+  /// Calculator display when a result is too large
+  ///
+  /// In ar, this message translates to:
+  /// **'الرقم كبير جدًا'**
+  String get calculatorTooLarge;
+
+  /// Footer hint: which keys toggle and clear the calculator
+  ///
+  /// In ar, this message translates to:
+  /// **'F12 للإظهار والإخفاء · Esc للمسح'**
+  String get calculatorShortcutHint;
+
+  /// Accessibility label of the calculator C key
+  ///
+  /// In ar, this message translates to:
+  /// **'مسح'**
+  String get calculatorKeyClear;
+
+  /// Accessibility label of the calculator backspace key
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف آخر رقم'**
+  String get calculatorKeyBackspace;
+
+  /// Accessibility label of the calculator percent key
+  ///
+  /// In ar, this message translates to:
+  /// **'نسبة مئوية'**
+  String get calculatorKeyPercent;
+
+  /// Accessibility label of the calculator divide key
+  ///
+  /// In ar, this message translates to:
+  /// **'قسمة'**
+  String get calculatorKeyDivide;
+
+  /// Accessibility label of the calculator multiply key
+  ///
+  /// In ar, this message translates to:
+  /// **'ضرب'**
+  String get calculatorKeyMultiply;
+
+  /// Accessibility label of the calculator subtract key
+  ///
+  /// In ar, this message translates to:
+  /// **'طرح'**
+  String get calculatorKeySubtract;
+
+  /// Accessibility label of the calculator add key
+  ///
+  /// In ar, this message translates to:
+  /// **'جمع'**
+  String get calculatorKeyAdd;
+
+  /// Accessibility label of the calculator equals key
+  ///
+  /// In ar, this message translates to:
+  /// **'يساوي'**
+  String get calculatorKeyEquals;
+
+  /// Accessibility label of the calculator decimal point key
+  ///
+  /// In ar, this message translates to:
+  /// **'فاصلة عشرية'**
+  String get calculatorKeyDecimal;
+
+  /// Toggles the calculator's currency converter
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويل العملات'**
+  String get calculatorConvert;
+
+  /// Swaps which currency row the calculator types into
+  ///
+  /// In ar, this message translates to:
+  /// **'تبديل اتجاه التحويل'**
+  String get calculatorSwapCurrencies;
+
+  /// Title of the converter's currency picker
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر العملة'**
+  String get calculatorPickCurrency;
+
+  /// Placeholder of the currency picker's search field
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث بالاسم أو الرمز'**
+  String get calculatorCurrencySearch;
+
+  /// Currency picker section: recently picked currencies
+  ///
+  /// In ar, this message translates to:
+  /// **'المستخدمة مؤخرًا'**
+  String get calculatorCurrencyRecent;
+
+  /// Currency picker section: every available currency
+  ///
+  /// In ar, this message translates to:
+  /// **'كل العملات'**
+  String get calculatorCurrencyAll;
+
+  /// A currency already used by the other converter row, so it cannot be picked
+  ///
+  /// In ar, this message translates to:
+  /// **'مختارة في الطرف الآخر'**
+  String get calculatorCurrencyOtherSide;
+
+  /// Currency picker search found nothing
+  ///
+  /// In ar, this message translates to:
+  /// **'لا نتائج لـ «{query}»'**
+  String calculatorCurrencyNoResults(String query);
+
+  /// Hint under the currency picker's no-results message
+  ///
+  /// In ar, this message translates to:
+  /// **'تحقق من الإملاء أو جرّب بحثًا آخر.'**
+  String get calculatorCurrencyNoResultsHint;
+
+  /// Converter is fetching exchange rates
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ تحميل أسعار الصرف…'**
+  String get calculatorRatesLoading;
+
+  /// Converter could not load any exchange rates
+  ///
+  /// In ar, this message translates to:
+  /// **'أسعار الصرف غير متاحة الآن'**
+  String get calculatorRatesUnavailable;
+
+  /// Retries loading exchange rates in the converter
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة المحاولة'**
+  String get calculatorRatesRetry;
+
+  /// Reloads the converter's exchange rates
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث الأسعار'**
+  String get calculatorRatesRefresh;
+
+  /// Footer hint in convert mode: F12 toggles, Tab swaps direction
+  ///
+  /// In ar, this message translates to:
+  /// **'F12 للإظهار والإخفاء · Tab لتبديل الاتجاه'**
+  String get calculatorConvertShortcutHint;
+
   /// Live stock shown on a product row in the command palette.
   ///
   /// In ar, this message translates to:
@@ -23627,12 +23849,6 @@ abstract class AppLocalizations {
   /// **'تم دفع رواتب هذا الشهر.'**
   String get payrollMonthPaidMessage;
 
-  /// No description provided for @payrollMonthOnboardingMessage.
-  ///
-  /// In ar, this message translates to:
-  /// **'أضف موظفيك وحدد خطط رواتبهم لبدء تجهيز مسيرات الرواتب.'**
-  String get payrollMonthOnboardingMessage;
-
   /// No description provided for @preparePayrollMonthButton.
   ///
   /// In ar, this message translates to:
@@ -23657,17 +23873,209 @@ abstract class AppLocalizations {
   /// **'عرض المسير'**
   String get viewPayrollRunButton;
 
-  /// No description provided for @customPayrollRunButton.
-  ///
-  /// In ar, this message translates to:
-  /// **'مسير مخصص'**
-  String get customPayrollRunButton;
-
   /// No description provided for @payrollHistoryTitle.
   ///
   /// In ar, this message translates to:
   /// **'سجل المسيرات'**
   String get payrollHistoryTitle;
+
+  /// No description provided for @payrollMonthPreviousTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'الشهر السابق'**
+  String get payrollMonthPreviousTooltip;
+
+  /// No description provided for @payrollMonthNextTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'الشهر التالي'**
+  String get payrollMonthNextTooltip;
+
+  /// No description provided for @payrollReadinessEmployeesStep.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضف موظفيك'**
+  String get payrollReadinessEmployeesStep;
+
+  /// Payroll readiness checklist: how many employees payroll would pay.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{موظف واحد مسجّل} =2{موظفان مسجّلان} other{{count} موظفين مسجّلين}}'**
+  String payrollReadinessEmployeesDone(num count);
+
+  /// No description provided for @payrollReadinessPlansStep.
+  ///
+  /// In ar, this message translates to:
+  /// **'حدّد راتب كل موظف'**
+  String get payrollReadinessPlansStep;
+
+  /// Payroll readiness checklist: employees whose salary plan covers the card's month, out of all payable employees.
+  ///
+  /// In ar, this message translates to:
+  /// **'{ready} من {total} لديهم خطة راتب لهذا الشهر'**
+  String payrollReadinessPlansProgress(int ready, int total);
+
+  /// No description provided for @payrollReadinessNoPlan.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدون خطة راتب'**
+  String get payrollReadinessNoPlan;
+
+  /// Payroll readiness row: the employee's salary plan only takes effect after the card's month, so this month's payroll leaves them out.
+  ///
+  /// In ar, this message translates to:
+  /// **'خطته تبدأ {date}، بعد هذا الشهر'**
+  String payrollReadinessPlanStartsLater(String date);
+
+  /// No description provided for @payrollSetSalaryButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديد الراتب'**
+  String get payrollSetSalaryButton;
+
+  /// Payroll readiness checklist: link to the employees tab for the employees not listed on the card.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{وموظف آخر بدون خطة} =2{وموظفان آخران بدون خطة} other{و{count} موظفين آخرين بدون خطة}}'**
+  String payrollReadinessMoreMissing(num count);
+
+  /// No description provided for @payrollPrepareHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيُنشأ مسير لكل موظف لديه خطة راتب، مع العمولات وأقساط السلف. يمكنك مراجعته وتعديله قبل الاعتماد.'**
+  String get payrollPrepareHint;
+
+  /// Under the prepare-payroll button: employees left out because they have no salary plan for the month.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{موظف واحد بدون خطة لن يُدرج في المسير.} =2{موظفان بدون خطة لن يُدرجا في المسير.} other{{count} موظفين بدون خطة لن يُدرجوا في المسير.}}'**
+  String payrollPrepareSkipsHint(num count);
+
+  /// No description provided for @payrollPrepareBlockedHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'حدّد راتب موظف واحد على الأقل لتتمكن من تجهيز المسير.'**
+  String get payrollPrepareBlockedHint;
+
+  /// No description provided for @payrollMonthDraftHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'راجع مبلغ كل موظف وأضف المكافآت أو الخصومات إن وجدت، ثم اعتمد المسير.'**
+  String get payrollMonthDraftHint;
+
+  /// No description provided for @payrollMonthApprovedHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجّل الدفع بعد تسليم الرواتب للموظفين.'**
+  String get payrollMonthApprovedHint;
+
+  /// No description provided for @payrollOtherRunButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسير لموظفين محددين'**
+  String get payrollOtherRunButton;
+
+  /// Top of the salary plan sheet opened right after adding an employee.
+  ///
+  /// In ar, this message translates to:
+  /// **'حدّد راتب {name} ليُدرج في مسير الرواتب.'**
+  String payrollCompensationIntro(String name);
+
+  /// No description provided for @payrollCompensationSkipButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'لاحقاً'**
+  String get payrollCompensationSkipButton;
+
+  /// Under the prepare-payroll button: employees hired during the month, whose first salary is prorated from their hire date.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُحسب راتب {names} من تاريخ بدء العمل هذا الشهر، لا عن الشهر كاملاً.'**
+  String payrollPrepareProratedHint(String names);
+
+  /// Payroll line chip: days of the period before the employee's hire date, and what they take off the salary.
+  ///
+  /// In ar, this message translates to:
+  /// **'قبل بدء العمل {days} يوم ({amount})'**
+  String payrollNotEmployedChipLabel(String days, String amount);
+
+  /// No description provided for @daysNotEmployedField.
+  ///
+  /// In ar, this message translates to:
+  /// **'أيام قبل بدء العمل'**
+  String get daysNotEmployedField;
+
+  /// No description provided for @daysNotEmployedHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'حُسبت من تاريخ تعيين الموظف وتُخصم بقيمة اليوم. صحّحها إن كان التاريخ غير دقيق.'**
+  String get daysNotEmployedHelper;
+
+  /// No description provided for @employeeHireDateHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُحسب أول راتب من هذا التاريخ. للموظفين الحاليين اختر تاريخ بدء عملهم الفعلي.'**
+  String get employeeHireDateHelper;
+
+  /// No description provided for @compensationEffectiveFromField.
+  ///
+  /// In ar, this message translates to:
+  /// **'يبدأ الراتب من'**
+  String get compensationEffectiveFromField;
+
+  /// No description provided for @compensationEffectiveFromHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'لموظف جديد: يوم بدء عمله، ليُحسب له الشهر الذي التحق فيه. لزيادة راتب: اليوم.'**
+  String get compensationEffectiveFromHelper;
+
+  /// No description provided for @customPayrollRunTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسير لموظفين محددين'**
+  String get customPayrollRunTitle;
+
+  /// No description provided for @customPayrollEmployeesLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الموظفون المشمولون'**
+  String get customPayrollEmployeesLabel;
+
+  /// No description provided for @customPayrollSelectAllButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديد الكل'**
+  String get customPayrollSelectAllButton;
+
+  /// No description provided for @customPayrollNoSelectionError.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر موظفاً واحداً على الأقل.'**
+  String get customPayrollNoSelectionError;
+
+  /// No description provided for @customPayrollWeeksField.
+  ///
+  /// In ar, this message translates to:
+  /// **'عدد الأسابيع'**
+  String get customPayrollWeeksField;
+
+  /// No description provided for @customPayrollDaysField.
+  ///
+  /// In ar, this message translates to:
+  /// **'عدد الأيام'**
+  String get customPayrollDaysField;
+
+  /// No description provided for @customPayrollHoursField.
+  ///
+  /// In ar, this message translates to:
+  /// **'عدد الساعات'**
+  String get customPayrollHoursField;
+
+  /// No description provided for @customPayrollShiftsField.
+  ///
+  /// In ar, this message translates to:
+  /// **'عدد الورديات'**
+  String get customPayrollShiftsField;
 
   /// No description provided for @pendingLoanRequestsTitle.
   ///
@@ -23852,12 +24260,6 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'مسودة رواتب الشهر'**
   String get draftMonthlyPayrollButton;
-
-  /// No description provided for @createPayrollRunButton.
-  ///
-  /// In ar, this message translates to:
-  /// **'إنشاء مسير رواتب'**
-  String get createPayrollRunButton;
 
   /// No description provided for @employeePayrollSaveError.
   ///
@@ -29332,6 +29734,12 @@ abstract class AppLocalizations {
   /// **'طريقة التفكير'**
   String get aiAssistantThinkingLabel;
 
+  /// AI chat empty state: caption above suggestions the assistant wrote for this shop.
+  ///
+  /// In ar, this message translates to:
+  /// **'اقتراحات من المساعد لمتجرك'**
+  String get aiAssistantSuggestionsForShop;
+
   /// No description provided for @aiAssistantSuggestion1.
   ///
   /// In ar, this message translates to:
@@ -29619,6 +30027,114 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'لا'**
   String get aiAssistantAskUserConfirmNo;
+
+  /// AI chat app bar: opens the assistant's memory screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'الذاكرة'**
+  String get aiMemoryOpen;
+
+  /// Memory screen title.
+  ///
+  /// In ar, this message translates to:
+  /// **'ذاكرة المساعد'**
+  String get aiMemoryTitle;
+
+  /// Memory screen explanation.
+  ///
+  /// In ar, this message translates to:
+  /// **'ما يتذكّره المساعد عن المتجر وعنك ويبدأ به كل محادثة جديدة. يحفظه بنفسه، ويمكنك تصحيحه أو حذفه.'**
+  String get aiMemorySubtitle;
+
+  /// Memory screen empty state.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يحفظ المساعد شيئًا بعد. سيحفظ ما يتعلّمه عن متجرك أثناء المحادثات.'**
+  String get aiMemoryEmpty;
+
+  /// Memory screen load error.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل الذاكرة.'**
+  String get aiMemoryLoadFailed;
+
+  /// Memory screen: shop-wide memories heading.
+  ///
+  /// In ar, this message translates to:
+  /// **'عن المتجر'**
+  String get aiMemoryShopSection;
+
+  /// Memory screen: the user's personal memories heading.
+  ///
+  /// In ar, this message translates to:
+  /// **'خاصة بك'**
+  String get aiMemoryPersonalSection;
+
+  /// Memory edit dialog title.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل الذاكرة'**
+  String get aiMemoryEditTitle;
+
+  /// Memory delete confirmation title.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف هذه الذاكرة؟'**
+  String get aiMemoryDeleteTitle;
+
+  /// Memory edit failed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر حفظ التعديل.'**
+  String get aiMemorySaveFailed;
+
+  /// Memory delete failed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر حذف الذاكرة.'**
+  String get aiMemoryDeleteFailed;
+
+  /// Tooltip on a shop memory a non-manager cannot edit.
+  ///
+  /// In ar, this message translates to:
+  /// **'يعدّلها المدير فقط'**
+  String get aiMemoryManagerOnly;
+
+  /// AI chat: heading of the assistant's step checklist for a multi-step task.
+  ///
+  /// In ar, this message translates to:
+  /// **'خطة العمل'**
+  String get aiAssistantPlanTitle;
+
+  /// AI chat: how many plan steps are done out of the total.
+  ///
+  /// In ar, this message translates to:
+  /// **'{done} من {total}'**
+  String aiAssistantPlanProgress(int done, int total);
+
+  /// No description provided for @aiAssistantApprovalApprove.
+  ///
+  /// In ar, this message translates to:
+  /// **'موافقة وتنفيذ'**
+  String get aiAssistantApprovalApprove;
+
+  /// No description provided for @aiAssistantApprovalCancel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء'**
+  String get aiAssistantApprovalCancel;
+
+  /// No description provided for @aiAssistantApprovalApproved.
+  ///
+  /// In ar, this message translates to:
+  /// **'تمت الموافقة ونُفِّذت العملية'**
+  String get aiAssistantApprovalApproved;
+
+  /// No description provided for @aiAssistantApprovalCancelled.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُلغيت العملية — لم يُنفَّذ شيء'**
+  String get aiAssistantApprovalCancelled;
 
   /// No description provided for @aiAssistantProductPickerChoose.
   ///
@@ -37846,6 +38362,12 @@ abstract class AppLocalizations {
   /// **'إظهار/إخفاء معاينة كاميرا القراءة'**
   String get posShortcutCameraPreview;
 
+  /// POS shortcuts sheet: F12 toggles the floating calculator anywhere in the app
+  ///
+  /// In ar, this message translates to:
+  /// **'إظهار/إخفاء الآلة الحاسبة (من أي شاشة)'**
+  String get posShortcutCalculator;
+
   /// Cost of one unit on a cart row
   ///
   /// In ar, this message translates to:
@@ -40870,6 +41392,18 @@ abstract class AppLocalizations {
   /// **'مرّ موعد وصوله إلى المصرف ولم يُسجَّل بعد. سجّل وصوله إن وصل، أو راجع شركة الدفع.'**
   String get treasuryClearingOverdueCalloutMessage;
 
+  /// Quiet note on a bank account card: the shop holds card money for another bank, but this bank's card takings are counted the moment they are taken.
+  ///
+  /// In ar, this message translates to:
+  /// **'مبيعات البطاقة تُضاف لهذا الحساب فوراً، بلا حساب تسوية.'**
+  String get treasuryCardDirectNote;
+
+  /// Button on a bank account card: open the account editor on a new clearing account that settles into this bank.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنشاء حساب تسوية'**
+  String get treasuryCardDirectAction;
+
   /// Button: record the processor's transfer of held card takings into the bank.
   ///
   /// In ar, this message translates to:
@@ -43260,6 +43794,162 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'{days} يومًا على الرف'**
   String aiUiStockUnitDaysOnShelf(int days);
+
+  /// AI POS card: open the record.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرض التفاصيل'**
+  String get aiUiCardOpen;
+
+  /// AI product card: price caption.
+  ///
+  /// In ar, this message translates to:
+  /// **'سعر البيع'**
+  String get aiUiProductPrice;
+
+  /// AI product card: stock on hand.
+  ///
+  /// In ar, this message translates to:
+  /// **'المخزون'**
+  String get aiUiProductStock;
+
+  /// AI product card: units sold in the last 30 days.
+  ///
+  /// In ar, this message translates to:
+  /// **'المباع في ٣٠ يومًا'**
+  String get aiUiProductSold30;
+
+  /// AI product card: days the stock lasts at the current pace.
+  ///
+  /// In ar, this message translates to:
+  /// **'نحو {days} يومًا'**
+  String aiUiProductCover(int days);
+
+  /// AI product card: label of the days-of-cover row.
+  ///
+  /// In ar, this message translates to:
+  /// **'يكفي المخزون'**
+  String get aiUiProductCoverLabel;
+
+  /// AI product card: no stock left.
+  ///
+  /// In ar, this message translates to:
+  /// **'نفد المخزون'**
+  String get aiUiProductOutOfStock;
+
+  /// AI product card: stock lasts a week or less.
+  ///
+  /// In ar, this message translates to:
+  /// **'قد ينفد قريبًا'**
+  String get aiUiProductRunningOut;
+
+  /// AI product card: product is inactive or archived.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير مفعّل'**
+  String get aiUiProductInactive;
+
+  /// AI product card: a service or prepared item without stock.
+  ///
+  /// In ar, this message translates to:
+  /// **'خدمة'**
+  String get aiUiProductService;
+
+  /// AI product card: no sales in the last 30 days.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يُبَع في ٣٠ يومًا'**
+  String get aiUiProductNoSales;
+
+  /// AI customer card: current balance due.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدَّين الحالي'**
+  String get aiUiCustomerBalance;
+
+  /// AI customer card: customer owes nothing.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا دَين عليه'**
+  String get aiUiCustomerNoDebt;
+
+  /// AI customer card: credit limit.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحد الائتماني'**
+  String get aiUiCustomerCreditLimit;
+
+  /// AI customer card: debt is above the credit limit.
+  ///
+  /// In ar, this message translates to:
+  /// **'تجاوز الحد الائتماني'**
+  String get aiUiCustomerOverLimit;
+
+  /// AI customer card: last purchase date.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر شراء'**
+  String get aiUiCustomerLastPurchase;
+
+  /// AI customer card: lifetime spend.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجمالي مشترياته'**
+  String get aiUiCustomerLifetime;
+
+  /// AI customer card: number of purchases.
+  ///
+  /// In ar, this message translates to:
+  /// **'عدد الفواتير'**
+  String get aiUiCustomerOrders;
+
+  /// AI sales card: revenue.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإيراد'**
+  String get aiUiSalesRevenue;
+
+  /// AI sales card: order count.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفواتير'**
+  String get aiUiSalesOrders;
+
+  /// AI sales card: average ticket.
+  ///
+  /// In ar, this message translates to:
+  /// **'متوسط الفاتورة'**
+  String get aiUiSalesAverage;
+
+  /// AI sales card: profit.
+  ///
+  /// In ar, this message translates to:
+  /// **'الربح'**
+  String get aiUiSalesProfit;
+
+  /// AI sales card: margin percent.
+  ///
+  /// In ar, this message translates to:
+  /// **'الهامش'**
+  String get aiUiSalesMargin;
+
+  /// AI sales card: change against the previous period.
+  ///
+  /// In ar, this message translates to:
+  /// **'{change} عن الفترة السابقة'**
+  String aiUiSalesVsPrevious(String change);
+
+  /// AI sales card: best sellers heading.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأكثر مبيعًا'**
+  String get aiUiSalesTopProducts;
+
+  /// AI sales card: no sales in the period.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا مبيعات في هذه الفترة'**
+  String get aiUiSalesEmpty;
 
   /// AI unit card: the article belongs to a consignor.
   ///
@@ -46638,6 +47328,440 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'جارية الآن'**
   String get registerSessionInProgressValue;
+
+  /// Nav entry: the Moamalat link page.
+  ///
+  /// In ar, this message translates to:
+  /// **'التحقق من البطاقات'**
+  String get moamalatDrawerLabel;
+
+  /// Moamalat link page title.
+  ///
+  /// In ar, this message translates to:
+  /// **'التحقق من البطاقات — معاملات'**
+  String get moamalatTitle;
+
+  /// Link state: the token is alive.
+  ///
+  /// In ar, this message translates to:
+  /// **'يعمل'**
+  String get moamalatStateAlive;
+
+  /// Link state: keepalive failing for a while.
+  ///
+  /// In ar, this message translates to:
+  /// **'الاتصال متعثر'**
+  String get moamalatStateAtRisk;
+
+  /// Link state: token died; OTP needed.
+  ///
+  /// In ar, this message translates to:
+  /// **'يحتاج إعادة ربط'**
+  String get moamalatStateNeedsReauth;
+
+  /// Link state: not linked.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير مربوط'**
+  String get moamalatStateUnlinked;
+
+  /// Link state: stopped fleet-wide by Daftar.
+  ///
+  /// In ar, this message translates to:
+  /// **'متوقف مؤقتاً'**
+  String get moamalatStateSwitchedOff;
+
+  /// Alive explanation.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُطابَق مدفوعات البطاقات مع عمليات جهاز الدفع لحظياً أثناء البيع.'**
+  String get moamalatAliveMessage;
+
+  /// At-risk explanation.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر الوصول إلى معاملات منذ دقائق. نعيد المحاولة تلقائياً، وتبقى النسخة الاحتياطية على خادم دفتر تحافظ على الاتصال.'**
+  String get moamalatAtRiskMessage;
+
+  /// Needs re-link explanation.
+  ///
+  /// In ar, this message translates to:
+  /// **'انتهت جلسة معاملات. البيع بالبطاقة مستمر، وتنتظر {count} دفعة التحقق حتى تعيد الربط برمز التحقق.'**
+  String moamalatNeedsReauthMessage(int count);
+
+  /// Unlinked explanation.
+  ///
+  /// In ar, this message translates to:
+  /// **'اربط حساب التاجر في معاملات ليتحقق النظام من كل دفعة بطاقة مقابل عمليات جهاز الدفع.'**
+  String get moamalatUnlinkedMessage;
+
+  /// Switched-off explanation.
+  ///
+  /// In ar, this message translates to:
+  /// **'أوقفت دفتر هذا الربط مؤقتاً لجميع المتاجر. يستمر البيع بالبطاقة كالمعتاد.'**
+  String get moamalatSwitchedOffMessage;
+
+  /// Link form section title.
+  ///
+  /// In ar, this message translates to:
+  /// **'ربط حساب معاملات'**
+  String get moamalatLinkTitle;
+
+  /// Re-link form section title.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة الربط'**
+  String get moamalatRelinkTitle;
+
+  /// Link form hint.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل اسم المستخدم وكلمة المرور لحساب التاجر في معاملات. سيصل رمز تحقق إلى هاتف التاجر المسجّل لدى معاملات.'**
+  String get moamalatLinkHint;
+
+  /// OTP step hint.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُرسل رمز التحقق إلى هاتف التاجر المسجّل لدى معاملات. أدخله هنا.'**
+  String get moamalatCodeHint;
+
+  /// Moamalat username field.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم المستخدم'**
+  String get moamalatUsernameLabel;
+
+  /// Moamalat password field.
+  ///
+  /// In ar, this message translates to:
+  /// **'كلمة المرور'**
+  String get moamalatPasswordLabel;
+
+  /// Password helper: never stored.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُرسل إلى معاملات مرة واحدة ولا تُحفظ.'**
+  String get moamalatPasswordNotStored;
+
+  /// OTP field.
+  ///
+  /// In ar, this message translates to:
+  /// **'رمز التحقق'**
+  String get moamalatCodeLabel;
+
+  /// Send credentials, request OTP.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرسال رمز التحقق'**
+  String get moamalatSendCodeAction;
+
+  /// Verify OTP and link.
+  ///
+  /// In ar, this message translates to:
+  /// **'تأكيد الربط'**
+  String get moamalatVerifyAction;
+
+  /// Unlink action.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء الربط'**
+  String get moamalatUnlinkAction;
+
+  /// Unlink confirmation title.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء ربط معاملات؟'**
+  String get moamalatUnlinkConfirmTitle;
+
+  /// Unlink confirmation message.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيتوقف التحقق من مدفوعات البطاقات وتُحذف الجلسة من هذا الخادم ومن خادم دفتر. يمكنك الربط مجدداً برمز تحقق جديد.'**
+  String get moamalatUnlinkConfirmMessage;
+
+  /// Note: verification never blocks a sale.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوقف التحقق أي عملية بيع: الدفعة التي لم تُطابَق بعد تُسجَّل «بانتظار التحقق» وتُطابَق تلقائياً فور ظهورها.'**
+  String get moamalatNeverBlocksNote;
+
+  /// Linked account section.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحساب المربوط'**
+  String get moamalatAccountTitle;
+
+  /// Merchant name row.
+  ///
+  /// In ar, this message translates to:
+  /// **'التاجر'**
+  String get moamalatMerchantLabel;
+
+  /// MID row.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم التاجر'**
+  String get moamalatMidLabel;
+
+  /// Linked at row.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ الربط'**
+  String get moamalatLinkedAtLabel;
+
+  /// Last OK row.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر اتصال ناجح'**
+  String get moamalatLastOkLabel;
+
+  /// Relay copy row.
+  ///
+  /// In ar, this message translates to:
+  /// **'النسخة الاحتياطية'**
+  String get moamalatRelayLabel;
+
+  /// Relay holds and keeps this token.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعمل على خادم دفتر'**
+  String get moamalatRelayInStep;
+
+  /// Relay holds another or a dead token.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيد المزامنة'**
+  String get moamalatRelayOutOfStep;
+
+  /// No relay copy.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير متاحة — هذا الخادم وحده يحافظ على الاتصال'**
+  String get moamalatRelayNone;
+
+  /// Pending count row.
+  ///
+  /// In ar, this message translates to:
+  /// **'دفعات بانتظار التحقق'**
+  String get moamalatPendingLabel;
+
+  /// Pending with overdue.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} (منها {overdue} متأخرة)'**
+  String moamalatPendingWithOverdue(int count, int overdue);
+
+  /// Merchant choice section.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر رقم التاجر'**
+  String get moamalatMerchantChoiceTitle;
+
+  /// Error: switched off.
+  ///
+  /// In ar, this message translates to:
+  /// **'أوقفت دفتر ربط معاملات مؤقتاً.'**
+  String get moamalatErrorSwitchedOff;
+
+  /// Error: credentials required.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل اسم المستخدم وكلمة المرور.'**
+  String get moamalatErrorCredentialsRequired;
+
+  /// Error: login refused.
+  ///
+  /// In ar, this message translates to:
+  /// **'رفضت معاملات اسم المستخدم أو كلمة المرور.'**
+  String get moamalatErrorLoginRefused;
+
+  /// Error: wrong OTP.
+  ///
+  /// In ar, this message translates to:
+  /// **'رمز التحقق غير صحيح.'**
+  String get moamalatErrorCodeRefused;
+
+  /// Error: OTP required.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل رمز التحقق.'**
+  String get moamalatErrorCodeRequired;
+
+  /// Error: OTP challenge expired.
+  ///
+  /// In ar, this message translates to:
+  /// **'انتهت صلاحية رمز التحقق. أرسل رمزاً جديداً.'**
+  String get moamalatErrorChallengeExpired;
+
+  /// Error: no merchant on account.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد تاجر مرتبط بهذا الحساب في معاملات.'**
+  String get moamalatErrorNoMerchant;
+
+  /// Error: MID not in account.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم التاجر غير موجود في هذا الحساب.'**
+  String get moamalatErrorUnknownMerchant;
+
+  /// Error: not linked.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحساب غير مربوط.'**
+  String get moamalatErrorNotLinked;
+
+  /// Error: forbidden.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا تملك صلاحية ربط حساب معاملات.'**
+  String get moamalatErrorForbidden;
+
+  /// Error: unreachable.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر الوصول إلى معاملات. حاول مرة أخرى.'**
+  String get moamalatErrorUnreachable;
+
+  /// Live line: first poll.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ الاتصال بمعاملات…'**
+  String get moamalatLiveConnecting;
+
+  /// Live line: waiting for swipe.
+  ///
+  /// In ar, this message translates to:
+  /// **'بانتظار عملية البطاقة من الجهاز…'**
+  String get moamalatLiveWaiting;
+
+  /// Live line: the swipe for this card line reached Moamalat.
+  ///
+  /// In ar, this message translates to:
+  /// **'وصلت عملية بطاقة بقيمة {amount}'**
+  String moamalatLiveSeen(String amount);
+
+  /// Live line: link dead.
+  ///
+  /// In ar, this message translates to:
+  /// **'التحقق من البطاقات متوقف — ستُتحقق الدفعة لاحقاً.'**
+  String get moamalatLiveOffline;
+
+  /// Live line: fast loop resting.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيُتحقق من الدفعة بعد الإتمام.'**
+  String get moamalatLiveLater;
+
+  /// Alert title: Moamalat needs re-link.
+  ///
+  /// In ar, this message translates to:
+  /// **'التحقق من البطاقات متوقف'**
+  String get notificationMoamalatReauthTitle;
+
+  /// Alert for supervisors.
+  ///
+  /// In ar, this message translates to:
+  /// **'انتهت جلسة معاملات. أعد الربط برمز التحقق — {count} دفعة بطاقة بانتظار التحقق.'**
+  String notificationMoamalatReauthManageMessage(int count);
+
+  /// Alert for cashiers.
+  ///
+  /// In ar, this message translates to:
+  /// **'البيع بالبطاقة مستمر كالمعتاد، وستُتحقق الدفعات لاحقاً. أبلغ المشرف.'**
+  String get notificationMoamalatReauthCashierMessage;
+
+  /// Alert title: unverified card payments.
+  ///
+  /// In ar, this message translates to:
+  /// **'دفعات بطاقة لم تُطابَق'**
+  String get notificationMoamalatUnverifiedTitle;
+
+  /// Alert: unverified card payments.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} دفعة بطاقة بقيمة {amount} لم تظهر في معاملات منذ {date}.'**
+  String notificationMoamalatUnverifiedMessage(
+    int count,
+    String amount,
+    String date,
+  );
+
+  /// Where and when a swipe happened.
+  ///
+  /// In ar, this message translates to:
+  /// **'على الجهاز {terminal} الساعة {time}'**
+  String moamalatSwipeWhere(String terminal, String time);
+
+  /// Notice: the sheet split a short card charge.
+  ///
+  /// In ar, this message translates to:
+  /// **'الجهاز سحب {charged} والمبلغ {intended}. صُحّح سطر البطاقة وأُضيف سطر بالمتبقي {rest}: اسحبه بالبطاقة أو غيّر طريقة دفعه.'**
+  String moamalatShortfallApplied(String charged, String intended, String rest);
+
+  /// Undo the swipe correction.
+  ///
+  /// In ar, this message translates to:
+  /// **'تراجع'**
+  String get moamalatUndoAction;
+
+  /// Suggestion: a smaller swipe than the card line.
+  ///
+  /// In ar, this message translates to:
+  /// **'عملية بطاقة بقيمة {amount} {where} — أقل من سطر البطاقة ({line}).'**
+  String moamalatShortfallFound(String amount, String where, String line);
+
+  /// Suggestion: a swipe taken before the sheet opened.
+  ///
+  /// In ar, this message translates to:
+  /// **'وُجدت عملية بطاقة لم تُسجَّل بعد بقيمة {amount} {where}.'**
+  String moamalatEarlierSwipeFound(String amount, String where);
+
+  /// Warning: the terminal took more than the line.
+  ///
+  /// In ar, this message translates to:
+  /// **'الجهاز سحب {amount} {where} وهو أكثر من {line}. أعد الفرق {extra} من الجهاز نفسه.'**
+  String moamalatOverchargeFound(
+    String amount,
+    String where,
+    String line,
+    String extra,
+  );
+
+  /// Apply the swipe to this sale.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذه عمليتي'**
+  String get moamalatUseThisSwipeAction;
+
+  /// Ignore the swipe on this sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'ليست لهذه الفاتورة'**
+  String get moamalatNotThisSaleAction;
+
+  /// Alert title: card payment amount differs from terminal.
+  ///
+  /// In ar, this message translates to:
+  /// **'مبلغ بطاقة لا يطابق الجهاز'**
+  String get notificationMoamalatAmountMismatchTitle;
+
+  /// Alert: amount mismatch.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفاتورة {receipt}: سُجّلت الدفعة بـ{recorded} بينما سحب الجهاز {charged}.{more}'**
+  String notificationMoamalatAmountMismatchMessage(
+    String receipt,
+    String recorded,
+    String charged,
+    String more,
+  );
+
+  /// Suffix: more mismatches.
+  ///
+  /// In ar, this message translates to:
+  /// **' ومعها {count} دفعات أخرى.'**
+  String notificationMoamalatAmountMismatchMore(int count);
 }
 
 class _AppLocalizationsDelegate

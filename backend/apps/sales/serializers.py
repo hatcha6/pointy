@@ -23,7 +23,7 @@ from apps.catalog.units import (
 )
 from apps.core.models import RelayInstallation, ShopSettings
 from apps.core.roles import user_has_full_visibility, user_is_manager
-from apps.core.timeutils import business_local_date
+from apps.core.timeutils import business_local_date, business_timezone
 from apps.customers.models import Customer
 from apps.customers.payment_terms import MAX_CREDIT_DAYS
 from apps.discounts.cache import (
@@ -1048,6 +1048,13 @@ class PublicInvoiceLineSerializer(serializers.ModelSerializer):
         read_only=True,
     )
     line_total = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    # What the printed receipt shows under a line, so the customer's link and
+    # the slip in their hand read the same: the unit it was sold in, the extras
+    # chosen on it, and the serials / lots it issued (a phone's IMEI is its
+    # warranty).
+    unit_label = serializers.SerializerMethodField()
+    modifiers = serializers.SerializerMethodField()
+    identifiers = serializers.SerializerMethodField()
 
     class Meta:
         model = OrderLine
@@ -1055,10 +1062,43 @@ class PublicInvoiceLineSerializer(serializers.ModelSerializer):
             "product_name",
             "variant_name",
             "quantity",
+            "unit_label",
             "unit_price",
             "line_subtotal",
             "discount_total",
             "line_total",
+            "modifiers",
+            "identifiers",
+        ]
+
+    def get_unit_label(self, line):
+        from apps.printing.services import receipt_unit_labels
+
+        labels = self.context.get("unit_labels")
+        if labels is None:
+            labels = receipt_unit_labels()
+            self.context["unit_labels"] = labels
+        code = line.unit or line.variant.product.unit
+        return labels.get(code, code)
+
+    def get_modifiers(self, line):
+        from apps.printing.services import order_line_modifier_payloads
+
+        return order_line_modifier_payloads(line)
+
+    def get_identifiers(self, line):
+        from .tracked_lines import order_line_identifiers
+
+        # Only what identifies the article to its owner: the consignment flags
+        # the receipt payload carries are the shop's business, not the page's.
+        return [
+            {
+                "kind": row["kind"],
+                "code": row["code"],
+                "expiry_date": row["expiry_date"],
+                "warranty_expires_on": row.get("warranty_expires_on", ""),
+            }
+            for row in order_line_identifiers(line)
         ]
 
 
@@ -1069,6 +1109,9 @@ class PublicInvoiceSerializer(serializers.ModelSerializer):
     shop_logo_data_uri = serializers.SerializerMethodField()
     customer_name = serializers.CharField(source="customer.full_name", read_only=True)
     lines = PublicInvoiceLineSerializer(many=True, read_only=True)
+    # In the shop's own timezone: the page prints the wall-clock time the
+    # customer stood at the counter, as the receipt does, not UTC.
+    created_at = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
@@ -1094,6 +1137,9 @@ class PublicInvoiceSerializer(serializers.ModelSerializer):
             settings = ShopSettings.load()
             self.context["shop_settings"] = settings
         return settings
+
+    def get_created_at(self, order):
+        return order.created_at.astimezone(business_timezone()).isoformat()
 
     def get_shop_name(self, order):
         return self._settings().shop_name

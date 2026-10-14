@@ -35,6 +35,10 @@ from .services import (
     void_payroll_run,
 )
 
+# Staff hired well before any period these tests pay: a run prorates the
+# month someone joined, and the default hire date is today.
+ON_STAFF_SINCE = date(2020, 1, 1)
+
 
 class PayrollRunLifecycleTests(TestCase):
     def setUp(self):
@@ -44,7 +48,7 @@ class PayrollRunLifecycleTests(TestCase):
         self.manager.groups.add(Group.objects.get(name=MANAGER_GROUP))
         self.accountant = User.objects.create_user(username="pay-acc", password="p")
         self.accountant.groups.add(Group.objects.get(name=ACCOUNTANT_GROUP))
-        self.employee = Employee.objects.create(full_name="موظف الرواتب")
+        self.employee = Employee.objects.create(hire_date=ON_STAFF_SINCE, full_name="موظف الرواتب")
         CompensationPlan.objects.create(
             employee=self.employee,
             pay_type=CompensationPlan.PayType.MONTHLY_SALARY,

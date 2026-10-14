@@ -10,6 +10,7 @@ from django.db.models import (
     Count,
     DecimalField,
     F,
+    Min,
     OuterRef,
     Prefetch,
     Q,
@@ -89,6 +90,14 @@ MANAGED_CODES = (
     # has not — or a deposit that arrived and was never recorded. Either way
     # the held balance is no longer "on its way".
     "treasury.card_settlement_overdue",
+    # The shop's Moamalat token died: card payments wait as "pending
+    # verification" until a supervisor re-links with an OTP.
+    "payments.moamalat_reauth",
+    # Card payments no Moamalat transaction proved, days after they should
+    # have appeared: the reconciliation exceptions.
+    "payments.moamalat_unverified",
+    # A card payment recorded for one amount while the terminal took another.
+    "payments.moamalat_amount_mismatch",
 )
 MONEY_FIELD = DecimalField(max_digits=12, decimal_places=2)
 NOTIFICATION_AUDIENCE_RULES = {
@@ -220,6 +229,20 @@ NOTIFICATION_AUDIENCE_RULES = {
         "permissions": ("treasury.add_cardsettlement",),
         "manager_only": False,
     },
+    # Cashiers see it too (quietly: nothing is blocked); only a holder of the
+    # link permission is offered the re-link.
+    "payments.moamalat_reauth": {
+        "permissions": ("payments.add_payment", "payments.manage_moamalat_link"),
+        "manager_only": False,
+    },
+    "payments.moamalat_unverified": {
+        "permissions": ("payments.manage_moamalat_link",),
+        "manager_only": False,
+    },
+    "payments.moamalat_amount_mismatch": {
+        "permissions": ("payments.manage_moamalat_link",),
+        "manager_only": False,
+    },
 }
 
 
@@ -238,6 +261,7 @@ def sync_business_notifications(now=None):
     desired.extend(_payroll_notifications(now))
     desired.extend(_backup_notifications(now))
     desired.extend(_card_settlement_notifications(now))
+    desired.extend(_moamalat_notifications(now))
     desired.extend(_wallet_transfer_notifications(now))
 
     fingerprints = set()
@@ -1130,6 +1154,85 @@ def _card_settlement_notifications(now):
                     "count": len(overdue),
                     "oldest_day": oldest.day.isoformat(),
                     "expected_on": oldest.expected_on.isoformat(),
+                },
+            )
+        )
+    return specs
+
+
+#: A card payment still unproven this long after it was taken is an exception:
+#: its batch has settled (~T+2) and its transaction should be listed by now.
+MOAMALAT_UNVERIFIED_AFTER = timedelta(days=3)
+
+
+def _moamalat_notifications(now):
+    """The Moamalat link needing a person: a dead token, and the card
+    payments nothing proved."""
+    from apps.payments.models import MoamalatLink
+    from apps.payments.moamalat import matching
+
+    link = MoamalatLink.objects.filter(pk=1).first()
+    if link is None or link.state == MoamalatLink.State.UNLINKED:
+        return []
+    specs = []
+    pending = matching.pending_payments(link)
+    if link.state == MoamalatLink.State.NEEDS_REAUTH:
+        specs.append(
+            _spec(
+                code="payments.moamalat_reauth",
+                category=BusinessNotification.Category.SALES,
+                severity=BusinessNotification.Severity.WARNING,
+                # One alert per dead token: a re-link and a later death is a
+                # new one, not the old one again.
+                fingerprint=f"payments.moamalat_reauth:{link.token_id}",
+                entity_type="payments.moamalatlink",
+                entity_id=str(link.pk),
+                payload={
+                    "merchant_name": link.merchant_name,
+                    "mid": link.mid,
+                    "died_at": link.died_at.isoformat() if link.died_at else "",
+                    "count": pending.count(),
+                },
+            )
+        )
+    mismatches = matching.amount_mismatches(link, now=now)
+    if mismatches:
+        payment, swipe = mismatches[0]
+        specs.append(
+            _spec(
+                code="payments.moamalat_amount_mismatch",
+                category=BusinessNotification.Category.SALES,
+                severity=BusinessNotification.Severity.WARNING,
+                fingerprint="payments.moamalat_amount_mismatch",
+                entity_type="payments.payment",
+                entity_id=str(payment.pk),
+                payload={
+                    "count": len(mismatches),
+                    # The first one, spelled out: recorded vs what the
+                    # terminal actually took.
+                    "recorded": _money(payment.amount),
+                    "charged": _money(swipe.amount),
+                    "receipt_number": getattr(payment.order, "receipt_number", "") or "",
+                    "terminal_id": swipe.terminal_id,
+                    "paid_at": payment.paid_at.isoformat(),
+                },
+            )
+        )
+    overdue = pending.filter(paid_at__lt=now - MOAMALAT_UNVERIFIED_AFTER)
+    totals = overdue.aggregate(count=Count("pk"), amount=Sum("amount"), oldest=Min("paid_at"))
+    if totals["count"]:
+        specs.append(
+            _spec(
+                code="payments.moamalat_unverified",
+                category=BusinessNotification.Category.SALES,
+                severity=BusinessNotification.Severity.WARNING,
+                fingerprint="payments.moamalat_unverified",
+                entity_type="payments.moamalatlink",
+                entity_id=str(link.pk),
+                payload={
+                    "count": totals["count"],
+                    "amount": _money(totals["amount"] or 0),
+                    "oldest_day": totals["oldest"].date().isoformat(),
                 },
             )
         )

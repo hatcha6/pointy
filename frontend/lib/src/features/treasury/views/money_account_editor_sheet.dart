@@ -26,6 +26,8 @@ Future<bool?> showMoneyAccountEditorSheet(
   BuildContext context, {
   required MoneyPositionViewModel viewModel,
   MoneyAccount? account,
+  // Opens a new clearing account that settles into this bank.
+  MoneyAccount? clearingFor,
 }) {
   final routing = BankRoutingScope.maybeOf(context);
   return showAdaptiveFormSurface<bool>(
@@ -35,6 +37,7 @@ Future<bool?> showMoneyAccountEditorSheet(
       viewModel: viewModel,
       routing: routing,
       account: account,
+      clearingFor: clearingFor,
     ),
   );
 }
@@ -44,11 +47,13 @@ class _MoneyAccountEditorSheet extends StatefulWidget {
     required this.viewModel,
     required this.routing,
     this.account,
+    this.clearingFor,
   });
 
   final MoneyPositionViewModel viewModel;
   final BankRouting? routing;
   final MoneyAccount? account;
+  final MoneyAccount? clearingFor;
 
   @override
   State<_MoneyAccountEditorSheet> createState() =>
@@ -73,6 +78,7 @@ class _MoneyAccountEditorSheetState extends State<_MoneyAccountEditorSheet> {
   late Set<int> _weekdays;
   late int _lagDays;
   bool _submitting = false;
+  bool _needsClearingName = false;
 
   bool get _isNew => widget.account == null;
 
@@ -101,6 +107,22 @@ class _MoneyAccountEditorSheetState extends State<_MoneyAccountEditorSheet> {
       account?.settlementWeekdays ?? MoneyAccount.defaultSettlementWeekdays,
     );
     _lagDays = account?.settlementLagDays ?? 1;
+    final clearingFor = widget.clearingFor;
+    if (account == null && clearingFor != null) {
+      _kind = MoneyAccountKind.clearing;
+      _settlesIntoId = clearingFor.id;
+      _needsClearingName = true;
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // The name `_chooseKind` would have typed, once l10n is reachable.
+    if (_needsClearingName) {
+      _needsClearingName = false;
+      _nameController.text = AppLocalizations.of(context)!.cardProviderMoamalat;
+    }
   }
 
   /// The active bank accounts a processor could pay into.

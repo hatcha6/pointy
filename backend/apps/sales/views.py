@@ -21,6 +21,7 @@ from apps.core.pagination import CreatedAtCursorPagination
 from apps.core.permissions import HasPointyPermission
 from apps.core.roles import user_has_full_visibility
 from apps.fraud.services import schedule_targeted_sweep
+from apps.inventory.models import StockUnit
 from .models import (
     Order,
     OrderLine,
@@ -789,6 +790,12 @@ class PublicInvoiceView(mixins.RetrieveModelMixin, viewsets.GenericViewSet):
         Prefetch(
             "lines__variant__option_values",
             queryset=VariantOptionValue.objects.select_related("option"),
+        ),
+        # The extras and serials each line prints under it.
+        "lines__modifiers",
+        Prefetch(
+            "lines__stock_units",
+            queryset=StockUnit.objects.select_related("batch"),
         ),
     )
 

@@ -622,6 +622,12 @@ type Located struct {
 	Refs []Ref
 	// CountryName is the item's region in Arabic, "" for none.
 	CountryName string
+	// PriceFollowsCost: the relay prices the item from its supplier's cost at
+	// the moment (price_mode auto), so a dearer supplier means a dearer card,
+	// not a thinner margin, and the suppliers' max_cost guards do not apply. A
+	// dinar card is never one: it sells at its face value whatever it costs, so
+	// its max_cost is what keeps it from selling at a loss.
+	PriceFollowsCost bool
 }
 
 // Listed reports whether the item is on sale at all: it, its brand and its
@@ -663,7 +669,8 @@ func Find(document Document, key string) (Located, bool) {
 			if err != nil {
 				return Located{}, false
 			}
-			located := Located{Brand: brand, Category: categories[brand.Category], Item: item, Ref: refs[0], Refs: refs}
+			located := Located{Brand: brand, Category: categories[brand.Category], Item: item, Ref: refs[0], Refs: refs,
+				PriceFollowsCost: document.AutoPriced(item) && !strings.EqualFold(strings.TrimSpace(item.FaceCurrency), "LYD")}
 			if item.Country != "" {
 				for _, country := range document.Countries {
 					if country.Code == item.Country {

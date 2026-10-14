@@ -105,6 +105,7 @@ class _PreviewHostState extends State<_PreviewHost> {
     'answer' || 'dark' => [analyticsAnswerSurface()],
     'invoice' => [invoiceReviewSurface()],
     'form' => [interactiveFormSurface()],
+    'pos' => [posCardsSurface()],
     _ => catalogBoardSurfaces(),
   };
 

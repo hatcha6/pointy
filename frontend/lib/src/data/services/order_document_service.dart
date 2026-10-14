@@ -1947,7 +1947,6 @@ class _ReceiptFrame {
           fontSize: 8,
           logoHeight: 12,
           color: _ink,
-          brandColor: _ink,
         ),
       ),
     );

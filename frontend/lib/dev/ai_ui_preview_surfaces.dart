@@ -800,6 +800,15 @@ List<AiUiSurface> catalogBoardSurfaces() {
       );
     case 'StockUnitCard':
       return (stockUnitCardExample(), const {});
+    case 'ProductCard':
+    case 'CustomerCard':
+    case 'SalesSummaryCard':
+      return (
+        [
+          {'id': 'root', ...posCardExamples()[name]!},
+        ],
+        const {},
+      );
   }
   return null;
 }
@@ -867,3 +876,64 @@ List<Map<String, dynamic>> stockUnitCardExample() => [
     'warehouse': 'المحل الرئيسي',
   },
 ];
+
+/// The three designer-built POS cards as the server composes them
+/// (`ui_pos_cards.py`). Public so the widget test renders the same payloads.
+Map<String, Map<String, dynamic>> posCardExamples() => {
+  'ProductCard': {
+    'component': 'ProductCard',
+    'productId': 12,
+    'name': 'قهوة تركي ٢٥٠غ',
+    'price': 18.5,
+    'code': '6281000000012',
+    'category': 'مشروبات',
+    'stock': 14,
+    'soldLast30Days': 62,
+    'daysOfCover': 6,
+    'active': true,
+  },
+  'CustomerCard': {
+    'component': 'CustomerCard',
+    'customerId': 7,
+    'name': 'سالم الورفلي',
+    'phone': '0912345678',
+    'segmentLabel': 'عميل وفيّ',
+    'balanceDue': 640,
+    'creditLimit': 500,
+    'lastPurchase': '2026-10-02',
+    'lifetimeSpend': 5120,
+    'orderCount': 38,
+  },
+  'SalesSummaryCard': {
+    'component': 'SalesSummaryCard',
+    'periodLabel': 'هذا الأسبوع',
+    'revenue': 12840,
+    'orders': 214,
+    'averageTicket': 60,
+    'revenueChange': 8.4,
+    'profit': 3110,
+    'marginPercent': 24.2,
+    'trend': [
+      {'label': '10-07', 'value': 1500},
+      {'label': '10-08', 'value': 2100},
+      {'label': '10-09', 'value': 1800},
+      {'label': '10-10', 'value': 2600},
+      {'label': '10-11', 'value': 2240},
+      {'label': '10-12', 'value': 2600},
+    ],
+    'topProducts': [
+      {'productId': 12, 'name': 'قهوة تركي ٢٥٠غ', 'revenue': 1147},
+      {'productId': 31, 'name': 'كعك بالتمر', 'revenue': 820},
+      {'productId': 8, 'name': 'شاي أخضر', 'revenue': 610},
+    ],
+  },
+};
+
+/// All three POS cards on one surface, as a reply would stack them.
+AiUiSurface posCardsSurface() {
+  final examples = posCardExamples();
+  return _surface('pos-cards', 'بطاقات نقطة البيع', [
+    {'id': 'root', 'component': 'Column', 'children': examples.keys.toList()},
+    for (final entry in examples.entries) {'id': entry.key, ...entry.value},
+  ]);
+}

@@ -20,9 +20,11 @@ class NotificationCenterDrawer extends StatelessWidget {
     required this.viewModel,
     this.onOpenAlert,
     this.onSecondaryAlertAction,
+    this.canManageMoamalatLink = false,
   });
 
   final NotificationCenterViewModel viewModel;
+  final bool canManageMoamalatLink;
   final Future<void> Function(BuildContext context, BusinessAlert alert)?
   onOpenAlert;
 
@@ -43,6 +45,7 @@ class NotificationCenterDrawer extends StatelessWidget {
               viewModel: viewModel,
               onOpenAlert: onOpenAlert,
               onSecondaryAlertAction: onSecondaryAlertAction,
+              canManageMoamalatLink: canManageMoamalatLink,
             );
           },
         ),
@@ -56,9 +59,11 @@ class _NotificationCenterBody extends StatelessWidget {
     required this.viewModel,
     required this.onOpenAlert,
     required this.onSecondaryAlertAction,
+    required this.canManageMoamalatLink,
   });
 
   final NotificationCenterViewModel viewModel;
+  final bool canManageMoamalatLink;
   final Future<void> Function(BuildContext context, BusinessAlert alert)?
   onOpenAlert;
   final Future<void> Function(BuildContext context, BusinessAlert alert)?
@@ -171,6 +176,7 @@ class _NotificationCenterBody extends StatelessWidget {
                   }
                   return _NotificationAlertRow(
                     alert: alerts[index],
+                    canManageMoamalatLink: canManageMoamalatLink,
                     onReview: onOpenAlert == null
                         ? null
                         : () => unawaited(onOpenAlert!(context, alerts[index])),
@@ -229,9 +235,11 @@ class _NotificationAlertRow extends StatelessWidget {
     required this.onSecondary,
     required this.onDismiss,
     required this.onSnooze,
+    this.canManageMoamalatLink = false,
   });
 
   final BusinessAlert alert;
+  final bool canManageMoamalatLink;
   final VoidCallback? onReview;
   final VoidCallback? onSecondary;
   final VoidCallback onDismiss;
@@ -380,6 +388,10 @@ class _NotificationAlertRow extends StatelessWidget {
     return alert.hasInvestigationQuery ||
         alert.type == BusinessAlertType.payrollReady ||
         alert.type == BusinessAlertType.cardSettlementOverdue ||
+        (canManageMoamalatLink &&
+            (alert.type == BusinessAlertType.moamalatReauth ||
+                alert.type == BusinessAlertType.moamalatUnverified ||
+                alert.type == BusinessAlertType.moamalatAmountMismatch)) ||
         alert.type == BusinessAlertType.belowCostCards ||
         alert.type == BusinessAlertType.walletTransferConfirmed ||
         alert.type == BusinessAlertType.walletTransferRejected;
@@ -411,6 +423,9 @@ class _NotificationAlertRow extends StatelessWidget {
       BusinessAlertType.offbookRecharge => Icons.receipt_long_outlined,
       BusinessAlertType.providerFloatDrift => Icons.balance_outlined,
       BusinessAlertType.cardSettlementOverdue => Icons.credit_score_outlined,
+      BusinessAlertType.moamalatReauth => Icons.lock_clock_outlined,
+      BusinessAlertType.moamalatUnverified => Icons.rule_outlined,
+      BusinessAlertType.moamalatAmountMismatch => Icons.call_split,
       BusinessAlertType.belowCostCards => Icons.price_change_outlined,
       BusinessAlertType.walletTransferConfirmed =>
         Icons.account_balance_wallet_outlined,
@@ -491,6 +506,11 @@ class _NotificationAlertRow extends StatelessWidget {
         l10n.smartNotificationProviderFloatDriftTitle,
       BusinessAlertType.cardSettlementOverdue =>
         l10n.smartNotificationCardSettlementOverdueTitle,
+      BusinessAlertType.moamalatReauth => l10n.notificationMoamalatReauthTitle,
+      BusinessAlertType.moamalatUnverified =>
+        l10n.notificationMoamalatUnverifiedTitle,
+      BusinessAlertType.moamalatAmountMismatch =>
+        l10n.notificationMoamalatAmountMismatchTitle,
       BusinessAlertType.belowCostCards => l10n.smartNotificationBelowCostTitle,
       BusinessAlertType.walletTransferConfirmed =>
         l10n.notificationWalletTransferConfirmedTitle,
@@ -610,6 +630,27 @@ class _NotificationAlertRow extends StatelessWidget {
         ),
       BusinessAlertType.belowCostCards =>
         l10n.smartNotificationBelowCostMessage(alert.count, alert.detailLabel),
+      // A cashier is told what it means for them; whoever can re-link is
+      // told what to do.
+      BusinessAlertType.moamalatReauth =>
+        canManageMoamalatLink
+            ? l10n.notificationMoamalatReauthManageMessage(alert.count)
+            : l10n.notificationMoamalatReauthCashierMessage,
+      BusinessAlertType.moamalatAmountMismatch =>
+        l10n.notificationMoamalatAmountMismatchMessage(
+          alert.primaryLabel,
+          formatMoney(_doublePayload(alert, 'recorded')),
+          formatMoney(_doublePayload(alert, 'charged')),
+          alert.count > 1
+              ? l10n.notificationMoamalatAmountMismatchMore(alert.count - 1)
+              : '',
+        ),
+      BusinessAlertType.moamalatUnverified =>
+        l10n.notificationMoamalatUnverifiedMessage(
+          alert.count,
+          formatMoney(_doublePayload(alert, 'amount')),
+          alert.occurredAt == null ? '' : formatDate(alert.occurredAt!),
+        ),
       BusinessAlertType.walletTransferConfirmed =>
         l10n.notificationWalletTransferConfirmedMessage(
           formatMoney(_doublePayload(alert, 'amount')),
@@ -691,6 +732,9 @@ class _NotificationAlertRow extends StatelessWidget {
       BusinessAlertType.offbookRecharge ||
       BusinessAlertType.providerFloatDrift ||
       BusinessAlertType.cardSettlementOverdue ||
+      BusinessAlertType.moamalatReauth ||
+      BusinessAlertType.moamalatUnverified ||
+      BusinessAlertType.moamalatAmountMismatch ||
       BusinessAlertType.belowCostCards ||
       // The reason is the message itself; the amount is in the title line.
       BusinessAlertType.walletTransferConfirmed ||

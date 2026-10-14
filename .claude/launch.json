@@ -42,6 +42,14 @@
       "port": 8080
     },
     {
+      "name": "calculator-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": [
+        "frontend-calculator-preview"
+      ],
+      "port": 8080
+    },
+    {
       "name": "cameras-preview",
       "runtimeExecutable": "make",
       "runtimeArgs": [
@@ -460,6 +468,14 @@
         "WEB_PORT=8096"
       ],
       "port": 8096
+    },
+    {
+      "name": "moamalat-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": [
+        "frontend-moamalat-preview"
+      ],
+      "port": 8080
     }
   ]
 }

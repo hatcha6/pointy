@@ -25,6 +25,7 @@ import (
 	"pointy/relay/internal/artifacts"
 	"pointy/relay/internal/control"
 	"pointy/relay/internal/limit"
+	"pointy/relay/internal/moamalat"
 	"pointy/relay/internal/observability"
 	"pointy/relay/internal/ratelimit"
 	"pointy/relay/internal/security"
@@ -134,131 +135,6 @@ var adminConsoleTemplate = template.Must(template.New("relay-admin").Parse(`<!do
 </body>
 </html>`))
 
-var publicInvoiceTemplate = template.Must(template.New("public-invoice").Parse(`<!doctype html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{.ShopName}} - {{.ReceiptNumber}}</title>
-  <style>
-    :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Tahoma, Arial, sans-serif; }
-    body { margin: 0; background: #f5f7fa; color: #111827; }
-    main { max-width: 760px; margin: 0 auto; padding: 28px 16px 44px; }
-    .invoice { background: #fff; border: 1px solid #d8dee9; border-radius: 8px; overflow: hidden; }
-    header { padding: 24px; border-bottom: 1px solid #e5e7eb; display: flex; align-items: center; gap: 16px; }
-    header .heading { flex: 1; }
-    .logo { width: 64px; height: 64px; object-fit: contain; border: 1px solid #e5e7eb; border-radius: 8px; background: #fff; padding: 4px; }
-    h1 { margin: 0; font-size: 26px; }
-    .muted { color: #5f6b7a; }
-    .meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 18px 24px; border-bottom: 1px solid #e5e7eb; }
-    .meta div { display: grid; gap: 4px; }
-    .label { color: #6b7280; font-size: 12px; font-weight: 700; }
-    .value { font-weight: 700; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { padding: 12px 16px; border-bottom: 1px solid #eef1f5; text-align: right; }
-    th { color: #4b5563; font-size: 12px; }
-    .num { text-align: left; direction: ltr; white-space: nowrap; }
-    .totals { display: grid; gap: 10px; padding: 18px 24px; margin-inline-start: auto; max-width: 340px; }
-    .total-row { display: flex; justify-content: space-between; gap: 16px; }
-    .grand { font-size: 20px; font-weight: 800; }
-    footer { padding: 18px 24px 24px; border-top: 1px solid #e5e7eb; }
-    .actions { display: flex; justify-content: flex-end; margin-top: 18px; }
-    button { border: 0; border-radius: 6px; padding: 12px 18px; font: inherit; font-weight: 800; background: #0b6b64; color: #fff; cursor: pointer; }
-    .credit { text-align: center; color: #6b7280; font-size: 12px; margin-top: 20px; }
-    .credit strong { color: #0b6b64; }
-    @media (max-width: 560px) {
-      main { padding: 12px; }
-      header, .meta, footer { padding-inline: 16px; }
-      .meta { grid-template-columns: 1fr; }
-      th, td { padding: 10px 12px; font-size: 13px; }
-    }
-    @media print {
-      body { background: #fff; }
-      main { padding: 0; max-width: none; }
-      .invoice { border: 0; border-radius: 0; }
-      .actions { display: none; }
-    }
-  </style>
-</head>
-<body>
-<main>
-  <section class="invoice">
-    <header>
-      {{if .ShopLogoSrc}}<img class="logo" src="{{.ShopLogoSrc}}" alt="">{{end}}
-      <div class="heading">
-        <h1>{{.ShopName}}</h1>
-        {{if .ReceiptHeader}}<p class="muted">{{.ReceiptHeader}}</p>{{end}}
-      </div>
-    </header>
-    <section class="meta">
-      <div><span class="label">رقم الفاتورة</span><span class="value">{{.ReceiptNumber}}</span></div>
-      <div><span class="label">الحالة</span><span class="value">{{.StatusLabel}}</span></div>
-      <div><span class="label">تاريخ الإصدار</span><span class="value">{{.CreatedAt}}</span></div>
-      {{if .CustomerName}}<div><span class="label">العميل</span><span class="value">{{.CustomerName}}</span></div>{{end}}
-    </section>
-    <table>
-      <thead>
-        <tr>
-          <th>الصنف</th>
-          <th class="num">الكمية</th>
-          <th class="num">السعر</th>
-          <th class="num">الإجمالي</th>
-        </tr>
-      </thead>
-      <tbody>
-        {{range .Lines}}
-          <tr>
-            <td>{{.DisplayName}}</td>
-            <td class="num">{{.Quantity}}</td>
-            <td class="num">{{.UnitPrice}}</td>
-            <td class="num">{{.LineTotal}}</td>
-          </tr>
-        {{end}}
-      </tbody>
-    </table>
-    <section class="totals">
-      <div class="total-row"><span>المجموع الفرعي</span><span class="num">{{.Subtotal}}</span></div>
-      <div class="total-row"><span>الخصم</span><span class="num">{{.DiscountTotal}}</span></div>
-      <div class="total-row grand"><span>الإجمالي</span><span class="num">{{.Total}}</span></div>
-    </section>
-    {{if .ReceiptFooter}}<footer class="muted">{{.ReceiptFooter}}</footer>{{end}}
-  </section>
-  <div class="actions">
-    <button type="button" id="save-pdf">حفظ كملف PDF</button>
-  </div>
-  <p class="credit">صُنع بحب بواسطة <strong>سمات</strong> · نظام Pointy</p>
-</main>
-<script>
-document.getElementById('save-pdf').addEventListener('click', function () { window.print(); });
-</script>
-</body>
-</html>`))
-
-var publicInvoiceErrorTemplate = template.Must(template.New("public-invoice-error").Parse(`<!doctype html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>الفاتورة غير متاحة</title>
-  <style>
-    :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Tahoma, Arial, sans-serif; }
-    body { margin: 0; background: #f5f7fa; color: #111827; }
-    main { max-width: 560px; margin: 0 auto; padding: 48px 16px; }
-    section { background: #fff; border: 1px solid #d8dee9; border-radius: 8px; padding: 24px; }
-    h1 { margin: 0 0 10px; font-size: 24px; }
-    p { margin: 0; color: #5f6b7a; }
-  </style>
-</head>
-<body>
-<main>
-  <section>
-    <h1>الفاتورة غير متاحة</h1>
-    <p>{{.Message}}</p>
-  </section>
-</main>
-</body>
-</html>`))
-
 type HTTPServer struct {
 	Store control.InstallationStore
 	Hub   *Hub
@@ -306,6 +182,10 @@ type HTTPServer struct {
 	Public PublicAddresses
 	// Alerts is the company's ntfy alert channel; nil sends nothing.
 	Alerts *alerts.Ntfy
+	// MoamalatSealer seals the shops' Moamalat tokens
+	// (POINTY_RELAY_MOAMALAT_TOKEN_KEY). Nil: the relay keeps no token warm
+	// and refuses to take one.
+	MoamalatSealer *moamalat.Sealer
 	// Balances watches the company's supplier balances; the server asks it
 	// to re-check coverage when a shop moves money into its card balance.
 	// Nil skips that.
@@ -414,49 +294,6 @@ type adminConsoleData struct {
 	AuditEvent   *control.AdminAuditEvent
 	GeneratedAt  time.Time
 	CSRFToken    string
-}
-
-type publicInvoicePayload struct {
-	ShopName        string                     `json:"shop_name"`
-	ReceiptHeader   string                     `json:"receipt_header"`
-	ReceiptFooter   string                     `json:"receipt_footer"`
-	ShopLogoDataURI string                     `json:"shop_logo_data_uri"`
-	ReceiptNumber   string                     `json:"receipt_number"`
-	Status          string                     `json:"status"`
-	CustomerName    string                     `json:"customer_name"`
-	Lines           []publicInvoiceLinePayload `json:"lines"`
-	Subtotal        string                     `json:"subtotal"`
-	DiscountTotal   string                     `json:"discount_total"`
-	Total           string                     `json:"total"`
-	CreatedAt       string                     `json:"created_at"`
-}
-
-type publicInvoiceLinePayload struct {
-	ProductName   string `json:"product_name"`
-	VariantName   string `json:"variant_name"`
-	Quantity      int    `json:"quantity"`
-	UnitPrice     string `json:"unit_price"`
-	LineSubtotal  string `json:"line_subtotal"`
-	DiscountTotal string `json:"discount_total"`
-	LineTotal     string `json:"line_total"`
-}
-
-type publicInvoiceViewData struct {
-	publicInvoicePayload
-	StatusLabel string
-	Lines       []publicInvoiceLineViewData
-	// Typed template.URL so html/template renders the validated data URI
-	// instead of sanitizing it.
-	ShopLogoSrc template.URL
-}
-
-type publicInvoiceLineViewData struct {
-	publicInvoiceLinePayload
-	DisplayName string
-}
-
-type publicInvoiceErrorData struct {
-	Message string
 }
 
 func (s HTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -743,6 +580,10 @@ func (s HTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// Direct top-up and bill payments: the directory, detection, quotes and
 		// orders of a shop (installation token), the operator's views (admin).
 		s.handleServiceRoutes(w, r)
+	case strings.HasPrefix(r.URL.Path, "/v1/moamalat/"):
+		// A shop's Moamalat token copy (installation token); the operator's
+		// view of every shop's keepalive (admin).
+		s.handleMoamalatRoutes(w, r)
 	case strings.HasPrefix(r.URL.Path, "/v1/vouchers/"):
 		// The company's card shop: a shop's catalog, images and purchases
 		// (installation token), the operator's catalog and ledger (admin).
@@ -2139,85 +1980,6 @@ func publicInvoiceTarget(path string, prefix string) (string, string, bool) {
 		return "", "", false
 	}
 	return installationID, invoiceToken, true
-}
-
-// publicInvoiceLogoSrc only trusts embedded raster image data URIs; anything
-// else renders no logo at all.
-func publicInvoiceLogoSrc(dataURI string) template.URL {
-	if strings.HasPrefix(dataURI, "data:image/png;base64,") ||
-		strings.HasPrefix(dataURI, "data:image/jpeg;base64,") ||
-		strings.HasPrefix(dataURI, "data:image/webp;base64,") {
-		return template.URL(dataURI)
-	}
-	return ""
-}
-
-func (s HTTPServer) renderPublicInvoice(
-	w http.ResponseWriter,
-	payload publicInvoicePayload,
-) {
-	data := publicInvoiceViewData{
-		publicInvoicePayload: payload,
-		StatusLabel:          publicInvoiceStatusLabel(payload.Status),
-		Lines:                publicInvoiceLineViewDataList(payload.Lines),
-		ShopLogoSrc:          publicInvoiceLogoSrc(payload.ShopLogoDataURI),
-	}
-	setPublicInvoiceHeaders(w.Header(), true)
-	w.WriteHeader(http.StatusOK)
-	_ = publicInvoiceTemplate.Execute(w, data)
-}
-
-func (s HTTPServer) renderPublicInvoiceError(
-	w http.ResponseWriter,
-	statusCode int,
-	message string,
-) {
-	setPublicInvoiceHeaders(w.Header(), false)
-	w.WriteHeader(statusCode)
-	_ = publicInvoiceErrorTemplate.Execute(w, publicInvoiceErrorData{
-		Message: message,
-	})
-}
-
-func setPublicInvoiceHeaders(header http.Header, allowScript bool) {
-	header.Set("Content-Type", "text/html; charset=utf-8")
-	header.Set("Cache-Control", "no-store")
-	header.Set("X-Content-Type-Options", "nosniff")
-	csp := "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'"
-	if allowScript {
-		csp = "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'"
-	}
-	header.Set("Content-Security-Policy", csp)
-}
-
-func publicInvoiceStatusLabel(status string) string {
-	switch strings.TrimSpace(status) {
-	case "paid":
-		return "مدفوعة"
-	case "void":
-		return "ملغاة"
-	case "open":
-		return "مفتوحة"
-	default:
-		return status
-	}
-}
-
-func publicInvoiceLineViewDataList(
-	lines []publicInvoiceLinePayload,
-) []publicInvoiceLineViewData {
-	rendered := make([]publicInvoiceLineViewData, 0, len(lines))
-	for _, line := range lines {
-		name := strings.TrimSpace(line.VariantName)
-		if name == "" {
-			name = strings.TrimSpace(line.ProductName)
-		}
-		rendered = append(rendered, publicInvoiceLineViewData{
-			publicInvoiceLinePayload: line,
-			DisplayName:              name,
-		})
-	}
-	return rendered
 }
 
 func (s HTTPServer) updateAdminSubscription(

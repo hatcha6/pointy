@@ -374,6 +374,7 @@ class _PayrollLineAdjustmentSheet extends StatefulWidget {
 class _PayrollLineAdjustmentSheetState
     extends State<_PayrollLineAdjustmentSheet> {
   late final TextEditingController _absenceDaysController;
+  late final TextEditingController _daysNotEmployedController;
   late final TextEditingController _overtimeHoursController;
   late final TextEditingController _raiseAmountController;
   late final TextEditingController _manualAdditionController;
@@ -385,6 +386,9 @@ class _PayrollLineAdjustmentSheetState
     super.initState();
     _absenceDaysController = TextEditingController(
       text: decimalInput(widget.line.absenceDays),
+    );
+    _daysNotEmployedController = TextEditingController(
+      text: decimalInput(widget.line.daysNotEmployed),
     );
     _overtimeHoursController = TextEditingController(
       text: decimalInput(widget.line.overtimeHours),
@@ -406,6 +410,7 @@ class _PayrollLineAdjustmentSheetState
 
   List<TextEditingController> get _amountControllers => [
     _absenceDaysController,
+    _daysNotEmployedController,
     _overtimeHoursController,
     _raiseAmountController,
     _manualAdditionController,
@@ -434,7 +439,10 @@ class _PayrollLineAdjustmentSheetState
     final projectedAdditions = _projectedAdditions;
     final projectedDeductions = _projectedDeductions;
     final projectedNet = _projectedNet;
-    final hasAbsenceError = periodDays > 0 && absenceDays > periodDays;
+    final hasAbsenceError =
+        periodDays > 0 &&
+        absenceDays + decimalValue(_daysNotEmployedController.text) >
+            periodDays;
     final hasNetError = projectedNet < 0;
 
     return Padding(
@@ -473,6 +481,24 @@ class _PayrollLineAdjustmentSheetState
               ),
               inputFormatters: [DecimalTextInputFormatter()],
             ),
+            // Only on a line the hire date prorated: the count was worked
+            // out for the owner, who may know better.
+            if (widget.line.daysNotEmployed > 0) ...[
+              SizedBox(height: spacing.sm),
+              TextFormField(
+                key: const ValueKey('payroll_line_days_not_employed_field'),
+                controller: _daysNotEmployedController,
+                decoration: InputDecoration(
+                  labelText: l10n.daysNotEmployedField,
+                  helperText: l10n.daysNotEmployedHelper,
+                  helperMaxLines: 2,
+                ),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                inputFormatters: [DecimalTextInputFormatter()],
+              ),
+            ],
             SizedBox(height: spacing.sm),
             TextFormField(
               controller: _overtimeHoursController,
@@ -641,6 +667,19 @@ class _PayrollLineAdjustmentSheetState
     );
   }
 
+  /// Prorated from the unrounded daily rate, as the server does.
+  double get _notEmployedDeduction {
+    final periodDays = payrollPeriodDays(widget.run);
+    if (periodDays <= 0) {
+      return 0;
+    }
+    return roundMoney(
+      widget.line.grossAmount *
+          decimalValue(_daysNotEmployedController.text) /
+          periodDays,
+    );
+  }
+
   double get _overtimeHourlyRate {
     // The backend computes the hourly wage from the employee's plan (day rate
     // divided by standard daily hours); fall back to an 8h day for a fresh line.
@@ -673,6 +712,7 @@ class _PayrollLineAdjustmentSheetState
     final fixed =
         _existingAdjustmentDeductions +
         _absenceDeduction +
+        _notEmployedDeduction +
         decimalValue(_manualDeductionController.text);
     // What the employee owes — staff purchases, a balance on their account —
     // gives way first: the server shrinks it rather than let the line go
@@ -718,6 +758,9 @@ class _PayrollLineAdjustmentSheetState
       widget.line,
       PayrollLineAdjustmentDraft(
         absenceDays: decimalPayload(_absenceDaysController.text),
+        daysNotEmployed: widget.line.daysNotEmployed > 0
+            ? decimalPayload(_daysNotEmployedController.text)
+            : null,
         overtimeHours: decimalPayload(_overtimeHoursController.text),
         raiseAmount: decimalPayload(_raiseAmountController.text),
         manualAdditionAmount: decimalPayload(_manualAdditionController.text),

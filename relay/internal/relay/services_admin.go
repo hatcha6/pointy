@@ -12,7 +12,8 @@ import (
 // The operator's side of the services (admin token):
 //
 //	GET  /v1/services/admin/config                         what the services are, and when the directory was read
-//	GET  /v1/services/admin/directory?country=ML,NE&refresh=1   the directory as a shop reads it (filtered);
+//	GET  /v1/services/admin/directory?country=ML,NE&refresh=1   the directory as a shop reads it, plus the
+//	                                                       company's cost of each price (cost_lyd; filtered);
 //	                                                       &accept=1 with refresh believes a far smaller directory
 //	POST /v1/services/admin/quote                          the quote route, without a shop
 //	GET  /v1/services/admin/names?missing=1                names the Arabic tables do not have
@@ -79,7 +80,7 @@ func (s HTTPServer) handleServiceAdminDirectory(w http.ResponseWriter, r *http.R
 		s.writeVoucherInternalError(w, "", "services pricing read failed", err)
 		return
 	}
-	rendered, err := s.Services.Directory(ctx, in)
+	rendered, err := s.Services.AdminDirectory(ctx, in)
 	if err != nil {
 		writeSMSError(w, http.StatusServiceUnavailable, serviceCodeUnavailable, "the services directory could not be read: "+services.RedactError(err), nil)
 		return

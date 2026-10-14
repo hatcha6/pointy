@@ -196,6 +196,29 @@ Screens are reviewed without a backend through dev-only preview harnesses under
 (`?screen=dashboard|board|dark|fx|payments`) — it feeds the real screen fake
 repositories, so there is no server, no login, and no shop data involved.
 
+## Live card verification (Moamalat)
+
+A supervisor links the shop's Moamalat merchant account once, in
+التحقق من البطاقات: username and password, then the OTP Moamalat texts to the
+merchant's phone. The password is passed to Moamalat and never stored. From
+then on every card payment is matched to the terminal's own transaction (RRN,
+or amount + time + terminal). The match is live while a till's payment sheet is
+open, and a quiet sweep catches anything later. A payment that cannot be
+matched yet is «بانتظار التحقق». Verification never blocks a sale.
+If the terminal took less than the card line (a mistyped amount), the sheet
+splits the line by itself and adds the remainder, with an undo. A swipe taken
+before the sheet opened is offered with one tap. A recorded payment that
+disagrees with its swipe is flagged to supervisors within minutes.
+
+The portal token dies after ~15 minutes of silence and needs an OTP to replace.
+The shop's backend (Celery beat `payments.moamalat-keepalive`) and the relay
+(`POINTY_RELAY_MOAMALAT_TOKEN_KEY`) each keep it warm independently. The fast
+loop for an open checkout is capped: one read every 5 s per shop, at most 10
+minutes per stretch, then a 2-minute rest, and it stops at the first failed
+read. Design and API shapes are in `tools/moamalat-capture/`. Stop it
+fleet-wide with `pointy-relay integrations disable moamalat --reason "…"`. Preview with
+`make frontend-moamalat-preview` (`?screen=board|unlinked|alive|at-risk|reauth|switched|sheet`).
+
 ## App updates after a backend update
 
 Every API response names the backend's release in `X-Pointy-Server-Version`. When
@@ -885,6 +908,7 @@ instead.
 make frontend-camera-wedge-test        # native engine tests + FFI tests (needs CMake)
 make frontend-camera-wedge-linux       # the Linux backend against a real kernel under QEMU (needs Docker)
 make frontend-camera-wedge-preview     # the F8 panel and settings states (?screen=board|panel|settings)
+make frontend-calculator-preview       # the F12 floating calculator (?screen=board|live)
 ```
 
 To check a camera on a real till without installing the app, build the

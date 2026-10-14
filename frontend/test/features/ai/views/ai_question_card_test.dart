@@ -5,6 +5,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import 'package:pointy_frontend/src/core/authorization.dart';
 import 'package:pointy_frontend/src/core/result.dart';
 import 'package:pointy_frontend/src/data/models/ai_chat.dart';
+import 'package:pointy_frontend/src/data/models/ai_memory.dart';
 import 'package:pointy_frontend/src/data/models/pos_user.dart';
 import 'package:pointy_frontend/src/data/repositories/ai_chat_repository.dart';
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
@@ -59,6 +60,33 @@ class _AskRepo extends AiChatRepository {
   Future<Result<List<AiConversationSummary>>> loadConversations({
     int page = 1,
   }) async => const Ok([]);
+}
+
+/// Serves the assistant's own opening suggestions and records what was sent.
+class _SuggestingRepo extends _AskRepo {
+  _SuggestingRepo() : super(const []);
+
+  String? sent;
+
+  @override
+  Future<Result<List<AiSuggestion>>> loadSuggestions() async => const Ok([
+    AiSuggestion(
+      title: 'لماذا تراجعت القهوة الثلاثاء؟',
+      prompt: 'حلّل تراجع مبيعات القهوة التركي يوم الثلاثاء الماضي',
+      icon: 'sales',
+    ),
+    AiSuggestion(title: 'اطلب من بُن اليمن', prompt: 'جهّز طلب شراء'),
+  ]);
+
+  @override
+  Stream<AiChatEvent> streamChat({
+    int? conversationId,
+    required String message,
+    List<AiAttachment> attachments = const [],
+  }) async* {
+    sent = message;
+    yield const AiChatDone(conversationId: 1);
+  }
 }
 
 class _FakeNavigation implements AppNavigation {
@@ -396,5 +424,84 @@ void main() {
 
     expect(repo.resumeCalled, isTrue);
     expect(repo.resumeDeclined, isTrue);
+  });
+
+  AiQuestion approvalQuestion() => const AiQuestion(
+    id: 'approve',
+    type: AiQuestionType.confirm,
+    prompt: 'تأكيد دفعة للمورّد',
+    help: 'لن يُنفَّذ شيء قبل موافقتك.',
+    config: {
+      'approval': true,
+      'details': [
+        {'label': 'المبلغ', 'value': '150.00', 'kind': 'money'},
+        {'label': 'طريقة الدفع', 'value': 'نقدًا'},
+      ],
+    },
+  );
+
+  testWidgets('approval card shows the exact figures and approves in one tap', (
+    tester,
+  ) async {
+    final repo = _AskRepo([approvalQuestion()]);
+    final viewModel = AiChatViewModel(repo);
+    addTearDown(viewModel.dispose);
+
+    await _pump(tester, viewModel);
+    await viewModel.sendMessage('ادفع للمورّد');
+    await tester.pumpAndSettle();
+
+    expect(find.text('تأكيد دفعة للمورّد'), findsOneWidget);
+    expect(find.text('نقدًا'), findsOneWidget);
+    // Money rows use the app's formatter, not the server's string.
+    expect(find.textContaining('150.00'), findsOneWidget);
+    // The generic submit/skip actions are replaced by approve/cancel.
+    expect(find.text('إرسال الإجابة'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('ai_approval_approve')));
+    await tester.pumpAndSettle();
+
+    expect(repo.resumeCalled, isTrue);
+    expect(repo.resumeDeclined, isFalse);
+    expect(repo.resumeAnswers.single.questionId, 'approve');
+    expect(repo.resumeAnswers.single.value, true);
+    expect(find.text('تمت الموافقة ونُفِّذت العملية'), findsOneWidget);
+  });
+
+  testWidgets('cancelling an approval answers no and says nothing ran', (
+    tester,
+  ) async {
+    final repo = _AskRepo([approvalQuestion()]);
+    final viewModel = AiChatViewModel(repo);
+    addTearDown(viewModel.dispose);
+
+    await _pump(tester, viewModel);
+    await viewModel.sendMessage('ادفع للمورّد');
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('ai_approval_cancel')));
+    await tester.pumpAndSettle();
+
+    expect(repo.resumeAnswers.single.value, false);
+    expect(find.text('أُلغيت العملية — لم يُنفَّذ شيء'), findsOneWidget);
+  });
+
+  testWidgets('the assistant\'s own suggestions replace the defaults', (
+    tester,
+  ) async {
+    final repo = _SuggestingRepo();
+    final viewModel = AiChatViewModel(repo);
+    addTearDown(viewModel.dispose);
+
+    await _pump(tester, viewModel);
+    await tester.pumpAndSettle();
+
+    expect(find.text('اقتراحات من المساعد لمتجرك'), findsOneWidget);
+    expect(find.text('اكتب رسالة ترحيب لعملاء متجري'), findsNothing);
+
+    await tester.tap(find.text('لماذا تراجعت القهوة الثلاثاء؟'));
+    await tester.pumpAndSettle();
+    // Tapping sends the full prompt, not the short title.
+    expect(repo.sent, 'حلّل تراجع مبيعات القهوة التركي يوم الثلاثاء الماضي');
   });
 }

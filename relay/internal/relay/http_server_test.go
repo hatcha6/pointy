@@ -2893,7 +2893,7 @@ func TestHTTPPublicInvoiceRendersHTMLFromBackend(t *testing.T) {
 				"lines": [{
 					"product_name": "Coffee",
 					"variant_name": "Coffee",
-					"quantity": 2,
+					"quantity": 2.0,
 					"unit_price": "3.50",
 					"line_subtotal": "7.00",
 					"discount_total": "0.00",
@@ -2961,7 +2961,7 @@ func TestHTTPPublicInvoiceRendersHTMLFromBackend(t *testing.T) {
 	body := string(content)
 	for _, expected := range []string{
 		"حفظ كملف PDF",
-		"صُنع بحب",
+		"دُوّن في",
 		`<img class="logo" src="data:image/png;base64,aGVsbG8="`,
 		"R20260609000001",
 		"متجر نقطة البيع",

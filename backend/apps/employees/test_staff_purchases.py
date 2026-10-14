@@ -40,6 +40,10 @@ from .services import (
 )
 from .staff_purchases import ensure_staff_customer
 
+# Staff hired well before any period these tests pay: a run prorates the
+# month someone joined, and the default hire date is today.
+ON_STAFF_SINCE = date(2020, 1, 1)
+
 JUNE = (date(2026, 6, 1), date(2026, 6, 30))
 JULY = (date(2026, 7, 1), date(2026, 7, 31))
 
@@ -113,7 +117,7 @@ class StaffAccountTests(TestCase):
         self.assertEqual(first.data["staff_employee"], employee.pk)
 
     def test_the_customer_list_says_which_accounts_are_staff(self):
-        staff = Employee.objects.create(full_name="موظف")
+        staff = Employee.objects.create(hire_date=ON_STAFF_SINCE, full_name="موظف")
         ensure_staff_customer(staff)
         Customer.objects.create(full_name="زبون")
 
@@ -124,7 +128,7 @@ class StaffAccountTests(TestCase):
         self.assertIsNone(by_name["زبون"])
 
     def test_merging_a_staff_account_away_keeps_the_employee_on_the_survivor(self):
-        staff = Employee.objects.create(full_name="موظف")
+        staff = Employee.objects.create(hire_date=ON_STAFF_SINCE, full_name="موظف")
         account = ensure_staff_customer(staff)
         duplicate = Customer.objects.create(full_name="موظف (قديم)")
 
@@ -139,8 +143,8 @@ class StaffAccountTests(TestCase):
         self.assertEqual(staff.customer_id, duplicate.pk)
 
     def test_two_employees_accounts_cannot_be_merged(self):
-        first = ensure_staff_customer(Employee.objects.create(full_name="الأول"))
-        second = ensure_staff_customer(Employee.objects.create(full_name="الثاني"))
+        first = ensure_staff_customer(Employee.objects.create(hire_date=ON_STAFF_SINCE, full_name="الأول"))
+        second = ensure_staff_customer(Employee.objects.create(hire_date=ON_STAFF_SINCE, full_name="الثاني"))
 
         response = self.client.post(
             reverse("customer-merge", args=[first.pk]),
@@ -155,8 +159,9 @@ class StaffAccountTests(TestCase):
         backfill = import_module(
             "apps.employees.migrations.0014_backfill_staff_customers"
         ).backfill
-        active = Employee.objects.create(full_name="على رأس العمل")
+        active = Employee.objects.create(hire_date=ON_STAFF_SINCE, full_name="على رأس العمل")
         gone = Employee.objects.create(
+            hire_date=ON_STAFF_SINCE,
             full_name="غادر",
             status=Employee.Status.TERMINATED,
             termination_date=date(2026, 1, 1),
@@ -205,6 +210,9 @@ class StaffPurchasePayrollTests(TestCase):
         )
         self.account = self.client.get(reverse("customer-staff-account")).data
         self.employee = Employee.objects.get(user=self.cashier)
+        # Created with the login, so hired today; paid for months before it.
+        self.employee.hire_date = ON_STAFF_SINCE
+        self.employee.save(update_fields=["hire_date"])
         self.plan = CompensationPlan.objects.create(
             employee=self.employee,
             pay_type=CompensationPlan.PayType.MONTHLY_SALARY,

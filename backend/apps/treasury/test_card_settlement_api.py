@@ -23,6 +23,7 @@ from apps.core.roles import (
     ensure_role_groups,
 )
 from apps.notifications.models import BusinessNotification
+from apps.payments.models import CardTerminal, Payment
 from apps.notifications.services import (
     MANAGED_CODES,
     NOTIFICATION_AUDIENCE_RULES,
@@ -183,6 +184,78 @@ class HeldDaysApiTests(SettlementApiTestCase):
         self.assertEqual(self.client.get(self.held_url(clearing)).status_code, 403)
         self.assertEqual(
             self.client.get(reverse("card-settlement-list")).status_code, 403
+        )
+
+
+class DirectCardBankNoteTests(SettlementApiTestCase):
+    """The note on a bank whose card takings nothing holds."""
+
+    def second_bank(self, name="الأمان"):
+        return MoneyAccount.objects.create(
+            name=name,
+            kind=MoneyAccount.Kind.BANK,
+            opening_at=self.today - timedelta(days=60),
+        )
+
+    def flags(self):
+        response = self.client.get(reverse("treasury-position"))
+        self.assertEqual(response.status_code, 200)
+        return {
+            entry["account"]["id"]: entry["card_direct"]
+            for entry in response.data["accounts"]
+        }
+
+    def test_a_shop_that_holds_nothing_is_told_nothing(self):
+        second = self.second_bank()
+        self.pay("70.00", account=second)
+        self.pay("30.00")
+        self.assertNotIn(True, self.flags().values())
+
+    def test_a_bank_with_card_takings_and_no_hold_is_flagged(self):
+        self.open_clearing()
+        second = self.second_bank()
+        self.pay("70.00", account=second)
+        flags = self.flags()
+        self.assertTrue(flags[second.pk])
+        self.assertFalse(flags[self.bank.pk])
+
+    def test_a_bank_that_only_takes_transfers_is_not(self):
+        self.open_clearing()
+        second = self.second_bank()
+        self.pay("70.00", account=second, method=Payment.Method.TRANSFER)
+        self.assertFalse(self.flags()[second.pk])
+
+    def test_a_terminal_mapped_to_it_is_enough(self):
+        self.open_clearing()
+        second = self.second_bank()
+        CardTerminal.objects.create(terminal_id="T-2", money_account=second)
+        self.assertTrue(self.flags()[second.pk])
+
+    def test_a_retired_terminal_and_old_takings_are_not(self):
+        self.open_clearing()
+        second = self.second_bank()
+        CardTerminal.objects.create(
+            terminal_id="T-2", money_account=second, is_active=False
+        )
+        self.pay("70.00", account=second, days_ago=120)
+        self.assertFalse(self.flags()[second.pk])
+
+    def test_untagged_takings_flag_the_default_when_another_bank_holds(self):
+        second = self.second_bank()
+        self.open_clearing(bank=second)
+        self.pay("30.00")
+        flags = self.flags()
+        self.assertTrue(flags[self.bank.pk])
+        self.assertFalse(flags[second.pk])
+
+    def test_a_past_position_never_asks(self):
+        self.open_clearing()
+        second = self.second_bank()
+        self.pay("70.00", account=second)
+        past = (self.today - timedelta(days=3)).isoformat()
+        response = self.client.get(reverse("treasury-position") + f"?as_of={past}")
+        self.assertNotIn(
+            True, [entry["card_direct"] for entry in response.data["accounts"]]
         )
 
 

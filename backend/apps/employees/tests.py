@@ -32,6 +32,10 @@ from .models import (
 )
 from .services import approve_payroll_run, draft_monthly_payroll_run, mark_payroll_run_paid
 
+# Staff hired well before any period these tests pay: a run prorates the
+# month someone joined, and the default hire date is today.
+ON_STAFF_SINCE = date(2020, 1, 1)
+
 
 class EmployeePayrollApiTests(TestCase):
     def setUp(self):
@@ -78,7 +82,7 @@ class EmployeePayrollApiTests(TestCase):
                 "job_title": "محاسبة",
                 "department": "الإدارة",
                 "employment_type": Employee.EmploymentType.FULL_TIME,
-                "hire_date": timezone.localdate().isoformat(),
+                "hire_date": timezone.localdate().replace(day=1).isoformat(),
             },
             format="json",
         )
@@ -141,7 +145,7 @@ class EmployeePayrollApiTests(TestCase):
         self.assertEqual(payroll_response.data["net_total"], "915.00")
 
     def test_payroll_run_detail_returns_employee_lines(self):
-        employee = Employee.objects.create(full_name="سارة أحمد")
+        employee = Employee.objects.create(hire_date=ON_STAFF_SINCE, full_name="سارة أحمد")
         plan = CompensationPlan.objects.create(
             employee=employee,
             pay_type=CompensationPlan.PayType.MONTHLY_SALARY,
@@ -188,7 +192,7 @@ class EmployeePayrollApiTests(TestCase):
         )
 
     def test_payroll_run_detail_updates_line_absence_and_adjustment_totals(self):
-        employee = Employee.objects.create(full_name="خالد محمود")
+        employee = Employee.objects.create(hire_date=ON_STAFF_SINCE, full_name="خالد محمود")
         plan = CompensationPlan.objects.create(
             employee=employee,
             pay_type=CompensationPlan.PayType.MONTHLY_SALARY,
@@ -237,7 +241,7 @@ class EmployeePayrollApiTests(TestCase):
         self.assertEqual(updated_line["net_amount"], "955.00")
 
     def test_payroll_run_detail_adds_overtime_hours_manually(self):
-        employee = Employee.objects.create(full_name="عمر سعيد")
+        employee = Employee.objects.create(hire_date=ON_STAFF_SINCE, full_name="عمر سعيد")
         plan = CompensationPlan.objects.create(
             employee=employee,
             pay_type=CompensationPlan.PayType.MONTHLY_SALARY,
@@ -274,7 +278,7 @@ class EmployeePayrollApiTests(TestCase):
         self.assertEqual(response.data["net_total"], "956.25")
 
     def test_per_employee_overtime_multiplier_is_configurable(self):
-        employee = Employee.objects.create(full_name="ليلى حسن")
+        employee = Employee.objects.create(hire_date=ON_STAFF_SINCE, full_name="ليلى حسن")
         plan = CompensationPlan.objects.create(
             employee=employee,
             pay_type=CompensationPlan.PayType.MONTHLY_SALARY,
@@ -308,7 +312,7 @@ class EmployeePayrollApiTests(TestCase):
         self.assertEqual(response.data["net_total"], "975.00")
 
     def test_payroll_line_adjustments_are_locked_after_draft_status(self):
-        employee = Employee.objects.create(full_name="منى صالح")
+        employee = Employee.objects.create(hire_date=ON_STAFF_SINCE, full_name="منى صالح")
         payroll = PayrollRun.objects.create(
             status=PayrollRun.Status.APPROVED,
             period_start=date(2026, 6, 1),
@@ -329,8 +333,8 @@ class EmployeePayrollApiTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_payroll_run_bulk_adjustments_apply_to_selected_lines(self):
-        first_employee = Employee.objects.create(full_name="أحمد سالم")
-        second_employee = Employee.objects.create(full_name="منى صالح")
+        first_employee = Employee.objects.create(hire_date=ON_STAFF_SINCE, full_name="أحمد سالم")
+        second_employee = Employee.objects.create(hire_date=ON_STAFF_SINCE, full_name="منى صالح")
         payroll = PayrollRun.objects.create(
             period_start=date(2026, 6, 1),
             period_end=date(2026, 6, 30),
@@ -402,7 +406,7 @@ class EmployeePayrollApiTests(TestCase):
         )
 
     def test_payroll_run_bulk_adjustments_are_locked_after_draft_status(self):
-        employee = Employee.objects.create(full_name="منى صالح")
+        employee = Employee.objects.create(hire_date=ON_STAFF_SINCE, full_name="منى صالح")
         payroll = PayrollRun.objects.create(
             status=PayrollRun.Status.APPROVED,
             period_start=date(2026, 6, 1),
@@ -450,7 +454,7 @@ class EmployeePayrollApiTests(TestCase):
         self.assertEqual(response.data["results"][1]["id"], older.pk)
 
     def test_employee_user_link_must_be_unique(self):
-        Employee.objects.create(full_name="موظف مرتبط", user=self.cashier)
+        Employee.objects.create(hire_date=ON_STAFF_SINCE, full_name="موظف مرتبط", user=self.cashier)
 
         response = self.authenticated_client(self.accountant).post(
             reverse("employee-list"),
@@ -467,6 +471,7 @@ class EmployeePayrollApiTests(TestCase):
 
     def test_monthly_payroll_draft_uses_base_salary_and_sales_commission(self):
         employee = Employee.objects.create(
+            hire_date=ON_STAFF_SINCE,
             full_name="كاشير عمولة",
             user=self.cashier,
         )
@@ -506,6 +511,7 @@ class EmployeePayrollApiTests(TestCase):
 
     def test_monthly_payroll_draft_commission_uses_only_cashier_paid_sales_in_period(self):
         employee = Employee.objects.create(
+            hire_date=ON_STAFF_SINCE,
             full_name="كاشير مبيعات متعددة",
             user=self.cashier,
         )
@@ -570,6 +576,7 @@ class EmployeePayrollApiTests(TestCase):
 
     def test_monthly_payroll_draft_uses_commission_only_salary(self):
         employee = Employee.objects.create(
+            hire_date=ON_STAFF_SINCE,
             full_name="مندوب عمولة",
             user=self.cashier,
         )
@@ -605,7 +612,7 @@ class EmployeePayrollApiTests(TestCase):
         self.assertEqual(payroll.net_total, Decimal("50.00"))
 
     def test_monthly_payroll_draft_uses_rate_based_salary_units(self):
-        employee = Employee.objects.create(full_name="موظف بالساعة")
+        employee = Employee.objects.create(hire_date=ON_STAFF_SINCE, full_name="موظف بالساعة")
         CompensationPlan.objects.create(
             employee=employee,
             pay_type=CompensationPlan.PayType.HOURLY,
@@ -628,7 +635,7 @@ class EmployeePayrollApiTests(TestCase):
         self.assertEqual(line.net_amount, Decimal("1800.00"))
 
     def test_compensation_plan_salary_type_validation(self):
-        employee = Employee.objects.create(full_name="تحقق الراتب")
+        employee = Employee.objects.create(hire_date=ON_STAFF_SINCE, full_name="تحقق الراتب")
         client = self.authenticated_client(self.accountant)
         invalid_cases = [
             {
@@ -672,8 +679,8 @@ class EmployeePayrollApiTests(TestCase):
             self.assertIn(error_field, response.data)
 
     def test_monthly_payroll_draft_skips_manual_and_expired_plans(self):
-        daily_employee = Employee.objects.create(full_name="عامل يومي")
-        expired_employee = Employee.objects.create(full_name="راتب منتهي")
+        daily_employee = Employee.objects.create(hire_date=ON_STAFF_SINCE, full_name="عامل يومي")
+        expired_employee = Employee.objects.create(hire_date=ON_STAFF_SINCE, full_name="راتب منتهي")
         today = timezone.localdate()
         CompensationPlan.objects.create(
             employee=daily_employee,
@@ -698,7 +705,7 @@ class EmployeePayrollApiTests(TestCase):
         self.assertIsNone(payroll)
 
     def test_monthly_payroll_draft_is_idempotent_for_period(self):
-        Employee.objects.create(full_name="موظف ثابت")
+        Employee.objects.create(hire_date=ON_STAFF_SINCE, full_name="موظف ثابت")
         employee = Employee.objects.get(full_name="موظف ثابت")
         CompensationPlan.objects.create(
             employee=employee,
@@ -731,6 +738,7 @@ class EmployeePayrollApiTests(TestCase):
 
     def test_employee_can_request_loan_and_admin_can_approve_it(self):
         employee = Employee.objects.create(
+            hire_date=ON_STAFF_SINCE,
             full_name="موظف قرض",
             user=self.cashier,
         )
@@ -776,6 +784,7 @@ class EmployeePayrollApiTests(TestCase):
 
     def test_monthly_payroll_deducts_approved_loan_when_payroll_is_paid(self):
         employee = Employee.objects.create(
+            hire_date=ON_STAFF_SINCE,
             full_name="موظف خصم قرض",
             user=self.cashier,
         )
@@ -824,7 +833,7 @@ class EmployeePayrollApiTests(TestCase):
         self.assertEqual(adjustment.loan_id, loan.pk)
 
     def test_monthly_payroll_loan_deduction_caps_to_remaining_balance(self):
-        employee = Employee.objects.create(full_name="موظف آخر قرض")
+        employee = Employee.objects.create(hire_date=ON_STAFF_SINCE, full_name="موظف آخر قرض")
         CompensationPlan.objects.create(
             employee=employee,
             pay_type=CompensationPlan.PayType.MONTHLY_SALARY,
@@ -859,7 +868,7 @@ class EmployeePayrollApiTests(TestCase):
         self.assertEqual(EmployeeLoanPayment.objects.get(loan=loan).amount, Decimal("30.00"))
 
     def test_unpaid_loan_deductions_are_not_double_scheduled(self):
-        employee = Employee.objects.create(full_name="موظف جدولة قرض")
+        employee = Employee.objects.create(hire_date=ON_STAFF_SINCE, full_name="موظف جدولة قرض")
         CompensationPlan.objects.create(
             employee=employee,
             pay_type=CompensationPlan.PayType.MONTHLY_SALARY,
@@ -895,7 +904,7 @@ class EmployeePayrollApiTests(TestCase):
         self.assertEqual(loan.outstanding_balance, Decimal("80.00"))
 
     def test_draft_payroll_run_generates_admin_notification(self):
-        employee = Employee.objects.create(full_name="تنبيه الرواتب")
+        employee = Employee.objects.create(hire_date=ON_STAFF_SINCE, full_name="تنبيه الرواتب")
         CompensationPlan.objects.create(
             employee=employee,
             pay_type=CompensationPlan.PayType.MONTHLY_SALARY,
@@ -926,7 +935,7 @@ class EmployeePayrollApiTests(TestCase):
         self.assertEqual(schedule["task"], "employees.draft_monthly_payroll")
 
     def test_payroll_run_transitions_are_guarded_and_audited_by_status(self):
-        employee = Employee.objects.create(full_name="أحمد محمود")
+        employee = Employee.objects.create(hire_date=ON_STAFF_SINCE, full_name="أحمد محمود")
         plan = CompensationPlan.objects.create(
             employee=employee,
             pay_type=CompensationPlan.PayType.DAILY_RATE,
@@ -967,7 +976,7 @@ class EmployeePayrollApiTests(TestCase):
         self.assertEqual(payroll.status, PayrollRun.Status.VOID)
 
     def test_dashboard_shows_payroll_to_manager_and_hides_from_cashier(self):
-        employee = Employee.objects.create(full_name="منى سالم")
+        employee = Employee.objects.create(hire_date=ON_STAFF_SINCE, full_name="منى سالم")
         payroll = PayrollRun.objects.create(
             status=PayrollRun.Status.PAID,
             period_start=timezone.localdate() - timedelta(days=2),
@@ -1059,7 +1068,7 @@ class OperationsCommissionPayrollTests(TestCase):
     def test_draft_pays_operations_commission_on_completed_repairs(self):
         from apps.operations.models import Job
 
-        employee = Employee.objects.create(full_name="فني عمولة")
+        employee = Employee.objects.create(hire_date=ON_STAFF_SINCE, full_name="فني عمولة")
         CompensationPlan.objects.create(
             employee=employee,
             pay_type=CompensationPlan.PayType.MONTHLY_SALARY,
@@ -1069,7 +1078,7 @@ class OperationsCommissionPayrollTests(TestCase):
             amount=Decimal("500.00"),
             commission_percent=Decimal("20.00"),
         )
-        other = Employee.objects.create(full_name="فني آخر")
+        other = Employee.objects.create(hire_date=ON_STAFF_SINCE, full_name="فني آخر")
         today = timezone.localdate()
         period_start = today.replace(day=1)
         in_period = timezone.now()
@@ -1124,7 +1133,7 @@ class OperationsCommissionPayrollTests(TestCase):
         self.assertIn("repairs", adjustment.notes)
 
     def test_draft_pays_operations_commission_only_plan(self):
-        employee = Employee.objects.create(full_name="فني بالعمولة فقط")
+        employee = Employee.objects.create(hire_date=ON_STAFF_SINCE, full_name="فني بالعمولة فقط")
         CompensationPlan.objects.create(
             employee=employee,
             pay_type=CompensationPlan.PayType.COMMISSION,
@@ -1151,7 +1160,7 @@ class OperationsCommissionPayrollTests(TestCase):
     def test_operations_commission_labor_base_excludes_parts(self):
         from apps.operations.models import JobMaterial
 
-        employee = Employee.objects.create(full_name="فني الأجور")
+        employee = Employee.objects.create(hire_date=ON_STAFF_SINCE, full_name="فني الأجور")
         CompensationPlan.objects.create(
             employee=employee,
             pay_type=CompensationPlan.PayType.COMMISSION,
@@ -1195,7 +1204,7 @@ class OperationsCommissionPayrollTests(TestCase):
     def test_operations_commission_order_total_base_uses_invoice(self):
         from apps.operations.models import Job
 
-        employee = Employee.objects.create(full_name="فني الفاتورة")
+        employee = Employee.objects.create(hire_date=ON_STAFF_SINCE, full_name="فني الفاتورة")
         CompensationPlan.objects.create(
             employee=employee,
             pay_type=CompensationPlan.PayType.COMMISSION,
@@ -1235,7 +1244,7 @@ class OperationsCommissionPayrollTests(TestCase):
         self.assertEqual(line.net_amount, Decimal("15.00"))
 
     def test_operations_commission_only_requires_percentage(self):
-        employee = Employee.objects.create(full_name="فني")
+        employee = Employee.objects.create(hire_date=ON_STAFF_SINCE, full_name="فني")
         plan = CompensationPlan(
             employee=employee,
             pay_type=CompensationPlan.PayType.COMMISSION,
@@ -1247,7 +1256,7 @@ class OperationsCommissionPayrollTests(TestCase):
             plan.full_clean()
 
     def test_operations_commission_fixed_requires_amount(self):
-        employee = Employee.objects.create(full_name="فني")
+        employee = Employee.objects.create(hire_date=ON_STAFF_SINCE, full_name="فني")
         plan = CompensationPlan(
             employee=employee,
             pay_type=CompensationPlan.PayType.MONTHLY_SALARY,

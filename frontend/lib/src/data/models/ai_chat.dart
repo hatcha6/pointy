@@ -119,6 +119,7 @@ class AiUsage {
 /// ("🔎 يستعلم عن المبيعات…") and ticked once it completes.
 class AiToolRun {
   AiToolRun({
+    this.id = '',
     required this.name,
     this.resource,
     this.label,
@@ -129,6 +130,10 @@ class AiToolRun {
     this.output,
   });
 
+  /// The tool call's id — what the start and done events share, so parallel
+  /// calls to the same tool each finish their own chip. Empty from an older
+  /// backend or a persisted trace.
+  final String id;
   final String name;
   final String? resource;
   final String? label;
@@ -144,6 +149,35 @@ class AiToolRun {
 
   /// True when there's anything to show in the tap-to-inspect sheet.
   bool get hasDetails => done && (output != null || arguments != null);
+}
+
+/// Where one step of the assistant's task plan stands.
+enum AiPlanStatus { pending, inProgress, completed }
+
+/// One step of the checklist the assistant keeps for a multi-step task.
+class AiPlanStep {
+  const AiPlanStep({required this.step, required this.status});
+
+  final String step;
+  final AiPlanStatus status;
+
+  static List<AiPlanStep> listFrom(Object? raw) {
+    if (raw is! List) {
+      return const [];
+    }
+    return [
+      for (final item in raw)
+        if (item is Map && '${item['step'] ?? ''}'.trim().isNotEmpty)
+          AiPlanStep(
+            step: '${item['step']}'.trim(),
+            status: switch (item['status']) {
+              'completed' => AiPlanStatus.completed,
+              'in_progress' => AiPlanStatus.inProgress,
+              _ => AiPlanStatus.pending,
+            },
+          ),
+    ];
+  }
 }
 
 /// A single chat turn. Extends [ChangeNotifier] so a streaming reply can notify
@@ -268,6 +302,24 @@ class AiQuestion {
   String? get confirmLabel => config['confirm_label'] as String?;
   String? get denyLabel => config['deny_label'] as String?;
 
+  /// A server-issued approval card for a money-moving action the assistant
+  /// asked to run. Nothing runs until the user approves it here.
+  bool get isApproval =>
+      type == AiQuestionType.confirm && config['approval'] == true;
+
+  /// The exact figures the approval commits, in display order.
+  List<AiApprovalDetail> get approvalDetails {
+    final raw = config['details'];
+    if (raw is! List) {
+      return const [];
+    }
+    return raw
+        .whereType<Map<String, Object?>>()
+        .map(AiApprovalDetail.fromJson)
+        .where((detail) => detail.label.isNotEmpty)
+        .toList(growable: false);
+  }
+
   // product_picker config: the invoice line the AI couldn't match. Shown to the
   // user and reused if they choose "create new product".
   String? get productName => (config['name'] as String?)?.trim();
@@ -297,6 +349,28 @@ class AiQuestion {
       config: json['config'] is Map<String, Object?>
           ? json['config'] as Map<String, Object?>
           : const {},
+    );
+  }
+}
+
+/// One row of an approval card. Money rows carry the raw number so the app
+/// formats them with its own currency rules.
+class AiApprovalDetail {
+  const AiApprovalDetail({
+    required this.label,
+    required this.value,
+    this.isMoney = false,
+  });
+
+  final String label;
+  final String value;
+  final bool isMoney;
+
+  factory AiApprovalDetail.fromJson(Map<String, Object?> json) {
+    return AiApprovalDetail(
+      label: (json['label'] as String?)?.trim() ?? '',
+      value: json['value']?.toString() ?? '',
+      isMoney: json['kind'] == 'money',
     );
   }
 }
@@ -523,6 +597,7 @@ class AiMessage extends ChangeNotifier {
     List<AiSource>? sources,
     List<AiUiSurface>? uiSurfaces,
     this.webSearched = false,
+    this.plan = const [],
   }) : toolRuns = toolRuns ?? <AiToolRun>[],
        sources = sources ?? <AiSource>[],
        uiSurfaces = uiSurfaces ?? <AiUiSurface>[];
@@ -550,6 +625,10 @@ class AiMessage extends ChangeNotifier {
 
   /// Generated UI surfaces rendered inside this turn's bubble, in arrival order.
   final List<AiUiSurface> uiSurfaces;
+
+  /// The task checklist the assistant keeps for a multi-step job; empty for an
+  /// ordinary answer. Replaced whole on each update.
+  List<AiPlanStep> plan;
 
   /// Web-search sources the assistant consulted (favicon avatars). Mutable so the
   /// `done` event can attach them after the reply streamed.
@@ -600,14 +679,20 @@ class AiMessage extends ChangeNotifier {
   /// Mark the most recent matching tool run finished (success/failure), attaching
   /// its inputs + result preview for the tap-to-inspect chip.
   void finishToolRun({
+    String id = '',
     required String name,
     String? resource,
     bool? ok,
     Object? arguments,
     String? output,
   }) {
+    // The call id when both sides have one; name + resource for an older
+    // backend, which is the guess this used to rely on.
+    bool matches(AiToolRun run) => id.isNotEmpty && run.id.isNotEmpty
+        ? run.id == id
+        : run.name == name && run.resource == resource;
     for (final run in toolRuns.reversed) {
-      if (run.name == name && run.resource == resource && !run.done) {
+      if (!run.done && matches(run)) {
         run.done = true;
         run.ok = ok;
         run.arguments = arguments;
@@ -615,6 +700,12 @@ class AiMessage extends ChangeNotifier {
         break;
       }
     }
+    notifyListeners();
+  }
+
+  /// Replace the task checklist and notify this message's listeners only.
+  void updatePlan(List<AiPlanStep> steps) {
+    plan = steps;
     notifyListeners();
   }
 
@@ -766,6 +857,7 @@ class AiMessage extends ChangeNotifier {
       sources: AiSource.listFrom(json['sources']),
       uiSurfaces: AiUiSurface.listFrom(json['ui_surfaces']),
       webSearched: json['web_searched'] == true,
+      plan: AiPlanStep.listFrom(json['plan']),
     );
   }
 }
@@ -815,6 +907,18 @@ class AiConversation {
               .map(AiMessage.fromJson)
               .toList(growable: false)
         : <AiMessage>[];
+    // A turn that paused on a question and resumed is saved as two rows, both
+    // holding the plan. Show it once, on the row that carried on — as it was
+    // in the session.
+    for (var i = 0; i + 1 < messages.length; i++) {
+      final paused = messages[i];
+      final next = messages[i + 1];
+      if (paused.pendingQuestion != null &&
+          !next.isUser &&
+          next.plan.isNotEmpty) {
+        paused.plan = const [];
+      }
+    }
     return AiConversation(
       id: (json['id'] as num?)?.toInt() ?? 0,
       title: (json['title'] as String?) ?? '',
@@ -845,6 +949,7 @@ class AiChatReasoning extends AiChatEvent {
 /// as a transient chip; `phase` is "start" or "done".
 class AiChatToolActivity extends AiChatEvent {
   const AiChatToolActivity({
+    this.id = '',
     required this.name,
     this.resource,
     this.label,
@@ -855,6 +960,7 @@ class AiChatToolActivity extends AiChatEvent {
     this.output,
   });
 
+  final String id;
   final String name;
   final String? resource;
   final String? label;
@@ -868,6 +974,13 @@ class AiChatToolActivity extends AiChatEvent {
   final String? output;
 
   bool get isStart => phase == 'start';
+}
+
+/// The assistant's task checklist, sent whole each time it changes.
+class AiChatPlan extends AiChatEvent {
+  const AiChatPlan(this.steps);
+
+  final List<AiPlanStep> steps;
 }
 
 /// The assistant paused to ask the user something. Carries the question spec and

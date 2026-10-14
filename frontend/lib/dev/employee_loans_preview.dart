@@ -5,7 +5,14 @@
 // through the real parsing. Pick a surface with `?screen=`:
 //
 //   payroll  — the employees & payroll workspace; open «السلف» for the list
-//              and its «سلفة جديدة» button.
+//              and its «سلفة جديدة» button. The month card's checklist names
+//              the one employee without a salary plan.
+//   payroll-empty — the same workspace before any employee is added: the
+//              card's checklist starts at «إضافة موظف».
+//   payroll-due — last month's run is still a draft, so the card is about
+//              last month and offers «مراجعة واعتماد».
+//   add-plan — the salary sheet as it opens right after adding an employee.
+//   custom-run — «مسير لموظفين محددين», open on load.
 //   new      — the new-loan form, open on load, for a manager: the money is
 //              handed over in the same step.
 //   request  — the same form for someone who may record a loan but not
@@ -42,6 +49,7 @@ import 'package:pointy_frontend/src/features/employees/views/employee_account_sc
 import 'package:pointy_frontend/src/features/employees/views/employee_loan_sheet.dart';
 import 'package:pointy_frontend/src/features/employees/views/employee_payroll_screen.dart';
 import 'package:pointy_frontend/src/features/employees/views/employee_picker_sheet.dart';
+import 'package:pointy_frontend/src/features/employees/views/employee_sheets.dart';
 import 'package:pointy_frontend/src/features/treasury/view_models/bank_routing.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
 import 'package:pointy_frontend/src/shared/navigation/app_navigation.dart';
@@ -123,10 +131,14 @@ class _EmployeeLoansPreviewAppState extends State<EmployeeLoansPreviewApp> {
       body = {'count': loans.length, 'next': null, 'results': loans};
     } else if (path.endsWith('/employees/5/')) {
       body = _salem;
+    } else if (path.endsWith('/payroll-runs/') && request.method == 'GET') {
+      final runs = widget.screen == 'payroll-due' ? [_lastMonthDraft()] : [];
+      body = {'count': runs.length, 'next': null, 'results': runs};
     } else if (path.endsWith('/employees/')) {
       final search = (query['search'] ?? '').trim();
       final employees = [
-        for (final employee in _employees)
+        for (final employee
+            in widget.screen == 'payroll-empty' ? const [] : _employees)
           if (search.isEmpty ||
               '${employee['full_name']}'.contains(search) ||
               '${employee['employee_number']}'.contains(search))
@@ -188,7 +200,21 @@ class _EmployeeLoansPreviewAppState extends State<EmployeeLoansPreviewApp> {
         ),
       ),
       home: switch (widget.screen) {
-        'payroll' => payroll,
+        'payroll' || 'payroll-empty' || 'payroll-due' => payroll,
+        'add-plan' => _OpenOnLoad(
+          open: (context) => showCompensationPlanSheet(
+            context,
+            viewModel: viewModel,
+            employee: Employee.fromJson(_employees[2]),
+            afterCreate: true,
+          ),
+          child: payroll,
+        ),
+        'custom-run' => _OpenOnLoad(
+          open: (context) =>
+              showCustomPayrollRunSheet(context, viewModel: viewModel),
+          child: payroll,
+        ),
         'account' => EmployeeAccountScreen(
           viewModel: viewModel,
           employee: Employee.fromJson(_salem),
@@ -477,3 +503,23 @@ const _accounts = <Map<String, Object?>>[
     'is_active': true,
   },
 ];
+
+/// Last month's run, drafted by the server on the 1st and not yet approved.
+Map<String, Object?> _lastMonthDraft() {
+  final now = DateTime.now();
+  String iso(DateTime date) => date.toIso8601String().substring(0, 10);
+  return {
+    'id': 70,
+    'run_number': 'PR-0070',
+    'status': 'draft',
+    'period_start': iso(DateTime(now.year, now.month - 1)),
+    'period_end': iso(DateTime(now.year, now.month, 0)),
+    'notes': '',
+    'gross_total': '3300.00',
+    'additions_total': '0.00',
+    'deductions_total': '350.00',
+    'net_total': '2950.00',
+    'line_count': 2,
+    'lines': const <Object?>[],
+  };
+}

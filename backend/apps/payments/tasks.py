@@ -85,3 +85,11 @@ def sweep_unverified_card_receipts(limit=200):
             break
         queued += 1
     return queued
+
+
+# Registered here so Celery's autodiscovery of ``apps.payments.tasks`` finds them.
+from .moamalat.tasks import (  # noqa: E402,F401
+    moamalat_fast_poll,
+    moamalat_keepalive,
+    moamalat_sweep,
+)

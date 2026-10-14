@@ -1264,6 +1264,15 @@ func TestTheOperatorSeesTheServices(t *testing.T) {
 		len(view["unsupported"].([]any)) != 1 {
 		t.Fatalf("filtered directory: %d %v", status, directory)
 	}
+	// The operator sees the company's cost beside every price; a shop never does.
+	operatorBody, _ := json.Marshal(directory)
+	if !strings.Contains(string(operatorBody), `"cost_lyd"`) {
+		t.Fatalf("the operator's directory carries no cost: %s", operatorBody)
+	}
+	shopBody := h.serve(http.MethodGet, "/v1/services/directory", map[string]string{AccessTokenHeader: h.shop.AccessToken}, nil).Body.String()
+	if !strings.Contains(shopBody, `"unit_price"`) || strings.Contains(shopBody, "cost_lyd") {
+		t.Fatalf("a shop's directory must carry prices and no cost: %s", shopBody)
+	}
 	status, names := h.admin(http.MethodGet, "/v1/services/admin/names?missing=1", "")
 	missing := names["missing"].([]any)
 	if status != http.StatusOK || len(missing) == 0 || svcObject(t, missing[0])["kind"] == nil {

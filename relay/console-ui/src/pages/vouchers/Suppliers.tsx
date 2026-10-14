@@ -1,14 +1,15 @@
 import { useMemo, useState } from "react";
 import { Unavailable } from "../../components/Unavailable";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeftRight, Landmark, RefreshCw, Search, Settings2, Telescope, Truck } from "lucide-react";
+import { ArrowLeftRight, Landmark, RefreshCw, Search, Settings2, Telescope, Trophy, Truck } from "lucide-react";
 import { api, qs } from "../../lib/api";
 import { useSearchParam } from "../../lib/router";
 import { matches } from "../../lib/search";
 import { count, money } from "../../lib/format";
 import { label, supplier as supplierLabels } from "../../lib/labels";
 import { reasonText, type SupplierOffer, type Supply } from "../../lib/vouchers";
-import { Badge, Button, Card, Empty, Money, Segmented, Skeleton, Switch, Tabs, TimeAgo } from "../../components/ui";
+import { Badge, Button, Card, Empty, Money, Notice, Segmented, Skeleton, Switch, Tabs, TimeAgo } from "../../components/ui";
+import { ProfitCell } from "../../components/profit";
 import { DataTable, Stacked, type Column } from "../../components/DataTable";
 import { PageHeader } from "../../components/PageHeader";
 import { AutoView } from "../../components/AutoView";
@@ -177,49 +178,100 @@ function OffersTab() {
 
 type Compared = {
   supply: Supply;
+  /** Who it is bought from now (the first candidate). */
   winner?: string;
   winnerCost?: number;
-  runnerUp?: string;
-  saving?: number;
+  /** Who prices it lowest, in stock or not; "" when the prices are equal. */
+  cheapest?: string;
+  /** The dearer price less the cheaper one, and that as a share of the cheaper. */
+  gap?: number;
+  gapPct?: number;
   unitPrice?: number;
   margin?: number;
 };
 
+type CompareFilter = "" | "tie" | "dearer" | `cheaper:${string}`;
+type CompareSort = "" | "gap" | "gap-pct";
+
+/** Two prices this close are the same price. */
+const TIE = 0.005;
+
+function compare(s: Supply, unitPrice: number | undefined): Compared {
+  const ranked = [...(s.suppliers ?? [])].filter((o) => o.candidate && o.cost_lyd).sort((a, b) => a.rank - b.rank);
+  const winner = ranked[0];
+  const winnerCost = winner?.cost_lyd ? Number(winner.cost_lyd) : undefined;
+  const priced = (s.suppliers ?? []).filter((o) => o.cost_lyd).sort((a, b) => Number(a.cost_lyd) - Number(b.cost_lyd));
+  let cheapest: string | undefined;
+  let gap: number | undefined;
+  let gapPct: number | undefined;
+  if (priced.length >= 2) {
+    const low = Number(priced[0].cost_lyd);
+    gap = Number(priced[1].cost_lyd) - low;
+    gapPct = low > 0 ? (gap / low) * 100 : undefined;
+    cheapest = gap < TIE ? "" : priced[0].supplier;
+  }
+  return {
+    supply: s,
+    winner: winner?.supplier,
+    winnerCost,
+    cheapest,
+    gap,
+    gapPct,
+    unitPrice,
+    margin: winnerCost !== undefined && unitPrice !== undefined ? unitPrice - winnerCost : undefined,
+  };
+}
+
 function CompareTab() {
   const catalog = useCatalog();
   const [query, setQuery] = useState("");
+  const [filter, setFilter] = useSearchParam("cheaper");
+  const [sort, setSort] = useState<CompareSort>("gap");
   const rows = useMemo<Compared[]>(() => {
     const prices = new Map<string, string>();
     for (const b of catalog.data?.view?.brands ?? []) for (const i of b.items) prices.set(i.key, i.unit_price);
     return (catalog.data?.supply ?? [])
       .filter((s) => (s.suppliers?.length ?? 0) >= 2)
-      .map((s) => {
-        const ranked = [...(s.suppliers ?? [])].filter((o) => o.candidate && o.cost_lyd).sort((a, b) => a.rank - b.rank);
-        const winner = ranked[0];
-        const next = ranked[1];
-        const winnerCost = winner?.cost_lyd ? Number(winner.cost_lyd) : undefined;
-        const unitPrice = prices.has(s.item) ? Number(prices.get(s.item)) : undefined;
-        return {
-          supply: s,
-          winner: winner?.supplier,
-          winnerCost,
-          runnerUp: next?.supplier,
-          saving: winnerCost !== undefined && next?.cost_lyd ? Number(next.cost_lyd) - winnerCost : undefined,
-          unitPrice,
-          margin: winnerCost !== undefined && unitPrice !== undefined ? unitPrice - winnerCost : undefined,
-        };
-      });
+      .map((s) => compare(s, prices.has(s.item) ? Number(prices.get(s.item)) : undefined));
   }, [catalog.data]);
-  const shown = rows.filter((r) => matches(query, r.supply.name, r.supply.item));
-  const wins = rows.reduce<Record<string, number>>((acc, r) => (r.winner ? { ...acc, [r.winner]: (acc[r.winner] ?? 0) + 1 } : acc), {});
+  const suppliers = useMemo(() => [...new Set(rows.flatMap((r) => (r.supply.suppliers ?? []).map((o) => o.supplier)))].sort(), [rows]);
+  // Who prices lowest, how many items, and how much cheaper in all.
+  const board = suppliers.map((key) => {
+    const won = rows.filter((r) => r.cheapest === key);
+    return { key, items: won.length, saving: won.reduce((sum, r) => sum + (r.gap ?? 0), 0), bought: rows.filter((r) => r.winner === key).length };
+  });
+  const leader = [...board].sort((a, b) => b.items - a.items)[0];
+  const ties = rows.filter((r) => r.cheapest === "").length;
+  const dearer = rows.filter(boughtDearer).length;
   const belowCost = rows.filter((r) => r.margin !== undefined && r.margin < 0).length;
+  const wanted = (filter || "") as CompareFilter;
+  const shown = useMemo(() => {
+    const filtered = rows.filter(
+      (r) =>
+        matches(query, r.supply.name, r.supply.item) &&
+        (wanted === "" ||
+          (wanted === "tie" && r.cheapest === "") ||
+          (wanted === "dearer" && boughtDearer(r)) ||
+          (wanted.startsWith("cheaper:") && r.cheapest === wanted.slice("cheaper:".length))),
+    );
+    if (sort === "gap") return [...filtered].sort((a, b) => (b.gap ?? -1) - (a.gap ?? -1));
+    if (sort === "gap-pct") return [...filtered].sort((a, b) => (b.gapPct ?? -1) - (a.gapPct ?? -1));
+    return filtered;
+  }, [rows, query, wanted, sort]);
   const columns: Column<Compared>[] = [
     { key: "item", header: "الصنف", mobile: "title", cell: (r) => <Stacked title={r.supply.name} sub={r.supply.item} mono /> },
     {
-      key: "winner",
-      header: "يُشترى من",
+      key: "cheapest",
+      header: "الأرخص",
       mobile: "trailing",
-      cell: (r) => (r.winner ? <Badge tone="success">{label(supplierLabels, r.winner)}</Badge> : <Badge tone="danger">لا أحد</Badge>),
+      cell: (r) =>
+        r.cheapest === undefined ? (
+          <span className="faint">—</span>
+        ) : r.cheapest === "" ? (
+          <Badge tone="neutral">متساويان</Badge>
+        ) : (
+          <Badge tone="success">{label(supplierLabels, r.cheapest)}</Badge>
+        ),
     },
     {
       key: "costs",
@@ -228,49 +280,129 @@ function CompareTab() {
       cell: (r) => (
         <div className="pill-list">
           {(r.supply.suppliers ?? []).map((o) => (
-            <Badge key={o.supplier} tone={o.supplier === r.winner ? "success" : o.candidate ? "outline" : "neutral"}>
+            <Badge key={o.supplier} tone={o.supplier === r.cheapest ? "success" : o.candidate ? "outline" : "neutral"}>
               {label(supplierLabels, o.supplier)}: {o.cost_lyd ? money(Number(o.cost_lyd).toFixed(3)) : reasonText(o.reason) || "—"}
+              {o.cost_lyd && !o.candidate ? " · لا يُشترى منه الآن" : ""}
             </Badge>
           ))}
         </div>
       ),
     },
-    { key: "saving", header: "التوفير", align: "end", cell: (r) => (r.saving !== undefined ? <Money value={r.saving.toFixed(3)} /> : <span className="faint">—</span>) },
     {
-      key: "margin",
-      header: "هامش البيع",
+      key: "gap",
+      header: "الفرق",
       align: "end",
       cell: (r) =>
-        r.margin !== undefined ? <span className={r.margin < 0 ? "negative" : "positive"}>{money(r.margin.toFixed(3))}</span> : <span className="faint">—</span>,
+        r.gap !== undefined ? (
+          <span className="price-cell">
+            <Money value={r.gap.toFixed(3)} />
+            {r.gapPct !== undefined && <span className="faint num" style={{ fontSize: 12 }}>{r.gapPct.toFixed(1)}%</span>}
+          </span>
+        ) : (
+          <span className="faint">—</span>
+        ),
+    },
+    {
+      key: "winner",
+      header: "يُشترى من",
+      cell: (r) =>
+        r.winner ? (
+          <Badge tone={boughtDearer(r) ? "warning" : "outline"}>
+            {label(supplierLabels, r.winner)}
+            {boughtDearer(r) ? " · ليس الأرخص" : ""}
+          </Badge>
+        ) : (
+          <Badge tone="danger">لا أحد</Badge>
+        ),
+    },
+    {
+      key: "margin",
+      header: "ربحنا",
+      align: "end",
+      wideOnly: true,
+      cell: (r) => <ProfitCell value={r.margin} of={r.winnerCost} />,
     },
   ];
   return (
     <div className="stack">
+      {leader && leader.items > 0 && (
+        <Notice tone="money" icon={<Trophy />}>
+          {board.filter((b) => b.items === leader.items).length > 1 ? (
+            <>الموردون متعادلون: </>
+          ) : (
+            <>
+              الأرخص في الغالب: <strong>{label(supplierLabels, leader.key)}</strong> —{" "}
+            </>
+          )}
+          {board.map((b) => `${label(supplierLabels, b.key)} أرخص في ${count(b.items)}`).join(" · ")} من {count(rows.length)} صنفاً
+          {ties ? ` · متساويان في ${count(ties)}` : ""}.
+        </Notice>
+      )}
       <div className="grid kpis">
-        {Object.entries(wins).map(([s, n]) => (
-          <div key={s} className="card kpi">
-            <div className="kpi-label">يُشترى من {label(supplierLabels, s)}</div>
-            <div className="kpi-value">{count(n)}</div>
-            <div className="kpi-foot">صنفاً بأقل تكلفة</div>
-          </div>
+        {board.map((b) => (
+          <button
+            type="button"
+            key={b.key}
+            className={`card kpi clickable ${wanted === `cheaper:${b.key}` ? "selected" : ""}`}
+            onClick={() => setFilter(wanted === `cheaper:${b.key}` ? "" : `cheaper:${b.key}`)}
+          >
+            <div className="kpi-label">أرخص لدى {label(supplierLabels, b.key)}</div>
+            <div className="kpi-value">{count(b.items)}</div>
+            <div className="kpi-foot">
+              أرخص بـ {money(b.saving.toFixed(2))} في مجموعها · يُشترى منه {count(b.bought)}
+            </div>
+          </button>
         ))}
+        <button
+          type="button"
+          className={`card kpi clickable ${dearer ? "attention" : ""} ${wanted === "dearer" ? "selected" : ""}`}
+          onClick={() => setFilter(wanted === "dearer" ? "" : "dearer")}
+        >
+          <div className="kpi-label">يُشترى من غير الأرخص</div>
+          <div className="kpi-value">{count(dearer)}</div>
+          <div className="kpi-foot">{dearer ? "الأرخص نافد أو رصيدنا لديه لا يكفي" : "لا شيء"}</div>
+        </button>
         <div className={`card kpi ${belowCost ? "attention" : ""}`}>
           <div className="kpi-label">يُباع بأقل من التكلفة</div>
           <div className="kpi-value">{count(belowCost)}</div>
           <div className="kpi-foot">{belowCost ? "راجع أسعارها في الكتالوج" : "لا شيء"}</div>
         </div>
       </div>
-      <Card tight title="الأصناف التي لها أكثر من مورّد">
-        <div className="toolbar">
+      <Card tight title={`${count(shown.length)} من ${count(rows.length)} صنفاً لها أكثر من مورّد`}>
+        <div className="toolbar stacks">
           <div className="search-input">
             <Search />
             <input className="input" placeholder="صنف" value={query} onChange={(e) => setQuery(e.target.value)} />
           </div>
+          <Segmented<CompareFilter>
+            value={wanted}
+            onChange={setFilter}
+            options={[
+              { id: "", label: "الكل" },
+              ...suppliers.map((key) => ({ id: `cheaper:${key}` as CompareFilter, label: `أرخص لدى ${label(supplierLabels, key)}` })),
+              { id: "tie", label: "متساوية" },
+              { id: "dearer", label: "ليس من الأرخص" },
+            ]}
+          />
+          <Segmented<CompareSort>
+            value={sort}
+            onChange={setSort}
+            options={[
+              { id: "gap", label: "الفرق الأكبر" },
+              { id: "gap-pct", label: "النسبة الأكبر" },
+              { id: "", label: "ترتيب الكتالوج" },
+            ]}
+          />
         </div>
-        <DataTable rows={shown} columns={columns} rowKey={(r) => r.supply.item} loading={catalog.isLoading} empty={<Empty icon={<ArrowLeftRight />} title="لا صنف له أكثر من مورّد" />} />
+        <DataTable rows={shown} columns={columns} rowKey={(r) => r.supply.item} loading={catalog.isLoading} empty={<Empty icon={<ArrowLeftRight />} title={rows.length ? "لا أصناف بهذه الشروط" : "لا صنف له أكثر من مورّد"} />} />
       </Card>
     </div>
   );
+}
+
+/** Bought from a supplier that is not the cheapest: the cheaper one is out of stock, short of our money, or refused. */
+function boughtDearer(r: Compared): boolean {
+  return !!r.winner && !!r.cheapest && r.winner !== r.cheapest;
 }
 
 function BalancesTab() {

@@ -637,6 +637,7 @@ type fileStoreData struct {
 	EnrollmentTokens                 map[string]EnrollmentTokenRecord          `json:"enrollment_tokens,omitempty"`
 	SMSMessages                      map[string]SMSMessage                     `json:"sms_messages,omitempty"`
 	IntegrationSwitches              map[string]IntegrationSwitch              `json:"integration_switches,omitempty"`
+	MoamalatLinks                    map[string]MoamalatLink                   `json:"moamalat_links,omitempty"`
 	WalletEntries                    map[string]WalletEntry                    `json:"wallet_entries,omitempty"`
 	WalletTopUps                     map[string]WalletTopUp                    `json:"wallet_topups,omitempty"`
 	VoucherCatalogs                  map[string]VoucherCatalog                 `json:"voucher_catalogs,omitempty"`

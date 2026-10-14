@@ -68,6 +68,122 @@ class AppLocalizationsAr extends AppLocalizations {
   String get commandPaletteActionStockCount => 'بدء جرد';
 
   @override
+  String get commandPaletteActionCalculator => 'الآلة الحاسبة';
+
+  @override
+  String get calculatorTitle => 'الآلة الحاسبة';
+
+  @override
+  String get calculatorClose => 'إغلاق الآلة الحاسبة';
+
+  @override
+  String get calculatorShowHistory => 'السجل';
+
+  @override
+  String get calculatorHistoryEmpty => 'لا توجد عمليات بعد';
+
+  @override
+  String get calculatorClearHistory => 'مسح السجل';
+
+  @override
+  String get calculatorCopy => 'نسخ';
+
+  @override
+  String get calculatorCopied => 'تم النسخ';
+
+  @override
+  String get calculatorInsert => 'إدراج في الحقل';
+
+  @override
+  String get calculatorInsertUnavailable =>
+      'اختر حقلاً في الصفحة أولاً ثم افتح الآلة الحاسبة';
+
+  @override
+  String get calculatorInsertRejected => 'الحقل لا يقبل هذه القيمة';
+
+  @override
+  String get calculatorUndefined => 'غير معرّف';
+
+  @override
+  String get calculatorTooLarge => 'الرقم كبير جدًا';
+
+  @override
+  String get calculatorShortcutHint => 'F12 للإظهار والإخفاء · Esc للمسح';
+
+  @override
+  String get calculatorKeyClear => 'مسح';
+
+  @override
+  String get calculatorKeyBackspace => 'حذف آخر رقم';
+
+  @override
+  String get calculatorKeyPercent => 'نسبة مئوية';
+
+  @override
+  String get calculatorKeyDivide => 'قسمة';
+
+  @override
+  String get calculatorKeyMultiply => 'ضرب';
+
+  @override
+  String get calculatorKeySubtract => 'طرح';
+
+  @override
+  String get calculatorKeyAdd => 'جمع';
+
+  @override
+  String get calculatorKeyEquals => 'يساوي';
+
+  @override
+  String get calculatorKeyDecimal => 'فاصلة عشرية';
+
+  @override
+  String get calculatorConvert => 'تحويل العملات';
+
+  @override
+  String get calculatorSwapCurrencies => 'تبديل اتجاه التحويل';
+
+  @override
+  String get calculatorPickCurrency => 'اختر العملة';
+
+  @override
+  String get calculatorCurrencySearch => 'ابحث بالاسم أو الرمز';
+
+  @override
+  String get calculatorCurrencyRecent => 'المستخدمة مؤخرًا';
+
+  @override
+  String get calculatorCurrencyAll => 'كل العملات';
+
+  @override
+  String get calculatorCurrencyOtherSide => 'مختارة في الطرف الآخر';
+
+  @override
+  String calculatorCurrencyNoResults(String query) {
+    return 'لا نتائج لـ «$query»';
+  }
+
+  @override
+  String get calculatorCurrencyNoResultsHint =>
+      'تحقق من الإملاء أو جرّب بحثًا آخر.';
+
+  @override
+  String get calculatorRatesLoading => 'جارٍ تحميل أسعار الصرف…';
+
+  @override
+  String get calculatorRatesUnavailable => 'أسعار الصرف غير متاحة الآن';
+
+  @override
+  String get calculatorRatesRetry => 'إعادة المحاولة';
+
+  @override
+  String get calculatorRatesRefresh => 'تحديث الأسعار';
+
+  @override
+  String get calculatorConvertShortcutHint =>
+      'F12 للإظهار والإخفاء · Tab لتبديل الاتجاه';
+
+  @override
   String commandPaletteStockLabel(String count) {
     return '$count في المخزون';
   }
@@ -13765,10 +13881,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String get payrollMonthPaidMessage => 'تم دفع رواتب هذا الشهر.';
 
   @override
-  String get payrollMonthOnboardingMessage =>
-      'أضف موظفيك وحدد خطط رواتبهم لبدء تجهيز مسيرات الرواتب.';
-
-  @override
   String get preparePayrollMonthButton => 'تجهيز رواتب الشهر';
 
   @override
@@ -13781,10 +13893,150 @@ class AppLocalizationsAr extends AppLocalizations {
   String get viewPayrollRunButton => 'عرض المسير';
 
   @override
-  String get customPayrollRunButton => 'مسير مخصص';
+  String get payrollHistoryTitle => 'سجل المسيرات';
 
   @override
-  String get payrollHistoryTitle => 'سجل المسيرات';
+  String get payrollMonthPreviousTooltip => 'الشهر السابق';
+
+  @override
+  String get payrollMonthNextTooltip => 'الشهر التالي';
+
+  @override
+  String get payrollReadinessEmployeesStep => 'أضف موظفيك';
+
+  @override
+  String payrollReadinessEmployeesDone(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count موظفين مسجّلين',
+      two: 'موظفان مسجّلان',
+      one: 'موظف واحد مسجّل',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get payrollReadinessPlansStep => 'حدّد راتب كل موظف';
+
+  @override
+  String payrollReadinessPlansProgress(int ready, int total) {
+    return '$ready من $total لديهم خطة راتب لهذا الشهر';
+  }
+
+  @override
+  String get payrollReadinessNoPlan => 'بدون خطة راتب';
+
+  @override
+  String payrollReadinessPlanStartsLater(String date) {
+    return 'خطته تبدأ $date، بعد هذا الشهر';
+  }
+
+  @override
+  String get payrollSetSalaryButton => 'تحديد الراتب';
+
+  @override
+  String payrollReadinessMoreMissing(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'و$count موظفين آخرين بدون خطة',
+      two: 'وموظفان آخران بدون خطة',
+      one: 'وموظف آخر بدون خطة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get payrollPrepareHint =>
+      'سيُنشأ مسير لكل موظف لديه خطة راتب، مع العمولات وأقساط السلف. يمكنك مراجعته وتعديله قبل الاعتماد.';
+
+  @override
+  String payrollPrepareSkipsHint(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count موظفين بدون خطة لن يُدرجوا في المسير.',
+      two: 'موظفان بدون خطة لن يُدرجا في المسير.',
+      one: 'موظف واحد بدون خطة لن يُدرج في المسير.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get payrollPrepareBlockedHint =>
+      'حدّد راتب موظف واحد على الأقل لتتمكن من تجهيز المسير.';
+
+  @override
+  String get payrollMonthDraftHint =>
+      'راجع مبلغ كل موظف وأضف المكافآت أو الخصومات إن وجدت، ثم اعتمد المسير.';
+
+  @override
+  String get payrollMonthApprovedHint =>
+      'سجّل الدفع بعد تسليم الرواتب للموظفين.';
+
+  @override
+  String get payrollOtherRunButton => 'مسير لموظفين محددين';
+
+  @override
+  String payrollCompensationIntro(String name) {
+    return 'حدّد راتب $name ليُدرج في مسير الرواتب.';
+  }
+
+  @override
+  String get payrollCompensationSkipButton => 'لاحقاً';
+
+  @override
+  String payrollPrepareProratedHint(String names) {
+    return 'يُحسب راتب $names من تاريخ بدء العمل هذا الشهر، لا عن الشهر كاملاً.';
+  }
+
+  @override
+  String payrollNotEmployedChipLabel(String days, String amount) {
+    return 'قبل بدء العمل $days يوم ($amount)';
+  }
+
+  @override
+  String get daysNotEmployedField => 'أيام قبل بدء العمل';
+
+  @override
+  String get daysNotEmployedHelper =>
+      'حُسبت من تاريخ تعيين الموظف وتُخصم بقيمة اليوم. صحّحها إن كان التاريخ غير دقيق.';
+
+  @override
+  String get employeeHireDateHelper =>
+      'يُحسب أول راتب من هذا التاريخ. للموظفين الحاليين اختر تاريخ بدء عملهم الفعلي.';
+
+  @override
+  String get compensationEffectiveFromField => 'يبدأ الراتب من';
+
+  @override
+  String get compensationEffectiveFromHelper =>
+      'لموظف جديد: يوم بدء عمله، ليُحسب له الشهر الذي التحق فيه. لزيادة راتب: اليوم.';
+
+  @override
+  String get customPayrollRunTitle => 'مسير لموظفين محددين';
+
+  @override
+  String get customPayrollEmployeesLabel => 'الموظفون المشمولون';
+
+  @override
+  String get customPayrollSelectAllButton => 'تحديد الكل';
+
+  @override
+  String get customPayrollNoSelectionError => 'اختر موظفاً واحداً على الأقل.';
+
+  @override
+  String get customPayrollWeeksField => 'عدد الأسابيع';
+
+  @override
+  String get customPayrollDaysField => 'عدد الأيام';
+
+  @override
+  String get customPayrollHoursField => 'عدد الساعات';
+
+  @override
+  String get customPayrollShiftsField => 'عدد الورديات';
 
   @override
   String get pendingLoanRequestsTitle => 'طلبات سلف بانتظار قرارك';
@@ -13899,9 +14151,6 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get draftMonthlyPayrollButton => 'مسودة رواتب الشهر';
-
-  @override
-  String get createPayrollRunButton => 'إنشاء مسير رواتب';
 
   @override
   String get employeePayrollSaveError =>
@@ -17207,6 +17456,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get aiAssistantThinkingLabel => 'طريقة التفكير';
 
   @override
+  String get aiAssistantSuggestionsForShop => 'اقتراحات من المساعد لمتجرك';
+
+  @override
   String get aiAssistantSuggestion1 => 'اكتب رسالة ترحيب لعملاء متجري';
 
   @override
@@ -17364,6 +17616,64 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get aiAssistantAskUserConfirmNo => 'لا';
+
+  @override
+  String get aiMemoryOpen => 'الذاكرة';
+
+  @override
+  String get aiMemoryTitle => 'ذاكرة المساعد';
+
+  @override
+  String get aiMemorySubtitle =>
+      'ما يتذكّره المساعد عن المتجر وعنك ويبدأ به كل محادثة جديدة. يحفظه بنفسه، ويمكنك تصحيحه أو حذفه.';
+
+  @override
+  String get aiMemoryEmpty =>
+      'لم يحفظ المساعد شيئًا بعد. سيحفظ ما يتعلّمه عن متجرك أثناء المحادثات.';
+
+  @override
+  String get aiMemoryLoadFailed => 'تعذّر تحميل الذاكرة.';
+
+  @override
+  String get aiMemoryShopSection => 'عن المتجر';
+
+  @override
+  String get aiMemoryPersonalSection => 'خاصة بك';
+
+  @override
+  String get aiMemoryEditTitle => 'تعديل الذاكرة';
+
+  @override
+  String get aiMemoryDeleteTitle => 'حذف هذه الذاكرة؟';
+
+  @override
+  String get aiMemorySaveFailed => 'تعذّر حفظ التعديل.';
+
+  @override
+  String get aiMemoryDeleteFailed => 'تعذّر حذف الذاكرة.';
+
+  @override
+  String get aiMemoryManagerOnly => 'يعدّلها المدير فقط';
+
+  @override
+  String get aiAssistantPlanTitle => 'خطة العمل';
+
+  @override
+  String aiAssistantPlanProgress(int done, int total) {
+    return '$done من $total';
+  }
+
+  @override
+  String get aiAssistantApprovalApprove => 'موافقة وتنفيذ';
+
+  @override
+  String get aiAssistantApprovalCancel => 'إلغاء';
+
+  @override
+  String get aiAssistantApprovalApproved => 'تمت الموافقة ونُفِّذت العملية';
+
+  @override
+  String get aiAssistantApprovalCancelled => 'أُلغيت العملية — لم يُنفَّذ شيء';
 
   @override
   String get aiAssistantProductPickerChoose => 'ابحث واختر منتجًا';
@@ -22234,6 +22544,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get posShortcutCameraPreview => 'إظهار/إخفاء معاينة كاميرا القراءة';
 
   @override
+  String get posShortcutCalculator => 'إظهار/إخفاء الآلة الحاسبة (من أي شاشة)';
+
+  @override
   String cartLineCostLabel(String cost) {
     return 'التكلفة: $cost';
   }
@@ -24099,6 +24412,13 @@ class AppLocalizationsAr extends AppLocalizations {
       'مرّ موعد وصوله إلى المصرف ولم يُسجَّل بعد. سجّل وصوله إن وصل، أو راجع شركة الدفع.';
 
   @override
+  String get treasuryCardDirectNote =>
+      'مبيعات البطاقة تُضاف لهذا الحساب فوراً، بلا حساب تسوية.';
+
+  @override
+  String get treasuryCardDirectAction => 'إنشاء حساب تسوية';
+
+  @override
   String get treasuryActionRecordSettlement => 'تسجيل وصول تحويل';
 
   @override
@@ -25593,6 +25913,88 @@ class AppLocalizationsAr extends AppLocalizations {
   String aiUiStockUnitDaysOnShelf(int days) {
     return '$days يومًا على الرف';
   }
+
+  @override
+  String get aiUiCardOpen => 'عرض التفاصيل';
+
+  @override
+  String get aiUiProductPrice => 'سعر البيع';
+
+  @override
+  String get aiUiProductStock => 'المخزون';
+
+  @override
+  String get aiUiProductSold30 => 'المباع في ٣٠ يومًا';
+
+  @override
+  String aiUiProductCover(int days) {
+    return 'نحو $days يومًا';
+  }
+
+  @override
+  String get aiUiProductCoverLabel => 'يكفي المخزون';
+
+  @override
+  String get aiUiProductOutOfStock => 'نفد المخزون';
+
+  @override
+  String get aiUiProductRunningOut => 'قد ينفد قريبًا';
+
+  @override
+  String get aiUiProductInactive => 'غير مفعّل';
+
+  @override
+  String get aiUiProductService => 'خدمة';
+
+  @override
+  String get aiUiProductNoSales => 'لم يُبَع في ٣٠ يومًا';
+
+  @override
+  String get aiUiCustomerBalance => 'الدَّين الحالي';
+
+  @override
+  String get aiUiCustomerNoDebt => 'لا دَين عليه';
+
+  @override
+  String get aiUiCustomerCreditLimit => 'الحد الائتماني';
+
+  @override
+  String get aiUiCustomerOverLimit => 'تجاوز الحد الائتماني';
+
+  @override
+  String get aiUiCustomerLastPurchase => 'آخر شراء';
+
+  @override
+  String get aiUiCustomerLifetime => 'إجمالي مشترياته';
+
+  @override
+  String get aiUiCustomerOrders => 'عدد الفواتير';
+
+  @override
+  String get aiUiSalesRevenue => 'الإيراد';
+
+  @override
+  String get aiUiSalesOrders => 'الفواتير';
+
+  @override
+  String get aiUiSalesAverage => 'متوسط الفاتورة';
+
+  @override
+  String get aiUiSalesProfit => 'الربح';
+
+  @override
+  String get aiUiSalesMargin => 'الهامش';
+
+  @override
+  String aiUiSalesVsPrevious(String change) {
+    return '$change عن الفترة السابقة';
+  }
+
+  @override
+  String get aiUiSalesTopProducts => 'الأكثر مبيعًا';
+
+  @override
+  String get aiUiSalesEmpty => 'لا مبيعات في هذه الفترة';
 
   @override
   String get aiUiStockUnitConsignment => 'أمانة';
@@ -27711,4 +28113,275 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get registerSessionInProgressValue => 'جارية الآن';
+
+  @override
+  String get moamalatDrawerLabel => 'التحقق من البطاقات';
+
+  @override
+  String get moamalatTitle => 'التحقق من البطاقات — معاملات';
+
+  @override
+  String get moamalatStateAlive => 'يعمل';
+
+  @override
+  String get moamalatStateAtRisk => 'الاتصال متعثر';
+
+  @override
+  String get moamalatStateNeedsReauth => 'يحتاج إعادة ربط';
+
+  @override
+  String get moamalatStateUnlinked => 'غير مربوط';
+
+  @override
+  String get moamalatStateSwitchedOff => 'متوقف مؤقتاً';
+
+  @override
+  String get moamalatAliveMessage =>
+      'تُطابَق مدفوعات البطاقات مع عمليات جهاز الدفع لحظياً أثناء البيع.';
+
+  @override
+  String get moamalatAtRiskMessage =>
+      'تعذّر الوصول إلى معاملات منذ دقائق. نعيد المحاولة تلقائياً، وتبقى النسخة الاحتياطية على خادم دفتر تحافظ على الاتصال.';
+
+  @override
+  String moamalatNeedsReauthMessage(int count) {
+    return 'انتهت جلسة معاملات. البيع بالبطاقة مستمر، وتنتظر $count دفعة التحقق حتى تعيد الربط برمز التحقق.';
+  }
+
+  @override
+  String get moamalatUnlinkedMessage =>
+      'اربط حساب التاجر في معاملات ليتحقق النظام من كل دفعة بطاقة مقابل عمليات جهاز الدفع.';
+
+  @override
+  String get moamalatSwitchedOffMessage =>
+      'أوقفت دفتر هذا الربط مؤقتاً لجميع المتاجر. يستمر البيع بالبطاقة كالمعتاد.';
+
+  @override
+  String get moamalatLinkTitle => 'ربط حساب معاملات';
+
+  @override
+  String get moamalatRelinkTitle => 'إعادة الربط';
+
+  @override
+  String get moamalatLinkHint =>
+      'أدخل اسم المستخدم وكلمة المرور لحساب التاجر في معاملات. سيصل رمز تحقق إلى هاتف التاجر المسجّل لدى معاملات.';
+
+  @override
+  String get moamalatCodeHint =>
+      'أُرسل رمز التحقق إلى هاتف التاجر المسجّل لدى معاملات. أدخله هنا.';
+
+  @override
+  String get moamalatUsernameLabel => 'اسم المستخدم';
+
+  @override
+  String get moamalatPasswordLabel => 'كلمة المرور';
+
+  @override
+  String get moamalatPasswordNotStored =>
+      'تُرسل إلى معاملات مرة واحدة ولا تُحفظ.';
+
+  @override
+  String get moamalatCodeLabel => 'رمز التحقق';
+
+  @override
+  String get moamalatSendCodeAction => 'إرسال رمز التحقق';
+
+  @override
+  String get moamalatVerifyAction => 'تأكيد الربط';
+
+  @override
+  String get moamalatUnlinkAction => 'إلغاء الربط';
+
+  @override
+  String get moamalatUnlinkConfirmTitle => 'إلغاء ربط معاملات؟';
+
+  @override
+  String get moamalatUnlinkConfirmMessage =>
+      'سيتوقف التحقق من مدفوعات البطاقات وتُحذف الجلسة من هذا الخادم ومن خادم دفتر. يمكنك الربط مجدداً برمز تحقق جديد.';
+
+  @override
+  String get moamalatNeverBlocksNote =>
+      'لا يوقف التحقق أي عملية بيع: الدفعة التي لم تُطابَق بعد تُسجَّل «بانتظار التحقق» وتُطابَق تلقائياً فور ظهورها.';
+
+  @override
+  String get moamalatAccountTitle => 'الحساب المربوط';
+
+  @override
+  String get moamalatMerchantLabel => 'التاجر';
+
+  @override
+  String get moamalatMidLabel => 'رقم التاجر';
+
+  @override
+  String get moamalatLinkedAtLabel => 'تاريخ الربط';
+
+  @override
+  String get moamalatLastOkLabel => 'آخر اتصال ناجح';
+
+  @override
+  String get moamalatRelayLabel => 'النسخة الاحتياطية';
+
+  @override
+  String get moamalatRelayInStep => 'تعمل على خادم دفتر';
+
+  @override
+  String get moamalatRelayOutOfStep => 'قيد المزامنة';
+
+  @override
+  String get moamalatRelayNone =>
+      'غير متاحة — هذا الخادم وحده يحافظ على الاتصال';
+
+  @override
+  String get moamalatPendingLabel => 'دفعات بانتظار التحقق';
+
+  @override
+  String moamalatPendingWithOverdue(int count, int overdue) {
+    return '$count (منها $overdue متأخرة)';
+  }
+
+  @override
+  String get moamalatMerchantChoiceTitle => 'اختر رقم التاجر';
+
+  @override
+  String get moamalatErrorSwitchedOff => 'أوقفت دفتر ربط معاملات مؤقتاً.';
+
+  @override
+  String get moamalatErrorCredentialsRequired =>
+      'أدخل اسم المستخدم وكلمة المرور.';
+
+  @override
+  String get moamalatErrorLoginRefused =>
+      'رفضت معاملات اسم المستخدم أو كلمة المرور.';
+
+  @override
+  String get moamalatErrorCodeRefused => 'رمز التحقق غير صحيح.';
+
+  @override
+  String get moamalatErrorCodeRequired => 'أدخل رمز التحقق.';
+
+  @override
+  String get moamalatErrorChallengeExpired =>
+      'انتهت صلاحية رمز التحقق. أرسل رمزاً جديداً.';
+
+  @override
+  String get moamalatErrorNoMerchant =>
+      'لا يوجد تاجر مرتبط بهذا الحساب في معاملات.';
+
+  @override
+  String get moamalatErrorUnknownMerchant =>
+      'رقم التاجر غير موجود في هذا الحساب.';
+
+  @override
+  String get moamalatErrorNotLinked => 'الحساب غير مربوط.';
+
+  @override
+  String get moamalatErrorForbidden => 'لا تملك صلاحية ربط حساب معاملات.';
+
+  @override
+  String get moamalatErrorUnreachable =>
+      'تعذّر الوصول إلى معاملات. حاول مرة أخرى.';
+
+  @override
+  String get moamalatLiveConnecting => 'جارٍ الاتصال بمعاملات…';
+
+  @override
+  String get moamalatLiveWaiting => 'بانتظار عملية البطاقة من الجهاز…';
+
+  @override
+  String moamalatLiveSeen(String amount) {
+    return 'وصلت عملية بطاقة بقيمة $amount';
+  }
+
+  @override
+  String get moamalatLiveOffline =>
+      'التحقق من البطاقات متوقف — ستُتحقق الدفعة لاحقاً.';
+
+  @override
+  String get moamalatLiveLater => 'سيُتحقق من الدفعة بعد الإتمام.';
+
+  @override
+  String get notificationMoamalatReauthTitle => 'التحقق من البطاقات متوقف';
+
+  @override
+  String notificationMoamalatReauthManageMessage(int count) {
+    return 'انتهت جلسة معاملات. أعد الربط برمز التحقق — $count دفعة بطاقة بانتظار التحقق.';
+  }
+
+  @override
+  String get notificationMoamalatReauthCashierMessage =>
+      'البيع بالبطاقة مستمر كالمعتاد، وستُتحقق الدفعات لاحقاً. أبلغ المشرف.';
+
+  @override
+  String get notificationMoamalatUnverifiedTitle => 'دفعات بطاقة لم تُطابَق';
+
+  @override
+  String notificationMoamalatUnverifiedMessage(
+    int count,
+    String amount,
+    String date,
+  ) {
+    return '$count دفعة بطاقة بقيمة $amount لم تظهر في معاملات منذ $date.';
+  }
+
+  @override
+  String moamalatSwipeWhere(String terminal, String time) {
+    return 'على الجهاز $terminal الساعة $time';
+  }
+
+  @override
+  String moamalatShortfallApplied(
+    String charged,
+    String intended,
+    String rest,
+  ) {
+    return 'الجهاز سحب $charged والمبلغ $intended. صُحّح سطر البطاقة وأُضيف سطر بالمتبقي $rest: اسحبه بالبطاقة أو غيّر طريقة دفعه.';
+  }
+
+  @override
+  String get moamalatUndoAction => 'تراجع';
+
+  @override
+  String moamalatShortfallFound(String amount, String where, String line) {
+    return 'عملية بطاقة بقيمة $amount $where — أقل من سطر البطاقة ($line).';
+  }
+
+  @override
+  String moamalatEarlierSwipeFound(String amount, String where) {
+    return 'وُجدت عملية بطاقة لم تُسجَّل بعد بقيمة $amount $where.';
+  }
+
+  @override
+  String moamalatOverchargeFound(
+    String amount,
+    String where,
+    String line,
+    String extra,
+  ) {
+    return 'الجهاز سحب $amount $where وهو أكثر من $line. أعد الفرق $extra من الجهاز نفسه.';
+  }
+
+  @override
+  String get moamalatUseThisSwipeAction => 'هذه عمليتي';
+
+  @override
+  String get moamalatNotThisSaleAction => 'ليست لهذه الفاتورة';
+
+  @override
+  String get notificationMoamalatAmountMismatchTitle =>
+      'مبلغ بطاقة لا يطابق الجهاز';
+
+  @override
+  String notificationMoamalatAmountMismatchMessage(
+    String receipt,
+    String recorded,
+    String charged,
+    String more,
+  ) {
+    return 'الفاتورة $receipt: سُجّلت الدفعة بـ$recorded بينما سحب الجهاز $charged.$more';
+  }
+
+  @override
+  String notificationMoamalatAmountMismatchMore(int count) {
+    return ' ومعها $count دفعات أخرى.';
+  }
 }

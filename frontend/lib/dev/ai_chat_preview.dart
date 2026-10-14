@@ -26,6 +26,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import 'package:pointy_frontend/src/core/authorization.dart';
 import 'package:pointy_frontend/src/core/result.dart';
 import 'package:pointy_frontend/src/data/models/ai_chat.dart';
+import 'package:pointy_frontend/src/data/models/ai_memory.dart';
 import 'package:pointy_frontend/src/data/models/pos_user.dart';
 import 'package:pointy_frontend/src/data/repositories/ai_chat_repository.dart';
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
@@ -98,6 +99,7 @@ class _PreviewHostState extends State<_PreviewHost> {
       linksMode: widget.screen == 'links',
       webMode: widget.screen == 'web',
       uiMode: widget.screen == 'ui' || widget.screen == 'ui-live',
+      agentMode: widget.screen == 'agent',
     ),
     picker: _FakeAttachmentPicker(),
   );
@@ -145,6 +147,12 @@ class _PreviewHostState extends State<_PreviewHost> {
       case 'web':
         // A web-searched reply with source favicons next to the copy action.
         await _viewModel.sendMessage('كم سعر الذهب اليوم؟');
+      case 'agent':
+        // A multi-step money task: the plan ticks along, then the server's
+        // approval card stops it before the payment runs.
+        await _viewModel.sendMessage(
+          'ادفع للمورّد بُن اليمن ١٥٠ دينارًا نقدًا',
+        );
       case 'ui-live':
         // Same scripted reply as `ui`, but nothing is sent on load: a recording
         // types the question into the real composer first.
@@ -220,7 +228,12 @@ class _FakeAiChatRepository extends AiChatRepository {
     this.linksMode = false,
     this.webMode = false,
     this.uiMode = false,
+    this.agentMode = false,
   }) : super(PosApiService());
+
+  /// When set, the scripted reply keeps a plan and stops on an approval card,
+  /// then ticks the plan off after the user approves.
+  final bool agentMode;
 
   /// When set, the scripted reply asks an interactive question (all 5 types)
   /// instead of answering, so the ask_user card can be screenshotted.
@@ -254,6 +267,10 @@ class _FakeAiChatRepository extends AiChatRepository {
   }) async* {
     if (askUserMode) {
       yield* _askUserScript();
+      return;
+    }
+    if (agentMode) {
+      yield* _agentScript();
       return;
     }
     if (actionsMode) {
@@ -385,6 +402,107 @@ class _FakeAiChatRepository extends AiChatRepository {
       userMessageId: 1,
       model: 'preview/model',
       usage: _fakeUsage(fiveUsed: 24, weekUsed: 97),
+    );
+  }
+
+  static const _agentSteps = [
+    'ابحث عن المورّد',
+    'راجع رصيد المورّد',
+    'سجّل الدفعة',
+  ];
+
+  List<AiPlanStep> _agentPlan(int completed) => [
+    for (final (i, step) in _agentSteps.indexed)
+      AiPlanStep(
+        step: step,
+        status: i < completed
+            ? AiPlanStatus.completed
+            : (i == completed ? AiPlanStatus.inProgress : AiPlanStatus.pending),
+      ),
+  ];
+
+  Stream<AiChatEvent> _agentScript() async* {
+    yield AiChatPlan(_agentPlan(0));
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    for (final (i, resource, label) in [
+      (1, 'suppliers', 'الموردون'),
+      (2, 'supplier-payments', 'دفعات الموردين'),
+    ]) {
+      yield AiChatToolActivity(
+        id: 'call_$i',
+        name: 'query_resource',
+        resource: resource,
+        label: label,
+        phase: 'start',
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+      yield AiChatToolActivity(
+        id: 'call_$i',
+        name: 'query_resource',
+        resource: resource,
+        label: label,
+        phase: 'done',
+        ok: true,
+      );
+      yield AiChatPlan(_agentPlan(i));
+    }
+    yield const AiChatAskUser(
+      conversationId: 1,
+      messageId: 7,
+      toolCallId: 'call_pay',
+      questions: [
+        AiQuestion(
+          id: 'approve',
+          type: AiQuestionType.confirm,
+          prompt: 'تأكيد دفعة للمورّد',
+          help: 'لن يُنفَّذ شيء قبل موافقتك.',
+          config: {
+            'approval': true,
+            'confirm_label': 'موافقة وتنفيذ',
+            'deny_label': 'إلغاء',
+            'details': [
+              {'label': 'المورّد', 'value': 'بُن اليمن'},
+              {'label': 'المبلغ', 'value': '150.00', 'kind': 'money'},
+              {'label': 'طريقة الدفع', 'value': 'نقدًا'},
+            ],
+          },
+        ),
+      ],
+    );
+  }
+
+  Stream<AiChatEvent> _agentResumeScript({required bool approved}) async* {
+    if (approved) {
+      yield const AiChatToolActivity(
+        id: 'call_pay',
+        name: 'record_supplier_payment',
+        label: 'تسجيل دفعة مورّد',
+        phase: 'start',
+        mutates: true,
+      );
+      yield const AiChatToolActivity(
+        id: 'call_pay',
+        name: 'record_supplier_payment',
+        label: 'تسجيل دفعة مورّد',
+        phase: 'done',
+        ok: true,
+        mutates: true,
+      );
+      yield AiChatPlan(_agentPlan(3));
+    }
+    final reply = approved
+        ? 'سُجّلت دفعة **١٥٠ د.ل** نقدًا لمورّد بُن اليمن، وصار رصيده المستحق '
+              '**٤٢٠ د.ل**. خرج المبلغ من درج الصندوق الحالي.'
+        : 'لم يُنفَّذ شيء. ما الذي تريد تغييره في الدفعة؟';
+    for (final word in reply.split(' ')) {
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+      yield AiChatDelta('$word ');
+    }
+    yield AiChatDone(
+      conversationId: 1,
+      messageId: 8,
+      model: 'preview/model',
+      usage: _fakeUsage(fiveUsed: 25, weekUsed: 98),
     );
   }
 
@@ -587,6 +705,12 @@ class _FakeAiChatRepository extends AiChatRepository {
     List<AiAnswer> answers = const [],
     bool declined = false,
   }) async* {
+    if (agentMode) {
+      yield* _agentResumeScript(
+        approved: !declined && answers.any((a) => a.value == true),
+      );
+      return;
+    }
     final reply = declined
         ? 'لا بأس، أخبرني عندما تكون جاهزًا. 👍'
         : 'ممتاز! سأضيف المنتج بهذه التفاصيل الآن. ✅';
@@ -601,6 +725,66 @@ class _FakeAiChatRepository extends AiChatRepository {
       usage: _fakeUsage(fiveUsed: 25, weekUsed: 98),
     );
   }
+
+  @override
+  Future<Result<List<AiSuggestion>>> loadSuggestions() async {
+    // Arrives a beat after the screen, like the real call, so the fade from
+    // the built-in set shows.
+    await Future<void>.delayed(const Duration(milliseconds: 900));
+    return const Ok([
+      AiSuggestion(
+        title: 'لماذا تراجعت مبيعات القهوة التركي يوم الثلاثاء؟',
+        prompt:
+            'مبيعات القهوة التركي تراجعت يوم الثلاثاء. حلّل السبب وقارنها بالأسابيع السابقة.',
+        icon: 'sales',
+      ),
+      AiSuggestion(
+        title: 'جهّز طلب بُن اليمن قبل توريد الثلاثاء',
+        prompt:
+            'مورّد بُن اليمن يورّد كل ثلاثاء. جهّز أمر شراء بالأصناف التي ستنفد قبله.',
+        icon: 'purchasing',
+      ),
+      AiSuggestion(
+        title: '٧ عملاء لم يعودوا منذ شهر — عرض لاسترجاعهم؟',
+        prompt: 'اقترح عرضًا ورسالة لاسترجاع العملاء الذين لم يشتروا منذ شهر.',
+        icon: 'customers',
+      ),
+      AiSuggestion(
+        title: 'كيف كانت مبيعات هذا الأسبوع حتى الآن؟',
+        prompt: 'اعرض ملخّص مبيعات هذا الأسبوع مقارنة بالأسبوع الماضي.',
+        icon: 'report',
+      ),
+    ]);
+  }
+
+  @override
+  Future<Result<List<AiMemory>>> loadMemories() async => const Ok([
+    AiMemory(
+      id: 1,
+      content: 'المحل مغلق يوم الجمعة، ويفتح السبت من ٩ صباحًا.',
+      isShop: true,
+      category: 'shop',
+    ),
+    AiMemory(
+      id: 2,
+      content: 'مورّد بُن اليمن يورّد كل ثلاثاء ويقبل الدفع نقدًا فقط.',
+      isShop: true,
+      category: 'supplier',
+    ),
+    AiMemory(
+      id: 3,
+      content: '«العلبة الكبيرة» في كلام الموظفين تعني حليب المراعي ١ لتر.',
+      isShop: true,
+      category: 'product',
+    ),
+    AiMemory(
+      id: 4,
+      content: 'يفضّل المستخدم الإجابات المختصرة مع الأرقام في جدول.',
+      isShop: false,
+      category: 'preference',
+      editable: true,
+    ),
+  ]);
 
   @override
   Future<Result<AiUsage>> loadUsage() async {

@@ -377,6 +377,23 @@ List<NavCatalogGroup> appNavigationCatalog(AppLocalizations l10n) {
           ],
         ),
         NavCatalogEntry(
+          destination: AppNavigationDestination.cardVerification,
+          icon: Icons.credit_score_outlined,
+          selectedIcon: Icons.credit_score,
+          label: l10n.moamalatDrawerLabel,
+          keywords: const [
+            'moamalat',
+            'card verification',
+            'card',
+            'terminal',
+            'معاملات',
+            'بطاقة',
+            'بطاقات',
+            'تحقق',
+            'نقطة البيع',
+          ],
+        ),
+        NavCatalogEntry(
           destination: AppNavigationDestination.reports,
           icon: Icons.summarize_outlined,
           selectedIcon: Icons.summarize,

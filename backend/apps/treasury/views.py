@@ -13,9 +13,10 @@ from apps.core.idempotency import run_idempotent_request
 from apps.core.permissions import HasPointyPermission
 
 from . import held_days
+from .clearing import direct_card_bank_ids
 from .models import MoneyAccount, MoneyCount, MoneyTransfer
 from .movements import account_movements
-from .position import treasury_position
+from .position import routed_account, treasury_position
 from .serializers import (
     MoneyAccountSerializer,
     MoneyCountSerializer,
@@ -130,7 +131,31 @@ class TreasuryPositionView(APIView):
             for entry in position["accounts"]:
                 if entry["account"].is_clearing:
                     entry["held"] = held_days.held_summary(entry["account"])
+            _mark_direct_card_banks(position["accounts"])
         return Response(TreasuryPositionSerializer(position).data)
+
+
+def _mark_direct_card_banks(entries):
+    """Flag the banks card takings reach at once, with nothing holding them.
+
+    A note on today's screen only, and only once the shop holds card money for
+    some bank: one that opened no clearing account pays nothing for the asking.
+    An open clearing account is always active, so always among ``entries``.
+    """
+    if not any(
+        entry["account"].is_clearing and entry["account"].closed_on is None
+        for entry in entries
+    ):
+        return
+    # Every account, closed clearing ones included: a closed one still holds
+    # the takings of its window.
+    accounts = list(MoneyAccount.objects.all())
+    default_bank = routed_account(MoneyAccount.Kind.BANK, accounts)
+    direct = direct_card_bank_ids(
+        accounts, default_bank_id=default_bank.pk if default_bank else None
+    )
+    for entry in entries:
+        entry["card_direct"] = entry["account"].pk in direct
 
 
 class AccountMovementsView(APIView):

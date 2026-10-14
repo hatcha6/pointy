@@ -29,7 +29,10 @@ from apps.analytics.models import AnalyticsEvent
 from apps.analytics.services import record_event_buffered
 from apps.core.streaming import aiter_in_thread
 
+from .approvals import approval_granted, approval_request, not_run_reply
 from .dashboard_digest import generate_dashboard_digest
+from .memory import MEMORY_TOOL_NAMES, run_memory_tool
+from .plan_tool import PLAN_TOOL_NAME, validate_plan
 from .models import AiConversation, AiMessage
 from .relay_stream import build_system_prompt, favicon_url_for, iter_relay_sse, sse_event
 from .serializers import (
@@ -39,6 +42,7 @@ from .serializers import (
     AiConversationSerializer,
 )
 from .ui_catalog import MAX_SURFACES_PER_TURN
+from .ui_pos_cards import SURFACE_TOOLS
 from .tools import (
     ASK_USER_TOOL_NAME,
     execute_tool,
@@ -162,6 +166,42 @@ class AiConversationViewSet(viewsets.ModelViewSet):
         return AiConversationSerializer
 
 
+class AiMemoryViewSet(viewsets.ModelViewSet):
+    """The memory screen: everything the assistant remembers that this user can
+    see, editable where they may edit it. Creation is the assistant's job
+    (remember); people review, correct and delete."""
+
+    permission_classes = [permissions.IsAuthenticated]
+    http_method_names = ["get", "patch", "delete", "head", "options"]
+    pagination_class = None
+
+    def get_queryset(self):
+        from .memory import visible_memories
+
+        return visible_memories(self.request.user)
+
+    def get_serializer_class(self):
+        from .serializers import AiMemorySerializer
+
+        return AiMemorySerializer
+
+    def _check_editable(self, memory):
+        from rest_framework.exceptions import PermissionDenied
+
+        from .memory import can_edit
+
+        if not can_edit(self.request.user, memory):
+            raise PermissionDenied("Shop memories are managed by a manager.")
+
+    def perform_update(self, serializer):
+        self._check_editable(serializer.instance)
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        self._check_editable(instance)
+        instance.delete()
+
+
 class AiChatView(APIView):
     """Send a message (with optional attachments) and stream the reply as SSE.
 
@@ -208,6 +248,7 @@ class AiChatView(APIView):
             supports_actions=payload.get("supports_actions", False),
             supports_navigation=payload.get("supports_navigation", False),
             supports_ui=payload.get("supports_ui", False),
+            supports_memory=payload.get("supports_memory", False),
         )
 
         user_message = AiMessage.objects.create(
@@ -242,6 +283,8 @@ class AiChatView(APIView):
             supports_ask_user=payload.get("supports_ask_user", False),
             supports_actions=payload.get("supports_actions", False),
             supports_ui=payload.get("supports_ui", False),
+            supports_plan=payload.get("supports_plan", False),
+            supports_memory=payload.get("supports_memory", False),
         )
 
         # Scoped to this installation, not built from the process config.
@@ -321,6 +364,7 @@ class AiChatView(APIView):
         supports_actions=False,
         supports_navigation=False,
         supports_ui=False,
+        supports_memory=False,
     ):
         """Rebuild the model context from the DB.
 
@@ -357,6 +401,8 @@ class AiChatView(APIView):
                     supports_actions=supports_actions,
                     supports_navigation=supports_navigation,
                     supports_ui=supports_ui,
+                    user=conversation.user,
+                    supports_memory=supports_memory,
                 ),
             }
         ]
@@ -420,6 +466,8 @@ class AiChatView(APIView):
         apply_title=False,
         favicon_base="",
         turn_attachments=None,
+        seed_tool_events=None,
+        initial_plan=None,
     ):
         """Drive the bounded tool loop: consume a relay turn; if the model asked
         for tools, run them as ``user``, feed the results back, and loop; on a
@@ -431,7 +479,12 @@ class AiChatView(APIView):
         turn_attachments = list(turn_attachments or [])
         answer = []
         reasoning = []
-        tool_events = []
+        # A resumed approval already ran its call before the stream opened; its
+        # chip leads this turn's trace.
+        tool_events = list(seed_tool_events or [])
+        # The task checklist as the model last sent it (update_plan). A resumed
+        # turn starts from the plan it paused with.
+        current_plan = list(initial_plan or [])
         # Validated UI surfaces produced this turn, in the order the model drew
         # them. Persisted on the assistant row so they re-render on reload.
         ui_surfaces = []
@@ -481,6 +534,9 @@ class AiChatView(APIView):
             # "thinking" from "gone". A ping per round costs nothing and makes
             # the client's idle deadline mean silence rather than thought.
             yield sse_event("ping", {})
+            for event in tool_events:
+                yield sse_event("tool", {**event, "phase": "start"})
+                yield sse_event("tool", {**event, "phase": "done"})
             try:
                 response = open_stream()
             except RelayControlError as exc:
@@ -579,6 +635,7 @@ class AiChatView(APIView):
                         data=done_data,
                         tool_events=tool_events,
                         prior_tool_messages=prior_tool_messages,
+                        plan=current_plan,
                     )
                     yield sse_event(
                         "ask_user",
@@ -591,7 +648,10 @@ class AiChatView(APIView):
                     )
                     return
 
-                for call in turn_tool_calls:
+                # Index of this round's assistant entry, so a gated call can split
+                # the round into "already ran" and "queued behind the approval".
+                round_index = len(messages) - 1
+                for position, call in enumerate(turn_tool_calls):
                     function = call.get("function") or {}
                     name = function.get("name", "")
                     try:
@@ -600,12 +660,62 @@ class AiChatView(APIView):
                         args = {}
                     if not isinstance(args, dict):
                         args = {}
+                    if name == PLAN_TOOL_NAME:
+                        # Not a chip: the checklist is its own piece of UI.
+                        steps = validate_plan(args)
+                        if steps:
+                            current_plan = steps
+                            yield sse_event("plan", {"steps": steps})
+                        messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": call.get("id", ""),
+                                "name": name,
+                                "content": json.dumps(
+                                    {"ok": bool(steps)} if steps else {"ok": False, "error": "empty_plan"}
+                                ),
+                            }
+                        )
+                        continue
                     resource = args.get("resource")
                     label = tool_label(name, resource)
                     mutates = is_mutating_tool(name)
+                    approval = approval_request(name, args, user=user) if mutates else None
+                    if approval is not None:
+                        # Money-moving or irreversible: never run it from here. Pause
+                        # on an approval card; the resume endpoint runs these exact
+                        # arguments only if the user approves.
+                        if not call.get("id"):
+                            call["id"] = f"call_{uuid4().hex[:16]}"
+                        paused = True
+                        paused_message = self._pause_for_approval(
+                            conversation,
+                            call=call,
+                            spec=approval,
+                            turn_tool_calls=turn_tool_calls,
+                            ran_replies=messages[round_index + 1 :],
+                            queued_calls=turn_tool_calls[position + 1 :],
+                            prior_tool_messages=messages[base_len:round_index],
+                            content="".join(turn_text),
+                            reasoning="".join(turn_reasoning),
+                            data=done_data,
+                            tool_events=tool_events,
+                            plan=current_plan,
+                        )
+                        yield sse_event(
+                            "ask_user",
+                            {
+                                "conversation_id": conversation.pk,
+                                "message_id": paused_message.pk,
+                                "tool_call_id": call["id"],
+                                "questions": approval["questions"],
+                            },
+                        )
+                        return
                     yield sse_event(
                         "tool",
                         {
+                            "id": call.get("id", ""),
                             "name": name,
                             "resource": resource,
                             "label": label,
@@ -639,6 +749,22 @@ class AiChatView(APIView):
                             intake_surface["content_offset"] = len("".join(answer))
                             ui_surfaces.append(intake_surface)
                             yield sse_event("ui", intake_surface)
+                    elif name in MEMORY_TOOL_NAMES:
+                        result = run_memory_tool(
+                            name, args, user=user, conversation=conversation
+                        )
+                    elif name in SURFACE_TOOLS:
+                        # A designer-built card: the server reads the record and
+                        # composes the card; the model only chose which one.
+                        try:
+                            result, card = SURFACE_TOOLS[name](user, args)
+                        except Exception:
+                            logger.exception("AI card tool %s crashed", name)
+                            result, card = {"ok": False, "error": "internal_error"}, None
+                        if card and len(ui_surfaces) < MAX_SURFACES_PER_TURN:
+                            card["content_offset"] = len("".join(answer))
+                            ui_surfaces.append(card)
+                            yield sse_event("ui", card)
                     else:
                         idem = _ai_idempotency_key(turn_id, name, args) if mutates else None
                         result = execute_tool(name, args, user=user, idempotency_key=idem)
@@ -689,6 +815,7 @@ class AiChatView(APIView):
                     yield sse_event(
                         "tool",
                         {
+                            "id": call.get("id", ""),
                             "name": name,
                             "resource": resource,
                             "label": label,
@@ -738,6 +865,7 @@ class AiChatView(APIView):
                 sources=collected_sources,
                 web_searched=web_searched,
                 ui_surfaces=ui_surfaces,
+                plan=current_plan,
             )
             saved = True
             yield sse_event(
@@ -798,6 +926,7 @@ class AiChatView(APIView):
                     sources=collected_sources,
                     web_searched=web_searched,
                     ui_surfaces=ui_surfaces,
+                    plan=current_plan,
                 )
             try:
                 response.close()
@@ -868,6 +997,7 @@ class AiChatView(APIView):
         sources=None,
         web_searched=False,
         ui_surfaces=None,
+        plan=None,
     ):
         usage = data.get("usage") or {}
         message = AiMessage.objects.create(
@@ -882,6 +1012,7 @@ class AiChatView(APIView):
             tool_events=tool_events or [],
             sources=sources or [],
             ui_surfaces=ui_surfaces or [],
+            plan=plan or [],
             web_searched=bool(web_searched),
         )
         AiConversation.objects.filter(pk=conversation.pk).update(updated_at=timezone.now())
@@ -910,6 +1041,48 @@ class AiChatView(APIView):
             return call, validate_ask_user_spec(args)
         return None
 
+    def _pause_for_approval(
+        self,
+        conversation,
+        *,
+        call,
+        spec,
+        turn_tool_calls,
+        ran_replies,
+        queued_calls,
+        prior_tool_messages,
+        content,
+        reasoning,
+        data,
+        tool_events,
+        plan=None,
+    ):
+        """Persist a turn paused on an approval card.
+
+        The round may have run calls before the gated one and queued calls after
+        it. Each gets a persisted tool reply now — the real result, or a "not run"
+        note — so the paused round replays as a valid prompt on resume (every
+        tool_call answered) and the model can re-issue what it still needs."""
+        for reply in list(ran_replies) + [not_run_reply(c) for c in queued_calls]:
+            AiMessage.objects.create(
+                conversation=conversation,
+                role=AiMessage.ROLE_TOOL,
+                tool_call_id=reply.get("tool_call_id", ""),
+                content=reply.get("content", ""),
+            )
+        return self._save_paused_assistant(
+            conversation,
+            content=content,
+            reasoning=reasoning,
+            tool_calls=turn_tool_calls,
+            ask_call_id=call["id"],
+            question=spec,
+            data=data,
+            tool_events=tool_events,
+            prior_tool_messages=prior_tool_messages,
+            plan=plan,
+        )
+
     def _save_paused_assistant(
         self,
         conversation,
@@ -922,6 +1095,7 @@ class AiChatView(APIView):
         data,
         tool_events=None,
         prior_tool_messages=None,
+        plan=None,
     ):
         """Persist a paused ask_user turn: the assistant message carries its
         ``tool_calls`` (for replay) and ``pending_question`` (for the client to
@@ -941,6 +1115,7 @@ class AiChatView(APIView):
             status=AiMessage.STATUS_AWAITING_ANSWER,
             tool_events=tool_events or [],
             prior_tool_messages=prior_tool_messages or [],
+            plan=plan or [],
             model=data.get("model", ""),
             tier=data.get("tier", ""),
             prompt_tokens=int(usage.get("prompt_tokens") or 0),
@@ -994,9 +1169,13 @@ class AiChatResumeView(AiChatView):
             )
 
         tool_call_id = payload["tool_call_id"]
+        # An approval pause is keyed by the gated call itself (create_sale…), not
+        # by an ask_user call; its frozen call lives on the persisted spec.
+        approval = (paused.pending_question or {}).get("approval")
+        expected_name = approval.get("name") if isinstance(approval, dict) else ASK_USER_TOOL_NAME
         matches = any(
             call.get("id") == tool_call_id
-            and (call.get("function") or {}).get("name") == ASK_USER_TOOL_NAME
+            and (call.get("function") or {}).get("name") == expected_name
             for call in (paused.tool_calls or [])
         )
         if not matches:
@@ -1007,7 +1186,16 @@ class AiChatResumeView(AiChatView):
 
         # Persist the user's answer (or skip) as the tool result that satisfies the
         # ask_user call — this is exactly what gets replayed to the model on resume.
-        if payload.get("declined"):
+        seed_tool_events = []
+        if isinstance(approval, dict):
+            result, seed_tool_events = self._run_approved_call(
+                paused,
+                approval,
+                answers=payload.get("answers") or [],
+                declined=bool(payload.get("declined")),
+                user=request.user,
+            )
+        elif payload.get("declined"):
             result = {"declined": True}
         else:
             answers = payload.get("answers") or []
@@ -1033,11 +1221,14 @@ class AiChatResumeView(AiChatView):
             supports_actions=supports_actions,
             supports_navigation=payload.get("supports_navigation", True),
             supports_ui=payload.get("supports_ui", False),
+            supports_memory=payload.get("supports_memory", False),
         )
         tools = tools_definitions(
             supports_ask_user=payload.get("supports_ask_user", True),
             supports_actions=supports_actions,
             supports_ui=payload.get("supports_ui", False),
+            supports_plan=payload.get("supports_plan", False),
+            supports_memory=payload.get("supports_memory", False),
         )
 
         # Scoped for the same reason as the chat turn above.
@@ -1065,8 +1256,48 @@ class AiChatResumeView(AiChatView):
                     route_tier=paused.tier,
                 ),
                 favicon_base=request.build_absolute_uri(reverse("ai-favicon")),
+                seed_tool_events=seed_tool_events,
+                initial_plan=paused.plan,
             ),
         )
+
+    def _run_approved_call(self, paused, approval, *, answers, declined, user):
+        """Run (or refuse) the call frozen on an approval pause.
+
+        Returns the tool reply the model will read and the chip event for the
+        stream. The call runs with the arguments persisted at pause time — what
+        the card showed — and an idempotency key tied to the paused row, so a
+        replayed resume can never commit twice."""
+        name = approval.get("name", "")
+        args = approval.get("arguments") if isinstance(approval.get("arguments"), dict) else {}
+        recap = [a for a in answers if isinstance(a, dict)]
+        resource = args.get("resource")
+        label = tool_label(name, resource)
+        if not approval_granted(answers, declined):
+            result = {
+                "ok": False,
+                "error": "user_declined",
+                "message": (
+                    "رفض المستخدم تنفيذ هذه العملية ولم يُنفَّذ شيء. لا تُعِد المحاولة "
+                    "تلقائيًا؛ اسأله باختصار ما الذي يريد تغييره."
+                ),
+            }
+            return {"answers": recap, "approved": False, "result": result}, []
+        result = execute_tool(
+            name, args, user=user, idempotency_key=f"ai-approval-{paused.pk}"
+        )
+        output = _tool_output_preview(result)
+        event = {
+            "name": name,
+            "resource": resource,
+            "label": label,
+            "arguments": args,
+            "ok": bool(result.get("ok")),
+            "error": result.get("error"),
+            "mutates": True,
+            "output": output,
+        }
+        return {"answers": recap, "approved": True, "result": result}, [event]
 
 
 # Favicons are tiny; cap the proxied bytes and validate the host to a plain name.
@@ -1208,7 +1439,16 @@ class DashboardAiDigestView(APIView):
             if cached is not None:
                 return Response(cached)
 
-            digest = generate_dashboard_digest(installation, sections, period_days)
+            # Scoped, like the chat turn: a bare client validates the process
+            # config, which on an enrolled backend holds only the spent
+            # enrollment key — and the except below would hide that as an
+            # empty digest.
+            digest = generate_dashboard_digest(
+                installation,
+                sections,
+                period_days,
+                client=scoped_relay_client(installation),
+            )
         except Exception:
             logger.warning(
                 "dashboard digest failed; serving the empty digest", exc_info=True
@@ -1224,6 +1464,61 @@ class DashboardAiDigestView(APIView):
         except Exception:
             pass
         return Response(digest)
+
+
+class AiSuggestionsView(APIView):
+    """The empty chat's opening suggestions, written by the assistant for this
+    user from their dashboard figures and its memories (see suggestions.py).
+
+    Always 200: an empty list tells the app to keep its built-in suggestions.
+    Cached per user for a few hours, so opening the chat costs one relay call
+    per window at most; a miss is never cached, so a relay hiccup heals."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    _WINDOW_HOURS = 4
+    _EMPTY = {"suggestions": []}
+
+    def get(self, request):
+        installation = RelayInstallation.load()
+        if not relay_ai_available(installation):
+            return Response(self._EMPTY)
+        now = timezone.localtime()
+        window = now.hour // self._WINDOW_HOURS
+        cache_key = f"ai_suggestions:v1:{request.user.pk}:{now:%Y-%m-%d}:{window}"
+        try:
+            cached = cache.get(cache_key)
+        except Exception:
+            cached = None
+        if cached is not None:
+            return Response(cached)
+
+        from .dashboard_digest import compact_figures
+        from .suggestions import generate_suggestions
+
+        try:
+            snapshot = build_dashboard_snapshot(request)
+            figures = compact_figures(
+                snapshot.get("sections") or {},
+                (snapshot.get("period") or {}).get("days", 30),
+            )
+            suggestions = generate_suggestions(
+                client=scoped_relay_client(installation),
+                installation=installation,
+                user=request.user,
+                figures=figures,
+            )
+        except Exception:
+            logger.warning("AI suggestions failed; serving none", exc_info=True)
+            return Response(self._EMPTY)
+        if not suggestions:
+            return Response(self._EMPTY)
+        payload = {"suggestions": suggestions}
+        try:
+            cache.set(cache_key, payload, timeout=self._WINDOW_HOURS * 3600)
+        except Exception:
+            pass
+        return Response(payload)
 
 
 def _seconds_until_local_midnight():

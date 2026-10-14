@@ -553,7 +553,6 @@ class _RepairTicketRoll {
           fontSize: 8,
           logoHeight: 12,
           color: _ink,
-          brandColor: _ink,
         ),
       ),
     ];

@@ -31,6 +31,7 @@ enum AppNavigationDestination {
   employees,
   expenses,
   payments,
+  cardVerification,
   discounts,
   reports,
   activityLog,
@@ -87,6 +88,11 @@ AppCapability appNavigationDestinationCapability(
     // money: every cashier holds view_payment for the till, and gating on it
     // showed them an entry that could only refuse them.
     AppNavigationDestination.payments => AppCapability.viewMoneyAccounts,
+    // Its own right, not shop settings: supervisors link the account (the
+    // OTP reaches whoever holds the merchant phone on shift) and they do not
+    // hold core.change_shopsettings.
+    AppNavigationDestination.cardVerification =>
+      AppCapability.manageMoamalatLink,
     AppNavigationDestination.discounts => AppCapability.viewDiscountRules,
     AppNavigationDestination.reports => AppCapability.viewReports,
     AppNavigationDestination.activityLog => AppCapability.viewActivityLog,

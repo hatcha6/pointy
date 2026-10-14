@@ -135,7 +135,7 @@ ENDURANCE_WORKERS ?= 4
 	backend-tracked-simulation backend-stock-integrity backend-contract-gate backend-search-eval \
 	backend-shell backend-superuser backend-test backend-test-pg backend-test-keepdb backend-test-slowest \
 	backend-check backend-celery backend-celery-beat backend-ftp backend-ingest-footage \
-	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-camera-wedge-test frontend-camera-wedge-linux frontend-camera-wedge-linux-clean frontend-camera-wedge-preview frontend-e2e frontend-analyze frontend-format frontend-navigation-preview frontend-balances-preview frontend-employee-loans-preview frontend-scales-preview frontend-invoice-attribution-preview frontend-learning-preview frontend-integrations-preview frontend-recharge-preview frontend-portal-payments-preview frontend-printers-preview frontend-reports-preview frontend-marketing-preview frontend-app-update-preview \
+	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-camera-wedge-test frontend-camera-wedge-linux frontend-camera-wedge-linux-clean frontend-camera-wedge-preview frontend-calculator-preview frontend-e2e frontend-analyze frontend-format frontend-navigation-preview frontend-balances-preview frontend-employee-loans-preview frontend-scales-preview frontend-invoice-attribution-preview frontend-learning-preview frontend-integrations-preview frontend-moamalat-preview frontend-recharge-preview frontend-portal-payments-preview frontend-printers-preview frontend-reports-preview frontend-marketing-preview frontend-app-update-preview \
 	marketing-site marketing-site-capture \
 	camera-rig camera-rig-stop camera-rig-logs camera-rig-test \
 	relay-install relay-format relay-check relay-test relay-production-test relay-run relay-connector relay-connector-remote relay-migrate relay-provision relay-subscription-update relay-remote-mint relay-remote-activate relay-remote-provision relay-cli \
@@ -391,13 +391,16 @@ frontend-categories-preview: frontend-install ## Run the categories UI preview h
 frontend-navigation-preview: frontend-install ## Run the navigation drawer/rail preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/navigation_preview.dart
 
+frontend-moamalat-preview: frontend-install ## Run the Moamalat card-verification UI preview harness (?screen=board|unlinked|alive|at-risk|reauth|switched|sheet).
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/moamalat_preview.dart
+
 frontend-treasury-preview: frontend-install ## Run the treasury (money position) UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/treasury_preview.dart
 
 frontend-balances-preview: frontend-install ## Run the customer/supplier/employee balance UI preview harness (?screen=customer|supplier|entry|receive|record|create|employee|loan).
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/balances_preview.dart
 
-frontend-employee-loans-preview: frontend-install ## Run the employee-loan UI preview harness (?screen=new|request|payroll|account|picker, &theme=dark).
+frontend-employee-loans-preview: frontend-install ## Run the employee-loan UI preview harness (?screen=new|request|payroll|payroll-empty|payroll-due|add-plan|custom-run|account|picker, &theme=dark).
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/employee_loans_preview.dart
 
 frontend-reports-preview: frontend-install ## Run the reports screen UI preview harness (any report via ?report=) as a local web server.
@@ -430,6 +433,9 @@ frontend-search-misses-preview: frontend-install ## Run the searched-but-not-fou
 
 frontend-camera-wedge-preview: frontend-install ## Run the counter-camera UI preview harness (F8 panel + settings; ?screen=board|panel|settings).
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/camera_wedge_preview.dart
+
+frontend-calculator-preview: frontend-install ## Run the floating calculator (F12) preview harness (?screen=board|live).
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/calculator_preview.dart
 
 frontend-product-units-editor-preview: frontend-install ## Run the product-form units + packaging-barcode editor preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/product_units_editor_preview.dart

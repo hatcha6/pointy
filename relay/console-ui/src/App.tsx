@@ -29,10 +29,12 @@ const Stock = lazy(() => import("./pages/vouchers/Stock").then((m) => ({ default
 const Company = lazy(() => import("./pages/vouchers/Company").then((m) => ({ default: m.Company })));
 const Pricing = lazy(() => import("./pages/vouchers/Pricing").then((m) => ({ default: m.Pricing })));
 const Services = lazy(() => import("./pages/vouchers/Services").then((m) => ({ default: m.Services })));
+const Margins = lazy(() => import("./pages/vouchers/Margins").then((m) => ({ default: m.Margins })));
 const Fleet = lazy(() => import("./pages/Fleet").then((m) => ({ default: m.Fleet })));
 const Operators = lazy(() => import("./pages/Operators").then((m) => ({ default: m.Operators })));
 const ActivityLog = lazy(() => import("./pages/ActivityLog").then((m) => ({ default: m.ActivityLog })));
 const Settings = lazy(() => import("./pages/Settings").then((m) => ({ default: m.Settings })));
+const Moamalat = lazy(() => import("./pages/Moamalat").then((m) => ({ default: m.Moamalat })));
 const Ledger = lazy(() => import("./pages/Ledger").then((m) => ({ default: m.Ledger })));
 
 /** An old address that moved: replaced, so Back does not bounce. */
@@ -78,6 +80,8 @@ function Page({ path }: { path: string }) {
       return <Licenses />;
     case "/sms":
       return <Sms />;
+    case "/moamalat":
+      return <Moamalat />;
     case "/catalog":
       return <Catalog />;
     case "/suppliers":
@@ -90,6 +94,8 @@ function Page({ path }: { path: string }) {
       return <Pricing />;
     case "/services":
       return <Services />;
+    case "/margins":
+      return <Margins />;
     default:
       return (
         <Card>

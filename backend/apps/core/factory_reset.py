@@ -78,8 +78,11 @@ WIPED_MODELS = (
     # admin — the Django admin's own change history, which is a log of the rows
     # below and outlives them into nonsense otherwise.
     "admin.logentry",
-    # ai — the assistant's conversations quote this shop's numbers back at it.
+    # ai — the assistant's conversations quote this shop's numbers back at it,
+    # and its memories are notes about this shop's customers, suppliers and
+    # habits, learned in those conversations.
     "ai.aiconversation",
+    "ai.aimemory",
     "ai.aimessage",
     # analytics — telemetry, the activity log and the audit trail all live in
     # this one table. Cleared here for the same reason the telemetry screen can
@@ -234,6 +237,9 @@ WIPED_MODELS = (
     "operations.jobstageevent",
     # payments — money taken and paid out. The card terminals are peripherals.
     "payments.payment",
+    # The terminal's own transactions read back from Moamalat, and which
+    # payment each proved: they go with the payments.
+    "payments.moamalattransaction",
     # price_checker — kiosk lookups; the kiosks themselves are devices.
     "price_checker.pricecheckevent",
     # printing — the queue and its audit trail. Printers, agents, prep stations
@@ -351,6 +357,8 @@ KEPT_MODELS = {
     "surveillance.ftpaccount": "The FTP login a DVR has been configured with.",
     "price_checker.pricecheckerdevice": "A configured kiosk.",
     "payments.cardterminal": "A configured card terminal.",
+    "payments.moamalatlink": "The Moamalat merchant link and its live token; "
+    "re-linking costs the merchant an OTP.",
     "messaging.messaginggateway": "The shop's SMS switch, pace and quiet hours.",
     "wallet.walletsettings": "Whether wallet top-ups go into the books, and "
     "under which category.",

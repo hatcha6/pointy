@@ -109,10 +109,7 @@ class PurchaseSuggestion {
 /// nearly every one of its deliveries. Empty unless the supplier has enough
 /// orders behind it for "usual" to mean anything.
 class PurchaseUsualBasket {
-  const PurchaseUsualBasket({
-    this.available = false,
-    this.items = const [],
-  });
+  const PurchaseUsualBasket({this.available = false, this.items = const []});
 
   final bool available;
   final List<PurchaseSuggestion> items;

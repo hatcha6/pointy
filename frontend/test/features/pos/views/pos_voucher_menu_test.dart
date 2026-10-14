@@ -199,6 +199,31 @@ void main() {
     expect(find.byType(PosVoucherBrandPicker), findsOneWidget);
   });
 
+  testWidgets('a brand with nothing on sale stays on the menu and opens', (
+    tester,
+  ) async {
+    _useWideTill(tester);
+    integrations.nothingSells = true;
+    final viewModel = await _activeSessionViewModel(integrations);
+    addTearDown(viewModel.dispose);
+    await _pumpPos(tester, viewModel, integrations);
+    await tester.tap(find.text('كروت دفتر'));
+    await tester.pumpAndSettle();
+
+    // Every brand is still on the rack, its art marked «غير متوفر».
+    expect(find.byType(PosVoucherBrandCard), findsNWidgets(3));
+    expect(find.text('غير متوفر'), findsNWidgets(3));
+
+    // Opened to read its prices; nothing in it can be picked.
+    await tester.tap(find.byKey(const ValueKey('voucher_brand_itunes')));
+    await tester.pumpAndSettle();
+    expect(find.byType(PosVoucherBrandPicker), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('voucher_item_card-9101')));
+    await tester.pumpAndSettle();
+    expect(viewModel.cart, isEmpty);
+    expect(find.byType(PosVoucherBrandPicker), findsOneWidget);
+  });
+
   testWidgets('a failed read keeps the grid under its error, and retries', (
     tester,
   ) async {
@@ -326,6 +351,9 @@ class _FakeIntegrationsRepository extends IntegrationsRepository {
   /// brand: a shelf with more tabs than a till's pane is wide.
   int extraTabs = 0;
 
+  /// Nothing on the shelf can be bought: the company's balance ran dry.
+  bool nothingSells = false;
+
   @override
   Future<Result<VoucherMenu>> loadVoucherMenu() async {
     menuReads++;
@@ -345,6 +373,13 @@ class _FakeIntegrationsRepository extends IntegrationsRepository {
       for (var i = 1; i <= extraTabs; i++)
         {...brands.first, 'key': 'copy$i', 'category': 'extra$i'},
     ];
+    if (nothingSells) {
+      for (final brand in json['brands']! as List) {
+        for (final item in (brand as Map)['items'] as List) {
+          (item as Map)['available'] = false;
+        }
+      }
+    }
     return Ok(VoucherMenu.fromJson(json));
   }
 }

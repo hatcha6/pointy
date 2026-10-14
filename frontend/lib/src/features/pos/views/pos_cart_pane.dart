@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../shared/barcode/scan_burst_guard.dart';
+import '../../card_verification/moamalat_scope.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
@@ -624,6 +625,9 @@ class PosCartPane extends StatelessWidget {
         requireCustomerForCredit: viewModel.requireCustomerForCredit,
         proposedDueDate: viewModel.proposedCreditDueDate,
         isStaffAccount: viewModel.selectedCustomer?.isStaffAccount ?? false,
+        moamalatRepository: viewModel.enableCardPayments
+            ? MoamalatScope.maybeOf(context)
+            : null,
       ),
     );
   }

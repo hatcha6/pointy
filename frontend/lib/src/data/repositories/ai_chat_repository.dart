@@ -1,5 +1,6 @@
 import '../../core/result.dart';
 import '../models/ai_chat.dart';
+import '../models/ai_memory.dart';
 import '../services/pos_api_service.dart';
 
 /// Access to the AI assistant: a streamed chat reply plus [Result]-wrapped
@@ -66,6 +67,25 @@ class AiChatRepository {
 
   Future<Result<AiConversation>> loadConversation(int id) {
     return Result.guard(() => _service.fetchAiConversation(id));
+  }
+
+  Future<Result<List<AiSuggestion>>> loadSuggestions() {
+    return Result.guard(() => _service.fetchAiSuggestions());
+  }
+
+  Future<Result<List<AiMemory>>> loadMemories() {
+    return Result.guard(() => _service.fetchAiMemories());
+  }
+
+  Future<Result<AiMemory>> updateMemory(int id, String content) {
+    return Result.guard(() => _service.updateAiMemory(id, content));
+  }
+
+  Future<Result<bool>> deleteMemory(int id) {
+    return Result.guard(() async {
+      await _service.deleteAiMemory(id);
+      return true;
+    });
   }
 
   Future<Result<bool>> deleteConversation(int id) {

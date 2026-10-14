@@ -88,6 +88,8 @@ from apps.ai.views import (
     AiConversationTruncateView,
     AiConversationViewSet,
     AiFaviconView,
+    AiMemoryViewSet,
+    AiSuggestionsView,
     AiUsageView,
     DashboardAiDigestView,
 )
@@ -177,6 +179,7 @@ from apps.wallet.views import (
     WalletView,
     WalletVoucherAllocationView,
 )
+from apps.payments.moamalat.views import MoamalatViewSet
 from apps.payments.views import CardTerminalViewSet, PaymentViewSet
 from apps.printing.views import (
     PrepStationViewSet,
@@ -298,6 +301,7 @@ router.register(
 router.register("boms", BillOfMaterialsViewSet, basename="bom")
 router.register("payments", PaymentViewSet)
 router.register("card-terminals", CardTerminalViewSet)
+router.register("moamalat", MoamalatViewSet, basename="moamalat")
 router.register("print-templates", PrintTemplateViewSet)
 router.register("print-template-versions", PrintTemplateVersionViewSet)
 router.register("printer-profiles", PrinterProfileViewSet)
@@ -374,6 +378,11 @@ router.register(
     "ai/conversations",
     AiConversationViewSet,
     basename="ai-conversation",
+)
+router.register(
+    "ai/memories",
+    AiMemoryViewSet,
+    basename="ai-memory",
 )
 router.register(
     "surveillance/recorders",
@@ -478,6 +487,7 @@ urlpatterns = [
     path("api/ai/chat/", AiChatView.as_view(), name="ai-chat"),
     path("api/ai/chat/resume/", AiChatResumeView.as_view(), name="ai-chat-resume"),
     path("api/ai/usage/", AiUsageView.as_view(), name="ai-usage"),
+    path("api/ai/suggestions/", AiSuggestionsView.as_view(), name="ai-suggestions"),
     path(
         "api/ai/dashboard-digest/",
         DashboardAiDigestView.as_view(),

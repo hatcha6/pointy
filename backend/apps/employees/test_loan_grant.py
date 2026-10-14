@@ -25,6 +25,10 @@ from apps.treasury.models import MoneyAccount
 from .models import CompensationPlan, Employee, EmployeeLoan, PayrollAdjustment
 from .services import draft_monthly_payroll_run
 
+# Staff hired well before any period these tests pay: a run prorates the
+# month someone joined, and the default hire date is today.
+ON_STAFF_SINCE = date(2020, 1, 1)
+
 
 class LoanGrantTests(TestCase):
     def setUp(self):
@@ -35,7 +39,7 @@ class LoanGrantTests(TestCase):
         self.cash_box = self._account(MoneyAccount.Kind.CASH, "الخزينة")
         self.bank = self._account(MoneyAccount.Kind.BANK, "المصرف")
         # No login: the employee this was built for.
-        self.employee = Employee.objects.create(full_name="سالم")
+        self.employee = Employee.objects.create(hire_date=ON_STAFF_SINCE, full_name="سالم")
         CompensationPlan.objects.create(
             employee=self.employee,
             pay_type=CompensationPlan.PayType.MONTHLY_SALARY,

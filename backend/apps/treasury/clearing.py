@@ -27,8 +27,9 @@ from functools import reduce
 from operator import or_
 
 from django.db.models import Exists, OuterRef, Q
+from django.utils import timezone
 
-from apps.payments.models import Payment
+from apps.payments.models import CardTerminal, Payment
 
 from .models import CardSettlement, CardSettlementLine, MoneyAccount
 from .settlement_calendar import day_start
@@ -129,9 +130,69 @@ def is_held_by(payment, clearing) -> bool:
     return payment.money_account_id is None and clearing.holds_untagged_card
 
 
+# How far back a card payment still says a bank takes card money. Long enough to
+# span a quiet season, short enough that a terminal retired last year is not.
+DIRECT_CARD_LOOKBACK = timedelta(days=90)
+
+
+def direct_card_bank_ids(accounts, *, default_bank_id):
+    """The open banks whose card takings land at once, with no clearing account.
+
+    Asked only once the shop holds card money for *some* bank: a shop with no
+    clearing account chose not to hold any, so it is told nothing — and runs
+    exactly the queries it ran before. A bank counts when a terminal settles
+    into it, or a card payment held by nobody landed in it lately. Untagged
+    terminals and payments belong to the default bank, as they do everywhere.
+
+    Holding nothing is a real setup (a processor that pays the same day), so
+    this is a note for the owner, never a rule the money obeys.
+    """
+    clearings = clearing_accounts(accounts)
+    open_banks = {
+        account.settles_into_id
+        for account in clearings
+        if account.closed_on is None and account.settles_into_id is not None
+    }
+    if not open_banks:
+        return set()
+
+    candidates = {
+        account.pk
+        for account in accounts
+        if account.kind == MoneyAccount.Kind.BANK
+        and account.is_active
+        and account.pk not in open_banks
+    }
+    if not candidates:
+        return set()
+
+    def bank_of(account_id):
+        return default_bank_id if account_id is None else account_id
+
+    found = {
+        bank_of(account_id)
+        for account_id in CardTerminal.objects.filter(is_active=True).values_list(
+            "money_account_id", flat=True
+        )
+    }
+    recent = Payment.objects.filter(
+        method=Payment.Method.CARD,
+        paid_at__gte=timezone.now() - DIRECT_CARD_LOOKBACK,
+    )
+    held = held_by_any_q(clearings)
+    if held is not None:
+        recent = recent.exclude(held)
+    found.update(
+        bank_of(account_id)
+        for account_id in recent.values_list("money_account_id", flat=True).distinct()
+    )
+    return candidates & found
+
+
 __all__ = [
     "claim_q",
     "clearing_accounts",
+    "direct_card_bank_ids",
     "held_by_any_q",
     "held_payments",
     "is_held_by",

@@ -18,7 +18,10 @@ class DocumentTrailApiClient {
       'document-events/',
       query: {'document_type': documentType, 'object_id': '$documentId'},
     );
-    _session.ensureSuccess(response, 'Document trail request failed with status');
+    _session.ensureSuccess(
+      response,
+      'Document trail request failed with status',
+    );
     return documentTrailEventsFromResponse(_session.decodedBody(response));
   }
 }

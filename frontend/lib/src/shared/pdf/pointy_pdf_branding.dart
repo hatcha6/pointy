@@ -54,29 +54,30 @@ const double pointyPdfBrandMarkOnBlackAspect = 643.0 / 715.5;
 /// The closing brand stamp — "دُوِّنَ في دفتر" — with the brand mark rendered
 /// inline (RTL) between the two words: "دُوِّنَ في [logo] دفتر". When no logo
 /// image is supplied it degrades to the voweled text alone, so it is safe to use
-/// on any surface. [fontSize]/[logoHeight]/colours let each caller size it to its
+/// on any surface. [fontSize]/[logoHeight]/[color] let each caller size it to its
 /// scale (the A4 footer keeps it muted and small; a receipt roll runs it bigger).
+///
+/// Both words take the one [color]: the mark is the only colour in the line,
+/// so «دفتر» reads as part of the sentence rather than a second accent.
 class PointyPdfTagline extends pw.StatelessWidget {
   PointyPdfTagline({
     this.brandLogo,
     this.fontSize = 8,
     this.logoHeight,
     this.color = PointyPdfPalette.muted,
-    this.brandColor = PointyPdfPalette.accent,
   });
 
   final pw.ImageProvider? brandLogo;
   final double fontSize;
   final double? logoHeight;
   final PdfColor color;
-  final PdfColor brandColor;
 
   @override
   pw.Widget build(pw.Context context) {
     final logo = brandLogo;
     final leadStyle = pw.TextStyle(color: color, fontSize: fontSize);
     final brandStyle = pw.TextStyle(
-      color: brandColor,
+      color: color,
       fontSize: fontSize,
       fontWeight: pw.FontWeight.bold,
     );

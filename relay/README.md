@@ -1642,6 +1642,8 @@ owners may take; cash from a resale is a ledger income line
 | `POINTY_RELAY_VOUCHERS_SYNC_INTERVAL` | `30m` | how often the suppliers' prices and stock are read (BN Plus: everything it sells; Reloadly: the cards the catalog names) |
 | `POINTY_RELAY_VOUCHERS_RATE_LIMIT` | `30/minute` | purchases per shop |
 | `POINTY_RELAY_VOUCHER_STOCK_KEY` | empty | base64 key (`pointy-relay gen-stock-key`) that seals the company's own card stock (codes added in the console, sold before any supplier). Empty: no stock is added or sold. A malformed key stops the relay. **Losing it loses every code in stock**: keep it with the other relay secrets and back it up apart from the database |
+| `POINTY_RELAY_MOAMALAT_TOKEN_KEY` | empty | base64 key (`pointy-relay gen-moamalat-key`) that seals the shops' Moamalat merchant tokens the relay keeps warm as the second keepalive behind each shop's backend (`tools/moamalat-capture/TOKEN_CUSTODY_DESIGN.md`). Empty: the relay holds no token and shops keep theirs warm alone. A malformed key stops the relay. Losing it costs each linked shop one re-link (an OTP). `pointy-relay moamalat status` lists every shop's keepalive; `pointy-relay integrations disable moamalat` stops it fleet-wide and deletes every copy |
+| `POINTY_RELAY_MOAMALAT_BASE_URL` | `https://merchant.moamalat.net/api` | Moamalat merchant portal API the keepalive pokes |
 
 ### Operator CLI
 

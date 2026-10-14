@@ -98,20 +98,61 @@ class EmployeePayrollViewModel extends ChangeNotifier {
   bool get hasMorePayrollRuns => _hasMorePayrollRuns;
   bool get hasMoreLoans => _hasMoreLoans;
 
-  /// The month the payroll card is about: the calendar month the shop is in.
-  /// The card's title, [currentMonthRun] and [draftMonthlyPayrollRun] all read
-  /// it, so the month a manager is shown is the month that gets drafted.
+  /// The calendar month the shop is in.
   ({DateTime start, DateTime end}) get currentMonthPeriod {
     final now = _clock();
-    return (
-      start: DateTime(now.year, now.month),
-      end: DateTime(now.year, now.month + 1, 0),
-    );
+    return _monthPeriod(DateTime(now.year, now.month));
   }
 
-  /// The latest non-void payroll run whose period overlaps the current month.
-  PayrollRun? get currentMonthRun {
-    final (start: monthStart, end: monthEnd) = currentMonthPeriod;
+  /// The month the manager moved the payroll card to, or null to follow
+  /// [_defaultPayrollMonth].
+  DateTime? _pickedMonth;
+
+  /// The month the payroll card is about. The card's title, [payrollMonthRun],
+  /// the readiness checks and [draftMonthlyPayrollRun] all read it, so the
+  /// month a manager is shown is the month that gets drafted.
+  ({DateTime start, DateTime end}) get payrollMonthPeriod =>
+      _monthPeriod(_pickedMonth ?? _defaultPayrollMonth);
+
+  /// Salaries are paid in the first days of the next month, and the server
+  /// drafts last month's run on the 1st. While that run still waits to be
+  /// approved or paid, it is the work in front of the manager — not an empty
+  /// card for a month that has barely started.
+  DateTime get _defaultPayrollMonth {
+    final current = currentMonthPeriod.start;
+    final previous = _monthPeriod(DateTime(current.year, current.month - 1));
+    final previousRun = _runOverlapping(previous);
+    if (previousRun != null &&
+        (previousRun.status == PayrollStatus.draft ||
+            previousRun.status == PayrollStatus.approved)) {
+      return previous.start;
+    }
+    return current;
+  }
+
+  /// Payroll is never prepared ahead, so the card stops at this month.
+  bool get canShowNextPayrollMonth =>
+      payrollMonthPeriod.start.isBefore(currentMonthPeriod.start);
+
+  void showPreviousPayrollMonth() => _moveMonth(-1);
+
+  void showNextPayrollMonth() {
+    if (canShowNextPayrollMonth) {
+      _moveMonth(1);
+    }
+  }
+
+  void _moveMonth(int delta) {
+    final start = payrollMonthPeriod.start;
+    _pickedMonth = DateTime(start.year, start.month + delta);
+    _monthDraftFoundNoPlans = false;
+    notifyListeners();
+  }
+
+  /// The latest non-void payroll run whose period overlaps the card's month.
+  PayrollRun? get payrollMonthRun => _runOverlapping(payrollMonthPeriod);
+
+  PayrollRun? _runOverlapping(({DateTime start, DateTime end}) period) {
     for (final run in _payrollRuns) {
       if (run.status == PayrollStatus.voided) {
         continue;
@@ -121,12 +162,69 @@ class EmployeePayrollViewModel extends ChangeNotifier {
       if (start == null || end == null) {
         continue;
       }
-      if (!end.isBefore(monthStart) && !start.isAfter(monthEnd)) {
+      if (!end.isBefore(period.start) && !start.isAfter(period.end)) {
         return run;
       }
     }
     return null;
   }
+
+  static ({DateTime start, DateTime end}) _monthPeriod(DateTime month) => (
+    start: DateTime(month.year, month.month),
+    end: DateTime(month.year, month.month + 1, 0),
+  );
+
+  /// Employees the month's payroll pays: the server drafts active staff and
+  /// staff on leave, nobody else.
+  List<Employee> get payrollEmployees => List.unmodifiable(
+    _employees.where(
+      (employee) =>
+          employee.status == EmployeeStatus.active ||
+          employee.status == EmployeeStatus.onLeave,
+    ),
+  );
+
+  /// [payrollEmployees] the card's month would include: their plan is in
+  /// effect on the month's last day, the same test the server drafts with.
+  List<Employee> get employeesReadyForPayroll => List.unmodifiable(
+    payrollEmployees.where((employee) => planCoversPayrollMonth(employee)),
+  );
+
+  /// [payrollEmployees] the card's month would leave out.
+  List<Employee> get employeesMissingPayrollPlan => List.unmodifiable(
+    payrollEmployees.where((employee) => !planCoversPayrollMonth(employee)),
+  );
+
+  /// [employeesReadyForPayroll] who started after the month's first day:
+  /// the run pays them from their hire date, as the server prorates it.
+  List<Employee> get employeesHiredDuringPayrollMonth {
+    final period = payrollMonthPeriod;
+    return List.unmodifiable(
+      employeesReadyForPayroll.where((employee) {
+        final hired = employee.hireDate;
+        return hired != null &&
+            hired.isAfter(period.start) &&
+            !hired.isAfter(period.end);
+      }),
+    );
+  }
+
+  bool planCoversPayrollMonth(Employee employee) {
+    final plan = employee.activeCompensationPlan;
+    if (plan == null || !plan.isActive) {
+      return false;
+    }
+    final monthEnd = payrollMonthPeriod.end;
+    final from = plan.effectiveFrom;
+    final to = plan.effectiveTo;
+    return (from == null || !from.isAfter(monthEnd)) &&
+        (to == null || !to.isBefore(monthEnd));
+  }
+
+  /// Every employee is loaded, so the readiness counts are the whole shop's
+  /// and not just the first page's. Until then nothing is blocked on them.
+  bool get hasWholeRoster =>
+      !_hasMoreEmployees && !_isLoadingEmployees && !_hasEmployeeError;
 
   List<EmployeeLoan> get pendingLoans =>
       List.unmodifiable(_loans.where((loan) => loan.status.canReview));
@@ -264,13 +362,20 @@ class EmployeePayrollViewModel extends ChangeNotifier {
   Exception? get lastCreateError => _lastCreateError;
   Exception? _lastCreateError;
 
+  /// The employee the last successful create returned — the add flow goes
+  /// straight on to their salary plan.
+  Employee? get lastCreatedEmployee => _lastCreatedEmployee;
+  Employee? _lastCreatedEmployee;
+
   Future<bool> createEmployee(EmployeeDraft draft) async {
     _lastCreateError = null;
+    _lastCreatedEmployee = null;
     return _save(() async {
       final result = await _repository.createEmployee(draft);
       switch (result) {
         case Ok<Employee>(value: final employee):
           _employees = [employee, ..._employees];
+          _lastCreatedEmployee = employee;
           _track(
             'employees.management.employee.created',
             'employee',
@@ -326,7 +431,7 @@ class EmployeePayrollViewModel extends ChangeNotifier {
     });
   }
 
-  /// Drafts the payroll run for [currentMonthPeriod] — the month on the card.
+  /// Drafts the payroll run for [payrollMonthPeriod] — the month on the card.
   ///
   /// It used to send no period, and the server then drafts the PREVIOUS month
   /// (right for its own task on the 1st, wrong for a card titled with this
@@ -339,7 +444,7 @@ class EmployeePayrollViewModel extends ChangeNotifier {
     _monthDraftFoundNoPlans = false;
     notifyListeners();
 
-    final (start: periodStart, end: periodEnd) = currentMonthPeriod;
+    final (start: periodStart, end: periodEnd) = payrollMonthPeriod;
     PayrollRun? run;
     final result = await _repository.draftMonthlyPayrollRun(
       periodStart: periodStart,
@@ -558,10 +663,14 @@ class EmployeePayrollViewModel extends ChangeNotifier {
     Future<Result<PayrollRun>> Function() action, {
     required String eventName,
   }) {
+    // Paying last month's run would otherwise flip the card to this month
+    // under the manager; it stays on the month they just finished.
+    final shownMonth = payrollMonthPeriod.start;
     return _save(() async {
       final result = await action();
       switch (result) {
         case Ok<PayrollRun>(value: final updatedRun):
+          _pickedMonth ??= shownMonth;
           _upsertPayrollRun(updatedRun);
           _track(eventName, 'payroll_run', updatedRun.id, {
             'previous_status': run.status.name,

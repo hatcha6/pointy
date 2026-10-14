@@ -171,7 +171,8 @@ class WarehouseStockRow {
       quantityCommitted: number(json['quantity_committed']),
       quantityExpected: number(json['quantity_expected']),
       variantId: (json['variant'] as num?)?.toInt() ?? 0,
-      variantName: json['variant_full_name']?.toString() ??
+      variantName:
+          json['variant_full_name']?.toString() ??
           json['variant_name']?.toString() ??
           '',
       variantSku: json['variant_sku']?.toString() ?? '',

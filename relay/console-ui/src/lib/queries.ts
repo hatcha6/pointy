@@ -9,6 +9,7 @@ import type {
   Installation,
   InstallationStatus,
   IntegrationSwitch,
+  MoamalatLink,
   Me,
   Operator,
   Purchase,
@@ -37,6 +38,7 @@ export const keys = {
   operators: ["operators"],
   audit: (filter: Record<string, string>) => ["audit", filter],
   integrations: ["integrations"],
+  moamalat: ["moamalat"],
   alerts: ["alerts"],
   fleet: ["fleet"],
 };
@@ -180,6 +182,20 @@ export function useIntegrations() {
   return useQuery({
     queryKey: keys.integrations,
     queryFn: () => api.get<{ integrations: IntegrationSwitch[] }>("/v1/fleet/integrations").then((r) => r.integrations ?? []),
+    retry: false,
+  });
+}
+
+export function useMoamalatLinks() {
+  return useQuery({
+    queryKey: keys.moamalat,
+    queryFn: () =>
+      api.get<{ links: MoamalatLink[]; available: boolean; switched_off: boolean }>("/v1/moamalat/admin/links").then((r) => ({
+        links: r.links ?? [],
+        available: r.available,
+        switched_off: r.switched_off,
+      })),
+    refetchInterval: 30_000,
     retry: false,
   });
 }

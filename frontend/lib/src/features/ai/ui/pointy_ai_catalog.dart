@@ -6,6 +6,7 @@ import 'items/chart_items.dart';
 import 'items/data_items.dart';
 import 'items/input_items.dart';
 import 'items/layout_items.dart';
+import 'items/pos_card_items.dart';
 import 'items/stock_unit_items.dart';
 import 'items/text_items.dart';
 
@@ -23,6 +24,7 @@ abstract final class PointyAiCatalog {
     ...aiActionItems,
     ...aiInputItems,
     ...aiStockUnitItems,
+    ...aiPosCardItems,
   ];
 
   static Catalog build() => Catalog(items, catalogId: pointyAiCatalogId);

@@ -26,7 +26,9 @@ class CreateEmployeeForm extends StatefulWidget {
 
   final EmployeePayrollViewModel viewModel;
   final UserRepository userRepository;
-  final VoidCallback onCreated;
+
+  /// Gets the saved employee, so the add flow can go on to their salary.
+  final ValueChanged<Employee> onCreated;
 
   /// Offers the balance the employee arrives with — only to a user who may
   /// write one; the server checks again.
@@ -87,7 +89,9 @@ class _CreateEmployeeFormState extends State<CreateEmployeeForm> {
         ),
         PayrollDatePickerField(
           label: l10n.employeeHireDateField,
+          helperText: l10n.employeeHireDateHelper,
           value: _hireDate,
+          lastDate: DateTime.now(),
           onChanged: (value) => setState(() => _hireDate = value),
         ),
         AsyncSelectionField<int>(
@@ -171,8 +175,9 @@ class _CreateEmployeeFormState extends State<CreateEmployeeForm> {
     if (!mounted) {
       return;
     }
-    if (saved) {
-      widget.onCreated();
+    final created = widget.viewModel.lastCreatedEmployee;
+    if (saved && created != null) {
+      widget.onCreated(created);
       return;
     }
     if (opening != null) {
@@ -249,11 +254,16 @@ class CompensationPlanForm extends StatefulWidget {
     required this.viewModel,
     required this.employee,
     required this.onCreated,
+    this.onSkip,
   });
 
   final EmployeePayrollViewModel viewModel;
   final Employee employee;
   final VoidCallback onCreated;
+
+  /// Set when the sheet follows adding the employee: it then says why it
+  /// opened and offers to set the salary later.
+  final VoidCallback? onSkip;
 
   @override
   State<CompensationPlanForm> createState() => _CompensationPlanFormState();
@@ -270,6 +280,24 @@ class _CompensationPlanFormState extends State<CompensationPlanForm> {
   OperationsCommissionBase _operationsCommissionBase =
       OperationsCommissionBase.approvedPrice;
   bool _submitted = false;
+  late DateTime _effectiveFrom = _defaultEffectiveFrom();
+
+  /// A first plan starts the day the employee did, so the month they joined
+  /// is paid. So does one replacing a plan that started after they were
+  /// hired — that gap is what it is for. A later plan is a raise: today.
+  DateTime _defaultEffectiveFrom() {
+    final today = DateUtils.dateOnly(DateTime.now());
+    final hired = widget.employee.hireDate;
+    if (hired == null || hired.isAfter(today)) {
+      return today;
+    }
+    final current = widget.employee.activeCompensationPlan;
+    final currentFrom = current?.effectiveFrom;
+    if (current == null || currentFrom == null || currentFrom.isAfter(hired)) {
+      return DateUtils.dateOnly(hired);
+    }
+    return today;
+  }
 
   @override
   void dispose() {
@@ -288,6 +316,12 @@ class _CompensationPlanFormState extends State<CompensationPlanForm> {
     return PayrollSheetFrame(
       title: l10n.addCompensationPlanTitle(widget.employee.fullName),
       children: [
+        if (widget.onSkip != null)
+          PointyInlineMessage(
+            key: const ValueKey('compensation_plan_intro'),
+            message: l10n.payrollCompensationIntro(widget.employee.fullName),
+            icon: Icons.payments_outlined,
+          ),
         DropdownButtonFormField<SalaryType>(
           initialValue: _salaryType,
           decoration: InputDecoration(labelText: l10n.salaryTypeField),
@@ -430,6 +464,14 @@ class _CompensationPlanFormState extends State<CompensationPlanForm> {
             ),
           ],
         ),
+        PayrollDatePickerField(
+          key: const ValueKey('compensation_plan_effective_from_field'),
+          label: l10n.compensationEffectiveFromField,
+          helperText: l10n.compensationEffectiveFromHelper,
+          value: _effectiveFrom,
+          lastDate: DateTime.now(),
+          onChanged: (value) => setState(() => _effectiveFrom = value),
+        ),
         if (_showsNotes)
           TextField(
             controller: _notesController,
@@ -451,6 +493,12 @@ class _CompensationPlanFormState extends State<CompensationPlanForm> {
           icon: const Icon(Icons.save_outlined),
           label: Text(l10n.saveButton),
         ),
+        if (widget.onSkip case final onSkip?)
+          TextButton(
+            key: const ValueKey('compensation_plan_skip_button'),
+            onPressed: widget.viewModel.isSaving ? null : onSkip,
+            child: Text(l10n.payrollCompensationSkipButton),
+          ),
       ],
     );
   }
@@ -485,6 +533,7 @@ class _CompensationPlanFormState extends State<CompensationPlanForm> {
             ? _expectedUnitsController.text.trim()
             : '1.00',
         notes: _showsNotes ? _notesController.text.trim() : '',
+        effectiveFrom: dateIso(_effectiveFrom),
       ),
     );
     if (saved && mounted) {
@@ -538,131 +587,6 @@ class _CompensationPlanFormState extends State<CompensationPlanForm> {
   }
 }
 
-class CreatePayrollRunForm extends StatefulWidget {
-  const CreatePayrollRunForm({
-    super.key,
-    required this.viewModel,
-    required this.onCreated,
-  });
-
-  final EmployeePayrollViewModel viewModel;
-  final VoidCallback onCreated;
-
-  @override
-  State<CreatePayrollRunForm> createState() => _CreatePayrollRunFormState();
-}
-
-class _CreatePayrollRunFormState extends State<CreatePayrollRunForm> {
-  final _unitsController = TextEditingController(text: '1.00');
-  late DateTime _periodStart;
-  late DateTime _periodEnd;
-  Employee? _employee;
-
-  @override
-  void initState() {
-    super.initState();
-    final now = DateTime.now();
-    _periodStart = DateTime(now.year, now.month);
-    _periodEnd = now;
-  }
-
-  @override
-  void dispose() {
-    _unitsController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final employeesWithPlans = widget.viewModel.employees
-        .where((employee) => employee.activeCompensationPlan != null)
-        .toList(growable: false);
-    if (_employee == null && employeesWithPlans.isNotEmpty) {
-      _employee = employeesWithPlans.first;
-    }
-
-    return PayrollSheetFrame(
-      title: l10n.createPayrollRunButton,
-      children: [
-        if (employeesWithPlans.isEmpty)
-          PointyInlineMessage.warning(
-            message: l10n.noEmployeesWithPayPlan,
-            icon: Icons.info_outline,
-          )
-        else
-          DropdownButtonFormField<Employee>(
-            initialValue: _employee,
-            decoration: InputDecoration(labelText: l10n.payrollEmployeeField),
-            items: [
-              for (final employee in employeesWithPlans)
-                DropdownMenuItem(
-                  value: employee,
-                  child: Text(employee.fullName),
-                ),
-            ],
-            onChanged: (value) => setState(() => _employee = value),
-          ),
-        PayrollDatePickerField(
-          label: l10n.payrollPeriodStartField,
-          value: _periodStart,
-          onChanged: (value) {
-            setState(() {
-              _periodStart = value;
-              if (_periodEnd.isBefore(value)) {
-                _periodEnd = value;
-              }
-            });
-          },
-        ),
-        PayrollDatePickerField(
-          label: l10n.payrollPeriodEndField,
-          value: _periodEnd,
-          firstDate: _periodStart,
-          onChanged: (value) => setState(() => _periodEnd = value),
-        ),
-        TextField(
-          controller: _unitsController,
-          decoration: InputDecoration(labelText: l10n.payUnitsField),
-          keyboardType: TextInputType.number,
-          inputFormatters: [DecimalTextInputFormatter()],
-        ),
-        FilledButton.icon(
-          onPressed: widget.viewModel.isSaving || _employee == null
-              ? null
-              : _submit,
-          icon: const Icon(Icons.save_outlined),
-          label: Text(l10n.saveButton),
-        ),
-      ],
-    );
-  }
-
-  Future<void> _submit() async {
-    final employee = _employee;
-    final plan = employee?.activeCompensationPlan;
-    if (employee == null || plan == null) {
-      return;
-    }
-    final saved = await widget.viewModel.createPayrollRun(
-      PayrollRunDraft(
-        periodStart: dateIso(_periodStart),
-        periodEnd: dateIso(_periodEnd),
-        lines: [
-          PayrollLineDraft(
-            employeeId: employee.id,
-            compensationPlanId: plan.id,
-            units: _unitsController.text.trim(),
-          ),
-        ],
-      ),
-    );
-    if (saved && mounted) {
-      widget.onCreated();
-    }
-  }
-}
-
 class PayrollSheetFrame extends StatelessWidget {
   const PayrollSheetFrame({
     super.key,
@@ -710,12 +634,16 @@ class PayrollDatePickerField extends StatelessWidget {
     required this.value,
     required this.onChanged,
     this.firstDate,
+    this.lastDate,
+    this.helperText,
   });
 
   final String label;
   final DateTime value;
   final ValueChanged<DateTime> onChanged;
   final DateTime? firstDate;
+  final DateTime? lastDate;
+  final String? helperText;
 
   @override
   Widget build(BuildContext context) {
@@ -725,6 +653,8 @@ class PayrollDatePickerField extends StatelessWidget {
       readOnly: true,
       decoration: InputDecoration(
         labelText: label,
+        helperText: helperText,
+        helperMaxLines: 2,
         suffixIcon: const Icon(Icons.event_outlined),
       ),
       onTap: () async {
@@ -733,7 +663,7 @@ class PayrollDatePickerField extends StatelessWidget {
           context: context,
           initialDate: value,
           firstDate: firstDate ?? DateTime(now.year - 10),
-          lastDate: DateTime(now.year + 5, 12, 31),
+          lastDate: lastDate ?? DateTime(now.year + 5, 12, 31),
         );
         if (selected != null) {
           onChanged(selected);

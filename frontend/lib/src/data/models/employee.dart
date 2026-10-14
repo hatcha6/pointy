@@ -777,6 +777,8 @@ class PayrollLine {
     this.absenceDays = 0,
     this.absenceDayRate = 0,
     this.absenceDeductionAmount = 0,
+    this.daysNotEmployed = 0,
+    this.notEmployedDeductionAmount = 0,
     this.overtimeHours = 0,
     this.overtimeHourlyRate = 0,
     this.overtimeMultiplier = 1.5,
@@ -805,6 +807,11 @@ class PayrollLine {
   final double absenceDays;
   final double absenceDayRate;
   final double absenceDeductionAmount;
+
+  /// Days of the period before the employee was hired (or after they left):
+  /// a new hire's first run pays from their hire date.
+  final double daysNotEmployed;
+  final double notEmployedDeductionAmount;
   final double overtimeHours;
   final double overtimeHourlyRate;
   final double overtimeMultiplier;
@@ -839,6 +846,10 @@ class PayrollLine {
       absenceDays: _doubleFromJson(json['absence_days']),
       absenceDayRate: _doubleFromJson(json['absence_day_rate']),
       absenceDeductionAmount: _doubleFromJson(json['absence_deduction_amount']),
+      daysNotEmployed: _doubleFromJson(json['days_not_employed']),
+      notEmployedDeductionAmount: _doubleFromJson(
+        json['not_employed_deduction_amount'],
+      ),
       overtimeHours: _doubleFromJson(json['overtime_hours']),
       overtimeHourlyRate: _doubleFromJson(json['overtime_hourly_rate']),
       overtimeMultiplier: _doubleFromJson(
@@ -991,10 +1002,15 @@ class CompensationPlanDraft {
     this.standardDailyHours = '8.00',
     this.expectedUnitsPerPeriod = '1.00',
     this.notes = '',
+    this.effectiveFrom,
   });
 
   final int employeeId;
   final SalaryType salaryType;
+
+  /// The day this pay starts. A new hire's first plan starts the day they
+  /// did, so the month they joined is paid; null means today.
+  final String? effectiveFrom;
   final String amount;
   final String commissionPercent;
   final OperationsCommissionBase operationsCommissionBase;
@@ -1016,6 +1032,7 @@ class CompensationPlanDraft {
       'standard_daily_hours': standardDailyHours,
       'expected_units_per_period': expectedUnitsPerPeriod,
       if (notes.trim().isNotEmpty) 'notes': notes.trim(),
+      'effective_from': ?effectiveFrom,
       'is_active': true,
     };
   }
@@ -1039,6 +1056,7 @@ class PayrollDraftResult {
 class PayrollLineAdjustmentDraft {
   const PayrollLineAdjustmentDraft({
     this.absenceDays = '0.00',
+    this.daysNotEmployed,
     this.overtimeHours = '0.00',
     this.raiseAmount = '0.00',
     this.manualAdditionAmount = '0.00',
@@ -1047,6 +1065,10 @@ class PayrollLineAdjustmentDraft {
   });
 
   final String absenceDays;
+
+  /// Null leaves the line's own count alone: the server worked it out from
+  /// the hire date, and only a correction should send one.
+  final String? daysNotEmployed;
   final String overtimeHours;
   final String raiseAmount;
   final String manualAdditionAmount;
@@ -1056,6 +1078,7 @@ class PayrollLineAdjustmentDraft {
   Map<String, Object?> toJson() {
     return {
       'absence_days': absenceDays,
+      'days_not_employed': ?daysNotEmployed,
       'overtime_hours': overtimeHours,
       'raise_amount': raiseAmount,
       'manual_addition_amount': manualAdditionAmount,

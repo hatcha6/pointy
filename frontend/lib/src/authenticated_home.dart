@@ -10,6 +10,8 @@ import 'core/result.dart';
 import 'core/typed_lookup_text.dart';
 import 'data/models/integration_provider.dart';
 import 'shared/contact_picker_sheet.dart';
+import 'features/card_verification/view_models/moamalat_link_view_model.dart';
+import 'features/card_verification/views/moamalat_page.dart';
 import 'features/settings/views/integration_presentation.dart';
 import 'features/settings/views/voucher_pricing_screen.dart';
 import 'core/authorization.dart';
@@ -139,6 +141,7 @@ import 'features/catalog/views/product_variant_details_screen.dart';
 import 'features/contacts/views/customer_details_screen.dart';
 import 'features/contacts/views/supplier_details_screen.dart';
 import 'shared/async_selection/async_multi_select_picker.dart';
+import 'shared/calculator/floating_calculator.dart';
 import 'shared/command_palette/command_palette.dart';
 import 'shared/date_formatters.dart';
 import 'shared/formatters.dart';
@@ -183,6 +186,7 @@ class AuthenticatedHome extends StatelessWidget {
         viewModel: dependencies.notificationCenterViewModel,
         onOpenAlert: routes.openBusinessAlert,
         onSecondaryAlertAction: routes.runBusinessAlertSecondaryAction,
+        canManageMoamalatLink: capabilities.canManageMoamalatLink,
         child: _BankRoutingLoader(
           routing: dependencies.bankRouting,
           canReadAccounts: capabilities.canViewMoneyAccounts,
@@ -378,6 +382,7 @@ class _AuthenticatedRoutes implements AppNavigation {
       AppNavigationDestination.employees => employeePayrollRouteBuilder,
       AppNavigationDestination.expenses => expensesRouteBuilder,
       AppNavigationDestination.payments => paymentsRouteBuilder,
+      AppNavigationDestination.cardVerification => cardVerificationRouteBuilder,
       AppNavigationDestination.discounts => discountsRouteBuilder,
       AppNavigationDestination.reports => reportsRouteBuilder,
       AppNavigationDestination.activityLog => activityLogRouteBuilder,
@@ -421,8 +426,8 @@ class _AuthenticatedRoutes implements AppNavigation {
     final camerasViewModel = capabilities.canWatchCamerasLive
         ? dependencies.dashboardCamerasViewModel
         : null;
-    // Same rule for rates: a cashier holds no FX permission, so their dashboard
-    // never asks the backend for them.
+    // Same rule for rates: only a user who may read them (since 2026-10 the
+    // till roles too, for the calculator's converter) asks the backend.
     final fxViewModel = capabilities.canViewExchangeRates
         ? dependencies.dashboardFxViewModel
         : null;
@@ -449,7 +454,10 @@ class _AuthenticatedRoutes implements AppNavigation {
               )
             : null,
         fxViewModel: fxViewModel,
-        onOpenExchangeRates: fxViewModel == null
+        // The band is a glance anyone with rates may take; the page behind it
+        // is for those who maintain them.
+        onOpenExchangeRates:
+            fxViewModel == null || !capabilities.canRecordExchangeRates
             ? null
             : () => openExchangeRates(routeContext),
       ),
@@ -1411,6 +1419,17 @@ class _AuthenticatedRoutes implements AppNavigation {
     );
   }
 
+  /// التحقق من البطاقات: the shop's Moamalat link (supervisors).
+  Widget cardVerificationRouteBuilder(BuildContext routeContext) {
+    return _screen(
+      'card_verification',
+      MoamalatPage(
+        viewModel: MoamalatLinkViewModel(dependencies.moamalatRepository),
+        navigation: this,
+      ),
+    );
+  }
+
   /// As [warehousesRouteBuilder], for the transfers between those places.
   Widget stockTransfersRouteBuilder(BuildContext routeContext) {
     return _screen(
@@ -1614,6 +1633,21 @@ class _AuthenticatedRoutes implements AppNavigation {
         navigator.context,
         dependencies.integrationsRepository,
         belowCost: true,
+      );
+      return;
+    }
+    // A dead Moamalat link, or card payments nothing proved: both are
+    // answered on the link's own page.
+    if (alert.type == BusinessAlertType.moamalatReauth ||
+        alert.type == BusinessAlertType.moamalatUnverified ||
+        alert.type == BusinessAlertType.moamalatAmountMismatch) {
+      if (!capabilities.canManageMoamalatLink) {
+        return;
+      }
+      final navigator = Navigator.of(context);
+      navigator.pop();
+      navigator.pushReplacement(
+        MaterialPageRoute<void>(builder: cardVerificationRouteBuilder),
       );
       return;
     }
@@ -2242,6 +2276,22 @@ class _AuthenticatedRoutes implements AppNavigation {
             onSelect: (ctx) =>
                 navigateTo(ctx, AppNavigationDestination.stockCount),
           ),
+        CommandItem(
+          id: 'action-calculator',
+          icon: Icons.calculate_outlined,
+          title: l10n.commandPaletteActionCalculator,
+          trailing: 'F12',
+          keywords: const [
+            'calculator',
+            'calc',
+            'percent',
+            'حاسبة',
+            'آلة حاسبة',
+            'حساب',
+            'نسبة',
+          ],
+          onSelect: (_) => openFloatingCalculator(),
+        ),
         CommandItem(
           id: 'action-toggle-theme',
           icon: Icons.brightness_6_outlined,

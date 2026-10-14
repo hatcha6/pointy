@@ -229,6 +229,11 @@ PERMISSION_CATALOG = [
             _perm("payments.add_payment", "تسجيل المدفوعات", "تحصيل المدفوعات وتسجيلها."),
             _perm("payments.change_payment", "تعديل المقبوضات", "تصحيح بيانات دفعة مسجّلة."),
             _perm("payments.delete_payment", "إلغاء المقبوضات", "إلغاء دفعة مسجّلة وعكس أثرها."),
+            _perm(
+                "payments.manage_moamalat_link",
+                "ربط حساب معاملات",
+                "ربط حساب التاجر في معاملات برمز التحقق للتحقق الفوري من مدفوعات البطاقات.",
+            ),
             _perm("purchasing.view_supplierpayment", "عرض دفعات الموردين", "الاطلاع على المبالغ المدفوعة للموردين."),
             _perm("purchasing.add_supplierpayment", "تسجيل دفعات الموردين", "تسجيل دفعة لمورد وطباعة سند الصرف."),
             _perm("purchasing.change_supplierpayment", "تعديل دفعات الموردين", "تصحيح بيانات دفعة مسجّلة لمورد."),

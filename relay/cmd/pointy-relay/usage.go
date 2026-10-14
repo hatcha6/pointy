@@ -238,6 +238,20 @@ var usageSections = []usageSection{
                  company's own card stock codes. Keep it with the other relay secrets and back
                  it up apart from the database: without it the codes in stock cannot be opened.`,
 	},
+	{
+		name:     "gen-moamalat-key",
+		synopsis: []string{"pointy-relay gen-moamalat-key"},
+		detail: `  gen-moamalat-key  Print a random key for POINTY_RELAY_MOAMALAT_TOKEN_KEY, which seals the
+                 shops' Moamalat tokens the relay keeps warm. Keep it with the other relay
+                 secrets; losing it costs every linked shop one re-link (an OTP).`,
+	},
+	{
+		name:     "moamalat",
+		synopsis: []string{"pointy-relay moamalat status [--json]"},
+		detail: `  moamalat status  Every shop's Moamalat token keepalive as the relay holds it: alive,
+                 at risk, or waiting for the shop to re-link. Stop it fleet-wide with
+                 "pointy-relay integrations disable moamalat --reason ...".`,
+	},
 }
 
 const adminAPIUsageNote = `Admin API commands read POINTY_RELAY_CONTROL_URL and POINTY_RELAY_ADMIN_TOKEN

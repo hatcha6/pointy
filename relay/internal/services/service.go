@@ -543,7 +543,7 @@ func (s *Service) Directory(ctx context.Context, in PricingInput) (*Rendered, er
 	if cached != nil {
 		return cached, nil
 	}
-	rendered := snap.render(in, key.test, key.configured)
+	rendered := snap.render(in, key.test, key.configured, false)
 	s.mu.Lock()
 	if s.snap == snap {
 		if len(s.rendered) >= maxRenderedKept {
@@ -553,6 +553,20 @@ func (s *Service) Directory(ctx context.Context, in PricingInput) (*Rendered, er
 	}
 	s.mu.Unlock()
 	return rendered, nil
+}
+
+// AdminDirectory is Directory for the operator: every price carries the
+// company's cost beside it (cost_lyd). It is rendered afresh each time and
+// never cached or served to a shop.
+func (s *Service) AdminDirectory(ctx context.Context, in PricingInput) (*Rendered, error) {
+	if !s.Configured() {
+		return emptyDirectory(in, s.TestOrSandbox()), nil
+	}
+	snap, err := s.current(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return snap.render(in, s.TestOrSandbox(), true, true), nil
 }
 
 func emptyDirectory(in PricingInput, test bool) *Rendered {

@@ -76,6 +76,159 @@
   "@commandPaletteActionStockCount": {
     "description": "Quick action: open the stock count screen."
   },
+  "commandPaletteActionCalculator": "الآلة الحاسبة",
+  "@commandPaletteActionCalculator": {
+    "description": "Quick action: open the floating calculator (also F12)."
+  },
+  "calculatorTitle": "الآلة الحاسبة",
+  "@calculatorTitle": {
+    "description": "Title of the floating calculator panel"
+  },
+  "calculatorClose": "إغلاق الآلة الحاسبة",
+  "@calculatorClose": {
+    "description": "Close button of the floating calculator"
+  },
+  "calculatorShowHistory": "السجل",
+  "@calculatorShowHistory": {
+    "description": "Toggles the list of earlier calculations"
+  },
+  "calculatorHistoryEmpty": "لا توجد عمليات بعد",
+  "@calculatorHistoryEmpty": {
+    "description": "Calculator history list has nothing in it"
+  },
+  "calculatorClearHistory": "مسح السجل",
+  "@calculatorClearHistory": {
+    "description": "Clears the calculator's list of earlier calculations"
+  },
+  "calculatorCopy": "نسخ",
+  "@calculatorCopy": {
+    "description": "Copies the calculator result to the clipboard"
+  },
+  "calculatorCopied": "تم النسخ",
+  "@calculatorCopied": {
+    "description": "Shown briefly after the calculator result was copied"
+  },
+  "calculatorInsert": "إدراج في الحقل",
+  "@calculatorInsert": {
+    "description": "Types the calculator result into the field the user was typing in"
+  },
+  "calculatorInsertUnavailable": "اختر حقلاً في الصفحة أولاً ثم افتح الآلة الحاسبة",
+  "@calculatorInsertUnavailable": {
+    "description": "Tooltip when there is no field to insert the result into"
+  },
+  "calculatorInsertRejected": "الحقل لا يقبل هذه القيمة",
+  "@calculatorInsertRejected": {
+    "description": "The target field refused the inserted value (e.g. a negative number)"
+  },
+  "calculatorUndefined": "غير معرّف",
+  "@calculatorUndefined": {
+    "description": "Calculator display after dividing by zero"
+  },
+  "calculatorTooLarge": "الرقم كبير جدًا",
+  "@calculatorTooLarge": {
+    "description": "Calculator display when a result is too large"
+  },
+  "calculatorShortcutHint": "F12 للإظهار والإخفاء · Esc للمسح",
+  "@calculatorShortcutHint": {
+    "description": "Footer hint: which keys toggle and clear the calculator"
+  },
+  "calculatorKeyClear": "مسح",
+  "@calculatorKeyClear": {
+    "description": "Accessibility label of the calculator C key"
+  },
+  "calculatorKeyBackspace": "حذف آخر رقم",
+  "@calculatorKeyBackspace": {
+    "description": "Accessibility label of the calculator backspace key"
+  },
+  "calculatorKeyPercent": "نسبة مئوية",
+  "@calculatorKeyPercent": {
+    "description": "Accessibility label of the calculator percent key"
+  },
+  "calculatorKeyDivide": "قسمة",
+  "@calculatorKeyDivide": {
+    "description": "Accessibility label of the calculator divide key"
+  },
+  "calculatorKeyMultiply": "ضرب",
+  "@calculatorKeyMultiply": {
+    "description": "Accessibility label of the calculator multiply key"
+  },
+  "calculatorKeySubtract": "طرح",
+  "@calculatorKeySubtract": {
+    "description": "Accessibility label of the calculator subtract key"
+  },
+  "calculatorKeyAdd": "جمع",
+  "@calculatorKeyAdd": {
+    "description": "Accessibility label of the calculator add key"
+  },
+  "calculatorKeyEquals": "يساوي",
+  "@calculatorKeyEquals": {
+    "description": "Accessibility label of the calculator equals key"
+  },
+  "calculatorKeyDecimal": "فاصلة عشرية",
+  "@calculatorKeyDecimal": {
+    "description": "Accessibility label of the calculator decimal point key"
+  },
+  "calculatorConvert": "تحويل العملات",
+  "@calculatorConvert": {
+    "description": "Toggles the calculator's currency converter"
+  },
+  "calculatorSwapCurrencies": "تبديل اتجاه التحويل",
+  "@calculatorSwapCurrencies": {
+    "description": "Swaps which currency row the calculator types into"
+  },
+  "calculatorPickCurrency": "اختر العملة",
+  "@calculatorPickCurrency": {
+    "description": "Title of the converter's currency picker"
+  },
+  "calculatorCurrencySearch": "ابحث بالاسم أو الرمز",
+  "@calculatorCurrencySearch": {
+    "description": "Placeholder of the currency picker's search field"
+  },
+  "calculatorCurrencyRecent": "المستخدمة مؤخرًا",
+  "@calculatorCurrencyRecent": {
+    "description": "Currency picker section: recently picked currencies"
+  },
+  "calculatorCurrencyAll": "كل العملات",
+  "@calculatorCurrencyAll": {
+    "description": "Currency picker section: every available currency"
+  },
+  "calculatorCurrencyOtherSide": "مختارة في الطرف الآخر",
+  "@calculatorCurrencyOtherSide": {
+    "description": "A currency already used by the other converter row, so it cannot be picked"
+  },
+  "calculatorCurrencyNoResults": "لا نتائج لـ «{query}»",
+  "@calculatorCurrencyNoResults": {
+    "description": "Currency picker search found nothing",
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "calculatorCurrencyNoResultsHint": "تحقق من الإملاء أو جرّب بحثًا آخر.",
+  "@calculatorCurrencyNoResultsHint": {
+    "description": "Hint under the currency picker's no-results message"
+  },
+  "calculatorRatesLoading": "جارٍ تحميل أسعار الصرف…",
+  "@calculatorRatesLoading": {
+    "description": "Converter is fetching exchange rates"
+  },
+  "calculatorRatesUnavailable": "أسعار الصرف غير متاحة الآن",
+  "@calculatorRatesUnavailable": {
+    "description": "Converter could not load any exchange rates"
+  },
+  "calculatorRatesRetry": "إعادة المحاولة",
+  "@calculatorRatesRetry": {
+    "description": "Retries loading exchange rates in the converter"
+  },
+  "calculatorRatesRefresh": "تحديث الأسعار",
+  "@calculatorRatesRefresh": {
+    "description": "Reloads the converter's exchange rates"
+  },
+  "calculatorConvertShortcutHint": "F12 للإظهار والإخفاء · Tab لتبديل الاتجاه",
+  "@calculatorConvertShortcutHint": {
+    "description": "Footer hint in convert mode: F12 toggles, Tab swaps direction"
+  },
   "commandPaletteStockLabel": "{count} في المخزون",
   "@commandPaletteStockLabel": {
     "description": "Live stock shown on a product row in the command palette.",
@@ -9024,13 +9177,114 @@
   "payrollMonthDraftMessage": "المسير جاهز للمراجعة والاعتماد.",
   "payrollMonthApprovedMessage": "المسير معتمد وبانتظار تسجيل الدفع.",
   "payrollMonthPaidMessage": "تم دفع رواتب هذا الشهر.",
-  "payrollMonthOnboardingMessage": "أضف موظفيك وحدد خطط رواتبهم لبدء تجهيز مسيرات الرواتب.",
   "preparePayrollMonthButton": "تجهيز رواتب الشهر",
   "reviewAndApprovePayrollButton": "مراجعة واعتماد",
   "recordPayrollPaymentButton": "تسجيل الدفع",
   "viewPayrollRunButton": "عرض المسير",
-  "customPayrollRunButton": "مسير مخصص",
   "payrollHistoryTitle": "سجل المسيرات",
+  "payrollMonthPreviousTooltip": "الشهر السابق",
+  "payrollMonthNextTooltip": "الشهر التالي",
+  "payrollReadinessEmployeesStep": "أضف موظفيك",
+  "payrollReadinessEmployeesDone": "{count, plural, =1{موظف واحد مسجّل} =2{موظفان مسجّلان} other{{count} موظفين مسجّلين}}",
+  "@payrollReadinessEmployeesDone": {
+    "description": "Payroll readiness checklist: how many employees payroll would pay.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
+  },
+  "payrollReadinessPlansStep": "حدّد راتب كل موظف",
+  "payrollReadinessPlansProgress": "{ready} من {total} لديهم خطة راتب لهذا الشهر",
+  "@payrollReadinessPlansProgress": {
+    "description": "Payroll readiness checklist: employees whose salary plan covers the card's month, out of all payable employees.",
+    "placeholders": {
+      "ready": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "payrollReadinessNoPlan": "بدون خطة راتب",
+  "payrollReadinessPlanStartsLater": "خطته تبدأ {date}، بعد هذا الشهر",
+  "@payrollReadinessPlanStartsLater": {
+    "description": "Payroll readiness row: the employee's salary plan only takes effect after the card's month, so this month's payroll leaves them out.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "payrollSetSalaryButton": "تحديد الراتب",
+  "payrollReadinessMoreMissing": "{count, plural, =1{وموظف آخر بدون خطة} =2{وموظفان آخران بدون خطة} other{و{count} موظفين آخرين بدون خطة}}",
+  "@payrollReadinessMoreMissing": {
+    "description": "Payroll readiness checklist: link to the employees tab for the employees not listed on the card.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
+  },
+  "payrollPrepareHint": "سيُنشأ مسير لكل موظف لديه خطة راتب، مع العمولات وأقساط السلف. يمكنك مراجعته وتعديله قبل الاعتماد.",
+  "payrollPrepareSkipsHint": "{count, plural, =1{موظف واحد بدون خطة لن يُدرج في المسير.} =2{موظفان بدون خطة لن يُدرجا في المسير.} other{{count} موظفين بدون خطة لن يُدرجوا في المسير.}}",
+  "@payrollPrepareSkipsHint": {
+    "description": "Under the prepare-payroll button: employees left out because they have no salary plan for the month.",
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
+  },
+  "payrollPrepareBlockedHint": "حدّد راتب موظف واحد على الأقل لتتمكن من تجهيز المسير.",
+  "payrollMonthDraftHint": "راجع مبلغ كل موظف وأضف المكافآت أو الخصومات إن وجدت، ثم اعتمد المسير.",
+  "payrollMonthApprovedHint": "سجّل الدفع بعد تسليم الرواتب للموظفين.",
+  "payrollOtherRunButton": "مسير لموظفين محددين",
+  "payrollCompensationIntro": "حدّد راتب {name} ليُدرج في مسير الرواتب.",
+  "@payrollCompensationIntro": {
+    "description": "Top of the salary plan sheet opened right after adding an employee.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "payrollCompensationSkipButton": "لاحقاً",
+  "payrollPrepareProratedHint": "يُحسب راتب {names} من تاريخ بدء العمل هذا الشهر، لا عن الشهر كاملاً.",
+  "@payrollPrepareProratedHint": {
+    "description": "Under the prepare-payroll button: employees hired during the month, whose first salary is prorated from their hire date.",
+    "placeholders": {
+      "names": {
+        "type": "String"
+      }
+    }
+  },
+  "payrollNotEmployedChipLabel": "قبل بدء العمل {days} يوم ({amount})",
+  "@payrollNotEmployedChipLabel": {
+    "description": "Payroll line chip: days of the period before the employee's hire date, and what they take off the salary.",
+    "placeholders": {
+      "days": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "daysNotEmployedField": "أيام قبل بدء العمل",
+  "daysNotEmployedHelper": "حُسبت من تاريخ تعيين الموظف وتُخصم بقيمة اليوم. صحّحها إن كان التاريخ غير دقيق.",
+  "employeeHireDateHelper": "يُحسب أول راتب من هذا التاريخ. للموظفين الحاليين اختر تاريخ بدء عملهم الفعلي.",
+  "compensationEffectiveFromField": "يبدأ الراتب من",
+  "compensationEffectiveFromHelper": "لموظف جديد: يوم بدء عمله، ليُحسب له الشهر الذي التحق فيه. لزيادة راتب: اليوم.",
+  "customPayrollRunTitle": "مسير لموظفين محددين",
+  "customPayrollEmployeesLabel": "الموظفون المشمولون",
+  "customPayrollSelectAllButton": "تحديد الكل",
+  "customPayrollNoSelectionError": "اختر موظفاً واحداً على الأقل.",
+  "customPayrollWeeksField": "عدد الأسابيع",
+  "customPayrollDaysField": "عدد الأيام",
+  "customPayrollHoursField": "عدد الساعات",
+  "customPayrollShiftsField": "عدد الورديات",
   "pendingLoanRequestsTitle": "طلبات سلف بانتظار قرارك",
   "employeeLoanApproveButton": "موافقة",
   "employeeLoanRejectButton": "رفض",
@@ -9151,7 +9405,6 @@
   "employeeCompensationButton": "خطة الراتب",
   "addEmployeeButton": "إضافة موظف",
   "draftMonthlyPayrollButton": "مسودة رواتب الشهر",
-  "createPayrollRunButton": "إنشاء مسير رواتب",
   "employeePayrollSaveError": "تعذر حفظ التغيير. راجع البيانات والصلاحيات ثم حاول مرة أخرى.",
   "employeesTabLabel": "الموظفون",
   "payrollRunsTabLabel": "مسيرات الرواتب",
@@ -9944,25 +10197,48 @@
   "expenseRecordedByLine": "بواسطة {name} — {when}",
   "@expenseRecordedByLine": {
     "description": "Expenses ledger row: who recorded the money out and when (a time, or a date and time).",
-    "placeholders": {"name": {"type": "String"}, "when": {"type": "String"}}
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "when": {
+        "type": "String"
+      }
+    }
   },
   "expenseRecordedByName": "بواسطة {name}",
   "@expenseRecordedByName": {
-    "placeholders": {"name": {"type": "String"}}
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "expenseRecordedAtLine": "سُجّل {when}",
   "@expenseRecordedAtLine": {
-    "placeholders": {"when": {"type": "String"}}
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
   },
   "expenseLinkRegisterSession": "جلسة الدرج {number}",
   "@expenseLinkRegisterSession": {
     "description": "Expenses ledger link to the drawer session the cash left, e.g. RS-12.",
-    "placeholders": {"number": {"type": "String"}}
+    "placeholders": {
+      "number": {
+        "type": "String"
+      }
+    }
   },
   "expenseOpenSourceError": "تعذر فتح السجل الذي جاء منه هذا المصروف.",
   "expenseLinkPayrollRun": "مسير الرواتب {number}",
   "@expenseLinkPayrollRun": {
-    "placeholders": {"number": {"type": "String"}}
+    "placeholders": {
+      "number": {
+        "type": "String"
+      }
+    }
   },
   "expenseDateLabel": "التاريخ",
   "expenseReferenceLabel": "مرجع (اختياري)",
@@ -10646,16 +10922,24 @@
   "@purchaseOrderLabelsReceived": {
     "description": "Purchase order label row: received quantity (in pieces) and the barcode printed.",
     "placeholders": {
-      "quantity": {"type": "String"},
-      "barcode": {"type": "String"}
+      "quantity": {
+        "type": "String"
+      },
+      "barcode": {
+        "type": "String"
+      }
     }
   },
   "purchaseOrderLabelsOrdered": "مطلوب {quantity} · {barcode}",
   "@purchaseOrderLabelsOrdered": {
     "description": "Purchase order label row: ordered quantity (in pieces, nothing received yet) and the barcode printed.",
     "placeholders": {
-      "quantity": {"type": "String"},
-      "barcode": {"type": "String"}
+      "quantity": {
+        "type": "String"
+      },
+      "barcode": {
+        "type": "String"
+      }
     }
   },
   "purchaseOrderLabelsSerialized": "أجهزة بأرقام تسلسلية — تُطبع ملصقاتها عند الاستلام أو من صفحة الجهاز",
@@ -11523,6 +11807,10 @@
   "aiAssistantEmptySubtitle": "اسأل GPT عن أي شيء يخص متجرك.",
   "aiAssistantThinking": "يكتب…",
   "aiAssistantThinkingLabel": "طريقة التفكير",
+  "aiAssistantSuggestionsForShop": "اقتراحات من المساعد لمتجرك",
+  "@aiAssistantSuggestionsForShop": {
+    "description": "AI chat empty state: caption above suggestions the assistant wrote for this shop."
+  },
   "aiAssistantSuggestion1": "اكتب رسالة ترحيب لعملاء متجري",
   "aiAssistantSuggestion2": "اقترح أفكارًا لعرض ترويجي لهذا الأسبوع",
   "aiAssistantSuggestion3": "اكتب وصفًا جذابًا لمنتج جديد",
@@ -11609,6 +11897,74 @@
   "aiAssistantAskUserSkipped": "تم تخطّي السؤال",
   "aiAssistantAskUserConfirmYes": "نعم",
   "aiAssistantAskUserConfirmNo": "لا",
+  "aiMemoryOpen": "الذاكرة",
+  "@aiMemoryOpen": {
+    "description": "AI chat app bar: opens the assistant's memory screen."
+  },
+  "aiMemoryTitle": "ذاكرة المساعد",
+  "@aiMemoryTitle": {
+    "description": "Memory screen title."
+  },
+  "aiMemorySubtitle": "ما يتذكّره المساعد عن المتجر وعنك ويبدأ به كل محادثة جديدة. يحفظه بنفسه، ويمكنك تصحيحه أو حذفه.",
+  "@aiMemorySubtitle": {
+    "description": "Memory screen explanation."
+  },
+  "aiMemoryEmpty": "لم يحفظ المساعد شيئًا بعد. سيحفظ ما يتعلّمه عن متجرك أثناء المحادثات.",
+  "@aiMemoryEmpty": {
+    "description": "Memory screen empty state."
+  },
+  "aiMemoryLoadFailed": "تعذّر تحميل الذاكرة.",
+  "@aiMemoryLoadFailed": {
+    "description": "Memory screen load error."
+  },
+  "aiMemoryShopSection": "عن المتجر",
+  "@aiMemoryShopSection": {
+    "description": "Memory screen: shop-wide memories heading."
+  },
+  "aiMemoryPersonalSection": "خاصة بك",
+  "@aiMemoryPersonalSection": {
+    "description": "Memory screen: the user's personal memories heading."
+  },
+  "aiMemoryEditTitle": "تعديل الذاكرة",
+  "@aiMemoryEditTitle": {
+    "description": "Memory edit dialog title."
+  },
+  "aiMemoryDeleteTitle": "حذف هذه الذاكرة؟",
+  "@aiMemoryDeleteTitle": {
+    "description": "Memory delete confirmation title."
+  },
+  "aiMemorySaveFailed": "تعذّر حفظ التعديل.",
+  "@aiMemorySaveFailed": {
+    "description": "Memory edit failed."
+  },
+  "aiMemoryDeleteFailed": "تعذّر حذف الذاكرة.",
+  "@aiMemoryDeleteFailed": {
+    "description": "Memory delete failed."
+  },
+  "aiMemoryManagerOnly": "يعدّلها المدير فقط",
+  "@aiMemoryManagerOnly": {
+    "description": "Tooltip on a shop memory a non-manager cannot edit."
+  },
+  "aiAssistantPlanTitle": "خطة العمل",
+  "@aiAssistantPlanTitle": {
+    "description": "AI chat: heading of the assistant's step checklist for a multi-step task."
+  },
+  "aiAssistantPlanProgress": "{done} من {total}",
+  "@aiAssistantPlanProgress": {
+    "description": "AI chat: how many plan steps are done out of the total.",
+    "placeholders": {
+      "done": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "aiAssistantApprovalApprove": "موافقة وتنفيذ",
+  "aiAssistantApprovalCancel": "إلغاء",
+  "aiAssistantApprovalApproved": "تمت الموافقة ونُفِّذت العملية",
+  "aiAssistantApprovalCancelled": "أُلغيت العملية — لم يُنفَّذ شيء",
   "aiAssistantProductPickerChoose": "ابحث واختر منتجًا",
   "aiAssistantProductPickerChooseOther": "ابحث عن منتج آخر…",
   "aiAssistantProductPickerCreateNew": "إنشاء منتج جديد",
@@ -16396,6 +16752,10 @@
   "@posShortcutCameraPreview": {
     "description": "POS shortcuts sheet: F8 toggles the counter camera preview"
   },
+  "posShortcutCalculator": "إظهار/إخفاء الآلة الحاسبة (من أي شاشة)",
+  "@posShortcutCalculator": {
+    "description": "POS shortcuts sheet: F12 toggles the floating calculator anywhere in the app"
+  },
   "cartLineCostLabel": "التكلفة: {cost}",
   "@cartLineCostLabel": {
     "description": "Cost of one unit on a cart row",
@@ -18867,6 +19227,14 @@
   "@treasuryClearingOverdueCalloutMessage": {
     "description": "Treasury callout message for overdue held card money."
   },
+  "treasuryCardDirectNote": "مبيعات البطاقة تُضاف لهذا الحساب فوراً، بلا حساب تسوية.",
+  "@treasuryCardDirectNote": {
+    "description": "Quiet note on a bank account card: the shop holds card money for another bank, but this bank's card takings are counted the moment they are taken."
+  },
+  "treasuryCardDirectAction": "إنشاء حساب تسوية",
+  "@treasuryCardDirectAction": {
+    "description": "Button on a bank account card: open the account editor on a new clearing account that settles into this bank."
+  },
   "treasuryActionRecordSettlement": "تسجيل وصول تحويل",
   "@treasuryActionRecordSettlement": {
     "description": "Button: record the processor's transfer of held card takings into the bank."
@@ -20890,6 +21258,120 @@
       }
     }
   },
+  "aiUiCardOpen": "عرض التفاصيل",
+  "@aiUiCardOpen": {
+    "description": "AI POS card: open the record."
+  },
+  "aiUiProductPrice": "سعر البيع",
+  "@aiUiProductPrice": {
+    "description": "AI product card: price caption."
+  },
+  "aiUiProductStock": "المخزون",
+  "@aiUiProductStock": {
+    "description": "AI product card: stock on hand."
+  },
+  "aiUiProductSold30": "المباع في ٣٠ يومًا",
+  "@aiUiProductSold30": {
+    "description": "AI product card: units sold in the last 30 days."
+  },
+  "aiUiProductCover": "نحو {days} يومًا",
+  "@aiUiProductCover": {
+    "description": "AI product card: days the stock lasts at the current pace.",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "aiUiProductCoverLabel": "يكفي المخزون",
+  "@aiUiProductCoverLabel": {
+    "description": "AI product card: label of the days-of-cover row."
+  },
+  "aiUiProductOutOfStock": "نفد المخزون",
+  "@aiUiProductOutOfStock": {
+    "description": "AI product card: no stock left."
+  },
+  "aiUiProductRunningOut": "قد ينفد قريبًا",
+  "@aiUiProductRunningOut": {
+    "description": "AI product card: stock lasts a week or less."
+  },
+  "aiUiProductInactive": "غير مفعّل",
+  "@aiUiProductInactive": {
+    "description": "AI product card: product is inactive or archived."
+  },
+  "aiUiProductService": "خدمة",
+  "@aiUiProductService": {
+    "description": "AI product card: a service or prepared item without stock."
+  },
+  "aiUiProductNoSales": "لم يُبَع في ٣٠ يومًا",
+  "@aiUiProductNoSales": {
+    "description": "AI product card: no sales in the last 30 days."
+  },
+  "aiUiCustomerBalance": "الدَّين الحالي",
+  "@aiUiCustomerBalance": {
+    "description": "AI customer card: current balance due."
+  },
+  "aiUiCustomerNoDebt": "لا دَين عليه",
+  "@aiUiCustomerNoDebt": {
+    "description": "AI customer card: customer owes nothing."
+  },
+  "aiUiCustomerCreditLimit": "الحد الائتماني",
+  "@aiUiCustomerCreditLimit": {
+    "description": "AI customer card: credit limit."
+  },
+  "aiUiCustomerOverLimit": "تجاوز الحد الائتماني",
+  "@aiUiCustomerOverLimit": {
+    "description": "AI customer card: debt is above the credit limit."
+  },
+  "aiUiCustomerLastPurchase": "آخر شراء",
+  "@aiUiCustomerLastPurchase": {
+    "description": "AI customer card: last purchase date."
+  },
+  "aiUiCustomerLifetime": "إجمالي مشترياته",
+  "@aiUiCustomerLifetime": {
+    "description": "AI customer card: lifetime spend."
+  },
+  "aiUiCustomerOrders": "عدد الفواتير",
+  "@aiUiCustomerOrders": {
+    "description": "AI customer card: number of purchases."
+  },
+  "aiUiSalesRevenue": "الإيراد",
+  "@aiUiSalesRevenue": {
+    "description": "AI sales card: revenue."
+  },
+  "aiUiSalesOrders": "الفواتير",
+  "@aiUiSalesOrders": {
+    "description": "AI sales card: order count."
+  },
+  "aiUiSalesAverage": "متوسط الفاتورة",
+  "@aiUiSalesAverage": {
+    "description": "AI sales card: average ticket."
+  },
+  "aiUiSalesProfit": "الربح",
+  "@aiUiSalesProfit": {
+    "description": "AI sales card: profit."
+  },
+  "aiUiSalesMargin": "الهامش",
+  "@aiUiSalesMargin": {
+    "description": "AI sales card: margin percent."
+  },
+  "aiUiSalesVsPrevious": "{change} عن الفترة السابقة",
+  "@aiUiSalesVsPrevious": {
+    "description": "AI sales card: change against the previous period.",
+    "placeholders": {
+      "change": {
+        "type": "String"
+      }
+    }
+  },
+  "aiUiSalesTopProducts": "الأكثر مبيعًا",
+  "@aiUiSalesTopProducts": {
+    "description": "AI sales card: best sellers heading."
+  },
+  "aiUiSalesEmpty": "لا مبيعات في هذه الفترة",
+  "@aiUiSalesEmpty": {
+    "description": "AI sales card: no sales in the period."
+  },
   "aiUiStockUnitConsignment": "أمانة",
   "@aiUiStockUnitConsignment": {
     "description": "AI unit card: the article belongs to a consignor."
@@ -22039,7 +22521,9 @@
   "@posVoucherSearchEmptyTitle": {
     "description": "Title when the typed search matches nothing on the «كروت دفتر» menu.",
     "placeholders": {
-      "query": {"type": "String"}
+      "query": {
+        "type": "String"
+      }
     }
   },
   "posVoucherSearchEmptyMessage": "جرّب اسماً آخر للبطاقة، مثل ماستركارد أو آيتونز أو بلايستيشن.",
@@ -23704,5 +24188,390 @@
   "registerSessionInProgressValue": "جارية الآن",
   "@registerSessionInProgressValue": {
     "description": "Under an open session's cash: the drawer has not been counted yet, so there is no variance to show."
+  },
+  "moamalatDrawerLabel": "التحقق من البطاقات",
+  "@moamalatDrawerLabel": {
+    "description": "Nav entry: the Moamalat link page."
+  },
+  "moamalatTitle": "التحقق من البطاقات — معاملات",
+  "@moamalatTitle": {
+    "description": "Moamalat link page title."
+  },
+  "moamalatStateAlive": "يعمل",
+  "@moamalatStateAlive": {
+    "description": "Link state: the token is alive."
+  },
+  "moamalatStateAtRisk": "الاتصال متعثر",
+  "@moamalatStateAtRisk": {
+    "description": "Link state: keepalive failing for a while."
+  },
+  "moamalatStateNeedsReauth": "يحتاج إعادة ربط",
+  "@moamalatStateNeedsReauth": {
+    "description": "Link state: token died; OTP needed."
+  },
+  "moamalatStateUnlinked": "غير مربوط",
+  "@moamalatStateUnlinked": {
+    "description": "Link state: not linked."
+  },
+  "moamalatStateSwitchedOff": "متوقف مؤقتاً",
+  "@moamalatStateSwitchedOff": {
+    "description": "Link state: stopped fleet-wide by Daftar."
+  },
+  "moamalatAliveMessage": "تُطابَق مدفوعات البطاقات مع عمليات جهاز الدفع لحظياً أثناء البيع.",
+  "@moamalatAliveMessage": {
+    "description": "Alive explanation."
+  },
+  "moamalatAtRiskMessage": "تعذّر الوصول إلى معاملات منذ دقائق. نعيد المحاولة تلقائياً، وتبقى النسخة الاحتياطية على خادم دفتر تحافظ على الاتصال.",
+  "@moamalatAtRiskMessage": {
+    "description": "At-risk explanation."
+  },
+  "moamalatNeedsReauthMessage": "انتهت جلسة معاملات. البيع بالبطاقة مستمر، وتنتظر {count} دفعة التحقق حتى تعيد الربط برمز التحقق.",
+  "@moamalatNeedsReauthMessage": {
+    "description": "Needs re-link explanation.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "moamalatUnlinkedMessage": "اربط حساب التاجر في معاملات ليتحقق النظام من كل دفعة بطاقة مقابل عمليات جهاز الدفع.",
+  "@moamalatUnlinkedMessage": {
+    "description": "Unlinked explanation."
+  },
+  "moamalatSwitchedOffMessage": "أوقفت دفتر هذا الربط مؤقتاً لجميع المتاجر. يستمر البيع بالبطاقة كالمعتاد.",
+  "@moamalatSwitchedOffMessage": {
+    "description": "Switched-off explanation."
+  },
+  "moamalatLinkTitle": "ربط حساب معاملات",
+  "@moamalatLinkTitle": {
+    "description": "Link form section title."
+  },
+  "moamalatRelinkTitle": "إعادة الربط",
+  "@moamalatRelinkTitle": {
+    "description": "Re-link form section title."
+  },
+  "moamalatLinkHint": "أدخل اسم المستخدم وكلمة المرور لحساب التاجر في معاملات. سيصل رمز تحقق إلى هاتف التاجر المسجّل لدى معاملات.",
+  "@moamalatLinkHint": {
+    "description": "Link form hint."
+  },
+  "moamalatCodeHint": "أُرسل رمز التحقق إلى هاتف التاجر المسجّل لدى معاملات. أدخله هنا.",
+  "@moamalatCodeHint": {
+    "description": "OTP step hint."
+  },
+  "moamalatUsernameLabel": "اسم المستخدم",
+  "@moamalatUsernameLabel": {
+    "description": "Moamalat username field."
+  },
+  "moamalatPasswordLabel": "كلمة المرور",
+  "@moamalatPasswordLabel": {
+    "description": "Moamalat password field."
+  },
+  "moamalatPasswordNotStored": "تُرسل إلى معاملات مرة واحدة ولا تُحفظ.",
+  "@moamalatPasswordNotStored": {
+    "description": "Password helper: never stored."
+  },
+  "moamalatCodeLabel": "رمز التحقق",
+  "@moamalatCodeLabel": {
+    "description": "OTP field."
+  },
+  "moamalatSendCodeAction": "إرسال رمز التحقق",
+  "@moamalatSendCodeAction": {
+    "description": "Send credentials, request OTP."
+  },
+  "moamalatVerifyAction": "تأكيد الربط",
+  "@moamalatVerifyAction": {
+    "description": "Verify OTP and link."
+  },
+  "moamalatUnlinkAction": "إلغاء الربط",
+  "@moamalatUnlinkAction": {
+    "description": "Unlink action."
+  },
+  "moamalatUnlinkConfirmTitle": "إلغاء ربط معاملات؟",
+  "@moamalatUnlinkConfirmTitle": {
+    "description": "Unlink confirmation title."
+  },
+  "moamalatUnlinkConfirmMessage": "سيتوقف التحقق من مدفوعات البطاقات وتُحذف الجلسة من هذا الخادم ومن خادم دفتر. يمكنك الربط مجدداً برمز تحقق جديد.",
+  "@moamalatUnlinkConfirmMessage": {
+    "description": "Unlink confirmation message."
+  },
+  "moamalatNeverBlocksNote": "لا يوقف التحقق أي عملية بيع: الدفعة التي لم تُطابَق بعد تُسجَّل «بانتظار التحقق» وتُطابَق تلقائياً فور ظهورها.",
+  "@moamalatNeverBlocksNote": {
+    "description": "Note: verification never blocks a sale."
+  },
+  "moamalatAccountTitle": "الحساب المربوط",
+  "@moamalatAccountTitle": {
+    "description": "Linked account section."
+  },
+  "moamalatMerchantLabel": "التاجر",
+  "@moamalatMerchantLabel": {
+    "description": "Merchant name row."
+  },
+  "moamalatMidLabel": "رقم التاجر",
+  "@moamalatMidLabel": {
+    "description": "MID row."
+  },
+  "moamalatLinkedAtLabel": "تاريخ الربط",
+  "@moamalatLinkedAtLabel": {
+    "description": "Linked at row."
+  },
+  "moamalatLastOkLabel": "آخر اتصال ناجح",
+  "@moamalatLastOkLabel": {
+    "description": "Last OK row."
+  },
+  "moamalatRelayLabel": "النسخة الاحتياطية",
+  "@moamalatRelayLabel": {
+    "description": "Relay copy row."
+  },
+  "moamalatRelayInStep": "تعمل على خادم دفتر",
+  "@moamalatRelayInStep": {
+    "description": "Relay holds and keeps this token."
+  },
+  "moamalatRelayOutOfStep": "قيد المزامنة",
+  "@moamalatRelayOutOfStep": {
+    "description": "Relay holds another or a dead token."
+  },
+  "moamalatRelayNone": "غير متاحة — هذا الخادم وحده يحافظ على الاتصال",
+  "@moamalatRelayNone": {
+    "description": "No relay copy."
+  },
+  "moamalatPendingLabel": "دفعات بانتظار التحقق",
+  "@moamalatPendingLabel": {
+    "description": "Pending count row."
+  },
+  "moamalatPendingWithOverdue": "{count} (منها {overdue} متأخرة)",
+  "@moamalatPendingWithOverdue": {
+    "description": "Pending with overdue.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "overdue": {
+        "type": "int"
+      }
+    }
+  },
+  "moamalatMerchantChoiceTitle": "اختر رقم التاجر",
+  "@moamalatMerchantChoiceTitle": {
+    "description": "Merchant choice section."
+  },
+  "moamalatErrorSwitchedOff": "أوقفت دفتر ربط معاملات مؤقتاً.",
+  "@moamalatErrorSwitchedOff": {
+    "description": "Error: switched off."
+  },
+  "moamalatErrorCredentialsRequired": "أدخل اسم المستخدم وكلمة المرور.",
+  "@moamalatErrorCredentialsRequired": {
+    "description": "Error: credentials required."
+  },
+  "moamalatErrorLoginRefused": "رفضت معاملات اسم المستخدم أو كلمة المرور.",
+  "@moamalatErrorLoginRefused": {
+    "description": "Error: login refused."
+  },
+  "moamalatErrorCodeRefused": "رمز التحقق غير صحيح.",
+  "@moamalatErrorCodeRefused": {
+    "description": "Error: wrong OTP."
+  },
+  "moamalatErrorCodeRequired": "أدخل رمز التحقق.",
+  "@moamalatErrorCodeRequired": {
+    "description": "Error: OTP required."
+  },
+  "moamalatErrorChallengeExpired": "انتهت صلاحية رمز التحقق. أرسل رمزاً جديداً.",
+  "@moamalatErrorChallengeExpired": {
+    "description": "Error: OTP challenge expired."
+  },
+  "moamalatErrorNoMerchant": "لا يوجد تاجر مرتبط بهذا الحساب في معاملات.",
+  "@moamalatErrorNoMerchant": {
+    "description": "Error: no merchant on account."
+  },
+  "moamalatErrorUnknownMerchant": "رقم التاجر غير موجود في هذا الحساب.",
+  "@moamalatErrorUnknownMerchant": {
+    "description": "Error: MID not in account."
+  },
+  "moamalatErrorNotLinked": "الحساب غير مربوط.",
+  "@moamalatErrorNotLinked": {
+    "description": "Error: not linked."
+  },
+  "moamalatErrorForbidden": "لا تملك صلاحية ربط حساب معاملات.",
+  "@moamalatErrorForbidden": {
+    "description": "Error: forbidden."
+  },
+  "moamalatErrorUnreachable": "تعذّر الوصول إلى معاملات. حاول مرة أخرى.",
+  "@moamalatErrorUnreachable": {
+    "description": "Error: unreachable."
+  },
+  "moamalatLiveConnecting": "جارٍ الاتصال بمعاملات…",
+  "@moamalatLiveConnecting": {
+    "description": "Live line: first poll."
+  },
+  "moamalatLiveWaiting": "بانتظار عملية البطاقة من الجهاز…",
+  "@moamalatLiveWaiting": {
+    "description": "Live line: waiting for swipe."
+  },
+  "moamalatLiveSeen": "وصلت عملية بطاقة بقيمة {amount}",
+  "@moamalatLiveSeen": {
+    "description": "Live line: the swipe for this card line reached Moamalat.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "moamalatLiveOffline": "التحقق من البطاقات متوقف — ستُتحقق الدفعة لاحقاً.",
+  "@moamalatLiveOffline": {
+    "description": "Live line: link dead."
+  },
+  "moamalatLiveLater": "سيُتحقق من الدفعة بعد الإتمام.",
+  "@moamalatLiveLater": {
+    "description": "Live line: fast loop resting."
+  },
+  "notificationMoamalatReauthTitle": "التحقق من البطاقات متوقف",
+  "@notificationMoamalatReauthTitle": {
+    "description": "Alert title: Moamalat needs re-link."
+  },
+  "notificationMoamalatReauthManageMessage": "انتهت جلسة معاملات. أعد الربط برمز التحقق — {count} دفعة بطاقة بانتظار التحقق.",
+  "@notificationMoamalatReauthManageMessage": {
+    "description": "Alert for supervisors.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "notificationMoamalatReauthCashierMessage": "البيع بالبطاقة مستمر كالمعتاد، وستُتحقق الدفعات لاحقاً. أبلغ المشرف.",
+  "@notificationMoamalatReauthCashierMessage": {
+    "description": "Alert for cashiers."
+  },
+  "notificationMoamalatUnverifiedTitle": "دفعات بطاقة لم تُطابَق",
+  "@notificationMoamalatUnverifiedTitle": {
+    "description": "Alert title: unverified card payments."
+  },
+  "notificationMoamalatUnverifiedMessage": "{count} دفعة بطاقة بقيمة {amount} لم تظهر في معاملات منذ {date}.",
+  "@notificationMoamalatUnverifiedMessage": {
+    "description": "Alert: unverified card payments.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "amount": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "moamalatSwipeWhere": "على الجهاز {terminal} الساعة {time}",
+  "@moamalatSwipeWhere": {
+    "description": "Where and when a swipe happened.",
+    "placeholders": {
+      "terminal": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "moamalatShortfallApplied": "الجهاز سحب {charged} والمبلغ {intended}. صُحّح سطر البطاقة وأُضيف سطر بالمتبقي {rest}: اسحبه بالبطاقة أو غيّر طريقة دفعه.",
+  "@moamalatShortfallApplied": {
+    "description": "Notice: the sheet split a short card charge.",
+    "placeholders": {
+      "charged": {
+        "type": "String"
+      },
+      "intended": {
+        "type": "String"
+      },
+      "rest": {
+        "type": "String"
+      }
+    }
+  },
+  "moamalatUndoAction": "تراجع",
+  "@moamalatUndoAction": {
+    "description": "Undo the swipe correction."
+  },
+  "moamalatShortfallFound": "عملية بطاقة بقيمة {amount} {where} — أقل من سطر البطاقة ({line}).",
+  "@moamalatShortfallFound": {
+    "description": "Suggestion: a smaller swipe than the card line.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "where": {
+        "type": "String"
+      },
+      "line": {
+        "type": "String"
+      }
+    }
+  },
+  "moamalatEarlierSwipeFound": "وُجدت عملية بطاقة لم تُسجَّل بعد بقيمة {amount} {where}.",
+  "@moamalatEarlierSwipeFound": {
+    "description": "Suggestion: a swipe taken before the sheet opened.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "where": {
+        "type": "String"
+      }
+    }
+  },
+  "moamalatOverchargeFound": "الجهاز سحب {amount} {where} وهو أكثر من {line}. أعد الفرق {extra} من الجهاز نفسه.",
+  "@moamalatOverchargeFound": {
+    "description": "Warning: the terminal took more than the line.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "where": {
+        "type": "String"
+      },
+      "line": {
+        "type": "String"
+      },
+      "extra": {
+        "type": "String"
+      }
+    }
+  },
+  "moamalatUseThisSwipeAction": "هذه عمليتي",
+  "@moamalatUseThisSwipeAction": {
+    "description": "Apply the swipe to this sale."
+  },
+  "moamalatNotThisSaleAction": "ليست لهذه الفاتورة",
+  "@moamalatNotThisSaleAction": {
+    "description": "Ignore the swipe on this sheet."
+  },
+  "notificationMoamalatAmountMismatchTitle": "مبلغ بطاقة لا يطابق الجهاز",
+  "@notificationMoamalatAmountMismatchTitle": {
+    "description": "Alert title: card payment amount differs from terminal."
+  },
+  "notificationMoamalatAmountMismatchMessage": "الفاتورة {receipt}: سُجّلت الدفعة بـ{recorded} بينما سحب الجهاز {charged}.{more}",
+  "@notificationMoamalatAmountMismatchMessage": {
+    "description": "Alert: amount mismatch.",
+    "placeholders": {
+      "receipt": {
+        "type": "String"
+      },
+      "recorded": {
+        "type": "String"
+      },
+      "charged": {
+        "type": "String"
+      },
+      "more": {
+        "type": "String"
+      }
+    }
+  },
+  "notificationMoamalatAmountMismatchMore": " ومعها {count} دفعات أخرى.",
+  "@notificationMoamalatAmountMismatchMore": {
+    "description": "Suffix: more mismatches.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   }
 }

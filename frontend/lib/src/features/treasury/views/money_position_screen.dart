@@ -317,6 +317,14 @@ class _MoneyPositionBody extends StatelessWidget {
             capabilities: capabilities,
             accountId: entry.account.id,
           ),
+          onCreateClearing:
+              entry.cardDirect && capabilities.canCreateMoneyAccount
+              ? () => showMoneyAccountEditorSheet(
+                  context,
+                  viewModel: viewModel,
+                  clearingFor: entry.account,
+                )
+              : null,
         ),
         SizedBox(height: spacing.sm),
       ],
@@ -503,10 +511,17 @@ class _QuickActions extends StatelessWidget {
 /// an icon. The card is a figure to read; a strip of buttons under every
 /// balance competes with the one tap the card already is.
 class _AccountCard extends StatelessWidget {
-  const _AccountCard({required this.entry, required this.onTap});
+  const _AccountCard({
+    required this.entry,
+    required this.onTap,
+    this.onCreateClearing,
+  });
 
   final MoneyAccountPosition entry;
   final VoidCallback onTap;
+
+  /// Opens a clearing account for this bank. Null hides the button.
+  final VoidCallback? onCreateClearing;
 
   @override
   Widget build(BuildContext context) {
@@ -589,6 +604,10 @@ class _AccountCard extends StatelessWidget {
                           ),
                       ],
                     ),
+                    if (entry.cardDirect) ...[
+                      SizedBox(height: spacing.xs),
+                      _CardDirectNote(onCreateClearing: onCreateClearing),
+                    ],
                   ],
                 ),
               ),
@@ -597,6 +616,48 @@ class _AccountCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// The shop holds card money for another bank, but not for this one: its card
+/// takings count the moment they are taken. A quiet line, not a warning —
+/// a processor that pays the same day is a real setup, and the choice is the
+/// owner's.
+class _CardDirectNote extends StatelessWidget {
+  const _CardDirectNote({this.onCreateClearing});
+
+  final VoidCallback? onCreateClearing;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final spacing = AdaptiveSpacing.of(context);
+    final colors = context.pointyColors;
+    final style = Theme.of(
+      context,
+    ).textTheme.bodySmall?.copyWith(color: colors.mutedInk);
+    return Column(
+      key: const ValueKey('treasury_card_direct_note'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.credit_card_outlined, size: 16, color: colors.mutedInk),
+            SizedBox(width: spacing.xs),
+            Expanded(child: Text(l10n.treasuryCardDirectNote, style: style)),
+          ],
+        ),
+        if (onCreateClearing != null)
+          TextButton.icon(
+            key: const ValueKey('treasury_card_direct_action'),
+            onPressed: onCreateClearing,
+            style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+            icon: const Icon(Icons.add, size: 18),
+            label: Text(l10n.treasuryCardDirectAction),
+          ),
+      ],
     );
   }
 }

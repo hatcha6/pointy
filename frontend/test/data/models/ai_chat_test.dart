@@ -349,4 +349,72 @@ void main() {
       expect(message.hasPendingQuestion, isFalse);
     });
   });
+
+  group('agent lifecycle', () {
+    test('parallel calls to one tool finish their own chip by call id', () {
+      final message = AiMessage(role: AiMessageRole.assistant, content: '')
+        ..startToolRun(AiToolRun(id: 'a', name: 'query_resource'))
+        ..startToolRun(AiToolRun(id: 'b', name: 'query_resource'));
+      message.finishToolRun(id: 'a', name: 'query_resource', ok: true);
+      expect(message.toolRuns[0].done, isTrue);
+      expect(message.toolRuns[1].done, isFalse);
+    });
+
+    test('plan steps parse with a pending fallback and rehydrate', () {
+      final message = AiMessage.fromJson({
+        'role': 'assistant',
+        'content': 'تم',
+        'plan': [
+          {'step': 'أنشئ المنتج', 'status': 'completed'},
+          {'step': 'أنشئ الوصفة', 'status': 'in_progress'},
+          {'step': 'راجع', 'status': '???'},
+          {'step': '', 'status': 'pending'},
+        ],
+      });
+      expect(message.plan.map((s) => s.status), [
+        AiPlanStatus.completed,
+        AiPlanStatus.inProgress,
+        AiPlanStatus.pending,
+      ]);
+    });
+
+    test('a paused-then-resumed turn shows its plan once on reload', () {
+      final conversation = AiConversation.fromJson({
+        'id': 1,
+        'title': 't',
+        'messages': [
+          {
+            'id': 5,
+            'role': 'assistant',
+            'content': '',
+            'tool_call_id': 'call_pay',
+            'pending_question': {
+              'questions': [
+                {'id': 'approve', 'type': 'confirm', 'prompt': 'تأكيد'},
+              ],
+            },
+            'answers': [
+              {'question_id': 'approve', 'type': 'confirm', 'value': true},
+            ],
+            'plan': [
+              {'step': 'ادفع', 'status': 'in_progress'},
+            ],
+          },
+          {
+            'id': 6,
+            'role': 'assistant',
+            'content': 'تم',
+            'plan': [
+              {'step': 'ادفع', 'status': 'completed'},
+            ],
+          },
+        ],
+      });
+      expect(conversation.messages[0].plan, isEmpty);
+      expect(
+        conversation.messages[1].plan.single.status,
+        AiPlanStatus.completed,
+      );
+    });
+  });
 }

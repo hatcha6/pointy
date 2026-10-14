@@ -11,6 +11,7 @@ const providers: { id: string; name: string; detail: string }[] = [
   { id: "hdbox", name: "HD Box", detail: "شحن اشتراكات أجهزة الاستقبال" },
   { id: "lnet", name: "LNET", detail: "اشتراكات الإنترنت ودفعاتها" },
   { id: "qareeb", name: "قريب", detail: "بطاقات وخدمات قريب" },
+  { id: "moamalat", name: "معاملات", detail: "التحقق الفوري من مدفوعات البطاقات؛ الإيقاف يحذف الجلسات المحفوظة" },
 ];
 
 export function Integrations({ embedded }: { embedded?: boolean } = {}) {

@@ -1,4 +1,7 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
+import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/voucher_menu.dart';
 import '../../../shared/catalog/catalog.dart';
@@ -11,7 +14,8 @@ const double kVoucherArtAspectRatio = 16 / 10;
 /// the display logo the company uploaded, or a drawn card when it has none.
 ///
 /// No padding box around the art: it is the card, the way a gift card on a
-/// shop's rack is. [muted] greys it out for a brand that cannot be sold now.
+/// shop's rack is. [muted] greys and blurs it under «غير متوفر» for a brand
+/// that cannot be sold now — still on the rack, so its prices can be read.
 class VoucherCardArt extends StatelessWidget {
   const VoucherCardArt({
     super.key,
@@ -48,7 +52,17 @@ class VoucherCardArt extends StatelessWidget {
             fallback: fallback,
           );
     if (muted) {
-      art = ColorFiltered(colorFilter: _greyscale, child: art);
+      art = Stack(
+        fit: StackFit.expand,
+        children: [
+          ImageFiltered(
+            imageFilter: ImageFilter.blur(sigmaX: 2.5, sigmaY: 2.5),
+            child: ColorFiltered(colorFilter: _greyscale, child: art),
+          ),
+          ColoredBox(color: colors.surface.withValues(alpha: 0.35)),
+          const Center(child: _UnavailableLabel()),
+        ],
+      );
     }
     final shape = BorderRadius.circular(radius);
     return Container(
@@ -59,6 +73,46 @@ class VoucherCardArt extends StatelessWidget {
         border: Border.all(color: colors.ink.withValues(alpha: 0.10)),
       ),
       child: art,
+    );
+  }
+}
+
+/// «غير متوفر» across a muted card's art, shrunk to fit the smallest frame.
+class _UnavailableLabel extends StatelessWidget {
+  const _UnavailableLabel();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.pointyColors;
+    return Padding(
+      padding: const EdgeInsets.all(6),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: colors.surface.withValues(alpha: 0.92),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: colors.line),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.block_rounded, size: 14, color: colors.mutedInk),
+                const SizedBox(width: 4),
+                Text(
+                  AppLocalizations.of(context)!.posVoucherMenuUnavailable,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: colors.ink,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

@@ -44,6 +44,33 @@ void main() {
     final event = parse('{"detail":"x","status":"429"}')! as AiChatError;
     expect(event.statusCode, 429);
   });
+
+  test('a plan event carries the whole checklist', () {
+    final event =
+        client.parseEvent(
+              SseEvent(
+                event: 'plan',
+                data:
+                    '{"steps":[{"step":"اجمع","status":"completed"},'
+                    '{"step":"أنشئ","status":"in_progress"}]}',
+              ),
+            )!
+            as AiChatPlan;
+    expect(event.steps.length, 2);
+    expect(event.steps.last.status, AiPlanStatus.inProgress);
+  });
+
+  test('tool events carry their call id', () {
+    final event =
+        client.parseEvent(
+              SseEvent(
+                event: 'tool',
+                data: '{"id":"call_q","name":"query_resource","phase":"start"}',
+              ),
+            )!
+            as AiChatToolActivity;
+    expect(event.id, 'call_q');
+  });
 }
 
 class _NoClient extends http.BaseClient {

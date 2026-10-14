@@ -16,6 +16,7 @@ DENY_BASENAMES = frozenset(
         "pos-user",  # auth / users / PII / permission management
         "sales-channel",  # carries API keys
         "ai-conversation",  # the AI's own chat threads
+        "ai-memory",  # written only through remember/update_memory/forget_memory
         "messaging-gateway",  # carries the encrypted send credential / webhook key
     }
 )

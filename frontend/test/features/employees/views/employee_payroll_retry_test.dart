@@ -33,6 +33,13 @@ void main() {
 
     await tester.pumpWidget(_payrollApp(viewModel, api.service));
     await tester.pumpAndSettle();
+    // The month card's readiness checklist (this employee has no salary plan)
+    // pushes the history below the fold of the test viewport.
+    await tester.drag(
+      find.byKey(const ValueKey('payroll_month_workflow_card')),
+      const Offset(0, -400),
+    );
+    await tester.pumpAndSettle();
 
     // The failure is visible and, crucially, it is not a dead end.
     expect(find.text('تعذر تحميل مسيرات الرواتب.'), findsOneWidget);

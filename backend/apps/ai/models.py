@@ -93,6 +93,9 @@ class AiMessage(models.Model):
     # shows the same cards, and so the record of what the user was shown is
     # exactly what they saw.
     ui_surfaces = models.JSONField(default=list, blank=True)
+    # The step plan the model kept for a multi-step task ([{step, status}]), as
+    # it stood when the turn ended — replayed so the checklist survives reload.
+    plan = models.JSONField(default=list, blank=True)
     # The concrete OpenRouter model id and the abstract tier the relay used.
     model = models.CharField(max_length=120, blank=True)
     tier = models.CharField(max_length=20, blank=True)
@@ -105,3 +108,67 @@ class AiMessage(models.Model):
 
     def __str__(self):
         return f"{self.role}: {self.content[:40]}"
+
+
+class AiMemory(models.Model):
+    """A durable note the assistant keeps about the shop or about one user.
+
+    Written by the assistant itself (remember / update_memory / forget_memory)
+    when it learns something worth carrying into future conversations, and
+    managed by people from the memory screen. Every turn's system prompt
+    carries the memories its user can see, so the assistant arrives already
+    knowing how this shop works.
+
+    ``shop`` memories are shared by everyone's assistant and only a manager's
+    turn may write them; ``user`` memories belong to ``owner`` alone.
+    """
+
+    SCOPE_SHOP = "shop"
+    SCOPE_USER = "user"
+    SCOPE_CHOICES = [(SCOPE_SHOP, "Shop"), (SCOPE_USER, "User")]
+
+    CATEGORY_CHOICES = [
+        ("shop", "Shop"),
+        ("process", "Process"),
+        ("supplier", "Supplier"),
+        ("customer", "Customer"),
+        ("product", "Product"),
+        ("preference", "Preference"),
+        ("other", "Other"),
+    ]
+
+    scope = models.CharField(max_length=8, choices=SCOPE_CHOICES, default=SCOPE_SHOP)
+    category = models.CharField(max_length=16, choices=CATEGORY_CHOICES, default="other")
+    content = models.CharField(max_length=400)
+    # Set for user-scope memories only: whose they are.
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="ai_memories",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    # The conversation the assistant learned it in, when it was the assistant.
+    source_conversation = models.ForeignKey(
+        AiConversation,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at", "-id"]
+        indexes = [models.Index(fields=["scope", "owner", "-updated_at"])]
+
+    def __str__(self):
+        return f"{self.scope}: {self.content[:40]}"

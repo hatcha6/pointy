@@ -549,9 +549,7 @@ class _PosVoucherMenuViewState extends State<PosVoucherMenuView> {
     key: ValueKey('voucher_brand_${brand.key}'),
     brand: brand,
     countryFor: menu.country,
-    onTap: onSelected == null || !brand.isAvailable
-        ? null
-        : () => onSelected(brand),
+    onTap: onSelected == null ? null : () => onSelected(brand),
   );
 
   Widget _browseContent(

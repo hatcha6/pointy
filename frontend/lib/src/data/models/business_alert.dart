@@ -58,6 +58,16 @@ enum BusinessAlertType {
   /// bank, with no settlement recorded against them.
   cardSettlementOverdue,
 
+  /// The shop's Moamalat token died: card payments wait as "pending
+  /// verification" until a supervisor re-links with an OTP.
+  moamalatReauth,
+
+  /// Card payments no Moamalat transaction proved days after they settled.
+  moamalatUnverified,
+
+  /// A card payment recorded for one amount while the terminal took another.
+  moamalatAmountMismatch,
+
   /// «كروت دفتر» cards the shop priced itself that the company's cost has
   /// overtaken: blocked from sale until the owner fixes them.
   belowCostCards,
@@ -254,6 +264,10 @@ BusinessAlertType _typeFromCode(String code) {
     'integrations.float_drift' => BusinessAlertType.providerFloatDrift,
     'treasury.card_settlement_overdue' =>
       BusinessAlertType.cardSettlementOverdue,
+    'payments.moamalat_reauth' => BusinessAlertType.moamalatReauth,
+    'payments.moamalat_unverified' => BusinessAlertType.moamalatUnverified,
+    'payments.moamalat_amount_mismatch' =>
+      BusinessAlertType.moamalatAmountMismatch,
     'integrations.below_cost_cards' => BusinessAlertType.belowCostCards,
     'wallet.transfer_confirmed' => BusinessAlertType.walletTransferConfirmed,
     'wallet.transfer_rejected' => BusinessAlertType.walletTransferRejected,
@@ -315,6 +329,11 @@ int _sortScore(BusinessAlertType type) {
     BusinessAlertType.providerFloatDrift => 27,
     // A money question too: the shop's own takings, late from the processor.
     BusinessAlertType.cardSettlementOverdue => 27,
+    // Card checks off: nothing is blocked, but every card sale goes unproven.
+    BusinessAlertType.moamalatReauth => 26,
+    BusinessAlertType.moamalatUnverified => 27,
+    // Money already short (or over) at the counter: ahead of the rest.
+    BusinessAlertType.moamalatAmountMismatch => 24,
     BusinessAlertType.lowProfitMargin => 28,
     BusinessAlertType.lowStock => 30,
     BusinessAlertType.payrollReady => 32,
@@ -366,6 +385,11 @@ String _primaryLabel(BusinessAlertType type, Map<String, Object?> payload) {
       payload['provider']?.toString() ?? '',
     BusinessAlertType.cardSettlementOverdue =>
       payload['account']?.toString() ?? '',
+    BusinessAlertType.moamalatReauth =>
+      payload['merchant_name']?.toString() ?? '',
+    BusinessAlertType.moamalatUnverified => payload['amount']?.toString() ?? '',
+    BusinessAlertType.moamalatAmountMismatch =>
+      payload['receipt_number']?.toString() ?? '',
     BusinessAlertType.walletTransferConfirmed ||
     BusinessAlertType.walletTransferRejected =>
       payload['invoice_no']?.toString() ?? '',
@@ -463,6 +487,13 @@ DateTime? _occurredAt(BusinessAlertType type, Map<String, Object?> payload) {
     // The day the money should have reached the bank.
     BusinessAlertType.cardSettlementOverdue => _dateTimeFromJson(
       payload['expected_on'],
+    ),
+    BusinessAlertType.moamalatReauth => _dateTimeFromJson(payload['died_at']),
+    BusinessAlertType.moamalatUnverified => _dateTimeFromJson(
+      payload['oldest_day'],
+    ),
+    BusinessAlertType.moamalatAmountMismatch => _dateTimeFromJson(
+      payload['paid_at'],
     ),
     _ => null,
   };

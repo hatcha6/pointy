@@ -153,7 +153,7 @@ type supplierRanking struct {
 // it sells the card (the card is in its last read offers, in stock, and a
 // supplier never read at all is "unknown": allowed, but tried after every
 // supplier whose price is known) and its price, in dinars, is within the
-// supplier block's max_cost. Reloadly is never unknown: its price depends on
+// supplier block's max_cost (unless its price follows the cost). Reloadly is never unknown: its price depends on
 // the dollar rate and on the amount, so a Reloadly card with no read offer or
 // no rate is not sold. Test mode buys from the one built-in supplier.
 func (c VoucherConfig) rankSuppliers(located vouchers.Located, offers voucherOffers, settings vouchers.Settings) supplierRanking {
@@ -174,7 +174,7 @@ func (c VoucherConfig) rankSuppliers(located vouchers.Located, offers voucherOff
 			ranking.Evaluations = append(ranking.Evaluations, evaluation)
 			continue
 		}
-		ranking.Evaluations = append(ranking.Evaluations, c.evaluateSupplier(index, ref, offers, settings))
+		ranking.Evaluations = append(ranking.Evaluations, c.evaluateSupplier(index, ref, located.PriceFollowsCost, offers, settings))
 	}
 	if stock == nil && offers.stock[located.Item.Key] > 0 {
 		evaluation := stockEvaluation(located.Item.Key, offers)
@@ -262,7 +262,7 @@ func (c VoucherConfig) skipPaused(ranking *supplierRanking, now time.Time) {
 }
 
 // evaluateSupplier judges one supplier of an item (outside test mode).
-func (c VoucherConfig) evaluateSupplier(index int, ref vouchers.Ref, offers voucherOffers, settings vouchers.Settings) supplierEvaluation {
+func (c VoucherConfig) evaluateSupplier(index int, ref vouchers.Ref, priceFollowsCost bool, offers voucherOffers, settings vouchers.Settings) supplierEvaluation {
 	evaluation := supplierEvaluation{Index: index, Ref: ref}
 	supplier, configured := c.Suppliers[ref.Supplier]
 	if !configured {
@@ -303,7 +303,10 @@ func (c VoucherConfig) evaluateSupplier(index int, ref vouchers.Ref, offers vouc
 	case evaluation.Cost == nil:
 		evaluation.Reason, evaluation.Attention = costReason, true
 	default:
-		if guard := strings.TrimSpace(ref.MaxCost); guard != "" {
+		// max_cost keeps a fixed price (a written one, or a dinar card's face)
+		// from selling below cost. A price that follows the cost passes a rise
+		// on (a shop quoted the old price gets price_changed), never refuses it.
+		if guard := strings.TrimSpace(ref.MaxCost); guard != "" && !priceFollowsCost {
 			limit, limitOK := new(big.Rat).SetString(guard)
 			if limitOK && evaluation.Cost.Cmp(limit) > 0 {
 				evaluation.Reason, evaluation.Attention = overGuardReason(offer, evaluation.Cost, guard), true

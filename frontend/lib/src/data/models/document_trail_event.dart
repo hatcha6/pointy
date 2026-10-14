@@ -78,8 +78,9 @@ class DocumentTrailEvent {
       reason: json['reason']?.toString() ?? '',
       changes: _changesFromDetails(json['details']),
       actorUsername: json['actor_username']?.toString(),
-      createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '')
-          ?.toLocal(),
+      createdAt: DateTime.tryParse(
+        json['created_at']?.toString() ?? '',
+      )?.toLocal(),
     );
   }
 }

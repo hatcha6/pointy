@@ -14,6 +14,7 @@ import 'data/services/pos_api_service.dart';
 import 'features/app_updates/views/app_update_prompt_host.dart';
 import 'features/companion/companion_bridge.dart';
 import 'features/companion/companion_scope.dart';
+import 'features/card_verification/moamalat_scope.dart';
 import 'features/treasury/view_models/bank_routing.dart';
 import 'shared/barcode/camera_wedge/camera_wedge_controller.dart';
 import 'shared/barcode/camera_wedge/camera_wedge_preview_panel.dart';
@@ -32,6 +33,9 @@ import 'features/printing/view_models/printing_settings_view_model.dart';
 import 'shared/design/design.dart';
 import 'shared/price_checker/price_checker_mode_controller.dart';
 import 'shared/product_search/product_search_mode_controller.dart';
+import 'core/authorization.dart';
+import 'shared/calculator/currency_converter.dart';
+import 'shared/calculator/floating_calculator.dart';
 import 'shared/tracking/tracking_features.dart';
 import 'shared/tracking/unit_attribute_catalog.dart';
 import 'shared/shell/shell.dart';
@@ -50,6 +54,8 @@ class PointyApp extends StatefulWidget {
 class _PointyAppState extends State<PointyApp> with WidgetsBindingObserver {
   late final PointyAppDependencies _dependencies;
   late final PointyNavigationRailController _navigationRailController;
+  late final ConverterRatesLoader _converterRatesLoader =
+      fxConverterRatesLoader(_dependencies.fxRepository);
   // App-lifetime home for the nav drawer/rail scroll offsets: screens replace
   // each other as routes, and the routes left underneath stay alive with a
   // scroll position each, so the offset has to live above all of them.
@@ -255,27 +261,33 @@ class _PointyAppState extends State<PointyApp> with WidgetsBindingObserver {
                               // which bank account a card or transfer lands in.
                               child: BankRoutingScope(
                                 routing: _dependencies.bankRouting,
-                                // Per device, like the theme: the product
-                                // searches on every route read whether this
-                                // machine offers the search-mode picker.
-                                child: ProductSearchModeScope(
-                                  controller:
-                                      _dependencies.productSearchModeController,
-                                  // Per shop, from the session: whether the
-                                  // product form offers serial and lot
-                                  // tracking, in whichever sheet it opens.
-                                  child: ListenableBuilder(
-                                    listenable: _dependencies.authViewModel,
-                                    builder: (context, scoped) =>
-                                        TrackingFeaturesScope(
-                                          features: _trackingFeatures(),
-                                          child: UnitAttributeCatalogScope(
-                                            catalog: _dependencies
-                                                .unitAttributeCatalog,
-                                            child: scoped!,
+                                // The till's payment sheet watches the card
+                                // terminal live through it.
+                                child: MoamalatScope(
+                                  repository: _dependencies.moamalatRepository,
+                                  // Per device, like the theme: the product
+                                  // searches on every route read whether this
+                                  // machine offers the search-mode picker.
+                                  child: ProductSearchModeScope(
+                                    controller: _dependencies
+                                        .productSearchModeController,
+                                    // Per shop, from the session: whether the
+                                    // product form offers serial and lot
+                                    // tracking, in whichever sheet it opens.
+                                    child: ListenableBuilder(
+                                      listenable: _dependencies.authViewModel,
+                                      builder: (context, scoped) =>
+                                          TrackingFeaturesScope(
+                                            features: _trackingFeatures(),
+                                            child: UnitAttributeCatalogScope(
+                                              catalog: _dependencies
+                                                  .unitAttributeCatalog,
+                                              child: scoped!,
+                                            ),
                                           ),
-                                        ),
-                                    child: railChild ?? const SizedBox.shrink(),
+                                      child:
+                                          railChild ?? const SizedBox.shrink(),
+                                    ),
                                   ),
                                 ),
                               ),
@@ -295,7 +307,33 @@ class _PointyAppState extends State<PointyApp> with WidgetsBindingObserver {
                                 release,
                                 onProgress: onProgress,
                               ),
-                          child: child ?? const SizedBox.shrink(),
+                          // F12 anywhere: the floating calculator, over every
+                          // route. Not on a customer-facing price checker.
+                          child: ListenableBuilder(
+                            listenable: _dependencies.authViewModel,
+                            builder: (context, navigator) {
+                              final user =
+                                  _dependencies.authViewModel.currentUser;
+                              // Convert needs rates this user may read.
+                              final canConvert =
+                                  user != null &&
+                                  AuthorizationCapabilities.forUser(
+                                    user,
+                                  ).canViewExchangeRates;
+                              return FloatingCalculatorHost(
+                                key: floatingCalculatorKey,
+                                enabled: !_dependencies
+                                    .priceCheckerModeController
+                                    .enabled,
+                                ratesKey: canConvert ? user.id : null,
+                                ratesLoader: canConvert
+                                    ? _converterRatesLoader
+                                    : null,
+                                child: navigator!,
+                              );
+                            },
+                            child: child ?? const SizedBox.shrink(),
+                          ),
                         ),
                       ),
                     ),

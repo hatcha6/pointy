@@ -151,3 +151,23 @@ export function reasonText(reason?: string): string {
   }
   return oneReason(reason);
 }
+
+/** How one sale splits: what it costs us, what the shop pays, what its customer pays, and who keeps what. */
+export type Split = {
+  /** The company's cost in dinars; undefined when it cannot be told. */
+  cost?: number;
+  unit: number;
+  retail: number;
+  /** Ours: the shop's price less our cost. */
+  company?: number;
+  /** The shop's: its customer's price less what it pays us. */
+  shop: number;
+};
+
+export function splitOf(cost: string | number | undefined | null, unit: string | number, retail: string | number): Split {
+  const c = cost === undefined || cost === null || cost === "" ? undefined : Number(cost);
+  const u = Number(unit);
+  const r = Number(retail);
+  const known = c !== undefined && Number.isFinite(c);
+  return { cost: known ? c : undefined, unit: u, retail: r, company: known ? u - c : undefined, shop: r - u };
+}

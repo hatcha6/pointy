@@ -1064,12 +1064,16 @@ def record_count(*, account, counted_amount, note="", created_by=None):
     )
 
 
-def routed_account(kind):
+def routed_account(kind, accounts=None):
     """The active account of ``kind`` that untagged money events land in.
 
-    ``None`` when the shop has no active account of that kind.
+    ``None`` when the shop has no active account of that kind. ``accounts`` is a
+    list the caller already loaded, to spare the query.
     """
-    accounts = list(MoneyAccount.objects.filter(is_active=True, kind=kind))
+    if accounts is None:
+        accounts = list(MoneyAccount.objects.filter(is_active=True, kind=kind))
+    else:
+        accounts = [a for a in accounts if a.is_active and a.kind == kind]
     return _default_account_ids(accounts).get(kind)
 
 

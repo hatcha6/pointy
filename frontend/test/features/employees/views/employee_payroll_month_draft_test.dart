@@ -266,5 +266,15 @@ Map<String, Object?> _employeeJson() => {
   'hire_date': '2025-01-01',
   'has_system_access': false,
   'payroll_total': '0.00',
-  'active_compensation_plan': null,
+  // In effect on the client's copy, so the card lets the manager press
+  // prepare; whether the server still finds it is what the tests vary.
+  'active_compensation_plan': {
+    'id': 3,
+    'employee': 1,
+    'pay_type': 'monthly_salary',
+    'salary_type': 'monthly_fixed',
+    'amount': '500.00',
+    'effective_from': '2026-01-01',
+    'is_active': true,
+  },
 };

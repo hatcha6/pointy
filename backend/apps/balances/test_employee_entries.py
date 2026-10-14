@@ -78,7 +78,11 @@ class _EmployeeCase(TestCase):
         self.manager.groups.add(Group.objects.get(name=MANAGER_GROUP))
         self.client = APIClient()
         self.client.force_authenticate(user=self.manager)
-        self.employee = Employee.objects.create(full_name="سالم")
+        # Hired long before the periods these tests pay: a run prorates the
+        # month someone joined, and the default hire date is today.
+        self.employee = Employee.objects.create(
+            full_name="سالم", hire_date=date(2020, 1, 1)
+        )
         CompensationPlan.objects.create(
             employee=self.employee,
             pay_type=CompensationPlan.PayType.MONTHLY_SALARY,

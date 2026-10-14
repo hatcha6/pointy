@@ -399,6 +399,37 @@ class RelayControlClient:
             timeout=timeout,
         )
 
+    # -- Moamalat token keepalive (the relay's copy) -------------------------
+    #
+    # The relay keeps a sealed copy of the shop's Moamalat token warm as a
+    # second, independent keepalive (TOKEN_CUSTODY_DESIGN.md). Identity-only:
+    # a lapsed subscription must not cost the shop an OTP.
+
+    def moamalat_link(self, *, access_token, timeout=None):
+        """The relay's state of this shop's token (``linked: false`` if none)."""
+        return self._request("GET", "/v1/moamalat/link", relay_token=access_token, timeout=timeout)
+
+    def put_moamalat_link(self, *, access_token, mid, token, token_id, timeout=None):
+        return self._request(
+            "PUT",
+            "/v1/moamalat/link",
+            body={"mid": mid, "token": token, "token_id": token_id},
+            relay_token=access_token,
+            timeout=timeout,
+        )
+
+    def delete_moamalat_link(self, *, access_token, timeout=None):
+        return self._request("DELETE", "/v1/moamalat/link", relay_token=access_token, timeout=timeout)
+
+    def report_moamalat_dead(self, *, access_token, token_id, timeout=None):
+        return self._request(
+            "POST",
+            "/v1/moamalat/link/dead",
+            body={"token_id": token_id},
+            relay_token=access_token,
+            timeout=timeout,
+        )
+
     def get_wallet(self, *, access_token, timeout=None):
         """This installation's wallet: balance, top-up options, latest movements.
 

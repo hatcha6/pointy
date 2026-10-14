@@ -30,6 +30,7 @@ Future<void> showPosShortcutsSheet(BuildContext context) {
         // anywhere else (camera_wedge_preview_panel.dart).
         if (CameraWedgeScope.controllerOf(context) != null)
           PointyShortcut(const ['F8'], l10n.posShortcutCameraPreview),
+        PointyShortcut(const ['F12'], l10n.posShortcutCalculator),
       ]),
       PointyShortcutGroup(l10n.posShortcutsSectionCheckout, [
         PointyShortcut([command, 'Enter'], l10n.posShortcutCheckout),

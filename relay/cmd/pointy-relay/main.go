@@ -37,6 +37,7 @@ import (
 	"pointy/relay/internal/control"
 	"pointy/relay/internal/discovery"
 	"pointy/relay/internal/limit"
+	"pointy/relay/internal/moamalat"
 	"pointy/relay/internal/observability"
 	"pointy/relay/internal/ratelimit"
 	relayserver "pointy/relay/internal/relay"
@@ -117,6 +118,10 @@ func run(args []string) error {
 		return runGenToken(args[1:])
 	case "gen-stock-key":
 		return runGenStockKey()
+	case "gen-moamalat-key":
+		return runGenMoamalatKey()
+	case "moamalat":
+		return runMoamalat(args[1:])
 	case "version", "-v", "--version":
 		fmt.Println(version)
 		return nil
@@ -513,6 +518,16 @@ func runServer(args []string) error {
 		"voucher-stock-key",
 		envString("POINTY_RELAY_VOUCHER_STOCK_KEY", ""),
 		"base64 key (32 bytes, pointy-relay gen-stock-key) that seals the company's own card stock codes; empty turns the stock off. Losing it loses every code in stock",
+	)
+	moamalatTokenKey := flags.String(
+		"moamalat-token-key",
+		envString("POINTY_RELAY_MOAMALAT_TOKEN_KEY", ""),
+		"base64 key (32 bytes, pointy-relay gen-moamalat-key) that seals the shops' Moamalat tokens; empty turns the relay's keepalive off. Losing it costs each linked shop one re-link",
+	)
+	moamalatBaseURL := flags.String(
+		"moamalat-base-url",
+		envString("POINTY_RELAY_MOAMALAT_BASE_URL", ""),
+		"Moamalat merchant portal API base (default https://merchant.moamalat.net/api)",
 	)
 	vouchersRateLimit := flags.String(
 		"vouchers-rate-limit",
@@ -1214,6 +1229,26 @@ func runServer(args []string) error {
 		go balanceWatcher.Run(ctx)
 	}
 
+	// The relay's half of the Moamalat keepalive. A malformed key stops the
+	// relay: starting without it would let every linked shop's token lapse.
+	moamalatSealer, err := buildMoamalatSealer(*moamalatTokenKey, logger)
+	if err != nil {
+		return err
+	}
+	moamalatKeeper := &relayserver.MoamalatKeeper{
+		Store:  store,
+		Sealer: moamalatSealer,
+		Client: &moamalat.Client{
+			BaseURL:    strings.TrimSpace(*moamalatBaseURL),
+			HTTPClient: &http.Client{Timeout: moamalat.RequestTimeout + 5*time.Second, Transport: outboundTransport},
+		},
+		Alerts: alertNotifier,
+		Logger: logger,
+	}
+	if moamalatKeeper.Enabled() {
+		go moamalatKeeper.Run(ctx)
+	}
+
 	servicesService := buildServices(voucherConfig, servicesSettings{
 		DirectoryInterval: *servicesDirectoryInterval,
 		RequestTimeout:    reloadlyCredentials.PurchaseTimeout,
@@ -1258,6 +1293,7 @@ func runServer(args []string) error {
 		Wallet:               walletConfig,
 		Public:               publicAddresses,
 		Alerts:               alertNotifier,
+		MoamalatSealer:       moamalatSealer,
 		Balances:             balanceWatcher,
 		Vouchers:             voucherConfig,
 		VoucherCache:         &relayserver.VoucherCatalogCache{},
