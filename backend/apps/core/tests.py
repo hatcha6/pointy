@@ -1403,14 +1403,14 @@ class RelayBackendApiTests(TestCase):
 
         with self.settings(POINTY_RELAY_UNAVAILABLE_COOLDOWN_SECONDS=300):
             with mock.patch(
-                "apps.core.relay.request.urlopen", return_value=_TimingOutResponse()
+                "apps.core.relay.relay_urlopen", return_value=_TimingOutResponse()
             ):
                 with self.assertRaises(relay_module.RelayControlError):
                     relay_client.get_installation("installation-1", timeout=2)
             self.assertTrue(relay_module.relay_transport_cooldown_active())
 
             # A successful call clears it.
-            with mock.patch("apps.core.relay.request.urlopen", return_value=_OkResponse()):
+            with mock.patch("apps.core.relay.relay_urlopen", return_value=_OkResponse()):
                 relay_client.get_installation("installation-1")
             self.assertFalse(relay_module.relay_transport_cooldown_active())
 
@@ -2265,6 +2265,12 @@ class RelayDiagnosticsAnalyticsExportTests(TestCase):
             subscription_active=True,
             connector_version="pointy-relay/test",
         )
+        # The support pull probes the relay's DNS for network.json; keep tests offline.
+        patcher = mock.patch(
+            "apps.core.relay_views.resolver_snapshot", return_value={"lookups": []}
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def _create_event(self, **kwargs):
         defaults = dict(
@@ -2301,7 +2307,7 @@ class RelayDiagnosticsAnalyticsExportTests(TestCase):
         archive = zipfile.ZipFile(BytesIO(b"".join(response.streaming_content)))
         self.assertEqual(
             sorted(archive.namelist()),
-            ["analytics_events.csv", "manifest.json"],
+            ["analytics_events.csv", "manifest.json", "network.json"],
         )
 
     def test_export_accepts_explicit_csv_format_param(self):

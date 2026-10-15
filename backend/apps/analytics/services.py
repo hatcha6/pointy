@@ -212,6 +212,7 @@ def iter_events_export_zip(
     exported_by,
     exported_at=None,
     batch_size=ANALYTICS_EXPORT_BATCH_SIZE,
+    extra_files=None,
 ):
     """Stream the export zip using the fastest engine this database supports.
 
@@ -231,6 +232,7 @@ def iter_events_export_zip(
             exported_by=exported_by,
             exported_at=exported_at,
             alias=queryset.db,
+            extra_files=extra_files,
         )
         return
 
@@ -240,7 +242,17 @@ def iter_events_export_zip(
         exported_by=exported_by,
         exported_at=exported_at,
         batch_size=batch_size,
+        extra_files=extra_files,
     )
+
+
+def write_extra_files(archive, extra_files):
+    """Write small side files (name -> text) beside the events; returns their names."""
+    names = []
+    for name, content in (extra_files or {}).items():
+        archive.writestr(name, content)
+        names.append(name)
+    return names
 
 
 def iter_events_export_zip_orm(
@@ -250,6 +262,7 @@ def iter_events_export_zip_orm(
     exported_by,
     exported_at=None,
     batch_size=ANALYTICS_EXPORT_BATCH_SIZE,
+    extra_files=None,
 ):
     """Generate the export zip's bytes incrementally, in bounded memory.
 
@@ -322,7 +335,7 @@ def iter_events_export_zip_orm(
             "engine": "orm-keyset",
             "ordered": True,
             "filters": manifest_filters(filters),
-            "files": [data_filename],
+            "files": [data_filename, *write_extra_files(archive, extra_files)],
         }
         archive.writestr(
             "manifest.json",

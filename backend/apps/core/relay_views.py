@@ -1,3 +1,6 @@
+import json
+import logging
+
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.utils import timezone
@@ -49,7 +52,10 @@ from .relay_serializers import (
     RelayPairingRequestSerializer,
     RelayPairingResponseSerializer,
 )
+from .relay_transport import resolver_snapshot
 
+
+logger = logging.getLogger(__name__)
 
 CONNECTOR_TOKEN_HEADER = "X-Pointy-Connector-Token"
 
@@ -70,6 +76,15 @@ def connector_token_accepted(installation, provided_token):
         provided_token,
         getattr(installation, "connector_token", ""),
     )
+
+
+def _network_snapshot_json():
+    try:
+        snapshot = resolver_snapshot()
+    except Exception as exc:  # never let the side file sink the export
+        logger.exception("relay resolver snapshot failed")
+        snapshot = {"error": f"{type(exc).__name__}: {exc}"}
+    return json.dumps(snapshot, ensure_ascii=False, indent=2)
 
 
 class DiscoveryServiceView(views.APIView):
@@ -477,6 +492,9 @@ class RelayDiagnosticsAnalyticsExportView(views.APIView):
             filters=filters,
             exported_by=None,
             exported_at=exported_at,
+            # A support pull is usually about the relay misbehaving; how this
+            # container resolves the relay right now is the first question.
+            extra_files={"network.json": _network_snapshot_json()},
         )
         response = build_events_export_response(
             request,

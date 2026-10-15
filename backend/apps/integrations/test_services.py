@@ -522,7 +522,7 @@ class RelayServicesClientTests(SimpleTestCase):
                 request.full_url, 304, "Not Modified", {"ETag": '"d1"'}, None
             )
 
-        with mock.patch("apps.core.relay.request.urlopen", side_effect=urlopen):
+        with mock.patch("apps.core.relay.relay_urlopen", side_effect=urlopen):
             payload, etag = relay_client().get_services_directory(access_token="tok", etag='"d1"')
         self.assertIsNone(payload)
         self.assertEqual(etag, '"d1"')
@@ -532,7 +532,7 @@ class RelayServicesClientTests(SimpleTestCase):
 
         body = json.dumps(services_directory()).encode()
         with mock.patch(
-            "apps.core.relay.request.urlopen",
+            "apps.core.relay.relay_urlopen",
             return_value=_Response(200, body, {"ETag": '"d2"'}),
         ):
             payload, etag = relay_client().get_services_directory(access_token="tok")
@@ -540,7 +540,7 @@ class RelayServicesClientTests(SimpleTestCase):
         self.assertEqual(payload["version"], "d1")
 
         too_big = _Response(200, b"x" * 100, {})
-        with mock.patch("apps.core.relay.request.urlopen", return_value=too_big):
+        with mock.patch("apps.core.relay.relay_urlopen", return_value=too_big):
             with self.assertRaises(RelayControlError):
                 relay_client().get_services_directory(access_token="tok", max_bytes=10)
 
@@ -551,7 +551,7 @@ class RelayServicesClientTests(SimpleTestCase):
             sent.append(request)
             return _Response(200, json.dumps(detection()).encode())
 
-        with mock.patch("apps.core.relay.request.urlopen", side_effect=urlopen):
+        with mock.patch("apps.core.relay.relay_urlopen", side_effect=urlopen):
             answer = relay_client().post_service_detect(
                 access_token="tok", country="ML", phone="+223 70 12 34 56"
             )
@@ -585,7 +585,7 @@ class RelayServicesClientTests(SimpleTestCase):
             "amount_currency": "XOF",
         }
         order = {**question, "country": "ML", "phone": "+22370123456", "idempotency_key": "k-1"}
-        with mock.patch("apps.core.relay.request.urlopen", side_effect=urlopen):
+        with mock.patch("apps.core.relay.relay_urlopen", side_effect=urlopen):
             quoted = relay_client().quote_service(access_token="tok", payload=question)
             status, answered = relay_client().create_service_order(
                 access_token="tok", payload=order
@@ -606,7 +606,7 @@ class RelayServicesClientTests(SimpleTestCase):
         ]
         for failure, sent in cases:
             with self.subTest(failure=type(failure).__name__):
-                with mock.patch("apps.core.relay.request.urlopen", side_effect=failure):
+                with mock.patch("apps.core.relay.relay_urlopen", side_effect=failure):
                     with self.assertRaises(RelayControlError) as caught:
                         relay_client().create_service_order(access_token="tok", payload={})
                 self.assertIsNone(caught.exception.status_code)
@@ -622,7 +622,7 @@ class RelayServicesClientTests(SimpleTestCase):
                 io.BytesIO(b'{"code": "amount_out_of_range", "min": "1967", "max": "32800"}'),
             )
 
-        with mock.patch("apps.core.relay.request.urlopen", side_effect=urlopen):
+        with mock.patch("apps.core.relay.relay_urlopen", side_effect=urlopen):
             with self.assertRaises(RelayControlError) as caught:
                 relay_client().quote_service(access_token="tok", payload={})
         self.assertEqual(caught.exception.status_code, 422)
@@ -1849,7 +1849,7 @@ class ServicesTelemetryTests(ServicesMixin, TestCase):
         with mock.patch("apps.integrations.relay_link.scoped_relay_client", return_value=client):
             with mock.patch("apps.core.relay.note_relay_transport_failure"):
                 for failure in failures:
-                    with mock.patch("apps.core.relay.request.urlopen", side_effect=failure) as sent:
+                    with mock.patch("apps.core.relay.relay_urlopen", side_effect=failure) as sent:
                         self.driver.service_detect("ML", "70123456")
                     addresses.append(sent.call_args[0][0].full_url)
         self.assertTrue(all(address.endswith("/v1/services/detect") for address in addresses))

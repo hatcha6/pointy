@@ -21,6 +21,7 @@ from django.utils.dateparse import parse_datetime
 from . import caching
 from .credentials import constant_time_secret_equal
 from .models import RelayConnectorSetupToken, RelayInstallation, ShopSettings
+from .relay_transport import relay_urlopen
 
 logger = logging.getLogger(__name__)
 
@@ -866,7 +867,7 @@ class RelayControlClient:
         url = urljoin(self.config.control_url.rstrip("/") + "/", path.lstrip("/"))
         http_request = request.Request(url, data=data, headers=headers, method=method)
         try:
-            return request.urlopen(
+            return relay_urlopen(
                 http_request,
                 timeout=self.config.ai_timeout_seconds,
                 context=self._ssl_context,
@@ -912,7 +913,7 @@ class RelayControlClient:
         url = urljoin(self.config.control_url.rstrip("/") + "/", path.lstrip("/"))
         http_request = request.Request(url, data=data, headers=headers, method=method)
         try:
-            with request.urlopen(
+            with relay_urlopen(
                 http_request,
                 timeout=timeout or self.config.timeout_seconds,
                 context=self._ssl_context,
@@ -980,7 +981,7 @@ class RelayControlClient:
         url = urljoin(self.config.control_url.rstrip("/") + "/", path.lstrip("/"))
         http_request = request.Request(url, data=data, headers=request_headers, method=method)
         try:
-            with request.urlopen(
+            with relay_urlopen(
                 http_request,
                 timeout=timeout or self.config.timeout_seconds,
                 context=self._ssl_context,

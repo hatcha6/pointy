@@ -556,7 +556,7 @@ class RelayVoucherClientTests(SimpleTestCase):
                 request.full_url, 304, "Not Modified", {"ETag": '"v1"'}, None
             )
 
-        with mock.patch("apps.core.relay.request.urlopen", side_effect=urlopen):
+        with mock.patch("apps.core.relay.relay_urlopen", side_effect=urlopen):
             payload, etag = relay_client().get_voucher_catalog(access_token="tok", etag='"v1"')
         self.assertIsNone(payload)
         self.assertEqual(etag, '"v1"')
@@ -570,7 +570,7 @@ class RelayVoucherClientTests(SimpleTestCase):
             sent.append(request)
             return _Response(201, json.dumps({"purchase": {"status": "succeeded"}}).encode())
 
-        with mock.patch("apps.core.relay.request.urlopen", side_effect=urlopen):
+        with mock.patch("apps.core.relay.relay_urlopen", side_effect=urlopen):
             status, payload = relay_client().create_voucher_purchase(
                 access_token="tok",
                 item="itunes-us-10",
@@ -597,7 +597,7 @@ class RelayVoucherClientTests(SimpleTestCase):
         ]
         for failure, sent in cases:
             with self.subTest(failure=type(failure).__name__):
-                with mock.patch("apps.core.relay.request.urlopen", side_effect=failure):
+                with mock.patch("apps.core.relay.relay_urlopen", side_effect=failure):
                     with self.assertRaises(RelayControlError) as caught:
                         relay_client().create_voucher_purchase(
                             access_token="tok", item="x", idempotency_key="k"
@@ -611,7 +611,7 @@ class RelayVoucherClientTests(SimpleTestCase):
                 request.full_url, 409, "Conflict", {}, io.BytesIO(b'{"code": "in_flight"}')
             )
 
-        with mock.patch("apps.core.relay.request.urlopen", side_effect=urlopen):
+        with mock.patch("apps.core.relay.relay_urlopen", side_effect=urlopen):
             with self.assertRaises(RelayControlError) as caught:
                 relay_client().create_voucher_purchase(
                     access_token="tok", item="x", idempotency_key="k"
@@ -626,7 +626,7 @@ class RelayVoucherClientTests(SimpleTestCase):
             sent.append(request)
             return _Response(201, b'{"balance": "50.000"}')
 
-        with mock.patch("apps.core.relay.request.urlopen", side_effect=urlopen):
+        with mock.patch("apps.core.relay.relay_urlopen", side_effect=urlopen):
             relay_client().allocate_wallet_vouchers(
                 access_token="tok",
                 amount=Decimal("25.00"),

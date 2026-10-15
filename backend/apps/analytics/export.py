@@ -322,6 +322,7 @@ def iter_events_export_zip_copy(
     exported_by,
     exported_at,
     alias="default",
+    extra_files=None,
 ):
     """Stream the export zip, formatting every row inside Postgres.
 
@@ -340,7 +341,7 @@ def iter_events_export_zip_copy(
     connection = connections[alias]
     workers = export_parallel_workers()
 
-    from .services import ZipStreamSink, manifest_filters
+    from .services import ZipStreamSink, manifest_filters, write_extra_files
 
     sink = ZipStreamSink()
     event_count = 0
@@ -378,6 +379,7 @@ def iter_events_export_zip_copy(
                 # The COPY command tag carries the definitive row count.
                 event_count = max(cursor.cursor.rowcount, 0)
 
+        extra_names = write_extra_files(archive, extra_files)
         archive.writestr(
             "manifest.json",
             json.dumps(
@@ -392,7 +394,7 @@ def iter_events_export_zip_copy(
                     "parallel_workers": workers,
                     "ordered": False,
                     "filters": manifest_filters(filters),
-                    "files": [data_filename],
+                    "files": [data_filename, *extra_names],
                 },
                 ensure_ascii=False,
                 indent=2,

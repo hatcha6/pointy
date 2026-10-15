@@ -482,7 +482,7 @@ class RelayClientContractTests(TestCase):
             seen["timeout"] = timeout
             return _Response()
 
-        return seen, mock.patch("apps.core.relay.request.urlopen", side_effect=_urlopen)
+        return seen, mock.patch("apps.core.relay.relay_urlopen", side_effect=_urlopen)
 
     def test_send_posts_the_kind_values_and_key_with_the_installation_token(self):
         seen, patch = self._capture(b'{"id":"L-1","status":"sent"}')
