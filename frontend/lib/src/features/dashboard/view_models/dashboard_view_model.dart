@@ -6,12 +6,17 @@ import '../../../core/result.dart';
 import '../../../data/models/dashboard.dart';
 import '../../../data/models/dashboard_ai_digest.dart';
 import '../../../data/repositories/dashboard_repository.dart';
+import '../../../data/services/local_scoped_json_storage.dart';
 
 class DashboardViewModel extends ChangeNotifier {
   DashboardViewModel(
     this._dashboardRepository, {
     bool Function()? canRequestAiDigest,
-  }) : _canRequestAiDigest = canRequestAiDigest ?? (() => true) {
+    ScopedJsonStorage? periodStorage,
+    String? periodScope,
+  }) : _canRequestAiDigest = canRequestAiDigest ?? (() => true),
+       _periodStorage = periodScope == null ? null : periodStorage,
+       _periodScope = periodScope ?? '' {
     loadDashboard();
   }
 
@@ -24,6 +29,17 @@ class DashboardViewModel extends ChangeNotifier {
   /// dashboard load and being told 403, 79 times in the field. Gate the call
   /// on the permission, not the response.
   final bool Function() _canRequestAiDigest;
+
+  /// Where the chosen range is remembered, keyed by [_periodScope] (the
+  /// signed-in user's id) so each user on a shared PC gets their own range
+  /// back. Null means nothing is remembered (tests, previews).
+  final ScopedJsonStorage? _periodStorage;
+  final String _periodScope;
+  bool _periodRestored = false;
+
+  /// The ranges the toolbar offers. A saved value outside this set (an older
+  /// build, a hand-edited store) is ignored rather than shown unselected.
+  static const List<int> periodOptions = [1, 7, 30, 90];
 
   DashboardSnapshot? _snapshot;
   int _selectedDays = 30;
@@ -47,6 +63,7 @@ class DashboardViewModel extends ChangeNotifier {
     _hasError = false;
     notifyListeners();
 
+    await _restorePeriod();
     final result = await _dashboardRepository.loadDashboard(
       days: _selectedDays,
     );
@@ -91,9 +108,36 @@ class DashboardViewModel extends ChangeNotifier {
       return;
     }
     _selectedDays = days;
+    unawaited(_savePeriod(days));
     // Drop the previous period's digest so its text never lingers over the new
     // period's numbers; loadDashboard regenerates it for the new range.
     _aiDigest = DashboardAiDigest.empty;
     await loadDashboard();
+  }
+
+  /// Reads the user's saved range once, before the first fetch, so the
+  /// dashboard opens straight onto it instead of loading 30 days first.
+  Future<void> _restorePeriod() async {
+    final storage = _periodStorage;
+    if (_periodRestored || storage == null) {
+      return;
+    }
+    _periodRestored = true;
+    try {
+      final saved = int.tryParse(await storage.load(_periodScope) ?? '');
+      if (saved != null && periodOptions.contains(saved)) {
+        _selectedDays = saved;
+      }
+    } catch (_) {
+      // A broken store costs the user their remembered range, nothing more.
+    }
+  }
+
+  Future<void> _savePeriod(int days) async {
+    try {
+      await _periodStorage?.save(_periodScope, '$days');
+    } catch (_) {
+      // Remembering the range is a convenience; never surface a failure.
+    }
   }
 }

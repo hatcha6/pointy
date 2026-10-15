@@ -5,6 +5,7 @@
 #include "flutter/generated_plugin_registrant.h"
 #include "app_update_channel.h"
 #include "autostart_channel.h"
+#include "server_host.h"
 #include "usb_print_channel.h"
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
@@ -31,6 +32,7 @@ bool FlutterWindow::OnCreate() {
   RegisterUsbPrintChannel(flutter_controller_->engine());
   RegisterAppUpdateChannel(flutter_controller_->engine());
   RegisterAutoStartChannel(flutter_controller_->engine());
+  RegisterServerHostChannel(flutter_controller_->engine());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {

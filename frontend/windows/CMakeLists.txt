@@ -107,6 +107,18 @@ install(CODE "
 install(DIRECTORY "${PROJECT_BUILD_DIR}/${FLUTTER_ASSET_DIR_NAME}"
   DESTINATION "${INSTALL_BUNDLE_DATA_DIR}" COMPONENT Runtime)
 
+# The WSL server keeper, carried by every Windows till: on the shop's server PC
+# the till installs or restarts it from this copy when the PC has none, or one
+# too old to (server_host.cpp). Copied from the deploy tree at build time, so
+# there is one source of truth; a build without it must not ship quietly.
+set(POINTY_KEEPER_SCRIPT
+  "${CMAKE_CURRENT_SOURCE_DIR}/../../deploy/onprem/wsl/keep-pointy-running.ps1")
+if(NOT EXISTS "${POINTY_KEEPER_SCRIPT}")
+  message(FATAL_ERROR "${POINTY_KEEPER_SCRIPT} is missing; the Windows till carries the WSL server keeper")
+endif()
+install(FILES "${POINTY_KEEPER_SCRIPT}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}/server"
+  COMPONENT Runtime)
+
 # Install the AOT library on non-Debug builds only.
 install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   CONFIGURATIONS Profile;Release

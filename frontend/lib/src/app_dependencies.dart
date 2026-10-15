@@ -35,6 +35,7 @@ import 'data/repositories/payments_repository.dart';
 import 'data/repositories/treasury_repository.dart';
 import 'features/treasury/view_models/bank_routing.dart';
 import 'features/app_updates/view_models/app_update_prompter.dart';
+import 'features/connection/view_models/local_server_host_controller.dart';
 import 'data/repositories/price_checker_repository.dart';
 import 'data/repositories/scales_repository.dart';
 import 'data/repositories/search_miss_repository.dart';
@@ -66,6 +67,8 @@ import 'data/services/connection_coordinator.dart';
 import 'data/services/connection_route_reporter.dart';
 import 'data/services/connection_profile_storage.dart';
 import 'data/services/connection_status_controller.dart';
+import 'data/services/local_scoped_json_storage.dart';
+import 'data/services/local_server_host.dart';
 import 'data/services/pos_api_service.dart';
 import 'data/services/server_state_watcher.dart';
 import 'data/services/pos_http_client.dart';
@@ -216,6 +219,18 @@ class PointyAppDependencies {
     );
     // A LAN request failing (server moved / network flapped) triggers a
     // debounced background re-discovery so the target self-heals.
+    // The till on the shop's WSL server PC keeps that server running. Tests
+    // and preview harnesses inject a target and never touch Windows.
+    localServerHost = LocalServerHostController(
+      platform: _enableAutomaticConnection
+          ? createLocalServerHostPlatform()
+          : const NoLocalServerHost(),
+      onServerReady: () {
+        if (!connectionStatus.isReady) {
+          unawaited(connectionCoordinator.rediscover());
+        }
+      },
+    );
     service.onLocalTargetUnreachable =
         connectionCoordinator.notifyLocalTargetUnreachable;
     // The relay refusing the session's ticket is not a sign-out: the
@@ -487,6 +502,7 @@ class PointyAppDependencies {
   late final UserRepository userRepository;
   late final ConnectionCoordinator connectionCoordinator;
   late final ConnectionStatusController connectionStatus;
+  late final LocalServerHostController localServerHost;
   late final AuthViewModel authViewModel;
   late final PosViewModel posViewModel;
   DeviceSettingsViewModel? _deviceSettingsViewModel;
@@ -533,6 +549,9 @@ class PointyAppDependencies {
     );
     priceCheckerModeController.addListener(_handlePriceCheckerModeChanged);
     if (_enableAutomaticConnection) {
+      // Alongside discovery, not before it: on the server PC the keeper may
+      // need minutes, and every other PC returns from this at once.
+      unawaited(localServerHost.start());
       await connectionCoordinator.bootstrap();
     } else {
       // Tests and preview harnesses inject an explicit target — there is no
@@ -667,6 +686,12 @@ class PointyAppDependencies {
   DashboardViewModel get dashboardViewModel =>
       _dashboardViewModel ??= DashboardViewModel(
         dashboardRepository,
+        // Session-scoped (disposed on sign-out), so the user id read here is
+        // the one whose range this view model restores and saves.
+        periodStorage: const SharedPreferencesScopedJsonStorage(
+          'pointy.dashboard.period.v1',
+        ),
+        periodScope: authViewModel.currentUser?.id.toString(),
         // Read at call time, not at construction: the view model outlives a
         // sign-out, and the next user may have a different entitlement.
         canRequestAiDigest: () {
@@ -906,6 +931,7 @@ class PointyAppDependencies {
     _connectionRouteReporter?.dispose();
     connectionStatus.dispose();
     connectionCoordinator.dispose();
+    localServerHost.dispose();
     analyticsEngine.dispose();
     themeController.dispose();
     productSearchModeController.dispose();

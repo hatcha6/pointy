@@ -18970,6 +18970,74 @@ class AppLocalizationsAr extends AppLocalizations {
       'ما زلنا نبحث تلقائيًا في الخلفية…';
 
   @override
+  String get serverHostTitle => 'تشغيل خادم المتجر';
+
+  @override
+  String get serverHostStartingMessage =>
+      'يجري تشغيل الخادم على هذا الجهاز. قد يستغرق ذلك دقيقة أو دقيقتين بعد تشغيل الجهاز، وسيفتح دفتر تلقائيًا عند جاهزيته.';
+
+  @override
+  String get serverHostStageLaunching => 'بدء خدمة التشغيل';
+
+  @override
+  String get serverHostStageWaitingForWsl => 'انتظار نظام WSL';
+
+  @override
+  String get serverHostStageStartingServices => 'تشغيل قاعدة البيانات والخدمات';
+
+  @override
+  String get serverHostProblemMessage =>
+      'الخادم لم يستجب بعد، وما زالت المحاولة مستمرة تلقائيًا. إن طال ذلك فاضغط «إعادة تشغيل الخادم».';
+
+  @override
+  String get serverHostKeeperSilentMessage =>
+      'خدمة تشغيل الخادم لم تبدأ على هذا الجهاز. اضغط «إعادة تشغيل الخادم» لتشغيلها بصلاحية المدير.';
+
+  @override
+  String get serverHostWslNotAnsweringMessage =>
+      'نظام WSL لا يستجيب على هذا الجهاز. اضغط «إعادة تشغيل الخادم»، وإن تكرر ذلك فأعد تشغيل الجهاز أو تواصل مع الدعم الفني.';
+
+  @override
+  String get serverHostRestartButton => 'إعادة تشغيل الخادم';
+
+  @override
+  String get serverHostLogLabel => 'سجل التشغيل للدعم الفني:';
+
+  @override
+  String get serverHostNeedsSetupMessage =>
+      'لم يُعَدّ تشغيل الخادم التلقائي على هذا الجهاز بعد. يلزم إعداده مرة واحدة بصلاحية مدير الجهاز، وبعدها يعمل الخادم وحده عند كل تشغيل.';
+
+  @override
+  String get serverHostSetupButton => 'إعداد التشغيل التلقائي';
+
+  @override
+  String get serverHostSetupRunning =>
+      'يجري الإعداد… وافق على طلب صلاحية المدير إن ظهر.';
+
+  @override
+  String get serverHostSetupCancelled =>
+      'أُلغي طلب صلاحية المدير. اضغط الزر مرة أخرى للمتابعة.';
+
+  @override
+  String get serverHostSetupMissing =>
+      'ملفات تشغيل الخادم غير موجودة على هذا الجهاز. تواصل مع الدعم الفني.';
+
+  @override
+  String get serverHostSetupFailed =>
+      'تعذّر بدء الإعداد. تواصل مع الدعم الفني.';
+
+  @override
+  String get serverHostSetupNoAnswer =>
+      'طُلبت صلاحية المدير لكن خدمة تشغيل الخادم لم تبدأ. أرسل سجل التشغيل أدناه إلى الدعم الفني، أو اضغط الزر مرة أخرى.';
+
+  @override
+  String get serverHostDisabledMessage =>
+      'التشغيل التلقائي للخادم موقوف على هذا الجهاز. تواصل مع الدعم الفني لإعادة تفعيله.';
+
+  @override
+  String get serverHostConnectElsewhereButton => 'الاتصال بخادم آخر';
+
+  @override
   String get treasuryTitle => 'الخزينة';
 
   @override

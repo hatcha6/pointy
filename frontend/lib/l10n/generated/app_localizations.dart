@@ -32362,6 +32362,120 @@ abstract class AppLocalizations {
   /// **'ما زلنا نبحث تلقائيًا في الخلفية…'**
   String get connectionManualSearchingHint;
 
+  /// Title of the screen a WSL server PC's till shows while it starts the shop's server on this PC.
+  ///
+  /// In ar, this message translates to:
+  /// **'تشغيل خادم المتجر'**
+  String get serverHostTitle;
+
+  /// Explains the wait on the server-starting screen; the app opens by itself when the server answers.
+  ///
+  /// In ar, this message translates to:
+  /// **'يجري تشغيل الخادم على هذا الجهاز. قد يستغرق ذلك دقيقة أو دقيقتين بعد تشغيل الجهاز، وسيفتح دفتر تلقائيًا عند جاهزيته.'**
+  String get serverHostStartingMessage;
+
+  /// Server-starting step: the background keeper has been asked to start and has not reported yet.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدء خدمة التشغيل'**
+  String get serverHostStageLaunching;
+
+  /// Server-starting step: the keeper is waiting for Windows' WSL to answer.
+  ///
+  /// In ar, this message translates to:
+  /// **'انتظار نظام WSL'**
+  String get serverHostStageWaitingForWsl;
+
+  /// Server-starting step: WSL is up and the server's services are starting.
+  ///
+  /// In ar, this message translates to:
+  /// **'تشغيل قاعدة البيانات والخدمات'**
+  String get serverHostStageStartingServices;
+
+  /// Shown when WSL runs but the server has not answered for several minutes.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخادم لم يستجب بعد، وما زالت المحاولة مستمرة تلقائيًا. إن طال ذلك فاضغط «إعادة تشغيل الخادم».'**
+  String get serverHostProblemMessage;
+
+  /// Shown when the keeper was started but never reported: Windows accepted the start and nothing ran.
+  ///
+  /// In ar, this message translates to:
+  /// **'خدمة تشغيل الخادم لم تبدأ على هذا الجهاز. اضغط «إعادة تشغيل الخادم» لتشغيلها بصلاحية المدير.'**
+  String get serverHostKeeperSilentMessage;
+
+  /// Shown when the keeper runs but Windows' WSL has not answered for minutes.
+  ///
+  /// In ar, this message translates to:
+  /// **'نظام WSL لا يستجيب على هذا الجهاز. اضغط «إعادة تشغيل الخادم»، وإن تكرر ذلك فأعد تشغيل الجهاز أو تواصل مع الدعم الفني.'**
+  String get serverHostWslNotAnsweringMessage;
+
+  /// Button that restarts the keeper, WSL and the server as administrator (Windows asks for administrator approval).
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة تشغيل الخادم'**
+  String get serverHostRestartButton;
+
+  /// Label before the path of the keeper's log file, for support staff.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجل التشغيل للدعم الفني:'**
+  String get serverHostLogLabel;
+
+  /// Shown when the keeper task is missing or this Windows user may not start it; a one-time administrator setup fixes it.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يُعَدّ تشغيل الخادم التلقائي على هذا الجهاز بعد. يلزم إعداده مرة واحدة بصلاحية مدير الجهاز، وبعدها يعمل الخادم وحده عند كل تشغيل.'**
+  String get serverHostNeedsSetupMessage;
+
+  /// Button that runs the one-time administrator setup of the server keeper (Windows asks for administrator approval).
+  ///
+  /// In ar, this message translates to:
+  /// **'إعداد التشغيل التلقائي'**
+  String get serverHostSetupButton;
+
+  /// Shown after the setup was launched, while waiting for the keeper to report.
+  ///
+  /// In ar, this message translates to:
+  /// **'يجري الإعداد… وافق على طلب صلاحية المدير إن ظهر.'**
+  String get serverHostSetupRunning;
+
+  /// Shown when the Windows administrator prompt (setup or restart) was refused.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُلغي طلب صلاحية المدير. اضغط الزر مرة أخرى للمتابعة.'**
+  String get serverHostSetupCancelled;
+
+  /// Shown when the keeper script is not on this PC, so setup cannot run.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملفات تشغيل الخادم غير موجودة على هذا الجهاز. تواصل مع الدعم الفني.'**
+  String get serverHostSetupMissing;
+
+  /// Shown when the administrator setup could not be launched.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر بدء الإعداد. تواصل مع الدعم الفني.'**
+  String get serverHostSetupFailed;
+
+  /// Server PC: the elevated setup or restart was accepted but no keeper reported in time.
+  ///
+  /// In ar, this message translates to:
+  /// **'طُلبت صلاحية المدير لكن خدمة تشغيل الخادم لم تبدأ. أرسل سجل التشغيل أدناه إلى الدعم الفني، أو اضغط الزر مرة أخرى.'**
+  String get serverHostSetupNoAnswer;
+
+  /// Shown when the keeper task exists but is turned off.
+  ///
+  /// In ar, this message translates to:
+  /// **'التشغيل التلقائي للخادم موقوف على هذا الجهاز. تواصل مع الدعم الفني لإعادة تفعيله.'**
+  String get serverHostDisabledMessage;
+
+  /// Button that leaves the server-starting screen for the manual connection screen.
+  ///
+  /// In ar, this message translates to:
+  /// **'الاتصال بخادم آخر'**
+  String get serverHostConnectElsewhereButton;
+
   /// Title of the money position screen: cash and bank balances.
   ///
   /// In ar, this message translates to:

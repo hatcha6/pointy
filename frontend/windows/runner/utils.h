@@ -16,4 +16,11 @@ std::string Utf8FromUtf16(const wchar_t* utf16_string);
 // encoded in UTF-8. Returns an empty std::vector<std::string> on failure.
 std::vector<std::string> GetCommandLineArguments();
 
+// This executable's full path. Empty on failure.
+std::wstring ExecutablePath();
+
+// This executable's full path in double quotes, as a Run entry or a command
+// line names it. Empty on failure.
+std::wstring QuotedExecutablePath();
+
 #endif  // RUNNER_UTILS_H_

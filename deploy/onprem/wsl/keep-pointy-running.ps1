@@ -21,6 +21,13 @@
   It runs only while Windows is signed in to the account that owns the Pointy
   distro, so that account should sign in automatically after a restart.
 
+  The Pointy client on this PC is what starts it: at sign-in (its
+  "PointyServer" Run entry, `pointy_frontend.exe --start-server`), every time
+  the till opens, and every minute while it is open. The task's own sign-in and
+  one-minute triggers stay as a second way in. -Install lets signed-in users
+  start (only start) the task, so none of that needs an administrator; the
+  client reads keepalive-state.json to show the cashier what is happening.
+
   bootstrap-wsl.ps1 installs it. Release updates reach it through the distro:
   every 15 minutes it copies the Windows-side files a release put in
   /opt/pointy out to %ProgramData%\Pointy, and hands over to a newer copy of
@@ -29,6 +36,11 @@
   Install by hand (a shop installed before the installer did it), once, from
   an ELEVATED PowerShell, signed in as the Windows user that installed Pointy:
       powershell -ExecutionPolicy Bypass -File .\keep-pointy-running.ps1 -Install
+
+  Restart everything (the stuck keeper, WSL, the stack) through the task, or as
+  the keeper in this window when the task starts none, from an ELEVATED
+  PowerShell; the Pointy client's restart button runs this:
+      powershell -ExecutionPolicy Bypass -File .\keep-pointy-running.ps1 -Restart
 
   Undo (removes this task and turns the PointyWSL boot task back on):
       powershell -ExecutionPolicy Bypass -File .\keep-pointy-running.ps1 -Uninstall
@@ -46,6 +58,9 @@ param(
     [string]$ExportTo = "",
     # With -ExportTo: bring the stack back up afterwards (a rehearsal).
     [switch]$KeepRunning,
+    # Stop the keeper running in this session, restart WSL, and start the task
+    # again (or keep running in its place). The client's restart button runs it.
+    [switch]$Restart,
     [string]$Distro = "Pointy",
     [int]$ApiPort = 8000,
     [int]$WebPort = 80
@@ -118,8 +133,13 @@ function Write-Log {
 
 function Die { param([string]$Message) Write-Log $Message "ERROR"; exit 1 }
 
+# What the keeper is doing, as the window title says it. The heartbeat carries
+# it too: the Pointy client on this PC shows it while it waits for the server.
+$script:Stage = "STARTING"
+
 function Set-Title {
     param([string]$State)
+    $script:Stage = $State
     try { $Host.UI.RawUI.WindowTitle = "Pointy server: ${State} - do not close | ${ArDoNotClose}" } catch { }
 }
 
@@ -564,7 +584,7 @@ function Write-KeeperState {
         $anchorPid = 0
         if (Test-ProcessAlive $Anchor) { $anchorPid = [int]$Anchor.Id }
         @{ keeper_pid = $PID; heartbeat_at = (Get-Date -Format "o"); anchor_pid = $anchorPid; wsl_ip = "$WslIp"
-           healthy = $Healthy; distro_restarts = $Restarts } |
+           healthy = $Healthy; distro_restarts = $Restarts; stage = $script:Stage } |
             ConvertTo-Json | Set-Content -Path $StateFile -Encoding UTF8
     } catch { }
 }
@@ -668,6 +688,9 @@ function Test-KeeperReplaced {
 # The keeper. What the PointyKeepAlive task runs at sign-in.
 # ---------------------------------------------------------------------------
 function Invoke-KeepAlive {
+    # How long to wait for the session's keeper lock: a moment, except after
+    # -Restart has just ended the keeper that held it.
+    param([int]$LockWaitMs = 0)
     Set-Title "STARTING"
     if (Test-Path $MovedFile) {
         Write-Log "this server was moved to Linux (see ${MovedFile}); there is nothing to keep running here"
@@ -680,13 +703,18 @@ function Invoke-KeepAlive {
     $mutex = New-Object System.Threading.Mutex($true, "Local\PointyKeepAlive", [ref]$created)
     if (-not $created) {
         $owned = $false
-        try { $owned = $mutex.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { $owned = $true }
+        try { $owned = $mutex.WaitOne($LockWaitMs) } catch [System.Threading.AbandonedMutexException] { $owned = $true }
         if (-not $owned) { Write-Log "a keeper is already running in this session"; return }
     }
 
     Protect-ConsoleWindow
     $script:WslExe = Get-WslExe
     Write-Log "keeper started (PID ${PID}) as ${env:USERDOMAIN}\${env:USERNAME}; wsl.exe: $($script:WslExe)"
+    # At once, not after the first cycle: that can take minutes while WSL boots,
+    # and the client waiting on this PC reads "no heartbeat" as "not running".
+    Write-KeeperState -Anchor $null -WslIp "" -Healthy $false -Restarts 0
+    # A task registered before the client started it lacks the grant.
+    Grant-KeeperTaskToSignedInUsers
     # Only the installed copy updates the Windows-side files, and hands over
     # when a newer keeper replaces it; a copy run from elsewhere does neither.
     $startedHash = ""
@@ -737,6 +765,8 @@ function Invoke-KeepAlive {
                     Write-Log "started WSL for '${Distro}' (keep-alive PID $($anchor.Id))"
                     $sinceStart = 0
                     $wslIp = $null
+                    Set-Title "STARTING"
+                    Write-KeeperState -Anchor $anchor -WslIp "" -Healthy $false -Restarts $restarts
                     if (-not (Test-DistroAnswers -TimeoutSec 180)) {
                         Write-Log "the distro has not answered yet; checking again shortly" "WARN"
                     } elseif (-not (Test-Path $HoldFile)) {
@@ -882,6 +912,40 @@ function Get-AutoSignInUser {
     } catch { return "" }
 }
 
+# The task's permissions, as SDDL, with "signed-in users may read and run it"
+# added: the Pointy client on this PC starts the keeper at sign-in and whenever
+# it opens, from an ordinary unelevated process. Running is all that grants:
+# what the task runs, and as whom, stays an administrator's to change.
+$KeeperRunAce = "(A;;GRGX;;;IU)"
+function Add-KeeperRunAce {
+    param([string]$Sddl)
+    if ($Sddl -match [regex]::Escape($KeeperRunAce)) { return $Sddl }
+    # No DACL of its own: the defaults, written out, so adding to it takes
+    # nothing away from administrators or the system.
+    if ($Sddl -notmatch 'D:') { $Sddl = "${Sddl}D:(A;;FA;;;BA)(A;;FA;;;SY)" }
+    # The DACL runs to the SACL (S:) when one follows, else to the end.
+    $at = $Sddl.IndexOf("S:", $Sddl.IndexOf("D:"))
+    if ($at -lt 0) { return "${Sddl}${KeeperRunAce}" }
+    return $Sddl.Substring(0, $at) + $KeeperRunAce + $Sddl.Substring($at)
+}
+
+function Grant-KeeperTaskToSignedInUsers {
+    try {
+        $service = New-Object -ComObject Schedule.Service
+        $service.Connect()
+        $task = $service.GetFolder("\").GetTask($TaskName)
+        # 4: the DACL alone.
+        $current = "$($task.GetSecurityDescriptor(4))"
+        $wanted = Add-KeeperRunAce $current
+        if ($wanted -eq $current) { return }
+        $task.SetSecurityDescriptor($wanted, 0)
+        Write-Log "signed-in users may now start the '${TaskName}' task (the Pointy client does, at sign-in and when it opens)"
+    } catch {
+        Write-Log ("could not let signed-in users start the '${TaskName}' task: $($_.Exception.Message). " +
+                   "The Pointy client cannot start the server until -Install runs elevated.") "WARN"
+    }
+}
+
 function Register-KeeperTask {
     $user = [Security.Principal.WindowsIdentity]::GetCurrent().Name
     $powershell = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
@@ -915,6 +979,7 @@ function Register-KeeperTask {
     Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger @($atLogOn, $everyMinute) -Principal $principal `
         -Settings $settings -Force -ErrorAction Stop | Out-Null
     Write-Log "registered the '${TaskName}' task for ${user}: at sign-in, re-checked every minute"
+    Grant-KeeperTaskToSignedInUsers
 }
 
 function Invoke-Install {
@@ -1045,13 +1110,90 @@ function Invoke-Export {
 
 
 # ---------------------------------------------------------------------------
+# -Restart: what the client's restart button runs, elevated.
+# ---------------------------------------------------------------------------
+
+# The keeper this session runs, by its heartbeat's PID - only while that PID is
+# still a PowerShell running this script, never whatever reused the number.
+# Returns that PID (0 when there was none), stopped or not.
+function Stop-RunningKeeper {
+    $keeperPid = 0
+    try {
+        if (-not (Test-Path $StateFile)) { return 0 }
+        $keeperPid = [int]((Get-Content -Raw $StateFile | ConvertFrom-Json).keeper_pid)
+        if ($keeperPid -le 0 -or $keeperPid -eq $PID) { return 0 }
+        $row = Get-CimInstance -ClassName Win32_Process -Filter "ProcessId=$keeperPid" -ErrorAction Stop
+        if (-not $row -or "$($row.CommandLine)" -notlike "*keep-pointy-running.ps1*") { return $keeperPid }
+        Stop-Process -Id $keeperPid -Force -ErrorAction Stop
+        Write-Log "stopped the keeper that was running (PID ${keeperPid})"
+    } catch {
+        Write-Log "could not stop the running keeper: $($_.Exception.Message)" "WARN"
+    }
+    return $keeperPid
+}
+
+function Invoke-Restart {
+    if (-not (Test-Admin)) { Die "run this from an ELEVATED PowerShell (right-click, Run as administrator)." }
+    if (Test-Path $MovedFile) { Die "this server was moved to Linux (see ${MovedFile}); there is nothing to restart here." }
+    $script:WslExe = Get-WslExe
+    Write-Log "restart asked for (the Pointy client's restart button, or by hand)"
+    $previousPid = Stop-RunningKeeper
+    if (Test-Path $HoldFile) {
+        # An export or an operator owns the stack: WSL stays up.
+        Write-Log "${HoldFile} is present, so WSL is left running; only the keeper restarts" "WARN"
+    } else {
+        # A wedged WSL answers nothing until it is shut down; the keeper below
+        # starts it again at once.
+        $r = Invoke-Wsl @("--shutdown") -TimeoutSec 120
+        if ($r.ExitCode -eq 0) { Write-Log "WSL shut down; starting it again" }
+        else { Write-Log "wsl --shutdown did not finish: $("$($r.Output)".Trim())" "WARN" }
+    }
+    # Through the task when it can: a keeper outside it is started again by
+    # nothing, updates nothing, and has the task's every-minute trigger open
+    # (and close) another window beside it for as long as it runs.
+    if (Start-KeeperTaskAndWait -PreviousPid $previousPid) { return }
+    Write-Log "the '${TaskName}' task did not start a keeper; running it here instead" "WARN"
+    Invoke-KeepAlive -LockWaitMs 15000
+}
+
+# Starts the keeper's task and waits for a new keeper - not the one -Restart
+# stopped - to write its heartbeat.
+function Start-KeeperTaskAndWait {
+    param([int]$PreviousPid, [int]$TimeoutSec = 30)
+    try {
+        $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction Stop
+        if ($task.State -eq "Disabled") { return $false }
+        $since = Get-Date
+        Start-ScheduledTask -TaskName $TaskName -ErrorAction Stop
+        $deadline = $since.AddSeconds($TimeoutSec)
+        while ((Get-Date) -lt $deadline) {
+            Start-Sleep -Seconds 2
+            try {
+                $state = Get-Content -Raw $StateFile -ErrorAction Stop | ConvertFrom-Json
+                if ([datetime]$state.heartbeat_at -ge $since -and
+                    [int]$state.keeper_pid -ne $PID -and [int]$state.keeper_pid -ne $PreviousPid) {
+                    Write-Log "the '${TaskName}' task runs the keeper again (PID $($state.keeper_pid))"
+                    return $true
+                }
+            } catch { }
+        }
+    } catch {
+        Write-Log "could not start the '${TaskName}' task: $($_.Exception.Message)" "WARN"
+    }
+    return $false
+}
+
+
+# ---------------------------------------------------------------------------
 # Entry point.
 # ---------------------------------------------------------------------------
 $modeCount = 0
 if ($Install)         { $modeCount++ }
 if ($Uninstall)       { $modeCount++ }
 if ($ExportTo -ne "") { $modeCount++ }
-if ($modeCount -gt 1) { Die "use only one of -Install, -Uninstall and -ExportTo." }
+if ($Restart)         { $modeCount++ }
+if ($modeCount -gt 1) { Die "use only one of -Install, -Uninstall, -ExportTo and -Restart." }
+if ($Restart)        { Invoke-Restart; exit 0 }
 if ($Install)        { Invoke-Install; exit 0 }
 if ($Uninstall)      { Invoke-Uninstall; exit 0 }
 if ($ExportTo -ne "") { exit (Invoke-Export) }

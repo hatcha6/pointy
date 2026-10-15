@@ -352,6 +352,7 @@ class _PointyAppState extends State<PointyApp> with WidgetsBindingObserver {
           : ConnectionGate(
               controller: _dependencies.connectionStatus,
               coordinator: _dependencies.connectionCoordinator,
+              serverHost: _dependencies.localServerHost,
               child: AuthGate(
                 viewModel: _dependencies.authViewModel,
                 analyticsEngine: _dependencies.analyticsEngine,

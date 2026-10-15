@@ -270,6 +270,54 @@ The window has no close button and ignores Ctrl+C. Ending it in Task Manager
 does not stop the server either: the client is a separate process, and the
 task opens the window again within a minute.
 
+**The Pointy app on that PC starts the keeper.** The task's own sign-in
+trigger has not proved enough in the field, so the till app installed on the
+server PC starts `PointyKeepAlive` itself. A till knows it is on the server PC
+when `%ProgramData%\Pointy` holds the keeper or `bootstrap-wsl.ps1`, or when
+this Windows user has the `Pointy` distro registered (WSL's own `Lxss` key);
+`MOVED-TO-LINUX.txt` there turns all of this off. It starts the keeper:
+
+- at every sign-in, through its own Run entry, `PointyServer`
+  (`pointy_frontend.exe --start-server`, which starts the task and exits
+  without a window);
+- every time the app opens, and every minute while it is open.
+
+None of that needs an administrator or shows a prompt: `-Install` lets
+signed-in users start the task (only start it; what it runs, and as whom,
+stays an administrator's). Closing the app leaves the keeper, and the server,
+running. Until the server answers, the app shows *تشغيل خادم المتجر* with the
+keeper's progress, read from `keepalive-state.json`, instead of searching the
+network. If the task is missing, or was registered by a keeper older than this
+grant, the screen offers *إعداد التشغيل التلقائي*: one administrator prompt
+that runs `keep-pointy-running.ps1 -Install`. Once the keeper has run, it adds
+the grant to an older task by itself.
+
+**The till carries the keeper.** Every Windows build ships this repository's
+`keep-pointy-running.ps1` in `data\server\` (copied from `deploy/` by
+`frontend/windows/CMakeLists.txt`; the build fails without it). Setup and
+restart use the PC's installed copy when it is current (it has `-Restart`),
+and the carried one otherwise: a server PC whose keeper was never installed, or
+is too old, gets it from the till, and `-Install` copies it into
+`%ProgramData%\Pointy`. The keeper still copies a release's own version out of
+the distro every 15 minutes, so update the server along with the tills: a
+server older than the till would put its older keeper back.
+
+A start that stalls is named rather than left spinning: no heartbeat from the
+keeper within 3 minutes, WSL still not answering after 5, or the keeper
+reporting the server down. The screen then offers *إعادة تشغيل الخادم*: one
+administrator prompt that runs `keep-pointy-running.ps1 -Restart` in a
+minimised console of the signed-in session. `-Restart` stops the keeper running
+in this session (by its heartbeat's PID, only while that is still this script),
+runs `wsl --shutdown` unless `keepalive.hold` is present, and starts the task
+again. If no new keeper reports within 30 seconds (a task that is broken, or
+belongs to another Windows account), it stays in that console as the keeper
+itself. It is what staff did by hand, an elevated PowerShell with `wsl` in it,
+as a button; it works from an operator's elevated PowerShell too.
+
+A setup or restart that was approved but brought no keeper up within 3 minutes
+(the hidden `-Install` stops early when WSL does not answer or the distro
+belongs to another account) says so and shows the log path.
+
 **Windows must sign in by itself.** The keeper runs only while that user is
 signed in, so after a restart or a power cut the server is down until they
 sign in. Turn on automatic sign-in for that account with Sysinternals

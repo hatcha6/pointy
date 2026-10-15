@@ -93,6 +93,9 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: deskto
 ; Covers the installing user's hive; a stale Run value left in another user's
 ; hive is harmless, as Windows ignores Run entries whose target is missing.
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "Pointy"; Flags: uninsdeletevalue
+; The till on a WSL server PC starts the server keeper at sign-in through its
+; own entry (server_host.cpp); it goes with the app too.
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "PointyServer"; Flags: uninsdeletevalue
 
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent

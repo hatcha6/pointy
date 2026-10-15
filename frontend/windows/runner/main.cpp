@@ -3,6 +3,7 @@
 #include <windows.h>
 
 #include "flutter_window.h"
+#include "server_host.h"
 #include "utils.h"
 
 // One running copy per machine. The till's operators launch the app by
@@ -51,6 +52,15 @@ void ActivateRunningInstance() {
 
 int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
                       _In_ wchar_t *command_line, _In_ int show_command) {
+  // The sign-in start of this PC's WSL server (see server_host.h): start the
+  // keeper and leave, before the single-instance lock, so a till already open
+  // is neither brought forward nor kept from starting.
+  if (command_line != nullptr &&
+      ::wcsstr(command_line, kStartServerSwitch) != nullptr) {
+    StartServerKeeper();
+    return EXIT_SUCCESS;
+  }
+
   if (!AcquireSingleInstance()) {
     ActivateRunningInstance();
     return EXIT_SUCCESS;

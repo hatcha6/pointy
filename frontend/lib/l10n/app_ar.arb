@@ -13047,6 +13047,82 @@
   "@connectionManualSearchingHint": {
     "description": "Hint that background auto-discovery is still running on the manual connection screen."
   },
+  "serverHostTitle": "تشغيل خادم المتجر",
+  "@serverHostTitle": {
+    "description": "Title of the screen a WSL server PC's till shows while it starts the shop's server on this PC."
+  },
+  "serverHostStartingMessage": "يجري تشغيل الخادم على هذا الجهاز. قد يستغرق ذلك دقيقة أو دقيقتين بعد تشغيل الجهاز، وسيفتح دفتر تلقائيًا عند جاهزيته.",
+  "@serverHostStartingMessage": {
+    "description": "Explains the wait on the server-starting screen; the app opens by itself when the server answers."
+  },
+  "serverHostStageLaunching": "بدء خدمة التشغيل",
+  "@serverHostStageLaunching": {
+    "description": "Server-starting step: the background keeper has been asked to start and has not reported yet."
+  },
+  "serverHostStageWaitingForWsl": "انتظار نظام WSL",
+  "@serverHostStageWaitingForWsl": {
+    "description": "Server-starting step: the keeper is waiting for Windows' WSL to answer."
+  },
+  "serverHostStageStartingServices": "تشغيل قاعدة البيانات والخدمات",
+  "@serverHostStageStartingServices": {
+    "description": "Server-starting step: WSL is up and the server's services are starting."
+  },
+  "serverHostProblemMessage": "الخادم لم يستجب بعد، وما زالت المحاولة مستمرة تلقائيًا. إن طال ذلك فاضغط «إعادة تشغيل الخادم».",
+  "@serverHostProblemMessage": {
+    "description": "Shown when WSL runs but the server has not answered for several minutes."
+  },
+  "serverHostKeeperSilentMessage": "خدمة تشغيل الخادم لم تبدأ على هذا الجهاز. اضغط «إعادة تشغيل الخادم» لتشغيلها بصلاحية المدير.",
+  "@serverHostKeeperSilentMessage": {
+    "description": "Shown when the keeper was started but never reported: Windows accepted the start and nothing ran."
+  },
+  "serverHostWslNotAnsweringMessage": "نظام WSL لا يستجيب على هذا الجهاز. اضغط «إعادة تشغيل الخادم»، وإن تكرر ذلك فأعد تشغيل الجهاز أو تواصل مع الدعم الفني.",
+  "@serverHostWslNotAnsweringMessage": {
+    "description": "Shown when the keeper runs but Windows' WSL has not answered for minutes."
+  },
+  "serverHostRestartButton": "إعادة تشغيل الخادم",
+  "@serverHostRestartButton": {
+    "description": "Button that restarts the keeper, WSL and the server as administrator (Windows asks for administrator approval)."
+  },
+  "serverHostLogLabel": "سجل التشغيل للدعم الفني:",
+  "@serverHostLogLabel": {
+    "description": "Label before the path of the keeper's log file, for support staff."
+  },
+  "serverHostNeedsSetupMessage": "لم يُعَدّ تشغيل الخادم التلقائي على هذا الجهاز بعد. يلزم إعداده مرة واحدة بصلاحية مدير الجهاز، وبعدها يعمل الخادم وحده عند كل تشغيل.",
+  "@serverHostNeedsSetupMessage": {
+    "description": "Shown when the keeper task is missing or this Windows user may not start it; a one-time administrator setup fixes it."
+  },
+  "serverHostSetupButton": "إعداد التشغيل التلقائي",
+  "@serverHostSetupButton": {
+    "description": "Button that runs the one-time administrator setup of the server keeper (Windows asks for administrator approval)."
+  },
+  "serverHostSetupRunning": "يجري الإعداد… وافق على طلب صلاحية المدير إن ظهر.",
+  "@serverHostSetupRunning": {
+    "description": "Shown after the setup was launched, while waiting for the keeper to report."
+  },
+  "serverHostSetupCancelled": "أُلغي طلب صلاحية المدير. اضغط الزر مرة أخرى للمتابعة.",
+  "@serverHostSetupCancelled": {
+    "description": "Shown when the Windows administrator prompt (setup or restart) was refused."
+  },
+  "serverHostSetupMissing": "ملفات تشغيل الخادم غير موجودة على هذا الجهاز. تواصل مع الدعم الفني.",
+  "@serverHostSetupMissing": {
+    "description": "Shown when the keeper script is not on this PC, so setup cannot run."
+  },
+  "serverHostSetupFailed": "تعذّر بدء الإعداد. تواصل مع الدعم الفني.",
+  "@serverHostSetupFailed": {
+    "description": "Shown when the administrator setup could not be launched."
+  },
+  "serverHostSetupNoAnswer": "طُلبت صلاحية المدير لكن خدمة تشغيل الخادم لم تبدأ. أرسل سجل التشغيل أدناه إلى الدعم الفني، أو اضغط الزر مرة أخرى.",
+  "@serverHostSetupNoAnswer": {
+    "description": "Server PC: the elevated setup or restart was accepted but no keeper reported in time."
+  },
+  "serverHostDisabledMessage": "التشغيل التلقائي للخادم موقوف على هذا الجهاز. تواصل مع الدعم الفني لإعادة تفعيله.",
+  "@serverHostDisabledMessage": {
+    "description": "Shown when the keeper task exists but is turned off."
+  },
+  "serverHostConnectElsewhereButton": "الاتصال بخادم آخر",
+  "@serverHostConnectElsewhereButton": {
+    "description": "Button that leaves the server-starting screen for the manual connection screen."
+  },
   "treasuryTitle": "الخزينة",
   "@treasuryTitle": {
     "description": "Title of the money position screen: cash and bank balances."

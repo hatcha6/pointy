@@ -11,6 +11,7 @@ add_executable(${BINARY_NAME} WIN32
   "main.cpp"
   "app_update_channel.cpp"
   "autostart_channel.cpp"
+  "server_host.cpp"
   "usb_print_channel.cpp"
   "utils.cpp"
   "win32_window.cpp"
@@ -43,6 +44,8 @@ target_link_libraries(${BINARY_NAME} PRIVATE "winspool.lib")
 target_link_libraries(${BINARY_NAME} PRIVATE "shell32.lib")
 # advapi32: registry APIs for launch-at-startup (autostart_channel.cpp).
 target_link_libraries(${BINARY_NAME} PRIVATE "advapi32.lib")
+# taskschd + ole32/oleaut32: starting the WSL server keeper task (server_host.cpp).
+target_link_libraries(${BINARY_NAME} PRIVATE "taskschd.lib" "ole32.lib" "oleaut32.lib")
 target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")
 
 # Run the Flutter tool portions of the build. This must not be removed.

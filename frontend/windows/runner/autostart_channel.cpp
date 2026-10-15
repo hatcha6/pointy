@@ -8,6 +8,8 @@
 #include <string>
 #include <variant>
 
+#include "utils.h"
+
 namespace {
 
 constexpr wchar_t kRunKeyPath[] =
@@ -15,23 +17,6 @@ constexpr wchar_t kRunKeyPath[] =
 // Stable value name so isEnabled/setEnabled and the installer's uninstall
 // cleanup all refer to the same entry.
 constexpr wchar_t kValueName[] = L"Pointy";
-
-std::wstring ExecutablePath() {
-  wchar_t buffer[MAX_PATH];
-  DWORD length = ::GetModuleFileNameW(nullptr, buffer, MAX_PATH);
-  if (length == 0 || length >= MAX_PATH) {
-    return std::wstring();
-  }
-  return std::wstring(buffer, length);
-}
-
-std::wstring QuotedExecutablePath() {
-  std::wstring path = ExecutablePath();
-  if (path.empty()) {
-    return path;
-  }
-  return L"\"" + path + L"\"";
-}
 
 bool GetBoolArg(const flutter::EncodableMap& map, const char* key) {
   auto it = map.find(flutter::EncodableValue(std::string(key)));

@@ -336,10 +336,16 @@ class _DashboardToolbar extends StatelessWidget {
       actions: [
         SegmentedButton<int>(
           segments: [
-            ButtonSegment(value: 1, label: Text(l10n.dashboardRangeToday)),
-            ButtonSegment(value: 7, label: Text(l10n.dashboardRange7Days)),
-            ButtonSegment(value: 30, label: Text(l10n.dashboardRange30Days)),
-            ButtonSegment(value: 90, label: Text(l10n.dashboardRange90Days)),
+            for (final days in DashboardViewModel.periodOptions)
+              ButtonSegment(
+                value: days,
+                label: Text(switch (days) {
+                  1 => l10n.dashboardRangeToday,
+                  7 => l10n.dashboardRange7Days,
+                  30 => l10n.dashboardRange30Days,
+                  _ => l10n.dashboardRange90Days,
+                }),
+              ),
           ],
           selected: {selectedDays},
           onSelectionChanged: isLoading

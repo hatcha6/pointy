@@ -7,27 +7,41 @@ import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
+import '../view_models/local_server_host_controller.dart';
+import 'local_server_starting_screen.dart';
 
 /// Gates the app behind connection state: a spinner while discovery runs during
 /// the startup cap, a manual IP/URL entry when auto-discovery gives up, and the
 /// real [child] once a target (LAN or relay) is acquired.
+///
+/// On the shop's WSL server PC, until that server answers, the
+/// [serverHost]'s starting screen stands in for the spinner and the manual
+/// entry: there is nothing to search for until it runs.
 class ConnectionGate extends StatelessWidget {
   const ConnectionGate({
     super.key,
     required this.controller,
     required this.coordinator,
     required this.child,
+    this.serverHost,
   });
 
   final ConnectionStatusController controller;
   final ConnectionCoordinator coordinator;
   final Widget child;
+  final LocalServerHostController? serverHost;
 
   @override
   Widget build(BuildContext context) {
+    final serverHost = this.serverHost;
     return ListenableBuilder(
-      listenable: controller,
+      listenable: Listenable.merge([controller, ?serverHost]),
       builder: (context, _) {
+        if (!controller.isReady &&
+            serverHost != null &&
+            serverHost.showsStartingScreen) {
+          return LocalServerStartingScreen(controller: serverHost);
+        }
         return switch (controller.phase) {
           ConnectionPhase.connectedLocal ||
           ConnectionPhase.connectedRelay => child,

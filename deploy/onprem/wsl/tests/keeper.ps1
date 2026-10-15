@@ -225,6 +225,14 @@ Check "never to one that does not parse" (Test-KeeperReplaced -StartedHash $star
 Remove-Item $StableScript
 Check "nor to a missing one" (Test-KeeperReplaced -StartedHash $startedHash) $false
 
+# The task's DACL gains "signed-in users may read and run it", once, inside the DACL.
+$KeeperRunAce = "(A;;GRGX;;;IU)"
+Check "run grant appended" (Add-KeeperRunAce "D:(A;;FA;;;BA)(A;;FA;;;SY)") "D:(A;;FA;;;BA)(A;;FA;;;SY)(A;;GRGX;;;IU)"
+Check "run grant idempotent" (Add-KeeperRunAce "D:(A;;FA;;;BA)(A;;GRGX;;;IU)") "D:(A;;FA;;;BA)(A;;GRGX;;;IU)"
+Check "run grant keeps protected DACL" (Add-KeeperRunAce "D:P(A;;FA;;;BA)") "D:P(A;;FA;;;BA)(A;;GRGX;;;IU)"
+Check "run grant stays before a SACL" (Add-KeeperRunAce "O:BAG:SYD:(A;;FA;;;BA)S:(AU;FA;;;;WD)") "O:BAG:SYD:(A;;FA;;;BA)(A;;GRGX;;;IU)S:(AU;FA;;;;WD)"
+Check "run grant on no DACL keeps admins" (Add-KeeperRunAce "") "D:(A;;FA;;;BA)(A;;FA;;;SY)(A;;GRGX;;;IU)"
+
 Remove-Item -Recurse -Force $tmp
 Write-Host ("# keeper: {0} passed, {1} failed" -f $pass, $fail)
 if ($fail) { exit 1 }

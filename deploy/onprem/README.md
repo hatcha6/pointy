@@ -244,6 +244,12 @@ window opens at every sign-in of the Windows user that installed Pointy:
 - It copies each release update's Windows-side files out of the distro, itself
   included, and hands over to a newer copy of itself.
 
+The Pointy app on the server PC starts that window: at sign-in (its
+`PointyServer` Run entry), whenever it opens, and every minute while it is
+open, with no administrator prompt. It shows the server starting until it
+answers, and offers a one-time administrator setup when the task is missing.
+See INSTALL.md.
+
 It needs Windows to sign in automatically (Sysinternals Autologon). A shop
 installed before the installer did this runs `wsl\keep-pointy-running.ps1
 -Install` once, elevated, as the Windows user that installed Pointy, from a new
