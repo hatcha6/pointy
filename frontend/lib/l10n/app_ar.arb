@@ -10946,6 +10946,30 @@
   "@purchaseOrderLabelsSerialized": {
     "description": "Purchase order label row for serial-tracked goods, which carry their own numbers instead of the product barcode."
   },
+  "createdProductLabelsTitle": "ملصقات المنتجات الجديدة",
+  "@createdProductLabelsTitle": {
+    "description": "Title of the barcode label sheet offered after creating products."
+  },
+  "createdProductLabelsSubtitle": "اطبع ملصقات الباركود لما أنشأته الآن. عدد الملصقات هو الرصيد الافتتاحي، أو ملصق واحد إن لم يُدخل. عدّله أو ألغِ تحديد ما لا تريد طباعته.",
+  "@createdProductLabelsSubtitle": {
+    "description": "Explains the sticker counts on the label sheet offered after creating products."
+  },
+  "createdProductLabelsStock": "رصيد افتتاحي {quantity} · {barcode}",
+  "@createdProductLabelsStock": {
+    "description": "Label sheet row for a new product entered with opening stock.",
+    "placeholders": {
+      "quantity": {
+        "type": "String"
+      },
+      "barcode": {
+        "type": "String"
+      }
+    }
+  },
+  "createdProductLabelsNoBarcode": "بلا باركود — أضف له باركودًا من صفحة المنتج لطباعة ملصقه",
+  "@createdProductLabelsNoBarcode": {
+    "description": "Label sheet row for a new product saved without a barcode, so no sticker can print."
+  },
   "stockUnitsTitle": "الأجهزة المسلسلة",
   "@stockUnitsTitle": {
     "description": "Title of the identified-articles list."

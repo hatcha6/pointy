@@ -2,6 +2,7 @@ package vouchers
 
 import (
 	"math/big"
+	"strings"
 	"testing"
 	"time"
 )
@@ -76,12 +77,19 @@ func TestMarketPricesAgreeWithPythonReport(t *testing.T) {
 	}
 }
 
-func TestLocalCardsSellAtFaceWithAnEightyTwentySplit(t *testing.T) {
+func TestLocalCardsSellAtFaceWithAFlatShopPercent(t *testing.T) {
 	m := cardMargin()
-	// A 5-dinar card costing 4.85: gap 0.15, the company keeps 20 % = 0.03.
-	shop, retail, ok := m.LocalPrices(rat("4.85"), rat("5"))
-	if !ok || retail.Cmp(rat("5")) != 0 || shop.Cmp(rat("4.88")) != 0 {
-		t.Fatalf("shop %v retail %v", shop, retail)
+	for _, c := range []struct{ cost, face, shop string }{
+		{"9.70", "10", "9.80"},   // 3 % discount: the shop earns 2 %, the company 1 %
+		{"9.75", "10", "9.80"},   // 2.5 %: the company keeps 0.5 %
+		{"4.85", "5", "4.90"},    // 3 % on a 5-dinar card
+		{"9.85", "10", "9.85"},   // 1.5 %: thinner than the shop's 2 %, all of it is the shop's
+		{"24.26", "25", "24.50"}, // rounded up to a cent: the shop never earns over 2 %
+	} {
+		shop, retail, ok := m.LocalPrices(rat(c.cost), rat(c.face))
+		if !ok || retail.Cmp(rat(c.face)) != 0 || shop.Cmp(rat(c.shop)) != 0 {
+			t.Errorf("cost %s face %s: shop %v retail %v, want %s", c.cost, c.face, shop, retail, c.shop)
+		}
 	}
 	// Never above face, even when the cost is.
 	if shop, retail, _ := m.LocalPrices(rat("5.10"), rat("5")); shop.Cmp(rat("5")) != 0 || retail.Cmp(rat("5")) != 0 {
@@ -102,5 +110,17 @@ func TestNormalizeKeepsMarket(t *testing.T) {
 	_, after, _ := Encode(Normalize(document))
 	if before == after {
 		t.Fatal("a competitor price must change the catalog hash, or a push of new market data reads as unchanged")
+	}
+}
+
+func TestSavedSettingsWithTheRetiredLocalShareStillLoad(t *testing.T) {
+	saved := []byte(`{"margin":{"local_company_share_percent":"20"},"card_margin":{"local_company_share_percent":"20"}}`)
+	settings, err := ParseSettings(saved)
+	if err != nil {
+		t.Fatalf("saved settings refused: %v", err)
+	}
+	encoded, _, _ := EncodeSettings(settings)
+	if strings.Contains(string(encoded), "local_company_share_percent") || !strings.Contains(string(encoded), `"local_shop_percent":"2"`) {
+		t.Fatalf("encoded %s", encoded)
 	}
 }

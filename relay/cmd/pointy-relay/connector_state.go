@@ -21,7 +21,11 @@ type connectorState struct {
 	ConnectorPrivateKeyPEM        string     `json:"connector_private_key_pem,omitempty"`
 	ConnectorCACertificatePEM     string     `json:"connector_ca_certificate_pem,omitempty"`
 	ConnectorCertificateExpiresAt *time.Time `json:"connector_certificate_expires_at,omitempty"`
-	UpdatedAt                     time.Time  `json:"updated_at"`
+	// RelayEndpoints is the tunnel address list the relay sent in its last
+	// HelloAck, and LastGoodEndpoint the address the last tunnel opened on.
+	RelayEndpoints   []string  `json:"relay_endpoints,omitempty"`
+	LastGoodEndpoint string    `json:"last_good_endpoint,omitempty"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 func defaultConnectorStatePath() string {

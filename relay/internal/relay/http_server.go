@@ -21,6 +21,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/redis/go-redis/v9"
+
 	"pointy/relay/internal/alerts"
 	"pointy/relay/internal/artifacts"
 	"pointy/relay/internal/control"
@@ -157,8 +159,13 @@ type HTTPServer struct {
 	TicketRefreshRateLimit        ratelimit.Policy
 	Metrics                       *observability.Metrics
 	Presence                      ConnectorPresence
+	Fleet                         *Fleet
+	ConnectorHold                 time.Duration
+	Version                       string
+	Database                      DatabaseHealthChecker
+	Redis                         redis.Cmdable
 	NodeID                        string
-	Draining                      bool
+	Drain                         *NodeDrain
 	NodeProxyToken                string
 	NodeProxyHTTPClient           *http.Client
 	AllowInsecureNodeProxy        bool
@@ -252,6 +259,17 @@ type HTTPServer struct {
 	ImageSearchHTTPClient     *http.Client
 }
 
+// NodeHeader names the node that answered a health check. It shows how the
+// balancer spreads connections across nodes; the id is the node's hostname
+// plus a random suffix, nothing secret.
+const NodeHeader = "X-Pointy-Relay-Node"
+
+func (s HTTPServer) setNodeHeader(w http.ResponseWriter) {
+	if s.NodeID != "" {
+		w.Header().Set(NodeHeader, s.NodeID)
+	}
+}
+
 type RouteMode int
 
 const (
@@ -299,9 +317,11 @@ type adminConsoleData struct {
 func (s HTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.URL.Path == "/healthz":
+		s.setNodeHeader(w)
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	case r.URL.Path == "/readyz":
-		if s.Draining {
+		s.setNodeHeader(w)
+		if s.Drain.Draining() {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "draining"})
 			return
 		}
@@ -342,6 +362,12 @@ func (s HTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.withAdmin(w, r, s.handleStatus)
+	case r.URL.Path == "/v1/system" && r.Method == http.MethodGet:
+		if !s.RouteMode.allowsAdmin() {
+			writeNotFound(w)
+			return
+		}
+		s.withAdmin(w, r, s.handleSystem)
 	case r.URL.Path == "/v1/metrics" && r.Method == http.MethodGet:
 		if !s.RouteMode.allowsAdmin() {
 			writeNotFound(w)
@@ -761,10 +787,16 @@ func (s HTTPServer) handleRefreshRelayTicket(w http.ResponseWriter, r *http.Requ
 }
 
 func (s HTTPServer) handleStatus(w http.ResponseWriter, r *http.Request) {
+	nodes, fresh := s.Fleet.View()
 	writeJSON(w, http.StatusOK, map[string]any{
-		"status":       "ok",
-		"node_id":      s.NodeID,
-		"draining":     s.Draining,
+		"status":   "ok",
+		"node_id":  s.NodeID,
+		"draining": s.Drain.Draining(),
+		// The live nodes and their tunnel counts, as placement last read them.
+		"fleet": map[string]any{
+			"nodes": nodes,
+			"fresh": fresh,
+		},
 		"generated_at": s.clock().Now(),
 		"metrics":      s.metrics().Snapshot(),
 		"limits": map[string]any{
@@ -831,7 +863,9 @@ func (s HTTPServer) handlePublicInvoiceTarget(
 	startedAt := time.Now()
 	statusCode := 0
 	outcome := "unknown"
+	phoneRequestDone := s.phoneRequestStarted(r)
 	defer func() {
+		phoneRequestDone(statusCode)
 		s.metrics().RecordRelayRequest(observability.RelayRequestObservation{
 			Outcome:    outcome,
 			StatusCode: statusCode,
@@ -889,26 +923,25 @@ func (s HTTPServer) handlePublicInvoiceTarget(
 
 	requestCtx, requestCancel := context.WithTimeout(r.Context(), s.relayRequestTimeout())
 	defer requestCancel()
-	openCtx, openCancel := context.WithTimeout(requestCtx, s.streamOpenTimeout())
-	stream, err := s.Hub.OpenStream(openCtx, installation.ID)
-	openCancel()
+	invoiceRequest := r.WithContext(requestCtx)
+	var forward forwardFunc
+	if allowNodeProxy {
+		forward = func(r *http.Request) (bool, int, string) {
+			return s.tryProxyPublicInvoiceToRemoteNode(w, r, installation.ID, invoiceToken)
+		}
+	}
+	route, err := s.reachShop(invoiceRequest, installation.ID, forward)
+	if err == nil && route.proxied {
+		statusCode = route.status
+		outcome = route.outcome
+		return
+	}
 	if err != nil {
 		if errors.Is(err, ErrConnectorOffline) {
-			if allowNodeProxy {
-				if proxied, proxyStatus, proxyOutcome := s.tryProxyPublicInvoiceToRemoteNode(
-					w,
-					r.WithContext(requestCtx),
-					installation.ID,
-					invoiceToken,
-				); proxied {
-					statusCode = proxyStatus
-					outcome = proxyOutcome
-					return
-				}
-			}
 			statusCode = http.StatusServiceUnavailable
 			outcome = "connector_offline"
 			s.metrics().RecordOfflineInstallation()
+			markNoTunnel(w, r)
 			s.renderPublicInvoiceError(
 				w,
 				http.StatusServiceUnavailable,
@@ -926,12 +959,13 @@ func (s HTTPServer) handlePublicInvoiceTarget(
 		)
 		return
 	}
+	stream := route.stream
 	defer stream.Close()
 	stopDeadlineCloser := closeStreamOnContextDone(requestCtx, stream)
 	defer stopDeadlineCloser()
 
 	targetPath := "/api/public-invoices/" + url.PathEscape(invoiceToken) + "/"
-	request := outboundRequest(r.WithContext(requestCtx), targetPath)
+	request := outboundRequest(invoiceRequest, targetPath)
 	request.URL.RawQuery = ""
 	request.Header.Del("Authorization")
 	request.Header.Del("Cookie")
@@ -1506,60 +1540,27 @@ func (s HTTPServer) tryProxyDiagnosticsToRemoteNode(
 	r *http.Request,
 	installationID string,
 ) (bool, int, string) {
-	if strings.TrimSpace(s.NodeProxyToken) == "" ||
-		s.Presence == nil ||
-		strings.TrimSpace(r.Header.Get(NodeProxyMarkerHeader)) != "" {
+	if !s.canForwardToNode(r) {
 		return false, 0, ""
 	}
-
-	record, ok, err := s.Presence.Get(r.Context(), installationID)
-	if err != nil {
-		s.logger().Warn("diagnostics connector presence lookup failed", "installation_id", installationID, "error", err)
-		return false, 0, ""
-	}
-	if !ok ||
-		strings.TrimSpace(record.NodeID) == "" ||
-		record.NodeID == s.NodeID ||
-		strings.TrimSpace(record.RelayHTTPURL) == "" {
-		return false, 0, ""
-	}
-
-	endpoint, err := nodeDiagnosticsEndpoint(
-		record.RelayHTTPURL,
+	response, record, attempted, err := s.forwardToTunnelNode(
+		r,
 		installationID,
-		r.URL.RawQuery,
-		s.AllowInsecureNodeProxy,
+		func(base string) (*url.URL, error) {
+			return nodeDiagnosticsEndpoint(base, installationID, r.URL.RawQuery, s.AllowInsecureNodeProxy)
+		},
+		func(request *http.Request) {
+			// The receiving node authorizes with the node token, so the
+			// operator's admin bearer token must not travel across the hop.
+			request.Header.Del("Authorization")
+		},
 	)
-	if err != nil {
-		s.logger().Warn(
-			"diagnostics remote node URL rejected",
-			"installation_id", installationID,
-			"connector_node_id", record.NodeID,
-			"error", err,
-		)
+	if !attempted || errors.Is(err, errTunnelNotReached) {
+		// Nothing reached the shop: the caller may wait and try again.
 		return false, 0, ""
 	}
-
-	request := r.Clone(r.Context())
-	request.URL = endpoint
-	request.RequestURI = ""
-	request.Host = endpoint.Host
-	request.Header = r.Header.Clone()
-	removeHopHeaders(request.Header)
-	// The receiving node authorizes with the node token, so the operator's admin
-	// bearer token must not travel across the internal hop.
-	request.Header.Del("Authorization")
-	request.Header.Set(NodeProxyMarkerHeader, "1")
-	request.Header.Set(NodeProxyTokenHeader, strings.TrimSpace(s.NodeProxyToken))
-
-	response, err := s.nodeProxyHTTPClient().Do(request)
 	if err != nil {
-		s.logger().Warn(
-			"diagnostics remote node proxy failed",
-			"installation_id", installationID,
-			"connector_node_id", record.NodeID,
-			"error", err,
-		)
+		s.logger().Warn("diagnostics remote node proxy failed", "installation_id", installationID, "error", err)
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "connector offline"})
 		return true, http.StatusServiceUnavailable, "node_proxy_failed"
 	}
@@ -1833,7 +1834,7 @@ func (s HTTPServer) connectorsOnline(ctx context.Context, installations []contro
 		go func() {
 			defer wg.Done()
 			defer func() { <-slots }()
-			_, ok, err := s.Presence.Get(ctx, id)
+			_, ok, err := connectorPresent(ctx, s.Presence, id)
 			mu.Lock()
 			online[id] = ok && err == nil
 			mu.Unlock()
@@ -2188,22 +2189,29 @@ func (s HTTPServer) handleInstallationStatus(w http.ResponseWriter, r *http.Requ
 	}
 
 	var presence map[string]any
+	tunnels := []map[string]any{}
 	if s.Presence != nil {
-		record, ok, err := s.Presence.Get(r.Context(), id)
+		records, err := s.Presence.List(r.Context(), id)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "connector presence lookup failed"})
 			return
 		}
-		if ok {
-			presence = map[string]any{
+		for i, record := range records {
+			view := map[string]any{
 				"online":         true,
 				"node_id":        record.NodeID,
 				"connection_id":  record.ConnectionID,
 				"relay_http_url": record.RelayHTTPURL,
+				"tunnel_id":      record.TunnelID,
+				"transport":      record.Transport,
 				"connected_at":   record.ConnectedAt,
 				"refreshed_at":   record.RefreshedAt,
 				"expires_at":     record.ExpiresAt,
 			}
+			if i == 0 {
+				presence = view
+			}
+			tunnels = append(tunnels, view)
 		}
 	}
 	if presence == nil {
@@ -2224,6 +2232,7 @@ func (s HTTPServer) handleInstallationStatus(w http.ResponseWriter, r *http.Requ
 		"subscription_ends_at":                     installation.SubscriptionEndsAt,
 		"connector_online_local":                   s.Hub != nil && s.Hub.IsOnline(installation.ID),
 		"connector_presence":                       presence,
+		"connector_tunnels":                        tunnels,
 		"last_connector_connected_at":              installation.LastConnectorConnectedAt,
 		"connector_certificate_fingerprint_sha256": installation.ConnectorCertificateFingerprint,
 		"connector_certificate_serial":             installation.ConnectorCertificateSerial,
@@ -2311,7 +2320,9 @@ func (s HTTPServer) handleRelayWithOptions(
 	startedAt := time.Now()
 	statusCode := 0
 	outcome := "unknown"
+	phoneRequestDone := s.phoneRequestStarted(r)
 	defer func() {
+		phoneRequestDone(statusCode)
 		s.metrics().RecordRelayRequest(observability.RelayRequestObservation{
 			Outcome:    outcome,
 			StatusCode: statusCode,
@@ -2357,25 +2368,19 @@ func (s HTTPServer) handleRelayWithOptions(
 
 	requestCtx, requestCancel := context.WithTimeout(r.Context(), s.relayRequestTimeout())
 	defer requestCancel()
-	openCtx, openCancel := context.WithTimeout(requestCtx, s.streamOpenTimeout())
-	stream, err := s.Hub.OpenStream(openCtx, installation.ID)
-	openCancel()
+	relayRequest := r.WithContext(requestCtx)
+	var forward forwardFunc
+	if options.AllowNodeProxy {
+		forward = func(r *http.Request) (bool, int, string) {
+			return s.tryProxyRelayToRemoteNode(w, r, installation.ID, targetPath)
+		}
+	}
+	route, err := s.reachShop(relayRequest, installation.ID, forward)
 	if err != nil {
 		if errors.Is(err, ErrConnectorOffline) {
-			if options.AllowNodeProxy {
-				if proxied, proxyStatus, proxyOutcome := s.tryProxyRelayToRemoteNode(
-					w,
-					r.WithContext(requestCtx),
-					installation.ID,
-					targetPath,
-				); proxied {
-					statusCode = proxyStatus
-					outcome = proxyOutcome
-					return
-				}
-			}
 			statusCode = http.StatusServiceUnavailable
 			outcome = "connector_offline"
+			markNoTunnel(w, r)
 			s.writeConnectorOffline(w, r, installation.ID)
 			return
 		}
@@ -2385,11 +2390,17 @@ func (s HTTPServer) handleRelayWithOptions(
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "relay stream failed"})
 		return
 	}
+	if route.proxied {
+		statusCode = route.status
+		outcome = route.outcome
+		return
+	}
+	stream := route.stream
 	defer stream.Close()
 	stopDeadlineCloser := closeStreamOnContextDone(requestCtx, stream)
 	defer stopDeadlineCloser()
 
-	request := outboundRequest(r.WithContext(requestCtx), targetPath)
+	request := outboundRequest(relayRequest, targetPath)
 	if maxBytes := s.MaxRelayedRequestBodyBytes; maxBytes > 0 && request.Body != nil {
 		request.Body = http.MaxBytesReader(w, request.Body, maxBytes)
 	}
@@ -2512,7 +2523,7 @@ func (s HTTPServer) writeConnectorOffline(
 ) {
 	s.metrics().RecordOfflineInstallation()
 	if s.Presence != nil {
-		record, ok, err := s.Presence.Get(r.Context(), installationID)
+		record, ok, err := connectorPresent(r.Context(), s.Presence, installationID)
 		if err != nil {
 			s.logger().Warn("relay connector presence lookup failed", "installation_id", installationID, "error", err)
 		} else if ok && record.NodeID != "" && record.NodeID != s.NodeID {
@@ -2538,63 +2549,23 @@ func (s HTTPServer) tryProxyRelayToRemoteNode(
 	installationID string,
 	targetPath string,
 ) (bool, int, string) {
-	if strings.TrimSpace(s.NodeProxyToken) == "" ||
-		s.Presence == nil ||
-		strings.TrimSpace(r.Header.Get(NodeProxyMarkerHeader)) != "" {
+	if !s.canForwardToNode(r) {
 		return false, 0, ""
 	}
-
-	record, ok, err := s.Presence.Get(r.Context(), installationID)
-	if err != nil {
-		s.logger().Warn("relay connector presence lookup failed", "installation_id", installationID, "error", err)
-		return false, 0, ""
-	}
-	if !ok ||
-		strings.TrimSpace(record.NodeID) == "" ||
-		record.NodeID == s.NodeID ||
-		strings.TrimSpace(record.RelayHTTPURL) == "" {
-		return false, 0, ""
-	}
-
-	endpoint, err := nodeRelayEndpoint(
-		record.RelayHTTPURL,
-		targetPath,
-		r.URL.RawQuery,
-		s.AllowInsecureNodeProxy,
+	response, record, attempted, err := s.forwardToTunnelNode(
+		r,
+		installationID,
+		func(base string) (*url.URL, error) {
+			return nodeRelayEndpoint(base, targetPath, r.URL.RawQuery, s.AllowInsecureNodeProxy)
+		},
+		nil,
 	)
-	if err != nil {
-		s.logger().Warn(
-			"relay connector remote node URL rejected",
-			"installation_id",
-			installationID,
-			"connector_node_id",
-			record.NodeID,
-			"error",
-			err,
-		)
+	if !attempted || errors.Is(err, errTunnelNotReached) {
+		// Nothing reached the shop: the caller may wait and try again.
 		return false, 0, ""
 	}
-
-	request := r.Clone(r.Context())
-	request.URL = endpoint
-	request.RequestURI = ""
-	request.Host = endpoint.Host
-	request.Header = r.Header.Clone()
-	removeHopHeaders(request.Header)
-	request.Header.Set(NodeProxyMarkerHeader, "1")
-	request.Header.Set(NodeProxyTokenHeader, strings.TrimSpace(s.NodeProxyToken))
-
-	response, err := s.nodeProxyHTTPClient().Do(request)
 	if err != nil {
-		s.logger().Warn(
-			"relay remote node proxy failed",
-			"installation_id",
-			installationID,
-			"connector_node_id",
-			record.NodeID,
-			"error",
-			err,
-		)
+		s.logger().Warn("relay remote node proxy failed", "installation_id", installationID, "error", err)
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "installation connector offline"})
 		return true, http.StatusServiceUnavailable, "node_proxy_failed"
 	}
@@ -2607,12 +2578,9 @@ func (s HTTPServer) tryProxyRelayToRemoteNode(
 	if _, _, err := flushingCopy(w, response.Body, 0); err != nil {
 		s.logger().Warn(
 			"relay remote node proxy response copy failed",
-			"installation_id",
-			installationID,
-			"connector_node_id",
-			record.NodeID,
-			"error",
-			err,
+			"installation_id", installationID,
+			"connector_node_id", record.NodeID,
+			"error", err,
 		)
 	}
 	return true, response.StatusCode, "node_proxied"
@@ -2624,63 +2592,23 @@ func (s HTTPServer) tryProxyPublicInvoiceToRemoteNode(
 	installationID string,
 	invoiceToken string,
 ) (bool, int, string) {
-	if strings.TrimSpace(s.NodeProxyToken) == "" ||
-		s.Presence == nil ||
-		strings.TrimSpace(r.Header.Get(NodeProxyMarkerHeader)) != "" {
+	if !s.canForwardToNode(r) {
 		return false, 0, ""
 	}
-
-	record, ok, err := s.Presence.Get(r.Context(), installationID)
-	if err != nil {
-		s.logger().Warn("public invoice connector presence lookup failed", "installation_id", installationID, "error", err)
-		return false, 0, ""
-	}
-	if !ok ||
-		strings.TrimSpace(record.NodeID) == "" ||
-		record.NodeID == s.NodeID ||
-		strings.TrimSpace(record.RelayHTTPURL) == "" {
-		return false, 0, ""
-	}
-
-	endpoint, err := nodePublicInvoiceEndpoint(
-		record.RelayHTTPURL,
+	response, record, attempted, err := s.forwardToTunnelNode(
+		r,
 		installationID,
-		invoiceToken,
-		s.AllowInsecureNodeProxy,
+		func(base string) (*url.URL, error) {
+			return nodePublicInvoiceEndpoint(base, installationID, invoiceToken, s.AllowInsecureNodeProxy)
+		},
+		nil,
 	)
-	if err != nil {
-		s.logger().Warn(
-			"public invoice remote node URL rejected",
-			"installation_id",
-			installationID,
-			"connector_node_id",
-			record.NodeID,
-			"error",
-			err,
-		)
+	if !attempted || errors.Is(err, errTunnelNotReached) {
+		// Nothing reached the shop: the caller may wait and try again.
 		return false, 0, ""
 	}
-
-	request := r.Clone(r.Context())
-	request.URL = endpoint
-	request.RequestURI = ""
-	request.Host = endpoint.Host
-	request.Header = r.Header.Clone()
-	removeHopHeaders(request.Header)
-	request.Header.Set(NodeProxyMarkerHeader, "1")
-	request.Header.Set(NodeProxyTokenHeader, strings.TrimSpace(s.NodeProxyToken))
-
-	response, err := s.nodeProxyHTTPClient().Do(request)
 	if err != nil {
-		s.logger().Warn(
-			"public invoice remote node proxy failed",
-			"installation_id",
-			installationID,
-			"connector_node_id",
-			record.NodeID,
-			"error",
-			err,
-		)
+		s.logger().Warn("public invoice remote node proxy failed", "installation_id", installationID, "error", err)
 		s.renderPublicInvoiceError(
 			w,
 			http.StatusServiceUnavailable,
@@ -2695,12 +2623,9 @@ func (s HTTPServer) tryProxyPublicInvoiceToRemoteNode(
 	if _, err := io.Copy(w, response.Body); err != nil {
 		s.logger().Warn(
 			"public invoice remote node proxy response copy failed",
-			"installation_id",
-			installationID,
-			"connector_node_id",
-			record.NodeID,
-			"error",
-			err,
+			"installation_id", installationID,
+			"connector_node_id", record.NodeID,
+			"error", err,
 		)
 	}
 	return true, response.StatusCode, "node_proxied"
@@ -3241,6 +3166,15 @@ func (s HTTPServer) logger() *slog.Logger {
 	return slog.Default()
 }
 
+// phoneRequestStarted counts a phone request in the node's live traffic, on
+// the node it reached first: one forwarded from another node is that node's.
+func (s HTTPServer) phoneRequestStarted(r *http.Request) func(statusCode int) {
+	if strings.TrimSpace(r.Header.Get(NodeProxyMarkerHeader)) != "" {
+		return func(int) {}
+	}
+	return s.metrics().PhoneRequestStarted()
+}
+
 func (s HTTPServer) metrics() *observability.Metrics {
 	if s.Metrics != nil {
 		return s.Metrics
@@ -3294,13 +3228,10 @@ func (s HTTPServer) nodeProxyHTTPClient() *http.Client {
 	// the direct path. Connection setup and waiting for headers stay bounded;
 	// the peer node enforces its own idle watchdog on the tunnel body.
 	return &http.Client{
-		Transport: &http.Transport{
-			DialContext: (&net.Dialer{
-				Timeout: s.streamOpenTimeout(),
-			}).DialContext,
-			TLSHandshakeTimeout:   s.streamOpenTimeout(),
-			ResponseHeaderTimeout: s.relayRequestTimeout(),
-		},
+		Transport: sharedNodeProxyTransport(
+			min(s.streamOpenTimeout(), nodeHopConnectTimeout),
+			s.relayRequestTimeout(),
+		),
 	}
 }
 

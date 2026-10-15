@@ -62,9 +62,13 @@ type Margin struct {
 	CompanyMinLYD    string `json:"company_min_lyd,omitempty"`
 	ShopMinPct       string `json:"shop_min_percent,omitempty"`
 	ShopMinLYD       string `json:"shop_min_lyd,omitempty"`
-	// LocalCompanyShare is the percent of a LYD-face card's discount (face - cost)
-	// the company keeps; the card is always sold at face value.
-	LocalCompanyShare string `json:"local_company_share_percent,omitempty"`
+	// LocalShopPercent is the flat percent of a LYD-face card's face value the shop
+	// earns; the card is always sold at face value and the company keeps whatever
+	// is left of the discount (face - cost).
+	LocalShopPercent string `json:"local_shop_percent,omitempty"`
+	// LegacyLocalCompanyShare is the retired 80/20 split of that discount. Saved
+	// settings still carry it, so it is read and dropped rather than refused.
+	LegacyLocalCompanyShare string `json:"local_company_share_percent,omitempty"`
 }
 
 func defaultBrackets() []Bracket {
@@ -80,6 +84,7 @@ func (m Margin) trimmed() Margin {
 	m.FixedLYD, m.MinMarginLYD = strings.TrimSpace(m.FixedLYD), strings.TrimSpace(m.MinMarginLYD)
 	m.ShopSharePercent, m.RoundStep = strings.TrimSpace(m.ShopSharePercent), strings.TrimSpace(m.RoundStep)
 	m.MinShopMargin = strings.TrimSpace(m.MinShopMargin)
+	m.LegacyLocalCompanyShare = ""
 	for _, f := range m.marketFields() {
 		*f = strings.TrimSpace(*f)
 	}

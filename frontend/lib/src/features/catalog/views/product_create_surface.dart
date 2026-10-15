@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../../data/models/product.dart';
+import '../../../data/repositories/printing_repository.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../view_models/catalog_view_model.dart';
+import 'created_product_labels.dart';
 import 'product_form.dart';
 
 /// Opens the new-product panel — the one creation workflow every screen uses,
@@ -12,6 +14,12 @@ import 'product_form.dart';
 /// Completes with the product a plain create made (the panel closes on it), or
 /// null when the panel was dismissed. Products made with «إنشاء وإضافة آخر»
 /// keep the panel open and arrive through [onCreatedAnother] one by one.
+///
+/// With [labelPrinting], once the panel closes on a run that made anything —
+/// a plain create, or a dismissal after «إنشاء وإضافة آخر» — the run's
+/// products are offered for barcode stickers in one sheet. Never between
+/// products: add-another stays one keystroke to the next form. A caller that
+/// prints its own way (a purchase order prints from the order) leaves it null.
 ///
 /// [disposeViewModel] hands [viewModel] to the panel to dispose when it is
 /// gone — for a caller that made one just for this panel. It must outlive the
@@ -26,8 +34,10 @@ Future<Product?> showProductCreateSurface(
   bool offerAddAnother = true,
   ValueChanged<Product>? onCreatedAnother,
   void Function(BuildContext panelContext, Product product)? onOpenCreated,
-}) {
-  return showAdaptiveFormSurface<Product?>(
+  PrintingRepository? labelPrinting,
+}) async {
+  final run = <Product>[];
+  final created = await showAdaptiveFormSurface<Product?>(
     context: context,
     size: AdaptiveModalSize.standard,
     desktopPresentation: AdaptiveFormPresentation.sidePanel,
@@ -41,7 +51,10 @@ Future<Product?> showProductCreateSurface(
         similarTo: similarTo,
         showOpeningStock: showOpeningStock,
         offerAddAnother: offerAddAnother,
-        onCreatedAnother: onCreatedAnother,
+        onCreatedAnother: (product) {
+          run.add(product);
+          onCreatedAnother?.call(product);
+        },
         onCreated: (created) =>
             Navigator.of(panelContext).pop<Product?>(created),
         onOpenCreated: onOpenCreated == null
@@ -50,6 +63,17 @@ Future<Product?> showProductCreateSurface(
       ),
     ),
   );
+  if (created != null) {
+    run.add(created);
+  }
+  if (labelPrinting != null && run.isNotEmpty && context.mounted) {
+    await showCreatedProductLabelsSheet(
+      context,
+      products: run,
+      printingRepository: labelPrinting,
+    );
+  }
+  return created;
 }
 
 class _ProductCreatePanel extends StatefulWidget {

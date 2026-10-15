@@ -570,10 +570,10 @@ func TestHTTPAdminStatusReturnsSanitizedMetricsSnapshot(t *testing.T) {
 func TestHTTPReadyzReportsDraining(t *testing.T) {
 	store, _ := provisionRelayInstallation(t)
 	server := HTTPServer{
-		Store:    store,
-		Hub:      NewHub(),
-		Logger:   slog.New(slog.NewTextHandler(io.Discard, nil)),
-		Draining: true,
+		Store:  store,
+		Hub:    NewHub(),
+		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Drain:  drainingNode(),
 	}
 
 	request, err := http.NewRequest(http.MethodGet, "http://relay.test/readyz", nil)
@@ -3207,12 +3207,16 @@ func (p *staticPresence) MarkOnline(
 	return nil, nil
 }
 
-func (p *staticPresence) Get(
-	context.Context,
-	string,
-) (ConnectorPresenceRecord, bool, error) {
+func (p *staticPresence) List(context.Context, string) ([]ConnectorPresenceRecord, error) {
 	p.lookupCount++
-	return p.record, p.ok, nil
+	if !p.ok {
+		return nil, nil
+	}
+	return []ConnectorPresenceRecord{p.record}, nil
+}
+
+func (p *staticPresence) Forget(context.Context, ConnectorPresenceRecord) error {
+	return nil
 }
 
 type memoryTicketService struct {

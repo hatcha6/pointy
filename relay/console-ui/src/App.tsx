@@ -35,6 +35,7 @@ const Operators = lazy(() => import("./pages/Operators").then((m) => ({ default:
 const ActivityLog = lazy(() => import("./pages/ActivityLog").then((m) => ({ default: m.ActivityLog })));
 const Settings = lazy(() => import("./pages/Settings").then((m) => ({ default: m.Settings })));
 const Moamalat = lazy(() => import("./pages/Moamalat").then((m) => ({ default: m.Moamalat })));
+const System = lazy(() => import("./pages/System").then((m) => ({ default: m.System })));
 const Ledger = lazy(() => import("./pages/Ledger").then((m) => ({ default: m.Ledger })));
 
 /** An old address that moved: replaced, so Back does not bounce. */
@@ -72,6 +73,8 @@ function Page({ path }: { path: string }) {
       return <Settings />;
     case "/fleet":
       return <Fleet />;
+    case "/system":
+      return <System />;
     case "/alerts":
       return <Redirect to="/settings?section=alerts" />;
     case "/wallets":

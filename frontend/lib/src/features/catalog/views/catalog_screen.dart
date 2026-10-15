@@ -495,6 +495,8 @@ class _CatalogScreenState extends State<CatalogScreen> {
       // «منتج مشابه» there: a second form over this one helps nobody.
       onOpenCreated: (panelContext, product) =>
           _openDetails(panelContext, product, offerSimilar: false),
+      // Stickers for everything the run made, once it is over.
+      labelPrinting: printingRepository,
     );
     if (created != null && similarTo != null && context.mounted) {
       _showCreatedSimilar(context, created);

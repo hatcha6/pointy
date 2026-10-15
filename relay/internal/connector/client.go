@@ -22,7 +22,28 @@ import (
 )
 
 type Client struct {
-	RelayAddress          string
+	// Endpoints are the tunnel addresses this connector was configured with,
+	// best first. RelayAddress, the legacy TCP address, is tried after them.
+	Endpoints    []Endpoint
+	RelayAddress string
+	// AdvertisedEndpoints and LastGoodEndpoint are what an earlier session
+	// learnt and saved: the relay's list from its HelloAck, and the address
+	// that last worked. Both are tried before Endpoints.
+	AdvertisedEndpoints []string
+	LastGoodEndpoint    string
+	// OnConnected runs after the relay accepts a tunnel, before it serves, so
+	// the caller can save what the relay said for the next start. Never
+	// concurrently with itself, though a shop's tunnels each call it.
+	OnConnected func(Connected)
+	// MaxTunnels caps how many tunnels this connector keeps, whatever the
+	// relay asks for. Zero follows the relay.
+	MaxTunnels int
+	// SpreadCheckInterval is how long a tunnel that shares a node with
+	// another of the shop's tunnels waits before looking for a node of its
+	// own; the wait doubles while the relay keeps putting it back. Zero
+	// means two minutes.
+	SpreadCheckInterval time.Duration
+
 	Token                 string
 	BackendURL            *url.URL
 	Logger                *slog.Logger
@@ -32,8 +53,10 @@ type Client struct {
 	ReconnectMinWait      time.Duration
 	ReconnectMaxWait      time.Duration
 	HTTPClient            *http.Client
-	UseTLS                bool
-	TLSConfig             *tls.Config
+	// UseTLS runs the tunnel's own mutual TLS (TLSConfig) on every transport.
+	// A wss:// address adds the balancer's TLS outside it; it never replaces it.
+	UseTLS    bool
+	TLSConfig *tls.Config
 	// KeepaliveInterval is how often the connector pings the relay, and
 	// DeadTunnelTimeout how long the relay may stay silent before the tunnel
 	// is declared dead and redialled. Zero means the defaults below.
@@ -43,22 +66,50 @@ type Client struct {
 	// healthySession is how long a session must have lasted for its loss to
 	// count as a dropped connection rather than a failed attempt (tests).
 	healthySession time.Duration
+	// jitter maps a computed wait onto the one actually slept (tests).
+	jitter func(time.Duration) time.Duration
+}
+
+// Connected describes a tunnel the relay just accepted.
+type Connected struct {
+	// Tunnel is which of the shop's tunnels it is, from 0.
+	Tunnel int
+	// Endpoint is the address it opened on: the one this connector dialled
+	// first, not a node's own address it was redirected to, which is only
+	// good for that moment.
+	Endpoint string
+	// NodeID is the relay node that took it, when the relay says.
+	NodeID string
+	// RelayAdvertised is false for a relay too old to send a list, which
+	// leaves Advertised at what was known before.
+	RelayAdvertised bool
+	// Advertised is the relay's list, as this connector will dial it.
+	Advertised []string
 }
 
 const (
 	defaultKeepaliveInterval = 20 * time.Second
-	defaultDeadTunnelTimeout = 60 * time.Second
+	defaultDeadTunnelTimeout = 30 * time.Second
 	defaultHealthySession    = time.Minute
 )
 
+// Run keeps the shop's tunnels open until ctx ends: one at first, then as
+// many as the relay asks for in its HelloAck.
 func (c Client) Run(ctx context.Context) error {
-	return c.run(ctx, c.RunOnce, sleepContext)
+	set, err := c.tunnelSet()
+	if err != nil {
+		return err
+	}
+	return set.run(ctx)
 }
 
 type runOnceFunc func(context.Context) error
 
 type reconnectWaitFunc func(context.Context, time.Duration) error
 
+// run is the connector's one reconnect scheduler. Every way a tunnel ends —
+// a failed dial, a refused handshake, a dropped or silent session — returns
+// here, and the loop holds exactly one pending redial at a time.
 func (c Client) run(ctx context.Context, runOnce runOnceFunc, wait reconnectWaitFunc) error {
 	minWait := c.ReconnectMinWait
 	if minWait == 0 {
@@ -72,6 +123,10 @@ func (c Client) run(ctx context.Context, runOnce runOnceFunc, wait reconnectWait
 	healthy := c.healthySession
 	if healthy == 0 {
 		healthy = defaultHealthySession
+	}
+	jitter := c.jitter
+	if jitter == nil {
+		jitter = jitterWait
 	}
 
 	attempt := 0
@@ -94,7 +149,17 @@ func (c Client) run(ctx context.Context, runOnce runOnceFunc, wait reconnectWait
 		if time.Since(startedAt) >= healthy {
 			attempt = 0
 		}
-		reconnectWait := backoff(attempt, minWait, maxWait)
+		// Every shop on a node that just died gets here in the same second.
+		// The random share spreads their redials out instead of bringing them
+		// back to the surviving nodes in lockstep, attempt after attempt.
+		reconnectWait := jitter(backoff(attempt, minWait, maxWait))
+		var busy *RelayBusyError
+		if errors.As(err, &busy) && busy.RetryAfter > 0 {
+			// The node said when to come back. Waiting at least that long is
+			// the point; the jitter keeps the refused shops from returning in
+			// the same second it named.
+			reconnectWait = max(reconnectWait, busy.RetryAfter+jitter(busy.RetryAfter/2))
+		}
 		attempt++
 		if err := wait(ctx, reconnectWait); err != nil {
 			return err
@@ -113,62 +178,90 @@ func sleepContext(ctx context.Context, wait time.Duration) error {
 	}
 }
 
+// RunOnce opens one tunnel and serves it until it ends.
 func (c Client) RunOnce(ctx context.Context) error {
+	set, err := c.tunnelSet()
+	if err != nil {
+		return err
+	}
+	return set.runOnce(ctx, 0)
+}
+
+func (c Client) tunnelSet() (*tunnelSet, error) {
 	if c.BackendURL == nil {
-		return fmt.Errorf("backend URL is required")
+		return nil, fmt.Errorf("backend URL is required")
 	}
 	if c.HTTPClient == nil {
 		c.HTTPClient = NewHTTPClient()
 	}
-	timeout := c.DialTimeout
-	if timeout == 0 {
-		timeout = 10 * time.Second
-	}
-	dialer := net.Dialer{Timeout: timeout, KeepAlive: 30 * time.Second}
-	raw, err := dialer.DialContext(ctx, "tcp", c.RelayAddress)
+	book, err := c.endpointBook()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if c.UseTLS {
-		tlsConn := tls.Client(raw, c.TLSConfig)
-		handshakeCtx, cancel := context.WithTimeout(ctx, timeout)
-		defer cancel()
-		if err := tlsConn.HandshakeContext(handshakeCtx); err != nil {
-			_ = raw.Close()
-			return err
+	return newTunnelSet(c, book), nil
+}
+
+func (c Client) endpointBook() (*endpointBook, error) {
+	configured := append([]Endpoint(nil), c.Endpoints...)
+	if strings.TrimSpace(c.RelayAddress) != "" {
+		legacy, err := ParseEndpoint(c.RelayAddress)
+		if err != nil {
+			return nil, err
 		}
-		raw = tlsConn
+		configured = appendEndpoint(configured, legacy)
 	}
+	if len(configured) == 0 {
+		return nil, fmt.Errorf("relay connector address is required")
+	}
+	return newEndpointBook(configured, c.AdvertisedEndpoints, c.LastGoodEndpoint), nil
+}
+
+// hello sends the token, with the tunnel's number in the stream field, and
+// reads the relay's answer.
+func (c Client) hello(raw net.Conn, tunnelID uint64) (*protocol.Session, protocol.HelloAckInfo, bool, error) {
 	conn := protocol.NewConn(raw)
 	if err := conn.WriteFrame(protocol.Frame{
-		Type:    protocol.FrameHello,
-		Payload: []byte(c.Token),
+		Type:     protocol.FrameHello,
+		StreamID: tunnelID,
+		Payload:  []byte(c.Token),
 	}); err != nil {
-		_ = conn.Close()
-		return err
+		return nil, protocol.HelloAckInfo{}, false, err
 	}
 	frame, err := conn.ReadFrame()
 	if err != nil {
-		_ = conn.Close()
-		return err
+		return nil, protocol.HelloAckInfo{}, false, err
 	}
 	if frame.Type == protocol.FrameError {
-		_ = conn.Close()
-		return fmt.Errorf("relay rejected connector: %s", string(frame.Payload))
+		return nil, protocol.HelloAckInfo{}, false, &RelayRejectedError{Message: string(frame.Payload)}
 	}
 	if frame.Type != protocol.FrameHelloAck {
-		_ = conn.Close()
-		return protocol.UnexpectedFrameError(frame)
+		return nil, protocol.HelloAckInfo{}, false, &RelayRejectedError{Message: protocol.UnexpectedFrameError(frame).Error()}
 	}
-
-	session := protocol.NewSession(conn)
-	return c.ServeSession(ctx, session)
+	ack, fromNewRelay := protocol.DecodeHelloAck(frame.Payload)
+	return protocol.NewSession(conn), ack, fromNewRelay, nil
 }
 
+// RelayRejectedError is the relay turning the connector away after the
+// handshake (a revoked token, a draining node).
+type RelayRejectedError struct {
+	Message string
+}
+
+func (e *RelayRejectedError) Error() string {
+	return "relay rejected connector: " + e.Message
+}
+
+// ServeSession serves the relay's requests on one tunnel until it ends.
 func (c Client) ServeSession(ctx context.Context, session *protocol.Session) error {
 	if c.HTTPClient == nil {
 		c.HTTPClient = NewHTTPClient()
 	}
+	return c.serveSession(ctx, session, limit.New(c.MaxConcurrentRequests))
+}
+
+// serveSession serves one tunnel under requestLimiter, which a shop's tunnels
+// share: MaxConcurrentRequests is the backend's budget, not each tunnel's.
+func (c Client) serveSession(ctx context.Context, session *protocol.Session, requestLimiter *limit.Limiter) error {
 	runErr := make(chan error, 1)
 	go func() {
 		runErr <- session.Run()
@@ -177,7 +270,6 @@ func (c Client) ServeSession(ctx context.Context, session *protocol.Session) err
 	c.logger().Info("relay connector session established")
 	stopKeepalive := c.keepTunnelAlive(session)
 	defer stopKeepalive()
-	requestLimiter := limit.New(c.MaxConcurrentRequests)
 	for {
 		acceptCtx, cancel := context.WithCancel(ctx)
 		stream, err := session.Accept(acceptCtx)
@@ -205,14 +297,20 @@ func (c Client) ServeSession(ctx context.Context, session *protocol.Session) err
 }
 
 // keepTunnelAlive pings the relay on a fixed cadence and closes the session
-// once the relay has gone silent for longer than DeadTunnelTimeout, so Run
-// redials.
+// once the tunnel has shown no sign of life for longer than DeadTunnelTimeout,
+// so Run redials.
 //
 // Nothing else notices a tunnel that died without a reset — a NAT that dropped
 // the mapping, an uplink that blackholed. Both ends kept believing in it until
 // TCP keepalive gave up, around five minutes, and all that time the relay went
 // on routing the shop's remote devices into it, each request hanging for the
 // full relay deadline before it failed.
+//
+// A sign of life is a frame from the relay, or one of our own data frames
+// finishing its write. The second matters on a slow uplink: a long response
+// going out can hold the relay's pong back for longer than the timeout, but a
+// write only finishes once the relay has acknowledged enough of what went
+// before it, so the tunnel is plainly alive.
 func (c Client) keepTunnelAlive(session *protocol.Session) (stop func()) {
 	interval := c.KeepaliveInterval
 	if interval <= 0 {
@@ -222,11 +320,18 @@ func (c Client) keepTunnelAlive(session *protocol.Session) (stop func()) {
 	if deadAfter <= 0 {
 		deadAfter = defaultDeadTunnelTimeout
 	}
+	// Look more often than we ping, so a dead tunnel is caught within a third
+	// of the timeout of crossing it, not up to a whole ping interval late.
+	check := min(interval, deadAfter/3)
+	if check <= 0 {
+		check = interval
+	}
 	done := make(chan struct{})
 	var pinging atomic.Bool
 	go func() {
-		ticker := time.NewTicker(interval)
+		ticker := time.NewTicker(check)
 		defer ticker.Stop()
+		lastPing := time.Now()
 		for {
 			select {
 			case <-done:
@@ -235,14 +340,18 @@ func (c Client) keepTunnelAlive(session *protocol.Session) (stop func()) {
 				return
 			case <-ticker.C:
 			}
-			if silent := session.SinceLastFrame(); silent > deadAfter {
+			if quiet := tunnelQuietFor(session); quiet > deadAfter {
 				c.logger().Warn(
 					"relay tunnel went silent; reconnecting",
-					"silent_for", silent.Round(time.Second).String(),
+					"silent_for", quiet.Round(time.Second).String(),
 				)
 				_ = session.Close()
 				return
 			}
+			if time.Since(lastPing) < interval {
+				continue
+			}
+			lastPing = time.Now()
 			// A write into a dead connection blocks once the socket buffer is
 			// full. Ping from a goroutine so that can never stall the silence
 			// check above, and never stack pings behind one another.
@@ -256,6 +365,15 @@ func (c Client) keepTunnelAlive(session *protocol.Session) (stop func()) {
 	}()
 	var once sync.Once
 	return func() { once.Do(func() { close(done) }) }
+}
+
+// tunnelQuietFor is how long the tunnel has gone without a sign of life.
+func tunnelQuietFor(session *protocol.Session) time.Duration {
+	quiet := session.SinceLastFrame()
+	if sent, ok := session.SinceDataSent(); ok && sent < quiet {
+		quiet = sent
+	}
+	return quiet
 }
 
 func rejectStream(stream *protocol.Stream, statusCode int, message string) {
@@ -531,6 +649,8 @@ func joinURLPath(basePath, requestPath string) string {
 	return strings.TrimRight(basePath, "/") + "/" + strings.TrimLeft(requestPath, "/")
 }
 
+// backoff is the exponential, capped wait before redial attempt number
+// attempt; the run loop adds the jitter.
 func backoff(attempt int, minWait, maxWait time.Duration) time.Duration {
 	if attempt <= 0 {
 		return minWait

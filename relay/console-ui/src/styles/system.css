@@ -1,0 +1,596 @@
+/* ---------- system view (/system) ---------- */
+
+.live-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.live-chip:not(.on) .pulse {
+  background: var(--faint);
+  animation: none;
+}
+
+.live-chip:not(.on) .pulse::after {
+  display: none;
+}
+
+.pulse {
+  position: relative;
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--success);
+  flex: none;
+}
+
+.pulse.down {
+  background: var(--danger);
+}
+
+.pulse::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  color: var(--success);
+  opacity: 0;
+  animation: pulse-ring 2s ease-out infinite;
+}
+
+.pulse.down::after {
+  color: var(--danger);
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.5);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+}
+
+/* The one-line verdict at the top. */
+.health-banner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  border-radius: var(--radius-lg);
+  border: 1px solid color-mix(in srgb, var(--success) 30%, var(--line));
+  background: linear-gradient(135deg, var(--success-wash), var(--surface) 75%);
+}
+
+.health-banner.warning {
+  border-color: color-mix(in srgb, var(--warning) 40%, var(--line));
+  background: linear-gradient(135deg, var(--warning-wash), var(--surface) 75%);
+}
+
+.health-banner.danger {
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--line));
+  background: linear-gradient(135deg, var(--danger-wash), var(--surface) 75%);
+}
+
+.health-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--success);
+  color: var(--surface);
+  flex: none;
+}
+
+.health-banner.warning .health-icon {
+  background: var(--warning);
+}
+
+.health-banner.danger .health-icon {
+  background: var(--danger);
+}
+
+.health-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.health-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.health-text strong {
+  font-size: 17px;
+}
+
+.health-text span {
+  color: var(--ink-2);
+}
+
+.health-text ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.health-text li {
+  color: var(--ink-2);
+  padding-inline-start: 14px;
+  position: relative;
+}
+
+.health-text li::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0;
+  top: 0.6em;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warning);
+}
+
+.health-text li.danger::before {
+  background: var(--danger);
+}
+
+.health-meta {
+  font-size: 12px;
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}
+
+.kpi .kpi-of {
+  font-size: 16px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+/* ---------- traffic chart ---------- */
+
+.traffic-chart {
+  position: relative;
+}
+
+.traffic-chart svg {
+  display: block;
+  width: 100%;
+  height: 180px;
+  overflow: visible;
+}
+
+.traffic-chart .grid-line {
+  stroke: var(--line);
+  stroke-dasharray: 3 5;
+  vector-effect: non-scaling-stroke;
+}
+
+.traffic-line {
+  fill: none;
+  stroke: var(--primary);
+  stroke-width: 2.25;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.traffic-failed {
+  fill: var(--danger);
+  opacity: 0.85;
+}
+
+.traffic-hit {
+  fill: transparent;
+}
+
+.traffic-hit:hover {
+  fill: color-mix(in srgb, var(--primary) 8%, transparent);
+}
+
+.traffic-axis {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.traffic-empty {
+  position: absolute;
+  inset: 0 0 24px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 14px;
+  pointer-events: none;
+}
+
+/* ---------- nodes ---------- */
+
+.section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.section-head h2 {
+  font-size: 15px;
+}
+
+.section-head .faint {
+  font-size: 13px;
+}
+
+.node-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: 16px;
+}
+
+.node-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px;
+  position: relative;
+  overflow: hidden;
+}
+
+.node-card::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 3px;
+  background: var(--success);
+}
+
+.node-card.draining::before {
+  background: var(--warning);
+}
+
+.node-card.late::before {
+  background: var(--danger);
+}
+
+.node-card.late {
+  opacity: 0.85;
+}
+
+.node-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.node-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--primary-wash);
+  color: var(--primary);
+  flex: none;
+}
+
+.node-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.node-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.node-name strong {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: start;
+}
+
+.node-name .faint {
+  font-size: 12px;
+}
+
+.node-load {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.node-tunnels {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.node-big {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.node-transports {
+  font-size: 12px;
+}
+
+.load-bar {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--sunken);
+}
+
+.load-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--primary), color-mix(in srgb, var(--primary) 60%, var(--rail-active)));
+  transition: width 0.6s ease;
+}
+
+.load-average {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  margin-inline-start: -1px;
+  background: var(--ink-2);
+  border-radius: 2px;
+}
+
+.node-facts,
+.service-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+  margin: 0;
+}
+
+.node-facts dt,
+.service-facts dt {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.node-facts dd,
+.service-facts dd {
+  margin: 2px 0 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: start;
+}
+
+.node-failed {
+  color: var(--danger);
+  font-weight: 500;
+}
+
+.node-old {
+  margin: 0;
+  font-size: 13px;
+}
+
+.sparkline {
+  display: block;
+  width: 100%;
+  height: 34px;
+}
+
+.sparkline polyline {
+  fill: none;
+  stroke: var(--primary);
+  stroke-width: 1.75;
+  stroke-linejoin: round;
+  opacity: 0.8;
+}
+
+.node-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+}
+
+.node-foot svg {
+  width: 14px;
+  height: 14px;
+}
+
+.node-foot svg.ok {
+  color: var(--success);
+}
+
+/* ---------- services ---------- */
+
+.card-head h2 .row svg {
+  width: 17px;
+  height: 17px;
+  color: var(--primary);
+}
+
+.service-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.service-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.service-status > div {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.service-status .pulse {
+  width: 11px;
+  height: 11px;
+}
+
+.meter {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--sunken);
+  overflow: hidden;
+}
+
+.meter-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--success);
+  transition: width 0.6s ease;
+}
+
+.meter-fill.warning {
+  background: var(--warning);
+}
+
+.meter-fill.danger {
+  background: var(--danger);
+}
+
+.pool,
+.memory {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.pool-slots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.pool-slots i {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  background: var(--sunken);
+  border: 1px solid var(--line);
+}
+
+.pool-slots i.idle {
+  background: var(--primary-wash);
+  border-color: var(--primary-line);
+}
+
+.pool-slots i.busy {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+/* ---------- tunnel activity ---------- */
+
+.activity-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+  gap: 12px;
+}
+
+.activity-tile {
+  display: flex;
+  gap: 12px;
+  padding: 14px;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+
+.activity-tile.warning {
+  border-color: color-mix(in srgb, var(--warning) 40%, var(--line));
+  background: var(--warning-wash);
+}
+
+.activity-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--subtle);
+  color: var(--ink-2);
+  flex: none;
+}
+
+.activity-icon svg {
+  width: 17px;
+  height: 17px;
+}
+
+.activity-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.activity-body .muted {
+  font-size: 12.5px;
+}
+
+.activity-body strong {
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+
+.activity-parts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.activity-parts b {
+  color: var(--ink-2);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse::after {
+    animation: none;
+  }
+
+  .load-fill,
+  .meter-fill {
+    transition: none;
+  }
+}

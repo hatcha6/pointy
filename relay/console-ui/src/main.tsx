@@ -12,6 +12,7 @@ import "./styles/base.css";
 import "./styles/ui.css";
 import "./styles/finance.css";
 import "./styles/pages.css";
+import "./styles/system.css";
 import "./styles/responsive.css";
 import { App } from "./App";
 import { RouterProvider } from "./lib/router";

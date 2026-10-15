@@ -33,3 +33,11 @@ func (l *Limiter) TryAcquire() (func(), bool) {
 		return nil, false
 	}
 }
+
+// Capacity is how many may run at once; 0 for no limit.
+func (l *Limiter) Capacity() int {
+	if l == nil {
+		return 0
+	}
+	return cap(l.ch)
+}

@@ -20,6 +20,7 @@ import (
 // never forwarded, even though the console adds the admin token.
 var forwardPrefixes = []string{
 	"/v1/status",
+	"/v1/system",
 	"/v1/metrics",
 	"/v1/installations",
 	"/v1/enrollment/tokens",

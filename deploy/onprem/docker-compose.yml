@@ -589,6 +589,10 @@ services:
     environment:
       POINTY_RELAY_CONNECTOR_SETUP_TOKEN: "${POINTY_RELAY_CONNECTOR_SETUP_TOKEN:?Set POINTY_RELAY_CONNECTOR_SETUP_TOKEN in deploy/onprem/.env}"
       POINTY_RELAY_CONNECTOR_STATE_FILE: /var/lib/pointy/relay-connector.json
+      # Tunnel addresses tried before the TCP one in --relay. Empty is right:
+      # the connector defaults to the hosted relay's tunnel over HTTPS, and the
+      # relay hands out its own list on every connect.
+      POINTY_RELAY_CONNECTOR_URLS: "${POINTY_RELAY_CONNECTOR_URLS:-}"
       POINTY_RELAY_TLS_SERVER_NAME: "${POINTY_RELAY_CONNECTOR_TLS_SERVER_NAME:-}"
       POINTY_RELAY_ALLOW_INSECURE_CONNECTOR: "${POINTY_RELAY_ALLOW_INSECURE_CONNECTOR:-false}"
       POINTY_RELAY_CONNECTOR_REQUEST_TIMEOUT: "30s"

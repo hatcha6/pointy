@@ -589,9 +589,10 @@ internal URL is HTTPS-only by default and should point at the private
 admin/control listener when listeners are split; `RELAY_ALLOW_INSECURE_NODE_PROXY`
 is for local development.
 
-Operators can drain a relay node with `RELAY_DRAINING=true`: `/readyz` returns
-unavailable, `/v1/status` reports the drain state, and new connector sessions
-are rejected while existing bounded requests finish.
+A relay node drains on SIGTERM: `/readyz` returns unavailable, its tunnels move
+to other nodes while it still serves, and it exits once they have and its
+requests are done (`POINTY_RELAY_DRAIN_TIMEOUT`, 20 s). `RELAY_DRAINING=true`
+starts a node already draining.
 
 The production relay path has explicit guardrails for request size, response
 size, stream-open timeout, total relay timeout, concurrent remote requests, and
@@ -1199,6 +1200,17 @@ verifies a two-node relay request preserves Django session cookies and CSRF:
 ```sh
 make postgres redis
 make relay-production-test
+```
+
+The relay fleet E2E (opt-in, Redis only) runs relay nodes behind a
+round-robin balancer with many connectors: a node killed under traffic, a node
+drained under traffic, a node restarted with 500 tunnels under the handshake
+limit, an old TCP connector beside new ones, WebSocket throughput against TCP,
+and a scale-out from two nodes to three that rebalancing evens out:
+
+```sh
+make redis
+make relay-fleet-test
 ```
 
 The pilot-day POS flow is automated as an opt-in Flutter E2E test. It runs the

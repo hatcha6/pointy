@@ -16108,6 +16108,22 @@ class AppLocalizationsAr extends AppLocalizations {
       'أجهزة بأرقام تسلسلية — تُطبع ملصقاتها عند الاستلام أو من صفحة الجهاز';
 
   @override
+  String get createdProductLabelsTitle => 'ملصقات المنتجات الجديدة';
+
+  @override
+  String get createdProductLabelsSubtitle =>
+      'اطبع ملصقات الباركود لما أنشأته الآن. عدد الملصقات هو الرصيد الافتتاحي، أو ملصق واحد إن لم يُدخل. عدّله أو ألغِ تحديد ما لا تريد طباعته.';
+
+  @override
+  String createdProductLabelsStock(String quantity, String barcode) {
+    return 'رصيد افتتاحي $quantity · $barcode';
+  }
+
+  @override
+  String get createdProductLabelsNoBarcode =>
+      'بلا باركود — أضف له باركودًا من صفحة المنتج لطباعة ملصقه';
+
+  @override
   String get stockUnitsTitle => 'الأجهزة المسلسلة';
 
   @override

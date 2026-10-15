@@ -5,6 +5,7 @@ import {
   Boxes,
   Coins,
   CreditCard,
+  Gauge,
   Home,
   KeyRound,
   NotebookPen,
@@ -68,6 +69,7 @@ export const navGroups: NavGroup[] = [
     id: "system",
     label: "النظام",
     items: [
+      { to: "/system", label: "حالة النظام", icon: Gauge, hint: "العُقد والأنفاق والطلبات الآن، وقاعدة البيانات وRedis" },
       { to: "/fleet", label: "التحديثات", icon: Rocket, hint: "الإصدارات والقنوات وحزم التحديث" },
       { to: "/licenses", label: "مفاتيح الترخيص", icon: KeyRound, hint: "إصدار مفاتيح تفعيل المتاجر الجديدة" },
       { to: "/operators", label: "المشغّلون", icon: Users, hint: "من يدخل اللوحة وأجهزتهم" },

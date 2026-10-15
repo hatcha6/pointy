@@ -33,7 +33,7 @@ func TestDefaultSettingsAreTheDemonstrationNumbers(t *testing.T) {
 		Airtime:        ServicePricing{OrderMode: "usd", USDBufferPercent: "0.5", ServiceFeeLYD: "2"},
 		Bills:          ServicePricing{OrderMode: "auto", USDBufferPercent: "0.5", ServiceFeeLYD: "0"},
 		Margin: Margin{FixedLYD: "0.50", MinMarginLYD: "0.50", Brackets: defaultBrackets(), ShopSharePercent: "35", RoundStep: "0.25", MinShopMargin: "0.10",
-			MarketGapPercent: "3", MarketMaxAgeDays: "30", CompanyMinPct: "3", CompanyMinLYD: "0.50", ShopMinPct: "2.5", ShopMinLYD: "0.50", LocalCompanyShare: "20"},
+			MarketGapPercent: "3", MarketMaxAgeDays: "30", CompanyMinPct: "3", CompanyMinLYD: "0.50", ShopMinPct: "2.5", ShopMinLYD: "0.50", LocalShopPercent: "2"},
 		USDRateSource: "fulus", USDRateSeries: "cash", USDRateBufferPercent: "0", USDRateMaxAge: "48h",
 		Popular: []string{
 			"NE", "ML", "NG", "EG", "GH", "SN", "TN", "BD", "PK", "IN",
@@ -232,7 +232,7 @@ func TestNormalized(t *testing.T) {
 		Airtime:        ServicePricing{OrderMode: "usd", USDBufferPercent: "0.5", ServiceFeeLYD: "2"},
 		Bills:          ServicePricing{OrderMode: "auto", USDBufferPercent: "0.5", ServiceFeeLYD: "0"},
 		Margin: Margin{FixedLYD: "0.50", MinMarginLYD: "0.50", Brackets: defaultBrackets(), ShopSharePercent: "35", RoundStep: "0.5", MinShopMargin: "0.10",
-			MarketGapPercent: "3", MarketMaxAgeDays: "30", CompanyMinPct: "3", CompanyMinLYD: "0.50", ShopMinPct: "2.5", ShopMinLYD: "0.50", LocalCompanyShare: "20"},
+			MarketGapPercent: "3", MarketMaxAgeDays: "30", CompanyMinPct: "3", CompanyMinLYD: "0.50", ShopMinPct: "2.5", ShopMinLYD: "0.50", LocalShopPercent: "2"},
 		USDRateSource: "fulus", USDRateSeries: "cash", USDRateBufferPercent: "0", USDRateMaxAge: "48h",
 		Popular: []string{"NE", "ML"},
 	}

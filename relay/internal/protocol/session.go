@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"sync"
@@ -26,6 +27,20 @@ type Session struct {
 
 	// lastFrameAt is when the peer last sent anything (unix nanoseconds).
 	lastFrameAt atomic.Int64
+	// lastDataSentAt is when one of our data frames last went out (unix
+	// nanoseconds, zero before the first).
+	lastDataSentAt atomic.Int64
+
+	// peerCapabilities is what the peer said it can do (Capabilities).
+	peerCapabilities atomic.Pointer[Capabilities]
+	// goAway carries the relay's requests to move this tunnel.
+	goAway chan GoAway
+	// onRetire is the relay's side of Retire: stop opening streams here.
+	// Nil on the connector's side, where Retire is the relay's answer.
+	onRetire func()
+	// retired is closed when the relay answers Retire.
+	retired     chan struct{}
+	retiredOnce sync.Once
 }
 
 func NewSession(conn *Conn) *Session {
@@ -35,6 +50,8 @@ func NewSession(conn *Conn) *Session {
 		closed:       make(chan struct{}),
 		nextStreamID: 1,
 		streams:      map[uint64]*Stream{},
+		goAway:       make(chan GoAway, 1),
+		retired:      make(chan struct{}),
 	}
 	session.lastFrameAt.Store(time.Now().UnixNano())
 	return session
@@ -50,6 +67,28 @@ func (s *Session) Ping() error {
 // SinceLastFrame is how long ago the peer last sent a frame of any kind.
 func (s *Session) SinceLastFrame() time.Duration {
 	return time.Since(time.Unix(0, s.lastFrameAt.Load()))
+}
+
+// SinceDataSent is how long ago one of our data frames last finished writing,
+// and false if none has yet.
+//
+// A write only finishes once the socket has room, so on a full connection it
+// is proof the peer is still acknowledging: a long response going out over a
+// slow uplink keeps the tunnel provably alive even while the peer's pong
+// waits behind it.
+func (s *Session) SinceDataSent() (time.Duration, bool) {
+	sentAt := s.lastDataSentAt.Load()
+	if sentAt == 0 {
+		return 0, false
+	}
+	return time.Since(time.Unix(0, sentAt)), true
+}
+
+// OpenStreams is how many streams are open on the session right now.
+func (s *Session) OpenStreams() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.streams)
 }
 
 // Done is closed once the session has ended.
@@ -93,9 +132,79 @@ func (s *Session) Run() error {
 		case FramePing:
 			_ = s.conn.WriteFrame(Frame{Type: FramePong})
 		case FramePong:
+		case FrameCapabilities:
+			var capabilities Capabilities
+			if json.Unmarshal(frame.Payload, &capabilities) == nil {
+				s.peerCapabilities.Store(&capabilities)
+			}
+		case FrameGoAway:
+			var goAway GoAway
+			_ = json.Unmarshal(frame.Payload, &goAway)
+			select {
+			case s.goAway <- goAway:
+			default:
+				// One request to move is pending already; that is enough.
+			}
+		case FrameRetire:
+			if s.onRetire != nil {
+				s.onRetire()
+				// Written from this loop, after every Open that went before.
+				_ = s.conn.WriteFrame(Frame{Type: FrameRetire})
+			} else {
+				s.retiredOnce.Do(func() { close(s.retired) })
+			}
 		default:
 			return UnexpectedFrameError(frame)
 		}
+	}
+}
+
+// SendCapabilities tells the relay what this connector can do. Only to a
+// relay whose HelloAck says Moves: an older one ends the session on it.
+func (s *Session) SendCapabilities(capabilities Capabilities) error {
+	return s.writeFrame(Frame{Type: FrameCapabilities, Payload: encodeJSON(capabilities)})
+}
+
+// PeerCapabilities is what the connector said it can do; zero until it does.
+func (s *Session) PeerCapabilities() Capabilities {
+	if capabilities := s.peerCapabilities.Load(); capabilities != nil {
+		return *capabilities
+	}
+	return Capabilities{}
+}
+
+// SendGoAway asks the connector to move this tunnel. Only once
+// PeerCapabilities says it can: an older connector ends the session on it.
+func (s *Session) SendGoAway(goAway GoAway) error {
+	return s.writeFrame(Frame{Type: FrameGoAway, Payload: encodeJSON(goAway)})
+}
+
+// GoAway delivers the relay's requests to move this tunnel.
+func (s *Session) GoAway() <-chan GoAway {
+	return s.goAway
+}
+
+// OnRetire sets what the relay does when the connector retires this tunnel:
+// stop opening streams on it. Set before Run. Once it returns, the session
+// answers Retire, and the connector takes that as the last word.
+func (s *Session) OnRetire(fn func()) {
+	s.onRetire = fn
+}
+
+// Retire asks the relay to open no more streams on this tunnel and waits for
+// its answer. Streams the relay opened before it answered arrive before the
+// answer does, so after it, OpenStreams only falls.
+func (s *Session) Retire(ctx context.Context) error {
+	if err := s.writeFrame(Frame{Type: FrameRetire}); err != nil {
+		return err
+	}
+	select {
+	case <-s.retired:
+		return nil
+	case <-s.closed:
+		return ErrSessionClosed
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 
@@ -152,8 +261,14 @@ func (s *Session) writeFrame(frame Frame) error {
 	case <-s.closed:
 		return ErrSessionClosed
 	default:
-		return s.conn.WriteFrame(frame)
 	}
+	if err := s.conn.WriteFrame(frame); err != nil {
+		return err
+	}
+	if frame.Type == FrameData {
+		s.lastDataSentAt.Store(time.Now().UnixNano())
+	}
+	return nil
 }
 
 func (s *Session) addStream(stream *Stream) bool {

@@ -151,3 +151,67 @@ func TestWriteFailsAfterALocalClose(t *testing.T) {
 		t.Fatalf("expected ErrStreamClosed after Close, got %v", err)
 	}
 }
+
+func TestSessionMovesATunnelWithoutLosingAStream(t *testing.T) {
+	relayRaw, connectorRaw := net.Pipe()
+	relay := NewSession(NewConn(relayRaw))
+	connector := NewSession(NewConn(connectorRaw))
+	defer relay.Close()
+	defer connector.Close()
+
+	retiring := make(chan struct{})
+	relay.OnRetire(func() { close(retiring) })
+	go func() { _ = relay.Run() }()
+	go func() { _ = connector.Run() }()
+
+	if err := connector.SendCapabilities(Capabilities{GoAway: true}); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(time.Second)
+	for !relay.PeerCapabilities().GoAway {
+		if time.Now().After(deadline) {
+			t.Fatal("relay never learnt the connector moves")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	if err := relay.SendGoAway(GoAway{Reason: GoAwayDrain, Connect: "wss://b/x"}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case goAway := <-connector.GoAway():
+		if goAway.Reason != GoAwayDrain || goAway.Connect != "wss://b/x" {
+			t.Fatalf("unexpected go away %+v", goAway)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("connector never heard go away")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := connector.Retire(ctx); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-retiring:
+	default:
+		t.Fatal("the relay answered Retire before it stopped opening streams")
+	}
+}
+
+func TestSessionRetireEndsWithTheSession(t *testing.T) {
+	relayRaw, connectorRaw := net.Pipe()
+	relay := NewSession(NewConn(relayRaw))
+	connector := NewSession(NewConn(connectorRaw))
+	go func() { _ = connector.Run() }()
+	go func() {
+		// A relay that never answers, then goes away.
+		_, _ = relay.conn.ReadFrame()
+		_ = relay.Close()
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := connector.Retire(ctx); !errors.Is(err, ErrSessionClosed) && !errors.Is(err, io.ErrClosedPipe) {
+		t.Fatalf("expected the session to end the wait, got %v", err)
+	}
+}

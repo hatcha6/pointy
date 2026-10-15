@@ -235,6 +235,70 @@ stream {
 }
 ```
 
+### Connector tunnel over 443 (WebSocket)
+
+Connectors can also reach the relay through the HTTPS listener, so a tunnel
+lands on any node the balancer picks instead of the node that owns the TCP
+port. The route is `GET /v1/connector/tunnel` (WebSocket, subprotocol
+`pointy-tunnel.v1`, binary messages). NGINX ends the outer TLS as for any
+request; inside the WebSocket the connector runs the **same mTLS** as on 8092,
+against the same server certificate and client CA, so the token check and the
+certificate binding are unchanged and NGINX never sees the tunnel's contents.
+
+NGINX has to pass the upgrade through, and must not time the tunnel out (the
+connector pings every 20 s):
+
+```nginx
+location = /v1/connector/tunnel {
+    proxy_pass http://relay_http;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 300s;
+}
+```
+
+The TCP port stays for connectors that haven't updated. `/v1/status` reports
+open tunnels per transport (`active_connectors_by_transport`), which shows when
+it can be retired.
+
+#### Which address a connector dials
+
+Every `HelloAck` carries the relay's tunnel addresses
+(`{"node_id", "endpoints": [...]}`), and the connector saves them in its state
+file. That is how the fleet moves to a new address without anyone editing a
+shop's `.env`. Relays and connectors from before this ignore it on both sides.
+
+- **Relay:** `POINTY_RELAY_CONNECTOR_ENDPOINTS`, a comma-separated list, best
+  first (`wss://host/v1/connector/tunnel`, `tls://host:port`). Unset, it is the
+  tunnel over HTTPS on `POINTY_RELAY_PUBLIC_URL`. `none` advertises an empty
+  list, which also clears what connectors saved.
+- **Connector:** `POINTY_RELAY_CONNECTOR_URLS`, the same format, tried before
+  `POINTY_RELAY_CONNECTOR_ADDR` (the TCP address, always the last resort).
+  Unset, and with `POINTY_RELAY_CONNECTOR_ADDR` on `tunnel.dftr.ly`, it is
+  `wss://my.dftr.ly/v1/connector/tunnel`. Not `tunnel.dftr.ly`: that name
+  points at one node's TCP endpoint.
+
+Each attempt tries, in order: the WebSocket address that last worked, the
+relay's saved list, then the connector's own list. A failed dial moves to the
+next address in the same attempt. The TCP listener never jumps the queue, even
+when it last worked, or one WebSocket blip would pin a shop to the TCP node for
+good. A node that turns the tunnel away (`429` over its handshake limit, `503`
+from placement or a draining node, below) stops the attempt instead: the
+connector waits `Retry-After` plus up to half again, rather than landing on the
+TCP node with everyone else. Reconnect waits are exponential, capped at 30 s,
+and randomised to 50–100%, so shops dropped together don't come back together.
+
+The inner TLS checks the same server name on every address
+(`POINTY_RELAY_TLS_SERVER_NAME`, the name on the relay's connector certificate),
+whatever host the WebSocket went to.
+
+A tunnel is declared dead after 30 s with no sign of life, checked every 10 s
+with a ping every 20 s. A sign of life is any frame from the relay, or one of the
+connector's own data frames finishing its write. The second keeps a long
+response going out over a slow uplink from being taken for a dead tunnel while
+the relay's pong waits behind it.
+
 The relay's auto-generated connector CA and server certificate are stored in
 PostgreSQL, so every autoscaled instance presents the same material — passthrough
 mTLS holds across the fleet. If you want the NGINX→relay hop on 8091 encrypted
@@ -243,10 +307,103 @@ too (defense in depth on the platform's internal network), set
 so the relay serves its own (auto) TLS, then `proxy_pass https://…` with
 `proxy_ssl_verify off`.
 
+#### Two tunnels per shop, placed by the nodes
+
+Each shop keeps two tunnels, on different nodes where more than one is live, so
+losing a node never takes a shop offline: its other tunnel keeps serving while
+the lost one redials. The relay asks for them in the `HelloAck`
+(`"tunnels": 2`, `POINTY_RELAY_CONNECTOR_TUNNELS`, 1–4); a connector opens the
+second only once a relay asks, because a relay from before keeps one session per
+shop and would close the first. Each tunnel has its own reconnect loop and is
+numbered in the Hello frame's stream field (old connectors send 0), so a node
+replaces a tunnel only by its own number.
+
+- **Presence** is one Redis key per tunnel, `presence-tunnel:<shop>:<conn>`,
+  plus the set `presence-index:<shop>`, pruned on read. The single
+  `presence:<shop>` key older relays read is still written, so a rolling deploy
+  keeps working; drop it once every node runs this version.
+- **Requests** go to the local tunnel carrying fewest streams, otherwise to a
+  node holding one. A node that can't be connected to within 2 s is skipped for
+  the next and its record dropped (its owner restores it on the next refresh if
+  it was a blip). Once a connection to a node is up, the request is never sent
+  again: it may have arrived.
+- **Node registry:** every node writes `node:<id>` every 5 s with a 15 s TTL:
+  its tunnel count, whether it is draining, and its own tunnel address. A node
+  that disappears from it is dead; peers drop the presence records pointing at
+  it. `/v1/status` shows the fleet as this node last read it.
+- **Own address:** a node advertises `wss://<container hostname>` (on JPaaS the
+  hostname is the node's public name) only after calling
+  `https://<hostname>/v1/node/whoami` and getting its own random nonce back,
+  rechecked every 5 minutes. `POINTY_RELAY_NODE_PUBLIC_URL_TEMPLATE` overrides
+  the candidate (`https://{hostname}`, or `none`); the startup log line
+  "relay node placement" shows what was chosen.
+- **Placement**, before the handshake: a node keeps a tunnel when it is within
+  max(5, 5% of the average) of the lightest node, and never beside the shop's
+  other tunnel while another node is live. Otherwise it answers `409
+  {"connect": "<lightest node's own address>"}`, which the connector dials at
+  once, or `503` when no lighter node has a verified address (or
+  `POINTY_RELAY_TUNNEL_REDIRECT=false`), and the balancer picks again. A dial
+  that followed a redirect, the third try, a stale registry and a Redis outage
+  are all accepted: spreading never keeps a shop out.
+- **Moving off a shared node:** when both tunnels end up on one node (it was
+  the only one live), the second looks for a node of its own after 2 minutes,
+  then less often while the relay keeps placing it there. It opens the new
+  tunnel first and closes the old one once its streams finish.
+
+The connector's headers on the upgrade (`X-Pointy-Tunnel-Attempt`,
+`X-Pointy-Tunnel-Avoid`, `X-Pointy-Tunnel-Direct`) only steer placement;
+identity is still the inner mTLS and the token.
+
+#### Moving tunnels: drain, rebalancing, held requests
+
+A relay asks a tunnel to move with a `GoAway` frame. The connector opens the
+replacement first, then sends `Retire` on the old tunnel; the relay opens no
+more streams on it, drops its presence record and answers `Retire`. Frames keep
+their order, so after that answer nothing new can arrive, and the connector
+closes the old tunnel once its last stream ends (within 10 minutes, for a
+stream that never does). A request in flight finishes on the tunnel it started
+on. The relay says it can do this in the `HelloAck` (`"moves": true`); the
+connector answers with a `Capabilities` frame, and only then is it ever sent
+`GoAway`. A connector from before gets neither: an unknown frame would end its
+session.
+
+- **Drain (SIGTERM):** the node turns `/readyz` to `503`, tells the registry it
+  is draining (placement sends new tunnels elsewhere, even beside the shop's
+  other tunnel when there is no third node), and asks every tunnel that can
+  move to move. It keeps serving meanwhile, and waits until those tunnels are
+  gone and no stream is open on the rest, for up to
+  `POINTY_RELAY_DRAIN_TIMEOUT` (20 s). Then it stops listening, closes what is
+  left (an old connector's tunnel, which reconnects as it always has), leaves
+  the registry and exits. The whole stop takes at most the drain timeout plus
+  5 s for the HTTP server, so keep that below the platform's stop grace period.
+  With no other node to move to, it only waits for open streams. A second
+  signal exits at once.
+- **Rebalancing:** every 30 s, a node above the fleet average and more than
+  max(5, 10% of the average) above the lightest node asks some of its tunnels
+  to move to the lightest one: 2% of its tunnels a round (at least one, at most
+  20, never more than half the gap), idle ones first, none open less than
+  5 minutes, and only a tunnel whose shop has its other tunnel on a third live
+  node, so the shop stays reachable and its tunnels stay apart. The `GoAway`
+  names the target; a connector whose other tunnel is already there dials as
+  usual instead. Nodes settle within 10% of each other, which keeps every node
+  within 10% of the average. `POINTY_RELAY_REBALANCE=false` turns it off.
+- **Held requests:** a request that finds no tunnel here, and no node that
+  takes it, waits for the shop to come back, looking every 250 ms for up to
+  `POINTY_RELAY_CONNECTOR_HOLD` (8 s) before the usual `503`. A try is repeated
+  only when the one before reached no tunnel: the stream couldn't open, the
+  node couldn't be connected to, or it answered that it holds no tunnel
+  (`X-Pointy-Relay-No-Tunnel`, a tunnel that just moved on). Bodies up to
+  64 KiB are kept in memory for that; a larger upload is forwarded once. A
+  request forwarded from another node never waits: that node does.
+
+`/v1/status` counts the moves (`tunnel_moves`, by reason) and the held
+requests (`held_requests`: `served` or `offline`, with `held_wait_total_ms` and
+`held_wait_max_ms`).
+
 ### Autoscaling (auto-mesh)
 
-Connectors pin to one instance over the TCP port; phone traffic may land on a
-different instance, so cross-instance routing needs the node-to-node mesh. The
+Phone traffic may land on a different instance from the shop's tunnels, so
+cross-instance routing needs the node-to-node mesh. The
 `paas` profile forms that mesh automatically — horizontal autoscaling is
 hands-off, no per-instance configuration:
 
@@ -1872,11 +2029,10 @@ URL on a private network and rotate the node proxy token through the deployment
 secret manager. Node proxy headers are stripped before requests reach the
 on-prem backend.
 
-To drain a node for deployment or maintenance, set `POINTY_RELAY_DRAINING=true`.
-The node keeps `/healthz` healthy, returns `503` from `/readyz`, reports the
-drain state in `/v1/status`, and rejects new connector handshakes so connectors
-can reconnect to another relay node. Existing sessions remain bounded by the
-normal relay and connector request timeouts.
+A node drains on SIGTERM: its tunnels move to other nodes before it exits (see
+"Moving tunnels" above). To start a node already draining, set
+`POINTY_RELAY_DRAINING=true`: it keeps `/healthz` healthy, returns `503` from
+`/readyz`, reports the drain state in `/v1/status`, and takes no new tunnel.
 
 ## Operational Limits
 
@@ -1891,6 +2047,12 @@ The relay server applies bounded defaults to the remote HTTP path:
 - `POINTY_RELAY_RATE_LIMIT_RELAY_REQUESTS` defaults to `600` per installation/window.
 - `POINTY_RELAY_RATE_LIMIT_TICKET_ISSUE` defaults to `60` per installation/device/window.
 - `POINTY_RELAY_RATE_LIMIT_TICKET_REFRESH` defaults to `120` per refresh token/window.
+- `POINTY_RELAY_CONNECTOR_HANDSHAKE_RATE` defaults to `50` new tunnels per
+  second per node, TCP and WebSocket together, with bursts of
+  `POINTY_RELAY_CONNECTOR_HANDSHAKE_BURST` (`100`). A node that restarts would
+  otherwise take every shop's reconnect at once. Over the limit, a TCP
+  connection is closed before its TLS handshake and a WebSocket upgrade gets
+  `503` with a `Retry-After` of 1-3 s. `0` turns the limit off.
 
 The connector applies its own backend-forwarding guardrails:
 
@@ -1924,6 +2086,24 @@ metrics for active connectors, relay request counts and latency, ticket
 issuance, refreshes, offline installations, subscription rejections, backend
 failures, credential rejections, body/concurrency-limit rejections, and
 rate-limit rejections/failures.
+
+`/v1/system` is the whole fleet at once, and what the console's «حالة النظام»
+page (`/console/system`) shows, refreshed every 5 s: every live node with its
+tunnels (by transport), shops, requests being served now, the last 5 minutes of
+phone requests in 10-second steps, memory and version; the shops connected to
+any node; and PostgreSQL (round trip, size, sessions against the limit, this
+node's pool) and Redis (round trip, version, role and replicas, memory,
+clients, operations per second) checked on the call. Each node publishes its
+figures in its registry record, so any node answers for all of them; a node
+older than this shows its tunnel count only. A request is counted on the node
+it reached first, never again on the node it was forwarded to.
+
+`/healthz` and `/readyz` carry an `X-Pointy-Relay-Node` header naming the node
+that answered, so you can see how the balancer spreads connections:
+
+```sh
+for i in $(seq 10); do curl -sI https://relay.yourdomain.com/readyz | grep -i x-pointy-relay-node; done
+```
 
 `/v1/installations/<id>/status` is intended for support diagnostics. It returns
 shop name, relay/subscription state, local connector state, Redis presence, last
@@ -1989,4 +2169,19 @@ Override the service URLs when needed:
 make relay-production-test \
   RELAY_E2E_DATABASE_URL='postgres://postgres:postgres@127.0.0.1:5432/pointy?sslmode=disable' \
   RELAY_E2E_REDIS_URL='redis://127.0.0.1:6379/0'
+```
+
+The fleet E2E runs relay nodes behind a round-robin balancer on Redis, with
+connectors dialling it over WebSocket: a node killed under phone traffic, a node
+drained under traffic without a failed request, a node holding 500 tunnels
+restarted under the handshake limit, an old TCP connector beside new ones,
+WebSocket throughput against raw TCP, and a scale-out from two nodes to three
+with 600 tunnels that rebalancing evens out (then a node restarted). It also
+runs the Redis presence and registry tests. It needs only Redis
+(`POINTY_RELAY_E2E_SHOPS` sets the restart test's shop count, 500 by default;
+`POINTY_RELAY_E2E_SCALE_SHOPS` the scale-out's, 300):
+
+```sh
+make redis
+make relay-fleet-test
 ```

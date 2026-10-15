@@ -28,6 +28,12 @@ const (
 	FramePing
 	FramePong
 	FrameError
+	// Frames that move a tunnel without dropping a request (see moves.go).
+	// A peer that predates them ends the session on any of them, so each is
+	// only sent once the other side has said it knows them.
+	FrameCapabilities
+	FrameGoAway
+	FrameRetire
 )
 
 var (

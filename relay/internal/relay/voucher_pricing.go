@@ -127,7 +127,7 @@ func (s HTTPServer) autoPricedDocument(document vouchers.Document, offers vouche
 			return "", "", false
 		}
 		if strings.EqualFold(item.FaceCurrency, "LYD") {
-			// A local card is sold at exactly its face value; the discount is split 80/20.
+			// A local card is sold at exactly its face value; the shop earns a flat share of it.
 			face, _ := new(big.Rat).SetString(strings.TrimSpace(item.FaceValue))
 			shop, retail, ok := margin.LocalPrices(cost, face)
 			if !ok {

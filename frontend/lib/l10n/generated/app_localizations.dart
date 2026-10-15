@@ -27412,6 +27412,30 @@ abstract class AppLocalizations {
   /// **'أجهزة بأرقام تسلسلية — تُطبع ملصقاتها عند الاستلام أو من صفحة الجهاز'**
   String get purchaseOrderLabelsSerialized;
 
+  /// Title of the barcode label sheet offered after creating products.
+  ///
+  /// In ar, this message translates to:
+  /// **'ملصقات المنتجات الجديدة'**
+  String get createdProductLabelsTitle;
+
+  /// Explains the sticker counts on the label sheet offered after creating products.
+  ///
+  /// In ar, this message translates to:
+  /// **'اطبع ملصقات الباركود لما أنشأته الآن. عدد الملصقات هو الرصيد الافتتاحي، أو ملصق واحد إن لم يُدخل. عدّله أو ألغِ تحديد ما لا تريد طباعته.'**
+  String get createdProductLabelsSubtitle;
+
+  /// Label sheet row for a new product entered with opening stock.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد افتتاحي {quantity} · {barcode}'**
+  String createdProductLabelsStock(String quantity, String barcode);
+
+  /// Label sheet row for a new product saved without a barcode, so no sticker can print.
+  ///
+  /// In ar, this message translates to:
+  /// **'بلا باركود — أضف له باركودًا من صفحة المنتج لطباعة ملصقه'**
+  String get createdProductLabelsNoBarcode;
+
   /// Title of the identified-articles list.
   ///
   /// In ar, this message translates to:

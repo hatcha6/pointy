@@ -93,7 +93,7 @@ func TestConnectorServerRejectsNewConnectorWhileDraining(t *testing.T) {
 	server := ConnectorServer{
 		Hub:              NewHub(),
 		Logger:           logger,
-		Draining:         true,
+		Drain:            drainingNode(),
 		HandshakeTimeout: time.Second,
 	}
 	serverRaw, clientRaw := net.Pipe()
@@ -344,13 +344,17 @@ func (p *recordingPresence) MarkOnline(
 	return noopPresenceLease{}, nil
 }
 
-func (p *recordingPresence) Get(
-	context.Context,
-	string,
-) (ConnectorPresenceRecord, bool, error) {
+func (p *recordingPresence) List(context.Context, string) ([]ConnectorPresenceRecord, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return p.record, p.record.InstallationID != "", nil
+	if p.record.InstallationID == "" {
+		return nil, nil
+	}
+	return []ConnectorPresenceRecord{p.record}, nil
+}
+
+func (p *recordingPresence) Forget(context.Context, ConnectorPresenceRecord) error {
+	return nil
 }
 
 func (p *recordingPresence) relayHTTPURL() string {

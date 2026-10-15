@@ -19,10 +19,10 @@ import (
 //	  shop cut = max(shop_floor, pool x shop_share); the company keeps the rest.
 
 // Defaults of the market knobs, in the order of marketFields.
-var marketDefaults = [7]string{"3", "30", "3", "0.50", "2.5", "0.50", "20"}
+var marketDefaults = [7]string{"3", "30", "3", "0.50", "2.5", "0.50", "2"}
 
 func (m *Margin) marketFields() []*string {
-	return []*string{&m.MarketGapPercent, &m.MarketMaxAgeDays, &m.CompanyMinPct, &m.CompanyMinLYD, &m.ShopMinPct, &m.ShopMinLYD, &m.LocalCompanyShare}
+	return []*string{&m.MarketGapPercent, &m.MarketMaxAgeDays, &m.CompanyMinPct, &m.CompanyMinLYD, &m.ShopMinPct, &m.ShopMinLYD, &m.LocalShopPercent}
 }
 
 func (m Margin) marketBlank() bool {
@@ -41,7 +41,7 @@ func (m Margin) validateMarket(prefix string, check func(name, raw string, dinar
 	check("company_min_lyd", m.CompanyMinLYD, false, false)
 	check("shop_min_percent", m.ShopMinPct, false, false)
 	check("shop_min_lyd", m.ShopMinLYD, false, false)
-	check("local_company_share_percent", m.LocalCompanyShare, false, false)
+	check("local_shop_percent", m.LocalShopPercent, false, false)
 }
 
 // Market is a competitor price captured for a card: the cheapest known, in
@@ -149,23 +149,23 @@ func (m Margin) MarketPrices(cost, marketNow *big.Rat) (MarketPricing, bool) {
 }
 
 // LocalPrices prices a LYD-face card: retail is exactly the face value, never
-// market-anchored, and the discount (face - cost) is split with the company
-// keeping local_company_share_percent: shop pays = cost + gap x company share,
-// rounded up to a cent, never above the face.
+// market-anchored. The shop earns a flat local_shop_percent of the face and the
+// company keeps whatever is left of the discount (face - cost): shop pays =
+// face x (1 - percent), rounded up to a cent, never below the cost (a thin
+// discount all goes to the shop) and never above the face.
 func (m Margin) LocalPrices(cost, face *big.Rat) (shop, retail *big.Rat, ok bool) {
 	m = m.withDefaults()
-	share, good := settingsRat(m.LocalCompanyShare, settingsNumberPattern)
-	if !good || share.Cmp(settingsHundred) > 0 || cost == nil || face == nil || face.Sign() <= 0 {
+	percent, good := settingsRat(m.LocalShopPercent, settingsNumberPattern)
+	if !good || percent.Cmp(settingsHundred) > 0 || cost == nil || face == nil || face.Sign() <= 0 {
 		return nil, nil, false
 	}
-	gap := new(big.Rat).Sub(face, cost)
-	if gap.Sign() < 0 {
+	if cost.Cmp(face) >= 0 {
 		return new(big.Rat).Set(face), new(big.Rat).Set(face), true
 	}
-	raw := new(big.Rat).Add(cost, gap.Mul(gap, new(big.Rat).Quo(share, settingsHundred)))
-	shop = settingsCeil(raw, settingsCent)
-	if shop.Cmp(face) > 0 {
-		shop = new(big.Rat).Set(face)
+	keep := new(big.Rat).Sub(settingsHundred, percent)
+	shop = settingsCeil(new(big.Rat).Quo(new(big.Rat).Mul(face, keep), settingsHundred), settingsCent)
+	if shop.Cmp(cost) < 0 {
+		shop = new(big.Rat).Set(cost)
 	}
 	return shop, new(big.Rat).Set(face), true
 }

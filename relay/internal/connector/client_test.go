@@ -29,6 +29,7 @@ func TestRunCancelsReconnectBackoff(t *testing.T) {
 		Logger:           testLogger(),
 		ReconnectMinWait: time.Hour,
 		ReconnectMaxWait: time.Hour,
+		jitter:           noJitter,
 	}
 
 	go func() {
@@ -702,6 +703,7 @@ func TestRunRedialsPromptlyAfterAHealthySession(t *testing.T) {
 		ReconnectMinWait: time.Second,
 		ReconnectMaxWait: time.Hour,
 		healthySession:   20 * time.Millisecond,
+		jitter:           noJitter,
 	}
 	err := client.run(
 		ctx,

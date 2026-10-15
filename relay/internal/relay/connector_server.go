@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -20,17 +21,36 @@ import (
 )
 
 type ConnectorServer struct {
-	Store                     control.InstallationStore
-	Hub                       *Hub
-	Logger                    *slog.Logger
-	Metrics                   *observability.Metrics
-	HandshakeTimeout          time.Duration
-	Presence                  ConnectorPresence
-	NodeID                    string
-	NodeRelayURL              string
-	Draining                  bool
+	Store            control.InstallationStore
+	Hub              *Hub
+	Logger           *slog.Logger
+	Metrics          *observability.Metrics
+	HandshakeTimeout time.Duration
+	Presence         ConnectorPresence
+	NodeID           string
+	NodeRelayURL     string
+	// Drain is the node's shutdown switch: on, it takes no new tunnel.
+	Drain                     *NodeDrain
 	PresenceTTL               time.Duration
 	PresenceHeartbeatInterval time.Duration
+	// HandshakeLimiter caps how fast this node takes new tunnels, over TCP and
+	// WebSocket together. Nil: no cap.
+	HandshakeLimiter *HandshakeLimiter
+	// Endpoints are the tunnel addresses this relay hands every connector in
+	// its HelloAck, best first. Connectors save them and dial them from then
+	// on, which is how the fleet moves to a new address without an .env edit.
+	Endpoints []string
+	// TunnelsPerShop is how many tunnels each shop should keep, sent in the
+	// HelloAck. Zero leaves connectors at one.
+	TunnelsPerShop int
+	// Fleet is the node registry this node takes part in, which placement
+	// reads. Nil: a single node, which takes every tunnel.
+	Fleet *Fleet
+	// TunnelRedirect lets placement send a tunnel straight to a lighter
+	// node's own address. Off, it turns the tunnel away instead and lets the
+	// balancer pick again (for when the platform's front balancer, which
+	// carries those addresses, can't take the load).
+	TunnelRedirect bool
 }
 
 func (s ConnectorServer) Serve(ctx context.Context, listener net.Listener) error {
@@ -51,11 +71,28 @@ func (s ConnectorServer) Serve(ctx context.Context, listener net.Listener) error
 			}
 			return err
 		}
+		if !s.HandshakeLimiter.Allow() {
+			// The TLS handshake hasn't started (it runs on the first read), so
+			// closing here costs nothing. The connector backs off and returns.
+			s.metrics().RecordConnectorHandshakeRejected("rate_limited")
+			_ = conn.Close()
+			continue
+		}
 		go s.handleConn(ctx, conn, logger)
 	}
 }
 
 func (s ConnectorServer) handleConn(ctx context.Context, raw net.Conn, logger *slog.Logger) {
+	s.serveConnector(ctx, raw, logger, "tcp")
+}
+
+// serveConnector runs one tunnel from the connector's Hello to its end.
+// transport names how the connection arrived ("tcp" or "websocket"); raw is a
+// TLS connection either way, so everything after it is the same.
+func (s ConnectorServer) serveConnector(ctx context.Context, raw net.Conn, logger *slog.Logger, transport string) {
+	if s.HandshakeTimeout == 0 {
+		s.HandshakeTimeout = 10 * time.Second
+	}
 	conn := protocol.NewConn(raw)
 	_ = conn.SetDeadline(time.Now().Add(s.HandshakeTimeout))
 	frame, err := conn.ReadFrame()
@@ -90,7 +127,15 @@ func (s ConnectorServer) handleConn(ctx context.Context, raw net.Conn, logger *s
 		_ = conn.Close()
 		return
 	}
-	if s.Draining {
+	// A connector numbers its tunnels in the Hello's stream field; an old
+	// one leaves it 0.
+	tunnelID := frame.StreamID
+	if tunnelID > protocol.MaxTunnels {
+		_ = protocol.WriteError(conn, "tunnel number out of range")
+		_ = conn.Close()
+		return
+	}
+	if s.Drain.Draining() {
 		_ = protocol.WriteError(conn, "relay node is draining")
 		logger.Info("relay connector rejected because node is draining")
 		_ = conn.Close()
@@ -115,7 +160,15 @@ func (s ConnectorServer) handleConn(ctx context.Context, raw net.Conn, logger *s
 		_ = conn.Close()
 		return
 	}
-	if err := conn.WriteFrame(protocol.Frame{Type: protocol.FrameHelloAck}); err != nil {
+	if err := conn.WriteFrame(protocol.Frame{
+		Type: protocol.FrameHelloAck,
+		Payload: protocol.EncodeHelloAck(protocol.HelloAckInfo{
+			NodeID:    s.NodeID,
+			Endpoints: s.Endpoints,
+			Tunnels:   s.TunnelsPerShop,
+			Moves:     true,
+		}),
+	}); err != nil {
 		logger.Warn("relay connector handshake ack failed", "installation_id", installation.ID, "error", err)
 		_ = conn.Close()
 		return
@@ -123,16 +176,23 @@ func (s ConnectorServer) handleConn(ctx context.Context, raw net.Conn, logger *s
 	_ = conn.SetDeadline(time.Time{})
 
 	session := protocol.NewSession(conn)
-	unregister := s.Hub.Register(installation.ID, session)
+	unregister := s.Hub.RegisterTunnel(installation.ID, tunnelID, session)
 	defer unregister()
-	releaseMetrics := s.metrics().ConnectorConnected()
+	releaseMetrics := s.metrics().ConnectorConnectedVia(transport)
 	defer releaseMetrics()
-	stopPresence := s.startPresence(ctx, installation.ID, logger)
+	stopPresence := sync.OnceFunc(s.startPresence(ctx, installation.ID, tunnelID, transport, logger))
 	defer stopPresence()
+	// The connector has a replacement and closes this tunnel once its last
+	// stream ends: no new stream goes here, and no other node forwards here.
+	session.OnRetire(func() {
+		s.Hub.Retire(installation.ID, session)
+		go stopPresence()
+		logger.Info("relay connector tunnel retired", "installation_id", installation.ID, "tunnel", tunnelID)
+	})
 	if err := s.Store.MarkConnectorConnected(ctx, installation.ID, time.Now().UTC()); err != nil {
 		logger.Warn("relay connector heartbeat update failed", "installation_id", installation.ID, "error", err)
 	}
-	logger.Info("relay connector connected", "installation_id", installation.ID)
+	logger.Info("relay connector connected", "installation_id", installation.ID, "transport", transport, "tunnel", tunnelID)
 	if err := session.Run(); err != nil {
 		logger.Warn("relay connector disconnected with error", "installation_id", installation.ID, "error", err)
 		return
@@ -234,6 +294,8 @@ func validateConnectorCertificateState(
 func (s ConnectorServer) startPresence(
 	ctx context.Context,
 	installationID string,
+	tunnelID uint64,
+	transport string,
 	logger *slog.Logger,
 ) func() {
 	if s.Presence == nil {
@@ -263,6 +325,8 @@ func (s ConnectorServer) startPresence(
 		ConnectionID:   connectionID,
 		RelayHTTPURL:   s.NodeRelayURL,
 		ConnectedAt:    time.Now().UTC(),
+		TunnelID:       tunnelID,
+		Transport:      transport,
 	}
 	lease, err := s.Presence.MarkOnline(ctx, record, ttl)
 	if err != nil {

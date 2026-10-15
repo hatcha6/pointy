@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -39,6 +40,7 @@ import (
 	"pointy/relay/internal/limit"
 	"pointy/relay/internal/moamalat"
 	"pointy/relay/internal/observability"
+	"pointy/relay/internal/protocol"
 	"pointy/relay/internal/ratelimit"
 	relayserver "pointy/relay/internal/relay"
 	"pointy/relay/internal/resala"
@@ -218,6 +220,46 @@ func runServer(args []string) error {
 		"connector-client-ca-key",
 		envString("POINTY_RELAY_CONNECTOR_CLIENT_CA_KEY", ""),
 		"client CA private key used to issue connector mTLS certificates",
+	)
+	connectorHandshakeRate := flags.Int(
+		"connector-handshake-rate",
+		envInt("POINTY_RELAY_CONNECTOR_HANDSHAKE_RATE", 50),
+		"new connector tunnels this node takes per second, TCP and WebSocket together (0 = no limit)",
+	)
+	connectorHandshakeBurst := flags.Int(
+		"connector-handshake-burst",
+		envInt("POINTY_RELAY_CONNECTOR_HANDSHAKE_BURST", 100),
+		"new connector tunnels this node takes at once before the per-second limit applies",
+	)
+	connectorTunnels := flags.Int(
+		"connector-tunnels",
+		envInt("POINTY_RELAY_CONNECTOR_TUNNELS", 2),
+		"tunnels each shop keeps open, each on its own node where more than one is live (1-4)",
+	)
+	tunnelRedirect := flags.Bool(
+		"tunnel-redirect",
+		envBool("POINTY_RELAY_TUNNEL_REDIRECT", true),
+		"let a node send an arriving tunnel straight to a lighter node's own address; off, it turns the tunnel away and the balancer picks again",
+	)
+	nodePublicURLTemplate := flags.String(
+		"node-public-url-template",
+		envString("POINTY_RELAY_NODE_PUBLIC_URL_TEMPLATE", ""),
+		"this node's own public https origin, {hostname} for the container hostname; empty tries https://<hostname> then reverse DNS, \"none\" advertises no address",
+	)
+	drainTimeout := flags.Duration(
+		"drain-timeout",
+		envDuration("POINTY_RELAY_DRAIN_TIMEOUT", 20*time.Second),
+		"on SIGTERM, how long this node waits for its tunnels to move to other nodes and its requests to finish before it closes the rest; keep it, plus 5s, below the platform's stop grace period",
+	)
+	connectorHold := flags.Duration(
+		"connector-hold",
+		envDuration("POINTY_RELAY_CONNECTOR_HOLD", 8*time.Second),
+		"how long a request waits for a shop that is between tunnels before it is answered 503 (0: answer at once)",
+	)
+	rebalance := flags.Bool(
+		"rebalance",
+		envBool("POINTY_RELAY_REBALANCE", true),
+		"let a node that holds more than its share of tunnels hand some to the lightest node",
 	)
 	connectorClientCertTTL := flags.Duration(
 		"connector-client-cert-ttl",
@@ -544,6 +586,11 @@ func runServer(args []string) error {
 		envString("POINTY_RELAY_PUBLIC_URL", ""),
 		"the relay's public origin (https://...), where Dafa's payment webhook reaches it; empty derives it per request",
 	)
+	connectorEndpoints := flags.String(
+		"connector-endpoints",
+		envString("POINTY_RELAY_CONNECTOR_ENDPOINTS", ""),
+		"tunnel addresses every connector is told to dial, best first (wss://host/v1/connector/tunnel, tls://host:port); empty derives the tunnel over HTTPS from --public-url, \"none\" advertises nothing",
+	)
 	publicPagesURL := flags.String(
 		"public-pages-url",
 		envString("POINTY_RELAY_PUBLIC_PAGES_URL", ""),
@@ -824,6 +871,10 @@ func runServer(args []string) error {
 	if err != nil {
 		return err
 	}
+	advertisedConnectorEndpoints, err := buildConnectorEndpoints(*connectorEndpoints, publicAddresses.API)
+	if err != nil {
+		return err
+	}
 	voucherSettingValues := voucherSettings{
 		BNPlusBaseURL:        *bnplusBaseURL,
 		BNPlusEmail:          *bnplusEmail,
@@ -1057,8 +1108,7 @@ func runServer(args []string) error {
 	if err != nil {
 		return err
 	}
-	secureConnector, err := secureConnectorListener(
-		connectorListener,
+	connectorTLSConfig, err := connectorServerTLSConfig(
 		*connectorTLSCert,
 		*connectorTLSKey,
 		autoTLSMaterial.ConnectorServerCertPEM,
@@ -1071,7 +1121,9 @@ func runServer(args []string) error {
 		_ = connectorListener.Close()
 		return err
 	}
-	connectorListener = secureConnector
+	if connectorTLSConfig != nil {
+		connectorListener = tls.NewListener(connectorListener, connectorTLSConfig)
+	}
 	httpListener, err := net.Listen("tcp", *httpAddr)
 	if err != nil {
 		_ = connectorListener.Close()
@@ -1129,8 +1181,57 @@ func runServer(args []string) error {
 		adminHTTPListener = secureAdminHTTP
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	// A stop signal drains the node first (see the end of this function);
+	// everything else runs until the drain is over.
+	signalCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	ctx, cancelRun := context.WithCancel(context.Background())
+	defer cancelRun()
+	drain := &relayserver.NodeDrain{}
+	if *draining {
+		drain.Begin()
+	}
+
+	if *connectorTunnels < 1 || *connectorTunnels > protocol.MaxTunnels {
+		return fmt.Errorf("POINTY_RELAY_CONNECTOR_TUNNELS must be between 1 and %d", protocol.MaxTunnels)
+	}
+	// The node's own address, checked by calling it before it is handed out;
+	// the registry, through which the nodes place tunnels among themselves.
+	publicCandidate, publicSource, err := relayserver.NodePublicAddressCandidate(*nodePublicURLTemplate)
+	if err != nil {
+		return err
+	}
+	nodeAddress := &relayserver.NodeAddress{
+		NodeID:    nodeID,
+		Candidate: publicCandidate,
+		Source:    publicSource,
+		Logger:    logger,
+	}
+	var fleet *relayserver.Fleet
+	if redisClient != nil {
+		fleet = &relayserver.Fleet{
+			Registry: relayserver.NewRedisNodeRegistry(redisClient, relayRedisKeyPrefix),
+			NodeID:   nodeID,
+			Hub:      hub,
+			Drain:    drain,
+			Stats:    relayserver.NodeStatsOf(hub, metrics, version),
+			Address:  nodeAddress,
+			Logger:   logger,
+		}
+	}
+	logger.Info(
+		"relay node placement",
+		"node_id", nodeID,
+		"node_internal_url", strings.TrimSpace(*nodeInternalURL),
+		"public_address_candidate", publicCandidate,
+		"public_address_source", publicSource,
+		"registry", fleet != nil,
+		"tunnel_redirect", *tunnelRedirect,
+		"tunnels_per_shop", *connectorTunnels,
+		"rebalance", *rebalance && fleet != nil && presence != nil,
+		"drain_timeout", drainTimeout.String(),
+		"connector_hold", connectorHold.String(),
+	)
 
 	connectorServer := relayserver.ConnectorServer{
 		Store:        store,
@@ -1140,7 +1241,15 @@ func runServer(args []string) error {
 		Presence:     presence,
 		NodeID:       nodeID,
 		NodeRelayURL: strings.TrimSpace(*nodeInternalURL),
-		Draining:     *draining,
+		Drain:        drain,
+		HandshakeLimiter: relayserver.NewHandshakeLimiter(
+			float64(*connectorHandshakeRate),
+			*connectorHandshakeBurst,
+		),
+		Endpoints:      advertisedConnectorEndpoints,
+		TunnelsPerShop: *connectorTunnels,
+		Fleet:          fleet,
+		TunnelRedirect: *tunnelRedirect,
 	}
 	var artifactStore *artifacts.Store
 	if dir := strings.TrimSpace(*artifactDir); dir != "" {
@@ -1275,8 +1384,12 @@ func runServer(args []string) error {
 		TicketRefreshRateLimit:        ratelimit.Policy{Limit: *ticketRefreshRateLimit, Window: *rateLimitWindow},
 		Metrics:                       metrics,
 		Presence:                      presence,
+		Fleet:                         fleet,
 		NodeID:                        nodeID,
-		Draining:                      *draining,
+		Drain:                         drain,
+		ConnectorHold:                 *connectorHold,
+		Version:                       version,
+		Database:                      postgresStore,
 		NodeProxyToken:                strings.TrimSpace(*nodeProxyToken),
 		AllowInsecureNodeProxy:        *allowInsecureNodeProxy,
 		Tickets:                       tickets,
@@ -1328,6 +1441,11 @@ func runServer(args []string) error {
 		SerperImageCountry:        strings.TrimSpace(*serperImageCountry),
 		ImageSearchRequestTimeout: *imageSearchRequestTimeout,
 	}
+	if redisClient != nil {
+		// Assigned only when set: a nil client in the interface would not
+		// read as "no Redis".
+		baseHTTPHandler.Redis = redisClient
+	}
 	publicHTTPHandler := baseHTTPHandler
 	publicHTTPHandler.RouteMode = relayserver.RouteAll
 	if adminHTTPListener != nil {
@@ -1361,6 +1479,15 @@ func runServer(args []string) error {
 			publicHandler = wrapped
 		}
 	}
+	// Connectors can also reach any node over HTTPS (443) through the
+	// balancer, with their mTLS inside a WebSocket; the TCP listener stays
+	// for connectors that haven't updated.
+	publicHandler = relayserver.WithConnectorTunnel(publicHandler, relayserver.ConnectorTunnel{
+		Server:    connectorServer,
+		TLSConfig: connectorTLSConfig,
+		Context:   ctx,
+	})
+	publicHandler = relayserver.WithNodeWhoAmI(publicHandler, nodeAddress)
 	httpServer := &http.Server{
 		Handler:           publicHandler,
 		ReadHeaderTimeout: 5 * time.Second,
@@ -1417,6 +1544,22 @@ func runServer(args []string) error {
 			"test_mode", smsConfig.TestMode,
 			"rate_limit", smsConfig.RateLimit.String(),
 		)
+	}
+
+	if fleet != nil {
+		go nodeAddress.Run(ctx)
+		go fleet.Run(ctx)
+		if *rebalance && presence != nil {
+			go relayserver.Rebalancer{
+				Hub:      hub,
+				Fleet:    fleet,
+				Presence: presence,
+				Drain:    drain,
+				NodeID:   nodeID,
+				Logger:   logger,
+				Metrics:  metrics,
+			}.Run(ctx)
+		}
 	}
 
 	errs := make(chan error, 3)
@@ -1541,14 +1684,32 @@ func runServer(args []string) error {
 	}
 
 	select {
-	case <-ctx.Done():
+	case <-signalCtx.Done():
+		// A second signal ends the process at once.
+		stop()
+		// Tunnels move to other nodes while this one still serves, so the
+		// requests that arrive meanwhile are answered; then the listeners
+		// stop, what is left closes, and the node leaves the registry.
+		relayserver.Drainer{
+			Hub:     hub,
+			Drain:   drain,
+			Fleet:   fleet,
+			Timeout: *drainTimeout,
+			Logger:  logger,
+			Metrics: metrics,
+		}.Run(context.Background())
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
+		_ = connectorListener.Close()
 		_ = httpServer.Shutdown(shutdownCtx)
 		if adminHTTPServer != nil {
 			_ = adminHTTPServer.Shutdown(shutdownCtx)
 		}
-		_ = connectorListener.Close()
+		hub.CloseAll()
+		cancelRun()
+		// At once, rather than when the record expires: the other nodes
+		// drop this one's presence records as soon as they see it gone.
+		fleet.Leave()
 		return nil
 	case err := <-errs:
 		if err != nil {
@@ -1898,7 +2059,12 @@ func runConnector(args []string) error {
 	relayAddr := flags.String(
 		"relay",
 		envString("POINTY_RELAY_CONNECTOR_ADDR", ""),
-		"relay connector TCP address",
+		"relay connector TCP address, tried after --urls",
+	)
+	tunnelURLs := flags.String(
+		"urls",
+		envString("POINTY_RELAY_CONNECTOR_URLS", ""),
+		"tunnel addresses to try before --relay, best first (wss://host/v1/connector/tunnel, tls://host:port); empty uses the hosted relay's tunnel over HTTPS when --relay is the hosted relay",
 	)
 	token := flags.String(
 		"token",
@@ -2038,6 +2204,8 @@ func runConnector(args []string) error {
 				tlsServerNameValue = strings.TrimSpace(bootstrap.TLSServerName)
 			}
 			state = connectorState{
+				RelayEndpoints:                state.RelayEndpoints,
+				LastGoodEndpoint:              state.LastGoodEndpoint,
 				InstallationID:                bootstrap.InstallationID,
 				ShopName:                      bootstrap.ShopName,
 				BackendURL:                    backendURL.String(),
@@ -2057,14 +2225,24 @@ func runConnector(args []string) error {
 	if connectorToken == "" {
 		return fmt.Errorf("connector token is required")
 	}
-	if relayAddress == "" {
+	endpoints, err := connector.ParseEndpoints(*tunnelURLs)
+	if err != nil {
+		return fmt.Errorf("POINTY_RELAY_CONNECTOR_URLS: %w", err)
+	}
+	if strings.TrimSpace(*tunnelURLs) == "" {
+		endpoints = connector.DefaultEndpoints(relayAddress)
+	}
+	if relayAddress == "" && len(endpoints) == 0 {
 		return fmt.Errorf("relay connector address is required")
 	}
 
 	var tlsConfig *tls.Config
 	if !*allowInsecureRelay {
-		if tlsServerNameValue == "" {
+		if tlsServerNameValue == "" && relayAddress != "" {
 			tlsServerNameValue = relayTLSServerName(relayAddress)
+		}
+		if tlsServerNameValue == "" {
+			tlsServerNameValue = endpoints[0].Host
 		}
 		if (strings.TrimSpace(*tlsCA) == "" &&
 			strings.TrimSpace(state.ConnectorCACertificatePEM) == "") ||
@@ -2089,7 +2267,24 @@ func runConnector(args []string) error {
 	}
 	startBackendConnectorHeartbeat(ctx, backendURL, connectorToken, logger)
 	return connector.Client{
-		RelayAddress:          relayAddress,
+		Endpoints:           endpoints,
+		RelayAddress:        relayAddress,
+		AdvertisedEndpoints: state.RelayEndpoints,
+		LastGoodEndpoint:    state.LastGoodEndpoint,
+		OnConnected: func(connected connector.Connected) {
+			// Saved so the next start dials what the relay advertised, and
+			// what last worked, before anything this install was configured
+			// with: that is how shops follow the relay to a new address.
+			if connected.Endpoint == state.LastGoodEndpoint &&
+				slices.Equal(connected.Advertised, state.RelayEndpoints) {
+				return
+			}
+			state.LastGoodEndpoint = connected.Endpoint
+			state.RelayEndpoints = connected.Advertised
+			if err := saveConnectorState(*stateFile, state); err != nil {
+				logger.Warn("connector could not save the relay's tunnel addresses", "error", err)
+			}
+		},
 		Token:                 connectorToken,
 		BackendURL:            backendURL,
 		Logger:                logger,
@@ -3278,6 +3473,11 @@ type installationStatusView struct {
 		Online bool   `json:"online"`
 		NodeID string `json:"node_id"`
 	} `json:"connector_presence"`
+	ConnectorTunnels []struct {
+		NodeID    string `json:"node_id"`
+		TunnelID  uint64 `json:"tunnel_id"`
+		Transport string `json:"transport"`
+	} `json:"connector_tunnels"`
 }
 
 type auditEventsResponse struct {
@@ -3355,9 +3555,20 @@ func renderInstallationStatus(status installationStatusView) error {
 		{"subscription ends", formatTimeField(status.SubscriptionEndsAt)},
 		{"connector online", onOff(online)},
 		{"connector node", dashIfEmpty(node)},
+	}
+	// One row per tunnel: which node holds it and how it arrived. A relay
+	// older than the tunnel list sends none, leaving the node row above.
+	for _, tunnel := range status.ConnectorTunnels {
+		label := "tunnel " + strconv.FormatUint(tunnel.TunnelID, 10)
+		if tunnel.TunnelID == 0 {
+			label = "tunnel (old connector)"
+		}
+		rows = append(rows, [2]string{label, tunnel.NodeID + " via " + dashIfEmpty(tunnel.Transport)})
+	}
+	rows = append(rows, [][2]string{
 		{"last connector seen", formatTimeField(status.LastConnectorConnectedAt)},
 		{"connector cert expires", formatTimeField(status.CertificateExpiresAt)},
-	}
+	}...)
 	for _, row := range rows {
 		fmt.Fprintf(writer, "%s\t%s\n", row[0], row[1])
 	}
@@ -3881,8 +4092,10 @@ func newRedisClient(ctx context.Context, rawURL string) (*redis.Client, error) {
 	return client, nil
 }
 
-func secureConnectorListener(
-	listener net.Listener,
+// connectorServerTLSConfig is the connector mTLS configuration, shared by the
+// TCP listener and the WebSocket tunnel route. Nil when the connector runs
+// without TLS (local development only).
+func connectorServerTLSConfig(
 	certFile string,
 	keyFile string,
 	certPEM string,
@@ -3890,9 +4103,9 @@ func secureConnectorListener(
 	clientCAFile string,
 	clientCAPEM string,
 	allowInsecure bool,
-) (net.Listener, error) {
+) (*tls.Config, error) {
 	if allowInsecure {
-		return listener, nil
+		return nil, nil
 	}
 	config, err := security.ServerTLSConfig(security.ServerTLSOptions{
 		CertFile:        certFile,
@@ -3906,7 +4119,7 @@ func secureConnectorListener(
 	if err != nil {
 		return nil, fmt.Errorf("connector mTLS setup failed: %w", err)
 	}
-	return tls.NewListener(listener, config), nil
+	return config, nil
 }
 
 func secureHTTPListener(

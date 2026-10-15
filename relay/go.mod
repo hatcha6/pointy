@@ -3,6 +3,7 @@ module pointy/relay
 go 1.25.0
 
 require (
+	github.com/coder/websocket v1.8.14
 	github.com/fxamacker/cbor/v2 v2.9.1
 	github.com/go-webauthn/webauthn v0.17.1
 	github.com/jackc/pgx/v5 v5.9.2

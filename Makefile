@@ -138,7 +138,7 @@ ENDURANCE_WORKERS ?= 4
 	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-camera-wedge-test frontend-camera-wedge-linux frontend-camera-wedge-linux-clean frontend-camera-wedge-preview frontend-calculator-preview frontend-e2e frontend-analyze frontend-format frontend-navigation-preview frontend-balances-preview frontend-employee-loans-preview frontend-scales-preview frontend-invoice-attribution-preview frontend-learning-preview frontend-integrations-preview frontend-moamalat-preview frontend-recharge-preview frontend-portal-payments-preview frontend-printers-preview frontend-reports-preview frontend-marketing-preview frontend-app-update-preview \
 	marketing-site marketing-site-capture \
 	camera-rig camera-rig-stop camera-rig-logs camera-rig-test \
-	relay-install relay-format relay-check relay-test relay-production-test relay-run relay-connector relay-connector-remote relay-migrate relay-provision relay-subscription-update relay-remote-mint relay-remote-activate relay-remote-provision relay-cli \
+	relay-install relay-format relay-check relay-test relay-production-test relay-fleet-test relay-run relay-connector relay-connector-remote relay-migrate relay-provision relay-subscription-update relay-remote-mint relay-remote-activate relay-remote-provision relay-cli \
 	onprem-test onprem-rehearsal onprem-rehearsal-clean onprem-move-test upgrade-rehearsal upgrade-check android-release-key \
 	format check test e2e dev dev-local dev-no-redis dev-ai dev-remote ai-enable ai-enable-remote postgres-ready clean
 
@@ -588,6 +588,13 @@ relay-production-test: ## Run opt-in relay production E2E tests against PostgreS
 		POINTY_RELAY_E2E_DATABASE_URL="$(RELAY_E2E_DATABASE_URL)" \
 		POINTY_RELAY_E2E_REDIS_URL="$(RELAY_E2E_REDIS_URL)" \
 		$(GO) test -count=1 ./internal/e2e
+
+relay-fleet-test: ## Run the opt-in relay fleet E2E tests (two nodes, balancer, Redis, many connectors).
+	cd "$(RELAY_DIR)" && GOCACHE="$(abspath $(GO_CACHE))" GOMODCACHE="$(abspath $(GO_MOD_CACHE))" \
+		POINTY_RELAY_TUNNEL_E2E=1 \
+		POINTY_RELAY_E2E_REDIS_URL="$(RELAY_E2E_REDIS_URL)" \
+		POINTY_RELAY_TEST_REDIS_URL="$(RELAY_E2E_REDIS_URL)" \
+		$(GO) test -count=1 -timeout 15m -run 'TestTunnelFleet|TestRedis' ./internal/e2e ./internal/relay
 
 relay-console-install: ## Install the operator console web app's dependencies.
 	cd "$(RELAY_DIR)/console-ui" && npm ci --no-audit --no-fund
