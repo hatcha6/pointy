@@ -55,9 +55,10 @@ std::wstring ProgramDataPath() {
 constexpr wchar_t kDistroName[] = L"Pointy";
 constexpr wchar_t kLxssKeyPath[] =
     L"Software\\Microsoft\\Windows\\CurrentVersion\\Lxss";
-// Present in a keeper that can -Restart and grants signed-in users the run
-// right: an installed copy without it is older than the one this till carries.
-constexpr char kKeeperCurrentMarker[] = "function Invoke-Restart";
+// The keeper's "# pointy-keeper-revision: N" line. Whichever of the installed
+// and the carried keeper has the higher one runs, so neither an older server
+// nor an older till ever puts back a keeper the other has outgrown.
+constexpr char kKeeperRevisionTag[] = "pointy-keeper-revision:";
 
 bool FileExists(const std::wstring& path) {
   const DWORD attributes = ::GetFileAttributesW(path.c_str());
@@ -65,20 +66,41 @@ bool FileExists(const std::wstring& path) {
          (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0;
 }
 
-bool FileContains(const std::wstring& path, const char* needle) {
+// 0 for a keeper without a revision (one older than revisions), or no file.
+int KeeperRevision(const std::wstring& path) {
   std::ifstream file(path, std::ios::binary);
   if (!file) {
-    return false;
+    return 0;
   }
-  const std::string text((std::istreambuf_iterator<char>(file)),
-                         std::istreambuf_iterator<char>());
-  return text.find(needle) != std::string::npos;
+  std::string line;
+  while (std::getline(file, line)) {
+    const size_t start = line.find_first_not_of(" \t");
+    if (start == std::string::npos || line[start] != '#') {
+      continue;
+    }
+    const size_t tag = line.find(kKeeperRevisionTag, start);
+    if (tag == std::string::npos) {
+      continue;
+    }
+    int revision = 0;
+    for (size_t i = tag + sizeof(kKeeperRevisionTag) - 1; i < line.size();
+         ++i) {
+      const char c = line[i];
+      if (c >= '0' && c <= '9') {
+        revision = revision * 10 + (c - '0');
+      } else if (c != ' ' && c != '\t' && c != '\r') {
+        return 0;
+      }
+    }
+    return revision;
+  }
+  return 0;
 }
 
 // The keeper this PC has installed, or the one this till carries
 // (data\server, from the deploy tree at build time) when the PC has none or
-// only one too old to -Restart. Run from there, -Install copies the carried
-// keeper into place. Empty when there is neither.
+// only a lower revision. Run from there, -Install copies the carried keeper
+// into place. Empty when there is neither.
 std::wstring ResolveKeeperScript() {
   const std::wstring program_data = ProgramDataPath();
   const std::wstring installed =
@@ -86,19 +108,23 @@ std::wstring ResolveKeeperScript() {
           ? std::wstring()
           : program_data + L"\\Pointy\\keep-pointy-running.ps1";
   const bool has_installed = !installed.empty() && FileExists(installed);
-  if (has_installed && FileContains(installed, kKeeperCurrentMarker)) {
-    return installed;
-  }
+  std::wstring carried;
   const std::wstring executable = ExecutablePath();
   const size_t slash = executable.find_last_of(L'\\');
   if (slash != std::wstring::npos) {
-    const std::wstring carried = executable.substr(0, slash) +
-                                 L"\\data\\server\\keep-pointy-running.ps1";
-    if (FileExists(carried)) {
-      return carried;
+    carried = executable.substr(0, slash) +
+              L"\\data\\server\\keep-pointy-running.ps1";
+    if (!FileExists(carried)) {
+      carried.clear();
     }
   }
-  return has_installed ? installed : std::wstring();
+  if (carried.empty()) {
+    return has_installed ? installed : std::wstring();
+  }
+  if (has_installed && KeeperRevision(installed) >= KeeperRevision(carried)) {
+    return installed;
+  }
+  return carried;
 }
 
 // Whether this Windows user has the Pointy distro: WSL's own per-user
@@ -203,6 +229,13 @@ std::string LaunchKeeperElevated(KeeperLaunch mode) {
   SHELLEXECUTEINFOW info = {};
   info.cbSize = sizeof(info);
   info.fMask = SEE_MASK_NOASYNC;
+  // Owned by the till's window: without an owner Windows may raise the
+  // administrator prompt behind the till or only flash it in the taskbar,
+  // and the button looks as if it did nothing.
+  info.hwnd = ::GetActiveWindow();
+  if (info.hwnd == nullptr) {
+    info.hwnd = ::GetForegroundWindow();
+  }
   info.lpVerb = L"runas";
   info.lpFile = file.c_str();
   info.lpParameters = parameters.c_str();

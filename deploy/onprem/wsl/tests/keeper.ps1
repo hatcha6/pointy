@@ -28,6 +28,7 @@ foreach ($fn in $ast.FindAll({ param($n) $n -is [System.Management.Automation.La
     Invoke-Expression $fn.Extent.Text
 }
 $Distro = "Pointy"; $AnchorSleep = "2147483647"; $InstallRoot = "/tmp/x"; $LogDir = "/tmp/x/logs"; $LogFile = "/tmp/x/logs/k.log"
+$KeeperFileName = "keep-pointy-running.ps1"; $ClientRunValue = "PointyServer"
 function Write-Log { param([string]$Message, [string]$Level = "INFO") }
 
 $pass = 0; $fail = 0
@@ -203,6 +204,58 @@ $firstTry = Test-Path $collector
 $script:BrokenReads.Clear()
 Update-FromGuest
 Check "a failed read is retried next round" ("{0} {1}" -f $firstTry, (Test-Path $collector)) "False True"
+
+# --- revisions: a keeper never goes backwards -------------------------------
+# An older server's release must not undo a newer till's keeper, and an older
+# till must not undo a newer server's.
+function keeperAt([int]$Revision, [string]$Body = "x") {
+    if ($Revision -gt 0) { return "# pointy-keeper-revision: ${Revision}`r`nWrite-Host '${Body}'`r`n" }
+    return "Write-Host '${Body}'`r`n" }
+$revFile = Join-Path $tmp "rev.ps1"
+[IO.File]::WriteAllText($revFile, (keeperAt 7))
+Check "reads a revision (CRLF)" (Get-KeeperRevision $revFile) 7
+[IO.File]::WriteAllText($revFile, (keeperAt 0))
+Check "a keeper without one is revision 0" (Get-KeeperRevision $revFile) 0
+Check "a missing file is revision 0" (Get-KeeperRevision (Join-Path $tmp "nope.ps1")) 0
+Check "the shipped keeper declares one" ((Get-KeeperRevision $path) -gt 0) $true
+
+$script:RefusedHashes = @{}
+[IO.File]::WriteAllText($local, (keeperAt 3 "installed"))
+$script:GuestFiles["wsl/keep-pointy-running.ps1"] = bytes (keeperAt 2 "older server")
+$script:Logged.Clear()
+Update-FromGuest
+Check "an older server's keeper does not replace a newer one" ([IO.File]::ReadAllText($local) -like "*installed*") $true
+Check "and says why, once" (logged "revision 2 is not newer than the installed 3") $true
+$script:GuestFiles["wsl/keep-pointy-running.ps1"] = bytes (keeperAt 3 "same revision")
+Update-FromGuest
+Check "nor does one of the same revision" ([IO.File]::ReadAllText($local) -like "*installed*") $true
+$script:GuestFiles["wsl/keep-pointy-running.ps1"] = bytes (keeperAt 4 "newer server")
+Update-FromGuest
+Check "a newer server's keeper does" ([IO.File]::ReadAllText($local) -like "*newer server*") $true
+[IO.File]::WriteAllText($local, (keeperAt 0 "before revisions"))
+$script:GuestFiles["wsl/keep-pointy-running.ps1"] = bytes (keeperAt 0 "release before revisions")
+Update-FromGuest
+Check "two keepers from before revisions update as before" ([IO.File]::ReadAllText($local) -like "*release before revisions*") $true
+
+# The till's carried keeper, found through its sign-in entry.
+$carried = Join-Path $tmp "carried.ps1"
+function Find-ClientKeeper { return $carried }
+[IO.File]::WriteAllText($local, (keeperAt 3 "installed"))
+[IO.File]::WriteAllText($carried, (keeperAt 5 "newer till"))
+$script:Logged.Clear()
+Update-FromClient
+Check "a newer till's keeper is installed" ([IO.File]::ReadAllText($local) -like "*newer till*") $true
+Check "and logged with its revision" (logged "to the client's keeper (revision 5)") $true
+[IO.File]::WriteAllText($carried, (keeperAt 2 "older till"))
+Update-FromClient
+Check "an older till's keeper is not" ([IO.File]::ReadAllText($local) -like "*newer till*") $true
+[IO.File]::WriteAllText($carried, "# pointy-keeper-revision: 9`nfunction Broken {`n")
+Update-FromClient
+Check "a till's keeper that does not parse is not" ([IO.File]::ReadAllText($local) -like "*newer till*") $true
+function Find-ClientKeeper { return "" }
+Update-FromClient
+Check "no till, nothing changes" ([IO.File]::ReadAllText($local) -like "*newer till*") $true
+Check "leaves no staged copies behind (client)" (@(Get-ChildItem $InstallRoot -Filter "*.new").Count) 0
 
 Check "sha256sum lines parse in text and binary mode" (& {
     function Invoke-Guest { param([string]$Command, [int]$TimeoutSec = 120)

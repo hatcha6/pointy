@@ -139,7 +139,7 @@ ENDURANCE_WORKERS ?= 4
 	marketing-site marketing-site-capture \
 	camera-rig camera-rig-stop camera-rig-logs camera-rig-test \
 	relay-install relay-format relay-check relay-test relay-production-test relay-fleet-test relay-run relay-connector relay-connector-remote relay-migrate relay-provision relay-subscription-update relay-remote-mint relay-remote-activate relay-remote-provision relay-cli \
-	onprem-test onprem-rehearsal onprem-rehearsal-clean onprem-move-test upgrade-rehearsal upgrade-check android-release-key \
+	onprem-test onprem-keeper-revision onprem-rehearsal onprem-rehearsal-clean onprem-move-test upgrade-rehearsal upgrade-check android-release-key \
 	format check test e2e dev dev-local dev-no-redis dev-ai dev-remote ai-enable ai-enable-remote postgres-ready clean
 
 help: ## Show available commands.
@@ -793,6 +793,9 @@ relay-remote-provision: ## Provision an installation on the REMOTE relay and pri
 
 onprem-test: ## Run the on-prem update engine unit tests (pure bash; no Docker, no network).
 	bash deploy/onprem/tests/run-tests.sh
+
+onprem-keeper-revision: ## Raise the WSL keeper's revision after changing keep-pointy-running.ps1 (CI refuses a change without one).
+	bash deploy/onprem/wsl/keeper-revision.sh bump
 
 onprem-rehearsal: docker-check ## Rehearse real updates against real Docker (installs throwaway shops; needs Go).
 	bash deploy/onprem/tests/rehearsal/run-rehearsal.sh $(REHEARSAL)

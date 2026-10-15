@@ -15,8 +15,8 @@ import 'local_server_starting_screen.dart';
 /// real [child] once a target (LAN or relay) is acquired.
 ///
 /// On the shop's WSL server PC, until that server answers, the
-/// [serverHost]'s starting screen stands in for the spinner and the manual
-/// entry: there is nothing to search for until it runs.
+/// [serverHost]'s starting screen stands in for the spinner, the manual
+/// entry and a relay connection: there is nothing to reach until it runs.
 class ConnectionGate extends StatelessWidget {
   const ConnectionGate({
     super.key,
@@ -37,7 +37,9 @@ class ConnectionGate extends StatelessWidget {
     return ListenableBuilder(
       listenable: Listenable.merge([controller, ?serverHost]),
       builder: (context, _) {
-        if (!controller.isReady &&
+        // The relay leads back to this same PC's server, so being on it says
+        // nothing about that server running: only the LAN does.
+        if (controller.phase != ConnectionPhase.connectedLocal &&
             serverHost != null &&
             serverHost.showsStartingScreen) {
           return LocalServerStartingScreen(controller: serverHost);

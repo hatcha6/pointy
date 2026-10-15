@@ -294,13 +294,24 @@ the grant to an older task by itself.
 
 **The till carries the keeper.** Every Windows build ships this repository's
 `keep-pointy-running.ps1` in `data\server\` (copied from `deploy/` by
-`frontend/windows/CMakeLists.txt`; the build fails without it). Setup and
-restart use the PC's installed copy when it is current (it has `-Restart`),
-and the carried one otherwise: a server PC whose keeper was never installed, or
-is too old, gets it from the till, and `-Install` copies it into
-`%ProgramData%\Pointy`. The keeper still copies a release's own version out of
-the distro every 15 minutes, so update the server along with the tills: a
-server older than the till would put its older keeper back.
+`frontend/windows/CMakeLists.txt`; the build fails without it).
+
+**A keeper never goes backwards.** The keeper declares
+`# pointy-keeper-revision: N`, and every copy of it replaces only a lower
+revision:
+- Setup and restart run the installed copy or the carried one, whichever has
+  the higher revision. `-Install` copies the carried one into
+  `%ProgramData%\Pointy` only when it is newer. It also stops a running older
+  keeper, so that keeper cannot overwrite the new one before handing over.
+- Every 15 minutes the keeper looks at the release in the distro and at the
+  copy carried by the till on this PC. It finds that copy through the till's
+  `PointyServer` sign-in entry. Either one is installed only when its revision
+  is higher, and the keeper then hands over to it.
+- So the tills and the server can update in any order. A till that is newer
+  than the server delivers its keeper, and an older server cannot undo it.
+
+Change the keeper, then run `make onprem-keeper-revision`. The release
+hardening check fails when `keeper-revision.lock` no longer matches the file.
 
 A start that stalls is named rather than left spinning: no heartbeat from the
 keeper within 3 minutes, WSL still not answering after 5, or the keeper

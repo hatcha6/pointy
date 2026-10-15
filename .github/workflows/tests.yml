@@ -50,6 +50,17 @@ jobs:
       - name: Windows bootstrap (WSL install + LAN bridge)
         run: pwsh -NoProfile -File deploy/onprem/wsl/tests/run-tests.ps1
 
+  onprem-windows-powershell:
+    name: On-prem scripts under Windows PowerShell 5.1
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The tasks run powershell.exe 5.1, not pwsh. Its Start-Process loses a
+      # child's exit code, which the Linux pwsh run above cannot see.
+      - name: Native exit codes
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File deploy/onprem/wsl/tests/native-exitcode.ps1
+
   backend-source:
     name: Backend suite (source)
     runs-on: ubuntu-latest

@@ -108,6 +108,25 @@ void main() {
     serverHost.dispose();
   });
 
+  // The field bug: the LAN search missed while the server was down, the
+  // session moved to the relay, and the till dropped this screen for one that
+  // waited on a relay leading back to the same dead server.
+  testWidgets('the relay does not stand in for the server on this PC', (
+    tester,
+  ) async {
+    final serverHost = await pumpGate(
+      tester,
+      _ServerPc(KeeperStartOutcome.missing),
+    );
+
+    status.update(ConnectionPhase.connectedRelay);
+    await tester.pump();
+
+    expect(find.text('تشغيل خادم المتجر'), findsOneWidget);
+    expect(find.text('till'), findsNothing);
+    serverHost.dispose();
+  });
+
   testWidgets('a missing task offers the one-time setup', (tester) async {
     final host = _ServerPc(KeeperStartOutcome.denied);
     final serverHost = await pumpGate(tester, host);

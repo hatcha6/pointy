@@ -50,6 +50,11 @@
   needs to D:\PointyMove; add -KeepRunning for a rehearsal that changes nothing:
       powershell -ExecutionPolicy Bypass -File .\keep-pointy-running.ps1 -ExportTo D:\PointyMove
 #>
+# Raised with every change (`make onprem-keeper-revision`; CI refuses a change
+# without it). A copy only ever replaces a LOWER revision: the release in the
+# distro and the copy the till carries both offer one, and an older server must
+# not undo a newer till's keeper.
+# pointy-keeper-revision: 1
 [CmdletBinding()]
 param(
     [switch]$Install,
@@ -105,6 +110,10 @@ $PromotedFiles = [ordered]@{
 }
 # Hashes of release copies already refused, so a bad one is logged once.
 $script:RefusedHashes = @{}
+$KeeperFileName = "keep-pointy-running.ps1"
+# Where the Pointy client's sign-in start points (its HKCU Run entry). The
+# client carries a keeper beside its executable, in data\server.
+$ClientRunValue = "PointyServer"
 
 # Arabic is spelled out as code points so this file stays plain ASCII, which
 # Windows PowerShell reads the same way whatever the PC's language.
@@ -218,6 +227,11 @@ function Invoke-NativeTimeout {
                     RedirectStandardOutput = $outFile; RedirectStandardError = $errFile }
         if ($line -ne "") { $start.ArgumentList = $line }
         $p = Start-Process @start
+        # Windows PowerShell 5.1 (what every task runs) only keeps an exit code
+        # for a -NoNewWindow child whose handle was opened before it exited;
+        # without this ExitCode is $null, and `$null -ne 0` made every
+        # successful wsl.exe call look like a failure. pwsh 7 is unaffected.
+        $null = $p.Handle
         if (-not $p.WaitForExit($TimeoutSec * 1000)) {
             try { $p.Kill() } catch { }
             return [pscustomobject]@{ ExitCode = -1; Output = "timed out after ${TimeoutSec}s: ${File} ${line}" }
@@ -641,6 +655,30 @@ function Save-GuestFile {
     } catch { return $false }
 }
 
+# The revision a keeper declares (see the header); 0 for a file that has none
+# - a keeper older than revisions, or not a keeper at all.
+function Get-KeeperRevision {
+    param([string]$Path)
+    try {
+        # ReadAllLines, not ReadLines: returning mid-way would leave the file
+        # open, and Windows then refuses to move a new keeper over it.
+        foreach ($line in [System.IO.File]::ReadAllLines($Path)) {
+            if ($line -match '^#\s*pointy-keeper-revision:\s*(\d+)\s*$') { return [int]$Matches[1] }
+        }
+    } catch { }
+    return 0
+}
+
+# Whether a candidate keeper may replace the one installed: only a higher
+# revision does. An installed keeper without one predates revisions, so any
+# candidate that differs may replace it, as before.
+function Test-KeeperIsNewer {
+    param([string]$Candidate, [string]$Installed)
+    $have = Get-KeeperRevision $Installed
+    if ($have -eq 0) { return $true }
+    return ((Get-KeeperRevision $Candidate) -gt $have)
+}
+
 # Copy out each promoted file whose copy in the distro differs from the one
 # here. A copy is written beside the target, checked, then moved over it, so
 # the target is never half-written.
@@ -659,6 +697,9 @@ function Update-FromGuest {
             $problem = ""
             if ((Get-FileSha256 $staged) -ne $want) { $problem = "the copy does not match the distro's" }
             elseif ($name -like "*.ps1" -and -not (Test-ScriptParses $staged)) { $problem = "it does not parse" }
+            elseif ($name -eq $KeeperFileName -and -not (Test-KeeperIsNewer -Candidate $staged -Installed $target)) {
+                $problem = "revision $(Get-KeeperRevision $staged) is not newer than the installed $(Get-KeeperRevision $target)"
+            }
             if ($problem) {
                 $script:RefusedHashes[$want] = $true
                 Write-Log "kept the current ${name}: the release's copy was refused (${problem})" "WARN"
@@ -671,6 +712,47 @@ function Update-FromGuest {
         } finally {
             Remove-Item -Force -LiteralPath $staged -ErrorAction SilentlyContinue
         }
+    }
+}
+
+# The keeper the Pointy client on this PC carries, from its sign-in start
+# entry; empty when there is no client, or it carries none.
+function Find-ClientKeeper {
+    try {
+        $command = (Get-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" `
+                                     -Name $ClientRunValue -ErrorAction Stop).$ClientRunValue
+        if ("$command" -match '^\s*"([^"]+)"' -or "$command" -match '^\s*(\S+)') {
+            $carried = Join-Path (Split-Path -Parent $Matches[1]) "data\server\$KeeperFileName"
+            if (Test-Path -LiteralPath $carried) { return $carried }
+        }
+    } catch { }
+    return ""
+}
+
+# A till updated before the server carries a newer keeper than the release in
+# the distro: install that one. The keeper is what keeps the server up, so the
+# fix a till brings must not wait for the server's own update.
+function Update-FromClient {
+    $carried = Find-ClientKeeper
+    if (-not $carried) { return }
+    $target = Join-Path $InstallRoot $KeeperFileName
+    $want = Get-FileSha256 $carried
+    if (-not $want -or $want -eq (Get-FileSha256 $target) -or $script:RefusedHashes.ContainsKey($want)) { return }
+    if (-not (Test-KeeperIsNewer -Candidate $carried -Installed $target)) { return }
+    $staged = "${target}.new"
+    try {
+        Copy-Item -Force -LiteralPath $carried -Destination $staged
+        if (-not (Test-ScriptParses $staged)) {
+            $script:RefusedHashes[$want] = $true
+            Write-Log "kept the current keeper: the client's copy (${carried}) does not parse" "WARN"
+            return
+        }
+        Move-Item -Force -LiteralPath $staged -Destination $target
+        Write-Log "updated ${target} to the client's keeper (revision $(Get-KeeperRevision $target))"
+    } catch {
+        Write-Log "could not take the client's keeper: $($_.Exception.Message)" "WARN"
+    } finally {
+        Remove-Item -Force -LiteralPath $staged -ErrorAction SilentlyContinue
     }
 }
 
@@ -720,6 +802,7 @@ function Invoke-KeepAlive {
     $startedHash = ""
     if ($PSCommandPath -eq $StableScript) { $startedHash = Get-FileSha256 $StableScript }
     $lastPromote = [datetime]::MinValue
+    $lastClientPromote = [datetime]::MinValue
     try {
         if (Update-WslConfig) {
             Write-Log ".wslconfig updated (localhostForwarding=false; removed autoMemoryReclaim/sparseVhd); WSL applies it at its next start"
@@ -841,6 +924,12 @@ function Invoke-KeepAlive {
                     $lastPromote = Get-Date
                     Update-FromGuest
                 }
+            }
+            # 5b. The client's keeper, whether or not WSL answers: a keeper that
+            #     cannot reach WSL is exactly the one that may need the fix.
+            if ($startedHash -and ((Get-Date) - $lastClientPromote).TotalSeconds -ge $PromoteEverySec) {
+                $lastClientPromote = Get-Date
+                Update-FromClient
             }
             Write-KeeperState -Anchor $anchor -WslIp $wslIp -Healthy $healthy -Restarts $restarts
         } catch {
@@ -982,6 +1071,20 @@ function Register-KeeperTask {
     Grant-KeeperTaskToSignedInUsers
 }
 
+# Run from elsewhere - the copy the till carries - put this keeper where the
+# task runs it, unless the one there has the same or a higher revision.
+function Install-ThisKeeper {
+    if ($PSCommandPath -eq $StableScript) { return }
+    New-Item -ItemType Directory -Force -Path $InstallRoot | Out-Null
+    if (Test-KeeperIsNewer -Candidate $PSCommandPath -Installed $StableScript) {
+        Copy-Item -Force $PSCommandPath $StableScript
+        Write-Log "installed keeper revision $(Get-KeeperRevision $StableScript) from ${PSCommandPath}"
+    } else {
+        Write-Log ("kept the installed keeper (revision $(Get-KeeperRevision $StableScript)); " +
+                   "this copy is revision $(Get-KeeperRevision $PSCommandPath)")
+    }
+}
+
 function Invoke-Install {
     if (-not (Test-Admin)) { Die "run this from an ELEVATED PowerShell (right-click, Run as administrator)." }
     $script:WslExe = Get-WslExe
@@ -992,7 +1095,7 @@ function Invoke-Install {
              "the user that installed Pointy and run -Install again.")
     }
     New-Item -ItemType Directory -Force -Path $InstallRoot | Out-Null
-    if ($PSCommandPath -ne $StableScript) { Copy-Item -Force $PSCommandPath $StableScript }
+    Install-ThisKeeper
     $mover = Find-MoveScript
     if ($mover -and $mover -ne (Join-Path $InstallRoot "move-server.sh")) {
         Copy-Item -Force $mover (Join-Path $InstallRoot "move-server.sh")
@@ -1008,6 +1111,10 @@ function Invoke-Install {
     Disable-OldBootTask
     if (Test-Path $HoldFile) { Remove-Item -Force $HoldFile }
 
+    # A keeper already running may be older than the one just installed, and an
+    # older one copies the release's keeper over this one before it notices.
+    # Its keep-alive client outlives it; the new keeper adopts that.
+    [void](Stop-RunningKeeper)
     Start-ScheduledTask -TaskName $TaskName
     Write-Log "started the keeper: a minimised window titled 'Pointy server' now holds WSL open"
     $autoUser = Get-AutoSignInUser
@@ -1137,6 +1244,9 @@ function Invoke-Restart {
     if (Test-Path $MovedFile) { Die "this server was moved to Linux (see ${MovedFile}); there is nothing to restart here." }
     $script:WslExe = Get-WslExe
     Write-Log "restart asked for (the Pointy client's restart button, or by hand)"
+    # The till runs its own keeper when it is newer: install it, so the task
+    # started below runs it too, rather than the older one.
+    Install-ThisKeeper
     $previousPid = Stop-RunningKeeper
     if (Test-Path $HoldFile) {
         # An export or an operator owns the stack: WSL stays up.

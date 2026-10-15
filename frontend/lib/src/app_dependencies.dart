@@ -225,8 +225,9 @@ class PointyAppDependencies {
       platform: _enableAutomaticConnection
           ? createLocalServerHostPlatform()
           : const NoLocalServerHost(),
+      // Off the LAN, the relay included: on this PC the server is local.
       onServerReady: () {
-        if (!connectionStatus.isReady) {
+        if (connectionStatus.phase != ConnectionPhase.connectedLocal) {
           unawaited(connectionCoordinator.rediscover());
         }
       },

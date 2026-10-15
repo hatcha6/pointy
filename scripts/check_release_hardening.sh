@@ -132,6 +132,12 @@ case "$?" in
 $(printf '%s' "$compose_parse_output" | sed 's/^/        /')" ;;
 esac
 
+echo "== The WSL keeper reaches shops =="
+# Every copy of the keeper replaces only a lower revision, so a change without
+# a new one would never reach a shop that has the old keeper.
+check "the keeper's revision matches its contents (make onprem-keeper-revision)" \
+  "bash deploy/onprem/wsl/keeper-revision.sh check"
+
 echo "== A shop can actually boot what we ship =="
 # Every ${VAR:?} in compose is a variable the stack refuses to start without.
 # If one is added to compose but not to .env.example, the release installs

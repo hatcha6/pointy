@@ -177,6 +177,11 @@ function Invoke-NativeTimeout {
                     RedirectStandardOutput = $outFile; RedirectStandardError = $errFile }
         if ($line -ne "") { $start.ArgumentList = $line }   # an empty -ArgumentList is an error, not "no arguments"
         $p = Start-Process @start
+        # Windows PowerShell 5.1 (what every task runs) only keeps an exit code
+        # for a -NoNewWindow child whose handle was opened before it exited;
+        # without this ExitCode is $null, and `$null -ne 0` made every
+        # successful wsl.exe call look like a failure. pwsh 7 is unaffected.
+        $null = $p.Handle
         if (-not $p.WaitForExit($TimeoutSec * 1000)) {
             try { $p.Kill() } catch { }
             return [pscustomobject]@{ ExitCode = -1; TimedOut = $true
