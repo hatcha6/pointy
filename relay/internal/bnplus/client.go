@@ -613,7 +613,11 @@ func (c *Client) do(
 		return nil, fmt.Errorf("bnplus: build request: %w", err)
 	}
 	request.Header.Set("Accept", "application/json")
+	// Reads take the token as a bearer; /buy-card ignores that and reads only
+	// Api-Token, answering 401 "Token, email, and password are required" without
+	// it. Every call sends both.
 	request.Header.Set("Authorization", "Bearer "+c.token)
+	request.Header.Set("Api-Token", c.token)
 	request.Header.Set("Api-Email", c.email)
 	request.Header.Set("Api-Password", c.password)
 	if body != nil {

@@ -84,6 +84,7 @@ type recordedCall struct {
 	path     string
 	query    string
 	bearer   string
+	apiToken string
 	email    string
 	password string
 	accept   string
@@ -115,6 +116,7 @@ func newFakeBNPlus(t *testing.T, status int, body string) *fakeBNPlus {
 			path:     r.URL.EscapedPath(),
 			query:    r.URL.RawQuery,
 			bearer:   r.Header.Get("Authorization"),
+			apiToken: r.Header.Get("Api-Token"),
 			email:    r.Header.Get("Api-Email"),
 			password: r.Header.Get("Api-Password"),
 			accept:   r.Header.Get("Accept"),
@@ -169,7 +171,7 @@ func TestEveryCallCarriesTheThreeCredentials(t *testing.T) {
 		t.Fatalf("unexpected request %+v", call)
 	}
 	// The e-mail and token are trimmed; a password is sent as written.
-	if call.bearer != "Bearer tok" || call.email != "ops@example.ly" || call.password != "pa ss" ||
+	if call.bearer != "Bearer tok" || call.apiToken != "tok" || call.email != "ops@example.ly" || call.password != "pa ss" ||
 		call.accept != "application/json" {
 		t.Fatalf("credentials not sent as headers: %+v", call)
 	}
@@ -273,6 +275,11 @@ func TestBuyCardSendsJSONAndReturnsTheCodes(t *testing.T) {
 	call := calls[0]
 	if call.method != http.MethodPost || call.path != "/api/merchant/buy-card" || call.ctype != "application/json" {
 		t.Fatalf("unexpected request %+v", call)
+	}
+	// BN Plus's buy-card reads the token from Api-Token only: a bearer alone is
+	// refused with 401 "Token, email, and password are required".
+	if call.apiToken != "tok" || call.email != "ops@example.ly" || call.password != "pa ss" {
+		t.Fatalf("buy-card credentials not sent as headers: %+v", call)
 	}
 	if call.body["card_id"] != float64(12) || call.body["quantity"] != float64(2) {
 		t.Fatalf("body = %#v", call.body)
