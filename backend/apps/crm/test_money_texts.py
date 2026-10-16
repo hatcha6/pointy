@@ -6,6 +6,7 @@ settings page."""
 
 from __future__ import annotations
 
+from datetime import timedelta
 from decimal import Decimal
 from unittest import mock
 
@@ -13,6 +14,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -68,11 +70,12 @@ class MoneyTextTests(TestCase):
         return Order.objects.get(pk=response.data["id"])
 
     def test_a_credit_sale_tells_the_customer_what_they_owe(self):
-        order = self.checkout(sale_type="credit", amount_received="30.00", due_date="2026-10-15")
+        due = timezone.localdate() + timedelta(days=30)
+        order = self.checkout(sale_type="credit", amount_received="30.00", due_date=due.isoformat())
         [text] = self.texts("credit_invoice")
         self.assertEqual(
             text.body,
-            f"محل النور: عليكم 70.00 د.ل من الفاتورة {order.receipt_number}، تستحق في 2026/10/15.",
+            f"محل النور: عليكم 70.00 د.ل من الفاتورة {order.receipt_number}، تستحق في {due:%Y/%m/%d}.",
         )
         # A real receipt number is fifteen characters: two SMS, as the
         # settings page's example says.
@@ -120,19 +123,23 @@ class MoneyTextTests(TestCase):
         self.assertEqual(text.body, "محل النور: استلمنا منكم 150.00 د.ل، والمتبقي على حسابكم 50.00 د.ل.")
 
     def test_a_new_due_date_and_a_return_follow_their_switches(self):
+        today = timezone.localdate()
+        first_due, moved_due = today + timedelta(days=15), today + timedelta(days=30)
         order = self.checkout(sale_type="credit")
         with self.captureOnCommitCallbacks(execute=True):
-            self.client.post(reverse("order-due-date", args=[order.pk]), {"due_date": "2026-11-01"}, format="json")
+            self.client.post(
+                reverse("order-due-date", args=[order.pk]), {"due_date": first_due.isoformat()}, format="json"
+            )
         self.assertEqual(self.texts("due_date_changed"), [])
         self.switch(due_date_changed=True, refund_issued=True)
         with self.captureOnCommitCallbacks(execute=True):
             response = self.client.post(
-                reverse("order-due-date", args=[order.pk]), {"due_date": "2026-11-15"}, format="json"
+                reverse("order-due-date", args=[order.pk]), {"due_date": moved_due.isoformat()}, format="json"
             )
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         [moved] = self.texts("due_date_changed")
         self.assertEqual(
-            moved.body, f"محل النور: استحقاق فاتورتكم {order.receipt_number} أصبح 2026/11/15، المتبقي 100.00 د.ل."
+            moved.body, f"محل النور: استحقاق فاتورتكم {order.receipt_number} أصبح {moved_due:%Y/%m/%d}، المتبقي 100.00 د.ل."
         )
         # A return on a paid sale reaches the customer's phone too.
         paid = self.checkout(payment_method="cash", amount_received="100.00")
@@ -150,11 +157,12 @@ class MoneyTextTests(TestCase):
         )
 
     def test_a_quotation_goes_out_as_an_offer(self):
-        quote = self.checkout(sale_type="quotation", valid_until="2026-10-20")
+        valid_until = timezone.localdate() + timedelta(days=7)
+        quote = self.checkout(sale_type="quotation", valid_until=valid_until.isoformat())
         message = send_invoice_sms(quote)
         self.assertEqual(message.template_kind, "quotation")
         self.assertEqual(
-            message.body, f"محل النور: عرض السعر {quote.receipt_number} بقيمة 100.00 د.ل، ساري حتى 2026/10/20."
+            message.body, f"محل النور: عرض السعر {quote.receipt_number} بقيمة 100.00 د.ل، ساري حتى {valid_until:%Y/%m/%d}."
         )
         with mock.patch(_PUBLIC_URL, return_value="https://relay.example/invoices/x/y"):
             OutboundMessage.objects.all().delete()
