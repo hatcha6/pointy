@@ -54,7 +54,7 @@
 # without it). A copy only ever replaces a LOWER revision: the release in the
 # distro and the copy the till carries both offer one, and an older server must
 # not undo a newer till's keeper.
-# pointy-keeper-revision: 2
+# pointy-keeper-revision: 3
 [CmdletBinding()]
 param(
     [switch]$Install,
@@ -1257,7 +1257,9 @@ function Select-KeeperProcesses {
         if ($cmd -match '(^|\s)-(Install|Uninstall|ExportTo)(\s|:|$)') { continue }
         $found += $row
     }
-    return ,$found
+    # Unrolled: callers wrap it in @(). ",$found" would nest the list, so
+    # nothing running counted as one keeper and [int]$k.ProcessId threw.
+    return $found
 }
 
 function Find-RunningKeepers {
