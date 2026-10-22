@@ -29,6 +29,7 @@ from apps.balances.views import (
     EmployeeBalanceEntryViewSet,
     SupplierBalanceEntryViewSet,
 )
+from apps.catalog.bulk_pricing_views import BulkPriceChangeViewSet
 from apps.catalog.views import (
     ModifierGroupViewSet,
     ProductCategoryViewSet,
@@ -216,6 +217,11 @@ router.register(
 )
 router.register("payroll-runs", PayrollRunViewSet, basename="payroll-run")
 router.register("products", ProductViewSet)
+router.register(
+    "bulk-price-changes",
+    BulkPriceChangeViewSet,
+    basename="bulk-price-change",
+)
 router.register(
     "product-variants",
     ProductVariantViewSet,

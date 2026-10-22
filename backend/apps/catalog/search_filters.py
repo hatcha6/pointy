@@ -57,7 +57,12 @@ from django.db.models.lookups import GreaterThanOrEqual
 from rest_framework.filters import BaseFilterBackend
 
 from . import search_text
-from .models import ProductAlias, ProductUnitBarcode, ProductVariant
+from .models import (
+    ProductAlias,
+    ProductUnitBarcode,
+    ProductVariant,
+    ProductVariantBarcode,
+)
 from .search_fallback import correct_tokens, shop_vocabulary
 from .search_sql import WordSimilarity, supports_similarity
 
@@ -242,6 +247,11 @@ def _unit_barcodes(condition):
     )
 
 
+def _extra_barcodes(condition, owner="variant_id"):
+    """A variant's further barcodes, as variant ids (or ``variant__product_id``)."""
+    return ProductVariantBarcode.objects.filter(condition).values(owner)
+
+
 @dataclass(frozen=True)
 class _Query:
     raw: str
@@ -291,6 +301,11 @@ class _ProductRows:
             match |= Q(
                 id__in=_variants(Q(sku__icontains=token) | Q(barcode__icontains=token))
             )
+            match |= Q(
+                id__in=_extra_barcodes(
+                    Q(barcode__icontains=token), owner="variant__product_id"
+                )
+            )
             match |= Q(id__in=_unit_barcodes(Q(barcode__icontains=token)))
         return match
 
@@ -315,11 +330,12 @@ class _ProductRows:
 
     def code_tiers(self, code):
         def tier(lookup):
-            return Q(
-                id__in=_variants(
-                    Q(**{f"sku__{lookup}": code}) | Q(**{f"barcode__{lookup}": code})
-                )
-            ) | Q(id__in=_unit_barcodes(Q(**{f"barcode__{lookup}": code})))
+            barcode = Q(**{f"barcode__{lookup}": code})
+            return (
+                Q(id__in=_variants(Q(**{f"sku__{lookup}": code}) | barcode))
+                | Q(id__in=_extra_barcodes(barcode, owner="variant__product_id"))
+                | Q(id__in=_unit_barcodes(barcode))
+            )
 
         return (tier("iexact"), tier("istartswith"), tier("icontains"))
 
@@ -343,6 +359,7 @@ class _VariantRows:
                 match |= _has_word("product__search_skeleton", key)
         if codes:
             match |= Q(sku__icontains=token) | Q(barcode__icontains=token)
+            match |= Q(id__in=_extra_barcodes(Q(barcode__icontains=token)))
             match |= Q(product_id__in=_unit_barcodes(Q(barcode__icontains=token)))
         return match
 
@@ -373,6 +390,7 @@ class _VariantRows:
             return (
                 Q(**{f"sku__{lookup}": code})
                 | Q(**{f"barcode__{lookup}": code})
+                | Q(id__in=_extra_barcodes(Q(**{f"barcode__{lookup}": code})))
                 | Q(product_id__in=_unit_barcodes(Q(**{f"barcode__{lookup}": code})))
             )
 

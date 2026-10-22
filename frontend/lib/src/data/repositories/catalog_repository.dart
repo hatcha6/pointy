@@ -7,6 +7,8 @@ import '../../shared/barcode/scale_barcode.dart';
 import '../../shared/units.dart';
 import '../models/attachment_summary.dart';
 import '../models/barcode_resolution.dart';
+import '../models/bulk_price_preview.dart';
+import '../models/bulk_price_rule.dart';
 import '../models/bought_together_product.dart';
 import '../models/catalog_identity_conflict.dart';
 import '../models/customer_asset.dart';
@@ -198,6 +200,39 @@ class CatalogRepository {
       ),
     );
   }
+
+  Future<Result<BulkPriceOptions>> loadBulkPriceOptions() =>
+      Result.guard(_service.fetchBulkPriceOptions);
+
+  Future<Result<BulkPricePreview>> previewBulkPriceChange({
+    required BulkPriceSpec spec,
+    BulkPricePreviewView view = BulkPricePreviewView.changed,
+    int offset = 0,
+    int limit = 50,
+  }) => Result.guard(
+    () => _service.previewBulkPriceChange(
+      spec: spec.toJson(),
+      view: view,
+      offset: offset,
+      limit: limit,
+    ),
+  );
+
+  Future<Result<BulkPriceChangeRecord>> applyBulkPriceChange({
+    required BulkPriceSpec spec,
+    required String fingerprint,
+  }) => Result.guard(
+    () => _service.applyBulkPriceChange(
+      spec: spec.toJson(),
+      fingerprint: fingerprint,
+    ),
+  );
+
+  Future<Result<List<BulkPriceChangeRecord>>> loadBulkPriceChanges() =>
+      Result.guard(_service.fetchBulkPriceChanges);
+
+  Future<Result<BulkPriceChangeRecord>> revertBulkPriceChange(int id) =>
+      Result.guard(() => _service.revertBulkPriceChange(id));
 
   Future<Result<Product>> setVariantPrices({
     required int productId,
@@ -838,6 +873,12 @@ class CatalogRepository {
     );
     for (final variant in page.variants) {
       if (variant.barcode.trim() == barcode) {
+        return BarcodeResolution(variant: variant);
+      }
+    }
+    // A variant's extra barcodes ring it up exactly like its primary one.
+    for (final variant in page.variants) {
+      if (variant.answersToBarcode(barcode)) {
         return BarcodeResolution(variant: variant);
       }
     }

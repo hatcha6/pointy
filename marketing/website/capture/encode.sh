@@ -24,7 +24,8 @@ clip() { # name, src, width, [trim-seconds-from-end], [poster-at-seconds]
 }
 
 # --- clips ---
-clip pos-checkout   $IN/v-pos.mp4        1600 0.3 9.6
+clip pos-checkout   $IN/v-pos.mp4        1600 0.3 18.0
+clip vouchers       $IN/v-vouchers.mp4   1600 0.3 6.0
 clip gpt-answer     $IN/v-ai.mp4         1600 0.3 12
 clip invoice-camera $IN/v-cam.mp4        620  0.6 4
 clip phone-dashboard $IN/v-phone-dash.mp4 620 0.3

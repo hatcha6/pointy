@@ -1,0 +1,22 @@
+// Wraps the relay's renderPublicInvoice in a command: render <payload.json> <out.html>.
+
+package main
+
+import (
+	"encoding/json"
+	"net/http/httptest"
+	"os"
+)
+
+type HTTPServer struct{}
+
+func main() {
+	raw, _ := os.ReadFile(os.Args[1])
+	var payload publicInvoicePayload
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		panic(err)
+	}
+	rec := httptest.NewRecorder()
+	HTTPServer{}.renderPublicInvoice(rec, payload)
+	os.WriteFile(os.Args[2], rec.Body.Bytes(), 0o644)
+}

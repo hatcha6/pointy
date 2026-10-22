@@ -62,7 +62,20 @@ class CanonicalProduct(CanonicalRecord):
     # seed a default variant (see the catalog loader).
     sku: str = ""
     barcode: str = ""
+    #: Further codes that scan to the same goods — a second supplier's EAN, an
+    #: old pack's code, a shop sticker. Loaded as the variant's *extra
+    #: barcodes*, never as extra variants: a code is not a different thing to
+    #: sell, and a variant per code splits one shelf's stock and history.
+    extra_barcodes: list[str] = field(default_factory=list)
     unit_price: Decimal | None = None
+    #: How closely the stock is identified (``Product.TrackingMode``): empty
+    #: leaves Pointy's default. A source that holds its shelf in lots says
+    #: ``batch``, so the stock record's :attr:`CanonicalStock.lots` can land in
+    #: lots. Applied only while the product has nothing on the shelf — changing
+    #: a stocked product's mode is the owner's decision, not an import's.
+    tracking_mode: str = ""
+    #: A delivery of this product must say when it goes off.
+    expiry_required: bool = False
 
 
 @dataclass
@@ -72,6 +85,11 @@ class CanonicalVariant(CanonicalRecord):
     unit_price: Decimal = Decimal("0")
     name: str = ""
     barcode: str = ""
+    #: Further codes that scan to the same goods — a second supplier's EAN, an
+    #: old pack's code, a shop sticker. Loaded as the variant's *extra
+    #: barcodes*, never as extra variants: a code is not a different thing to
+    #: sell, and a variant per code splits one shelf's stock and history.
+    extra_barcodes: list[str] = field(default_factory=list)
     is_active: bool = True
     is_default: bool = False
 
@@ -96,6 +114,19 @@ class CanonicalStock(CanonicalRecord):
     #: re-import — and so duplicate — the whole catalogue.
     barcode: str = ""
     sku: str = ""
+    #: The quantity split into lots, when the source keeps it that way. Must add
+    #: up to :attr:`quantity_on_hand`. Used only for a product whose tracking
+    #: mode holds lots; for any other the total alone is loaded.
+    lots: list[CanonicalStockLot] = field(default_factory=list)
+
+
+@dataclass
+class CanonicalStockLot:
+    quantity: Decimal = Decimal("0")
+    #: The lot number, when the source has one. Empty gets a generated code,
+    #: which the app shows as «بدون رقم دفعة».
+    code: str = ""
+    expiry_date: date | None = None
 
 
 @dataclass
@@ -290,6 +321,30 @@ class CanonicalPurchaseOrder(CanonicalRecord):
     discount_total: Decimal = Decimal("0")
     occurred_at: datetime | None = None
     lines: list[CanonicalPurchaseLine] = field(default_factory=list)
+
+
+@dataclass
+class CanonicalPurchaseReturnLine:
+    variant_source_key: str
+    quantity: Decimal = Decimal("1")
+    #: Per base unit. Zero means "what the purchase line cost".
+    unit_cost: Decimal = Decimal("0")
+
+
+@dataclass
+class CanonicalPurchaseReturn(CanonicalRecord):
+    """Goods sent back to a supplier off a purchase that was already imported.
+
+    Pointy hangs a supplier return on the purchase order it came off, so
+    ``purchase_order_source_key`` names it; empty means the connector could not
+    place the goods on any purchase, and the loader reports it. Settled as
+    credit with the supplier: a return reduces what the shop owes.
+    """
+
+    purchase_order_source_key: str = ""
+    occurred_at: datetime | None = None
+    reason: str = ""
+    lines: list[CanonicalPurchaseReturnLine] = field(default_factory=list)
 
 
 @dataclass

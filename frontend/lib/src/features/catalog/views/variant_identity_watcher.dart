@@ -128,9 +128,12 @@ class VariantIdentityWatcher extends ChangeNotifier {
 
   /// Records what the server said about a rejected save.
   void applyConflicts(Iterable<CatalogIdentityConflict> conflicts) {
-    // The GTIN is not one of the two codes this watches; its form shows it.
+    // The GTIN and the extra barcodes are not the two codes this watches;
+    // their own inputs show them.
     conflicts = conflicts.where(
-      (conflict) => conflict.field != CatalogIdentityField.gtin,
+      (conflict) =>
+          conflict.field != CatalogIdentityField.gtin &&
+          conflict.field != CatalogIdentityField.extraBarcodes,
     );
     for (final conflict in conflicts) {
       final state = IdentityFieldState(
@@ -306,7 +309,9 @@ String identityConflictMessage(
   AppLocalizations l10n,
   CatalogIdentityConflict conflict,
 ) {
-  final isBarcode = conflict.field == CatalogIdentityField.barcode;
+  final isBarcode =
+      conflict.field == CatalogIdentityField.barcode ||
+      conflict.field == CatalogIdentityField.extraBarcodes;
   if (conflict.field == CatalogIdentityField.gtin) {
     return _gtinConflictMessage(l10n, conflict);
   }

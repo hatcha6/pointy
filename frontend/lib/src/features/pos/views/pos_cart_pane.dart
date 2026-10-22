@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../shared/barcode/keystroke_wedge.dart';
 import '../../../shared/barcode/scan_burst_guard.dart';
 import '../../card_verification/moamalat_scope.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
@@ -10,10 +11,8 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../core/authorization.dart';
 import '../../../core/result.dart';
 import '../../../data/models/contact.dart';
-import '../../../data/models/integration_card.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../data/repositories/sale_repository.dart';
-import '../../../data/services/order_document_service.dart';
 import '../../../shared/authorization_guards.dart';
 import '../../../shared/contact_picker_sheet.dart';
 import '../../../shared/components/components.dart';
@@ -23,8 +22,6 @@ import '../../../shared/order/order.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../treasury/view_models/bank_routing.dart';
 import '../view_models/pos_view_model.dart';
-import 'direct_services/service_charge_issue_dialog.dart';
-import 'direct_services/service_delivered_dialog.dart';
 import 'direct_services/service_requote_dialog.dart';
 import '../../../shared/tutor/anchors.dart';
 import '../../../shared/tutor/tutor_target.dart';
@@ -40,8 +37,7 @@ import 'weight_entry_sheet.dart';
 import 'cart_totals.dart';
 import 'payment/payment.dart';
 import 'pos_sale_session_strip.dart';
-import 'public_invoice_dialog.dart';
-import 'recharge_outcome_dialog.dart';
+import 'checkout_result/pos_checkout_dialog.dart';
 
 /// Lets an ancestor (the POS workspace) trigger the cart's checkout flow from a
 /// keyboard shortcut. The cart pane publishes its current checkout closure here
@@ -58,6 +54,7 @@ class PosCartPane extends StatelessWidget {
     required this.capabilities,
     this.onCheckoutSuccess,
     this.checkoutController,
+    this.onOpenShopSettings,
   });
 
   final PosViewModel viewModel;
@@ -65,6 +62,10 @@ class PosCartPane extends StatelessWidget {
   final AuthorizationCapabilities capabilities;
   final VoidCallback? onCheckoutSuccess;
   final PosCheckoutController? checkoutController;
+
+  /// Opens the shop settings, for a result that points at one. Null for
+  /// someone who may not change them.
+  final VoidCallback? onOpenShopSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -149,14 +150,29 @@ class PosCartPane extends StatelessWidget {
     switch (step) {
       case _ServiceLinesRequoted(:final changes):
         await resolveServiceRequotes(context, viewModel, changes);
-      case _PaymentTaken(:final outcome, :final payment, :final soldInTestMode):
-        await _settleOutcome(
-          context,
-          outcome,
-          payment: payment,
-          soldInTestMode: soldInTestMode,
-        );
+      case _SaleCompleted(:final exit):
+        _afterSale(exit);
     }
+  }
+
+  /// The sale's result has closed: back to an empty till, ready for the next
+  /// customer — whose first item may already be the scan that closed it.
+  void _afterSale(PosCheckoutCompleted exit) {
+    onCheckoutSuccess?.call();
+    final scanned = exit.scannedCode;
+    if (scanned != null && scanned.trim().isNotEmpty) {
+      unawaited(
+        viewModel.addVariantByBarcode(
+          scanned,
+          source: KeystrokeWedge.typingSource ?? 'hardware_scanner',
+        ),
+      );
+    }
+    if (exit.openShopSettings) {
+      onOpenShopSettings?.call();
+      return;
+    }
+    viewModel.requestSearchFocus();
   }
 
   /// Everything from Pay to the sale being sent. Null when the cashier backs
@@ -278,36 +294,49 @@ class PosCartPane extends StatelessWidget {
       }
     }
 
-    // Shown again, once, when the sale refuses a tender that no longer matches
-    // the cart's total — with the total re-read, so the second sheet asks for
-    // the right amount.
+    // Shown again, once, when the tender no longer matches the cart's total —
+    // with the total re-read, so the second sheet asks for the right amount.
+    // "Edit payment" from a refused sale brings the sheet back as often as the
+    // cashier asks for it.
     var reopened = false;
     while (true) {
       final payment = await _showPaymentDialog(context);
-      if (payment == null) {
+      if (payment == null || !context.mounted) {
         return null;
       }
 
-      // The lines are gone from the cart once the sale is made: whether any
-      // was added while the relay was in test mode is told to the dialog from
-      // here.
-      final soldInTestMode = viewModel.cart.any(
-        (line) => line.integration?.testMode == true,
-      );
-      final outcome = await viewModel.checkoutCurrentSale(
-        payments: payment.payments,
+      var totalChanged = !viewModel.tenderMatchesTotal(
+        payment.payments,
         saleType: payment.saleType,
-        validUntil: payment.validUntil,
-        dueDate: payment.dueDate,
-        reserveStock: payment.reserveStock,
-        printProof: payment.printProof,
       );
-      if (!outcome.isTotalChanged) {
-        return _PaymentTaken(
-          outcome,
+      if (!totalChanged) {
+        // The lines are gone from the cart once the sale is made: whether any
+        // was added while the relay was in test mode is told from here.
+        final soldInTestMode = viewModel.cart.any(
+          (line) => line.integration?.testMode == true,
+        );
+        final exit = await showPosCheckoutDialog(
+          context: context,
+          viewModel: viewModel,
           payment: payment,
           soldInTestMode: soldInTestMode,
+          showLossAmounts: capabilities.canViewLossAmounts,
+          canSendSms: capabilities.canSendSms,
+          canOpenSettings: onOpenShopSettings != null,
         );
+        if (!context.mounted) {
+          return null;
+        }
+        switch (exit) {
+          case PosCheckoutCompleted():
+            return _SaleCompleted(exit);
+          case PosCheckoutAbandoned():
+            return null;
+          case PosCheckoutEditPayment():
+            continue;
+          case PosCheckoutTotalChanged():
+            totalChanged = true;
+        }
       }
       messenger
         ..clearSnackBars()
@@ -320,165 +349,6 @@ class PosCartPane extends StatelessWidget {
       if (!context.mounted) {
         return null;
       }
-    }
-  }
-
-  Future<void> _settleOutcome(
-    BuildContext context,
-    SaleCheckoutOutcome outcome, {
-    required PaymentSheetResult payment,
-    required bool soldInTestMode,
-  }) async {
-    final l10n = AppLocalizations.of(context)!;
-    final messenger = ScaffoldMessenger.of(context);
-
-    if (outcome.isStockRejected) {
-      await _showStockWarningDialog(
-        context,
-        shortages: outcome.shortages,
-        canOversell: false,
-      );
-      return;
-    }
-    if (outcome.isLossRejected) {
-      await showLossWarningDialog(
-        context,
-        lossLines: outcome.lossLines,
-        canSellAtLoss: false,
-        showAmounts: capabilities.canViewLossAmounts,
-      );
-      return;
-    }
-    final creditLimit = outcome.creditLimit;
-    if (creditLimit != null) {
-      await _showCreditLimitDialog(context, credit: creditLimit);
-      return;
-    }
-    if (outcome.isSessionExpired) {
-      messenger
-        ..clearSnackBars()
-        ..showSnackBar(
-          SnackBar(content: Text(l10n.saleCheckoutSessionExpired)),
-        );
-      return;
-    }
-
-    // The provider has already been paid (or refused) by now. Anything other
-    // than a clean charge is told to the cashier in a dialog rather than a
-    // snackbar: one of these states means money may have moved and nobody
-    // knows, which is not something to let scroll past.
-    // Airtime and bills have their own words: not the card and agency ones of
-    // a subscriber's top-up, which would send the cashier looking for a card.
-    final cardRows = outcome.recharges
-        .where((row) => !row.isDirectService)
-        .toList(growable: false);
-    final unperformedServices = outcome.recharges
-        .where((row) => row.isDirectService && !row.isCharged)
-        .toList(growable: false);
-    if (outcome.isSuccess && cardRows.any((row) => !row.isCharged)) {
-      await showRechargeOutcomeDialog(context, cardRows);
-      if (!context.mounted) return;
-    }
-    if (outcome.isSuccess && unperformedServices.isNotEmpty) {
-      await showServiceChargeIssueDialog(
-        context,
-        unperformedServices,
-        receiptNumber: outcome.order?.receiptNumber,
-      );
-      if (!context.mounted) return;
-    }
-    // A card's PIN is the thing that was sold. It is printed on the receipt;
-    // when the receipt did not print, it goes on screen instead, so the
-    // customer never leaves without it.
-    final unprintedCards = outcome.recharges
-        .where(
-          (row) => row.isVoucher && row.isCharged && row.voucherCode.isNotEmpty,
-        )
-        .toList(growable: false);
-    if (outcome.isSuccess &&
-        unprintedCards.isNotEmpty &&
-        outcome.printStatus != InvoicePrintStatus.printed) {
-      await _showVoucherCodesDialog(context, unprintedCards);
-      if (!context.mounted) return;
-    }
-    // Airtime sent and bills paid used to be a snackbar only. Say what was
-    // done, whatever the printer did: a bill's token is the thing bought.
-    final delivered = outcome.recharges
-        .where((row) => row.isDirectService && row.isCharged)
-        .toList(growable: false);
-    if (outcome.isSuccess && delivered.isNotEmpty) {
-      await showServiceDeliveredDialog(
-        context,
-        delivered,
-        testMode: soldInTestMode,
-      );
-      if (!context.mounted) return;
-    }
-
-    final receiptNumber = outcome.order?.receiptNumber;
-    var message = outcome.isSuccess
-        ? receiptNumber == null || receiptNumber.isEmpty
-              ? l10n.saleCheckoutSuccess
-              : l10n.saleCheckoutSuccessWithReceipt(receiptNumber)
-        : outcome.failureReason ?? l10n.saleCheckoutError;
-    if (outcome.isSuccess && payment.shareInvoiceAfterPayment) {
-      final order = outcome.order;
-      final shareStatus = order == null
-          ? OrderDocumentActionStatus.failed
-          : await viewModel.sharePaidInvoice(order);
-      if (!context.mounted) {
-        return;
-      }
-      message = switch (shareStatus) {
-        OrderDocumentActionStatus.completed =>
-          '$message ${l10n.invoiceShareSuccess}',
-        OrderDocumentActionStatus.failed =>
-          '$message ${l10n.invoiceShareError}',
-        OrderDocumentActionStatus.canceled => message,
-      };
-    }
-
-    if (outcome.isSuccess) {
-      message = switch (outcome.printStatus) {
-        InvoicePrintStatus.printed => '$message ${l10n.invoicePrintSuccess}',
-        InvoicePrintStatus.failed => '$message ${l10n.invoicePrintError}',
-        InvoicePrintStatus.noPrinter =>
-          '$message ${l10n.invoicePrintNoPrinter}',
-        InvoicePrintStatus.notRequested => message,
-      };
-    }
-
-    messenger
-      ..clearSnackBars()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          action: outcome.isSuccess
-              ? null
-              : SnackBarAction(
-                  label: l10n.retryButton,
-                  onPressed: () {
-                    if (context.mounted) {
-                      _checkout(context);
-                    }
-                  },
-                ),
-        ),
-      );
-
-    if (outcome.isSuccess) {
-      final order = outcome.order;
-      if (order != null && order.publicInvoiceUrl.trim().isNotEmpty) {
-        await showPublicInvoiceDialog(context: context, order: order);
-        if (!context.mounted) {
-          return;
-        }
-      }
-      onCheckoutSuccess?.call();
-      // The sale is done and the cart has reset — send the cashier straight
-      // back to the search field for the next customer. Fired last, after any
-      // public-invoice dialog has closed, so it lands on the live route.
-      viewModel.requestSearchFocus();
     }
   }
 
@@ -548,56 +418,6 @@ class PosCartPane extends StatelessWidget {
     );
   }
 
-  /// The آجل sale was refused for breaching the customer's ceiling. There is no
-  /// "continue anyway" here on purpose: raising the limit is an owner's decision
-  /// made on the customer's record, not a cashier's at the till.
-  Future<void> _showCreditLimitDialog(
-    BuildContext context, {
-    required SaleCheckoutCreditLimitException credit,
-  }) {
-    final l10n = AppLocalizations.of(context)!;
-    return showDialog<void>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          icon: const Icon(Icons.account_balance_wallet_outlined),
-          title: Text(l10n.creditLimitBlockedTitle),
-          content: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(l10n.creditLimitBlockedMessage),
-                const SizedBox(height: 12),
-                Text(
-                  l10n.creditLimitBlockedOutstanding(
-                    formatMoney(credit.outstanding),
-                  ),
-                ),
-                Text(l10n.creditLimitBlockedLimit(formatMoney(credit.limit))),
-                Text(
-                  l10n.creditLimitBlockedAvailable(
-                    formatMoney(credit.available),
-                  ),
-                ),
-                Text(
-                  l10n.creditLimitBlockedNewDebt(formatMoney(credit.newDebt)),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text(l10n.reviewCartButton),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   Future<PaymentSheetResult?> _showPaymentDialog(BuildContext context) {
     // Where the shop's card and transfer money goes. Absent in previews and
     // tests, and empty until an owner configures a second bank account — in
@@ -615,12 +435,6 @@ class PosCartPane extends StatelessWidget {
         enableTransferPayments: viewModel.enableTransferPayments,
         requireCardReceipt: viewModel.requireCardPaymentReceipt,
         trustedCardTerminalIds: viewModel.trustedCardTerminalIds,
-        showPrintInvoiceToggle: viewModel.shouldShowPrintInvoiceCheckbox,
-        printInvoiceAfterPayment: viewModel.printInvoiceAfterPayment,
-        onPrintInvoiceChanged: viewModel.updatePrintInvoiceAfterPayment,
-        showShareInvoiceToggle: viewModel.shouldShowShareInvoiceCheckbox,
-        shareInvoiceAfterPayment: viewModel.shareInvoiceAfterPayment,
-        onShareInvoiceChanged: viewModel.updateShareInvoiceAfterPayment,
         hasCustomer: viewModel.selectedCustomer != null,
         requireCustomerForCredit: viewModel.requireCustomerForCredit,
         proposedDueDate: viewModel.proposedCreditDueDate,
@@ -1438,20 +1252,7 @@ class _CheckoutFooter extends StatelessWidget {
     return PointyStickyActionFooter(
       padding: EdgeInsetsDirectional.fromSTEB(spacing.sm, 6, spacing.sm, 6),
       primaryActionHeight: short ? PointyDimensions.buttonHeight : 52,
-      summary: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          CartTotals(viewModel: viewModel, compact: true),
-          if (viewModel.shouldShowPrintInvoiceCheckbox)
-            PointyOrderToggleRow(
-              label: l10n.printInvoiceAfterPaymentLabel,
-              value: viewModel.printInvoiceAfterPayment,
-              enabled: !viewModel.isCheckingOut,
-              onChanged: viewModel.updatePrintInvoiceAfterPayment,
-            ),
-        ],
-      ),
+      summary: CartTotals(viewModel: viewModel, compact: true),
       primaryAction: CheckoutGuard(
         capabilities: capabilities,
         child: TutorTarget(
@@ -1480,76 +1281,6 @@ class _CheckoutFooter extends StatelessWidget {
   }
 }
 
-/// The PINs of the cards a sale just bought, for when the receipt that
-/// carries them did not print.
-Future<void> _showVoucherCodesDialog(
-  BuildContext context,
-  List<IntegrationChargeResult> cards,
-) {
-  final l10n = AppLocalizations.of(context)!;
-  final colors = context.pointyColors;
-  return showDialog<void>(
-    context: context,
-    // Not dismissable by tapping away: closing it before the customer has the
-    // code is losing what they paid for.
-    barrierDismissible: false,
-    builder: (dialogContext) {
-      final textTheme = Theme.of(dialogContext).textTheme;
-      return AlertDialog(
-        icon: Icon(
-          Icons.confirmation_number_outlined,
-          color: colors.primaryStrong,
-        ),
-        title: Text(l10n.voucherCodesTitle),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(l10n.voucherCodesBody, style: textTheme.bodySmall),
-              const SizedBox(height: 12),
-              for (final card in cards) ...[
-                Text(card.optionLabel, style: textTheme.titleSmall),
-                const SizedBox(height: 4),
-                SelectableText(
-                  card.voucherCode,
-                  textAlign: TextAlign.center,
-                  textDirection: TextDirection.ltr,
-                  style: textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 2,
-                  ),
-                ),
-                if ((card.receipt['serial'] ?? '').isNotEmpty)
-                  Text(
-                    l10n.voucherSerial(card.receipt['serial']!),
-                    textAlign: TextAlign.center,
-                    style: textTheme.bodySmall?.copyWith(
-                      color: colors.mutedInk,
-                    ),
-                  ),
-                if ((card.receipt['instructions'] ?? '').isNotEmpty)
-                  Text(
-                    card.receipt['instructions']!,
-                    textAlign: TextAlign.center,
-                    style: textTheme.bodySmall,
-                  ),
-                const SizedBox(height: 12),
-              ],
-            ],
-          ),
-        ),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: Text(l10n.voucherCodesDone),
-          ),
-        ],
-      );
-    },
-  );
-}
-
 /// What the frozen half of the Pay flow hands back to the rest of it.
 sealed class _PayStep {
   const _PayStep();
@@ -1563,14 +1294,9 @@ final class _ServiceLinesRequoted extends _PayStep {
   final List<ServiceRequote> changes;
 }
 
-final class _PaymentTaken extends _PayStep {
-  const _PaymentTaken(
-    this.outcome, {
-    required this.payment,
-    required this.soldInTestMode,
-  });
+/// The sale is recorded and its result closed.
+final class _SaleCompleted extends _PayStep {
+  const _SaleCompleted(this.exit);
 
-  final SaleCheckoutOutcome outcome;
-  final PaymentSheetResult payment;
-  final bool soldInTestMode;
+  final PosCheckoutCompleted exit;
 }

@@ -6,6 +6,7 @@ class ProductVariantDraft {
     this.id,
     this.name = '',
     this.barcode = '',
+    this.extraBarcodes,
     this.gtin,
     this.isActive = true,
     this.isDefault = false,
@@ -20,6 +21,10 @@ class ProductVariantDraft {
   final String name;
   final String sku;
   final String barcode;
+
+  /// The variant's further barcodes. Null leaves the saved ones alone (a form
+  /// that does not show them must not wipe them); a list replaces them.
+  final List<String>? extraBarcodes;
 
   /// The GS1 trade-item number as typed. Null leaves the saved one alone —
   /// the editor only shows the field where it matters — and blank clears it.
@@ -48,6 +53,7 @@ class ProductVariantDraft {
       'name': name,
       'sku': sku,
       'barcode': barcode,
+      if (extraBarcodes != null) 'extra_barcodes': extraBarcodes,
       if (gtin != null) 'gtin': gtin,
       'unit_price': unitPrice.toStringAsFixed(2),
       if (priceAmount != null) 'price_amount': priceAmount!.toStringAsFixed(2),

@@ -17,7 +17,7 @@ from apps.core.models import ShopSettings
 from apps.core.roles import MANAGER_GROUP, ensure_role_groups
 
 from .models import IntegrationFulfillment
-from .redeem import dial_code, printed_receipt
+from .redeem import dial_code, printed_receipt, redeem_url
 
 PIN = "1111222233334"
 
@@ -57,7 +57,74 @@ class DialCodeTests(SimpleTestCase):
         self.assertEqual(dial_code(card(brand="31", code=f" {PIN}\n")), f"*112*{PIN}#")
 
 
+APPLE_CODE = "X8K2MQ4TZ7WJ9R3N"
+
+
+def apple_card(*, code=APPLE_CODE, **overrides):
+    """An unsaved fulfillment for an Apple card off the company's shelf."""
+    return card(provider="pointy", brand="apple", code=code, **overrides)
+
+
+class RedeemUrlTests(SimpleTestCase):
+    def test_an_apple_card_opens_the_app_store_redeem_sheet_with_its_code(self):
+        self.assertEqual(
+            redeem_url(apple_card()),
+            f"https://apps.apple.com/redeem?code={APPLE_CODE}",
+        )
+
+    def test_a_code_printed_in_groups_or_lower_case_is_the_same_code(self):
+        for code in (
+            "X8K2 MQ4T Z7WJ 9R3N",
+            "X8K2-MQ4T-Z7WJ-9R3N",
+            f" {APPLE_CODE.lower()}\n",
+        ):
+            with self.subTest(code=code):
+                self.assertEqual(
+                    redeem_url(apple_card(code=code)),
+                    f"https://apps.apple.com/redeem?code={APPLE_CODE}",
+                )
+
+    def test_a_code_that_is_not_apples_shape_gets_no_link(self):
+        # Too short, too long, not starting with X, punctuation, Arabic digits.
+        for code in (
+            "",
+            None,
+            "X8K2MQ4TZ7WJ9R3",
+            "X8K2MQ4TZ7WJ9R3NN",
+            "A8K2MQ4TZ7WJ9R3N",
+            "X8K2MQ4T&Z7WJ9R3",
+            "X٨K2MQ4TZ7WJ9R3N",
+        ):
+            with self.subTest(code=code):
+                self.assertEqual(redeem_url(apple_card(code=code)), "")
+
+    def test_only_a_listed_brand_on_its_own_provider_gets_a_link(self):
+        for provider, brand in (("qareeb", "apple"), ("pointy", "itunes"), ("pointy", "libyana")):
+            with self.subTest(provider=provider, brand=brand):
+                self.assertEqual(
+                    redeem_url(card(provider=provider, brand=brand, code=APPLE_CODE)), ""
+                )
+
+    def test_an_operator_card_is_dialled_not_linked(self):
+        self.assertEqual(redeem_url(card(brand="31")), "")
+
+
 class PrintedReceiptTests(SimpleTestCase):
+    def test_a_confirmed_apple_card_carries_its_redemption_link(self):
+        fulfillment = apple_card()
+        printed = printed_receipt(fulfillment)
+        self.assertEqual(
+            printed["redeem_url"], f"https://apps.apple.com/redeem?code={APPLE_CODE}"
+        )
+        self.assertNotIn("dial", printed)
+        self.assertNotIn("redeem_url", fulfillment.provider_receipt["printed"])
+
+    def test_an_apple_card_not_confirmed_gets_no_link(self):
+        for state in ("pending", "submitted", "failed", "cancelled"):
+            with self.subTest(state=state):
+                self.assertNotIn("redeem_url", printed_receipt(apple_card(status=state)))
+
+
     def test_a_confirmed_card_carries_its_dial_string_beside_the_slip(self):
         fulfillment = card(brand="31", serial="123456789012345")
         printed = printed_receipt(fulfillment)

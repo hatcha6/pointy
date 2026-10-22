@@ -18,15 +18,23 @@
 //   ?screen=error            the menu could not be read
 //   ?screen=loading          the first read still on its way
 //
+// `&menu=live` shows the live catalog with the real brand logos (see
+// [_useLiveMenu]), `&seed=off` starts with an empty invoice, and `&printer=on` auto-prints every
+// receipt on a printer that always works. Pay books the sale and the card
+// comes back with a PIN, so a recorded sale ends on the real result.
+//
 // See AGENTS.md ("UI preview harness") for the pattern. Not part of the
 // shipping app. Safe to delete.
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:http/http.dart' as http;
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import 'package:pointy_frontend/src/core/authorization.dart';
 import 'package:pointy_frontend/src/core/result.dart';
+import 'package:pointy_frontend/src/data/models/integration_card.dart';
 import 'package:pointy_frontend/src/data/models/pos_user.dart';
 import 'package:pointy_frontend/src/data/models/product.dart';
 import 'package:pointy_frontend/src/data/models/product_category.dart';
@@ -56,10 +64,52 @@ import 'package:pointy_frontend/src/shared/order/order.dart';
 import 'package:pointy_frontend/src/shared/responsive/responsive.dart';
 import 'package:pointy_frontend/src/shared/shell/shell.dart';
 
+import 'preview_receipt_printer.dart';
 import 'voucher_menu_fixtures.dart';
 
-void main() {
+bool get _printerOn => Uri.base.queryParameters['printer'] == 'on';
+
+/// `&menu=live`: the live catalog every shop is offered, as the till would
+/// read it — `brand-catalog.json` next to the build, which
+/// marketing/website/capture/build.sh writes from the relay's shop view (see
+/// live_menu.py) — with each brand's real logo from `brand-logos/<key>.png`.
+Future<void> _useLiveMenu() async {
+  final response = await http.get(Uri.base.resolve('brand-catalog.json'));
+  final manager =
+      jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, Object?>;
+  // A cashier is never sent a card's cost.
+  final cashier = {
+    ...manager,
+    'brands': [
+      for (final brand
+          in (manager['brands']! as List<Object?>).cast<Map<String, Object?>>())
+        {
+          ...brand,
+          'items': [
+            for (final item in brand['items']! as List<Object?>)
+              {...item! as Map<String, Object?>}..remove('cost'),
+          ],
+        },
+    ],
+  };
+  voucherPreviewMenuSource = ({required bool withCost}) =>
+      withCost ? manager : cashier;
+  PointyProductImageFrame.debugImageOverride = (url) {
+    final key = Uri.tryParse(url)?.pathSegments.lastOrNull;
+    return key == null ? null : NetworkImage('brand-logos/$key.png');
+  };
+  voucherPreviewPicks = const VoucherPreviewPicks(
+    countries: 'playstation',
+    single: 'libyana',
+    seeded: 'apple',
+  );
+}
+
+Future<void> main() async {
   PointyProductImageFrame.debugImageOverride = voucherPreviewArtResolver;
+  if (Uri.base.queryParameters['menu'] == 'live') {
+    await _useLiveMenu();
+  }
   runApp(VoucherMenuPreviewApp(screen: _screen()));
 }
 
@@ -187,8 +237,12 @@ class _TillSurfaceState extends State<_TillSurface> {
       _PreviewCatalogRepository(),
       _PreviewRegisterSessionRepository(),
       _PreviewSaleRepository(_menu),
-      ShopSettingsRepository(PosApiService()),
-      PrintingRepository(PosApiService()),
+      _printerOn
+          ? PreviewAutoPrintSettingsRepository()
+          : ShopSettingsRepository(PosApiService()),
+      _printerOn
+          ? PreviewReceiptPrintingRepository()
+          : PrintingRepository(PosApiService()),
       integrationsRepository: _PreviewIntegrationsRepository(
         state: widget.menu,
         menu: _menu,
@@ -213,7 +267,7 @@ class _TillSurfaceState extends State<_TillSurface> {
       (brand) => brand.key == voucherPreviewPicks.seeded,
     );
     final card = seeded.variantFor(seeded.items[1]);
-    if (card != null) {
+    if (card != null && Uri.base.queryParameters['seed'] != 'off') {
       _viewModel.addVariant(card, source: 'seed');
     }
     final brandKey = widget.openBrand;
@@ -503,6 +557,32 @@ class _PreviewIntegrationsRepository extends IntegrationsRepository {
   final Duration delay;
 
   @override
+  Future<Result<List<IntegrationChargeResult>>> charge({
+    required int orderId,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 1300));
+    return Ok([
+      for (final (index, line) in _PreviewSaleRepository.lastCardLines.indexed)
+        IntegrationChargeResult(
+          fulfillment: line.id,
+          orderLine: line.id,
+          provider: 'pointy',
+          kind: 'voucher',
+          optionLabel: line.variantName ?? '',
+          outcome: 'charged',
+          status: 'confirmed',
+          receipt: {
+            'code': const [
+              '4821 7730 1965 2048',
+              '7310 5528 0047 9163',
+            ][index % 2],
+            'serial': 'SN 0099${line.id}',
+          },
+        ),
+    ]);
+  }
+
+  @override
   Future<Result<VoucherMenu>> loadVoucherMenu() async {
     if (state == _MenuState.loading) {
       return Completer<Result<VoucherMenu>>().future;
@@ -593,16 +673,85 @@ class _PreviewRegisterSessionRepository extends RegisterSessionRepository {
   }
 }
 
-/// Totals the cart from the menu's own prices, so the panel reconciles.
+/// Totals the cart from the menu's own prices, so the panel reconciles, and
+/// books a sale whose card lines a provider then performs (see
+/// [_PreviewIntegrationsRepository.charge]), so a recorded sale ends on the
+/// real result with the card's PIN.
 class _PreviewSaleRepository extends SaleRepository {
   _PreviewSaleRepository(VoucherMenu menu)
     : _prices = {
         for (final brand in menu.brands)
           for (final item in brand.items) item.variantId: item.price,
       },
+      _cards = {
+        for (final brand in menu.brands)
+          for (final item in brand.items) item.variantId: (brand, item),
+      },
       super(PosApiService());
 
   final Map<int, double> _prices;
+  final Map<int, (VoucherBrand, VoucherItem)> _cards;
+  var _receipt = 730;
+
+  /// The card lines of the last sale booked, for the charge to answer.
+  static List<SaleOrderLine> lastCardLines = const [];
+
+  @override
+  Future<Result<SaleOrder>> checkout(
+    SaleCheckoutDraft draft, {
+    String? idempotencyKey,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 900));
+    _receipt++;
+    var total = 0.0;
+    final lines = <SaleOrderLine>[];
+    for (final (index, line) in draft.lines.indexed) {
+      final price = _prices[line.variantId] ?? 0;
+      total += price * line.quantity;
+      final card = _cards[line.variantId];
+      lines.add(
+        SaleOrderLine(
+          id: _receipt * 10 + index,
+          productId: card?.$1.product?.id ?? 0,
+          variantId: line.variantId,
+          quantity: line.quantity,
+          returnedQuantity: 0,
+          returnableQuantity: line.quantity,
+          unitPrice: price,
+          total: price * line.quantity,
+          productName: card?.$1.name,
+          variantName: card?.$2.name,
+          integration: card == null
+              ? null
+              : SaleLineIntegration(
+                  provider: 'pointy',
+                  kind: 'voucher',
+                  subscriberRef: '',
+                  optionLabel: card.$2.name,
+                ),
+        ),
+      );
+    }
+    lastCardLines = [
+      for (final line in lines)
+        if (line.integration != null) line,
+    ];
+    final paid = draft.payments.fold<double>(0, (sum, p) => sum + p.amount);
+    return Ok(
+      SaleOrder(
+        id: _receipt,
+        status: 'paid',
+        lines: lines,
+        payments: const [],
+        subtotal: total,
+        total: total,
+        discountTotal: 0,
+        amountPaid: paid,
+        receiptNumber: 'R20261017000$_receipt',
+        cashierName: 'سالم',
+      ),
+    );
+  }
 
   @override
   Future<Result<SaleDiscountPreview>> previewDiscounts(

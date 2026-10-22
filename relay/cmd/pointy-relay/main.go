@@ -756,25 +756,25 @@ func runServer(args []string) error {
 		envInt64("POINTY_RELAY_AI_MAX_REQUEST_BYTES", 16<<20),
 		"maximum AI chat request body bytes (prompt + base64 attachments)",
 	)
-	serperAPIKey := flags.String(
-		"serper-api-key",
-		envString("POINTY_RELAY_SERPER_API_KEY", ""),
-		"Serper.dev API key for relay-hosted product image search; empty disables image search",
+	openSERPBaseURL := flags.String(
+		"openserp-base-url",
+		envString("POINTY_RELAY_OPENSERP_BASE_URL", ""),
+		"base URL of the self-hosted OpenSERP server for relay-hosted product image search, e.g. http://10.0.0.5:7000; empty disables image search",
 	)
-	serperBaseURL := flags.String(
-		"serper-base-url",
-		envString("POINTY_RELAY_SERPER_BASE_URL", "https://google.serper.dev/images"),
-		"Serper.dev images endpoint",
+	openSERPEngines := flags.String(
+		"openserp-engines",
+		envString("POINTY_RELAY_OPENSERP_ENGINES", "bing,yandex,ecosia"),
+		"comma-separated OpenSERP engines asked at once for image search, in merge order (bing, yandex, ecosia, google, duckduckgo, baidu)",
 	)
-	serperImageLanguage := flags.String(
-		"serper-image-language",
-		envString("POINTY_RELAY_SERPER_IMAGE_LANGUAGE", "ar"),
-		"Serper image search language code (hl)",
+	openSERPLanguage := flags.String(
+		"openserp-language",
+		envString("POINTY_RELAY_OPENSERP_LANGUAGE", "ar"),
+		"OpenSERP image search language code (lang)",
 	)
-	serperImageCountry := flags.String(
-		"serper-image-country",
-		envString("POINTY_RELAY_SERPER_IMAGE_COUNTRY", "us"),
-		"Serper image search country code (gl)",
+	openSERPRegion := flags.String(
+		"openserp-region",
+		envString("POINTY_RELAY_OPENSERP_REGION", ""),
+		"OpenSERP image search region code (region); empty leaves it to the engine",
 	)
 	openRouterManagementKey := flags.String(
 		"openrouter-management-key",
@@ -816,14 +816,9 @@ func runServer(args []string) error {
 		envString("POINTY_RELAY_ALERT_OPENROUTER_FLOOR", "3"),
 		"alert when OpenRouter credits are at or under this many USD (empty: not watched)",
 	)
-	alertSerperFloor := flags.String(
-		"alert-serper-floor",
-		envString("POINTY_RELAY_ALERT_SERPER_FLOOR", "300"),
-		"alert when Serper search credits are at or under this many (empty: not watched)",
-	)
 	imageSearchRequestTimeout := flags.Duration(
 		"image-search-request-timeout",
-		envDuration("POINTY_RELAY_IMAGE_SEARCH_REQUEST_TIMEOUT", 8*time.Second),
+		envDuration("POINTY_RELAY_IMAGE_SEARCH_REQUEST_TIMEOUT", 12*time.Second),
 		"total timeout for a relay-hosted product image search request",
 	)
 	if err := flags.Parse(args); err != nil {
@@ -1291,7 +1286,7 @@ func runServer(args []string) error {
 	}
 	imageSearchClientTimeout := *imageSearchRequestTimeout
 	if imageSearchClientTimeout <= 0 {
-		imageSearchClientTimeout = 8 * time.Second
+		imageSearchClientTimeout = 12 * time.Second
 	}
 	// Resala shares the tuned transport; the per-call timeout is also applied
 	// by the client itself, so this one is only a backstop.
@@ -1323,12 +1318,9 @@ func runServer(args []string) error {
 		ReloadlyFloor:           *alertReloadlyFloor,
 		BNPlusFloor:             *alertBNPlusFloor,
 		OpenRouterFloor:         *alertOpenRouterFloor,
-		SerperFloor:             *alertSerperFloor,
 		OpenRouterAPIKey:        *openRouterAPIKey,
 		OpenRouterBaseURL:       *openRouterBaseURL,
 		OpenRouterManagementKey: *openRouterManagementKey,
-		SerperAPIKey:            *serperAPIKey,
-		SerperBaseURL:           *serperBaseURL,
 	}, store, voucherConfig, &http.Client{Timeout: 30 * time.Second, Transport: outboundTransport}, logger)
 	if err != nil {
 		return err
@@ -1435,10 +1427,10 @@ func runServer(args []string) error {
 		AIHTTPClient:              &http.Client{Timeout: aiClientTimeout, Transport: outboundTransport},
 		ImageSearchHTTPClient:     &http.Client{Timeout: imageSearchClientTimeout, Transport: outboundTransport},
 		AIChatRateLimit:           ratelimit.Policy{Limit: *aiChatRateLimit, Window: *rateLimitWindow},
-		SerperAPIKey:              strings.TrimSpace(*serperAPIKey),
-		SerperBaseURL:             strings.TrimSpace(*serperBaseURL),
-		SerperImageLanguage:       strings.TrimSpace(*serperImageLanguage),
-		SerperImageCountry:        strings.TrimSpace(*serperImageCountry),
+		OpenSERPBaseURL:           strings.TrimSpace(*openSERPBaseURL),
+		OpenSERPEngines:           strings.TrimSpace(*openSERPEngines),
+		OpenSERPLanguage:          strings.TrimSpace(*openSERPLanguage),
+		OpenSERPRegion:            strings.TrimSpace(*openSERPRegion),
 		ImageSearchRequestTimeout: *imageSearchRequestTimeout,
 	}
 	if redisClient != nil {

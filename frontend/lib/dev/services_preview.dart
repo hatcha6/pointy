@@ -72,10 +72,12 @@ import 'package:pointy_frontend/src/features/pos/view_models/bill_flow_view_mode
 import 'package:pointy_frontend/src/features/pos/view_models/pos_service_shelves.dart';
 import 'package:pointy_frontend/src/features/pos/view_models/pos_view_model.dart';
 import 'package:pointy_frontend/src/features/pos/views/direct_services/bill_flow_sheet.dart';
-import 'package:pointy_frontend/src/features/pos/views/direct_services/service_charge_issue_dialog.dart';
-import 'package:pointy_frontend/src/features/pos/views/direct_services/service_delivered_dialog.dart';
 import 'package:pointy_frontend/src/features/pos/views/direct_services/service_requote_dialog.dart';
-import 'package:pointy_frontend/src/features/pos/views/pos_provider_charge_overlay.dart';
+import 'package:pointy_frontend/src/features/pos/views/checkout_result/checkout_progress_view.dart';
+import 'package:pointy_frontend/src/features/pos/views/checkout_result/checkout_receipt_actions.dart';
+import 'package:pointy_frontend/src/features/pos/views/checkout_result/checkout_success_view.dart';
+import 'package:pointy_frontend/src/data/services/order_document_service.dart';
+import 'package:pointy_frontend/src/shared/components/components.dart';
 import 'package:pointy_frontend/src/features/pos/views/pos_cart_pane.dart';
 import 'package:pointy_frontend/src/features/pos/views/pos_catalog_pane.dart';
 import 'package:pointy_frontend/src/shared/app_navigation_drawer.dart';
@@ -365,22 +367,32 @@ class _ServicesPreviewTillState extends State<ServicesPreviewTill> {
     switch (scenario) {
       case 'dialog-delivered':
         unawaited(
-          showServiceDeliveredDialog(context, [
+          _showSaleResult([
             _chargeResult(_airtimeCharged),
             _chargeResult(_electricityCharged),
-          ], testMode: widget.testMode),
+          ]),
         );
       case 'dialog-refused':
-        unawaited(
-          showServiceChargeIssueDialog(context, [
-            _chargeResult(_airtimeRefused),
-          ], receiptNumber: 'R20261008000042'),
-        );
+        unawaited(_showSaleResult([_chargeResult(_airtimeRefused)]));
       case 'dialog-unknown':
+        unawaited(_showSaleResult([_chargeResult(_electricityUnknown)]));
+      case 'dialog-charging':
         unawaited(
-          showServiceChargeIssueDialog(context, [
-            _chargeResult(_electricityUnknown),
-          ], receiptNumber: 'R20261008000042'),
+          showPointyResultDialog<void>(
+            context: context,
+            builder: (_) => CheckoutProgressView(
+              saleType: SaleType.standard,
+              total: 60,
+              progress: PosCheckoutProgress(
+                step: PosCheckoutStep.charge,
+                prints: true,
+                chargeLabels: const ['أورنج مالي · 5,000 فرنك أفريقي'],
+                chargeStartedAt: DateTime.now().subtract(
+                  const Duration(seconds: 17),
+                ),
+              ),
+            ),
+          ),
         );
       case 'dialog-requote':
         final airtime = _viewModel.serviceShelves.airtime!;
@@ -394,6 +406,34 @@ class _ServicesPreviewTillState extends State<ServicesPreviewTill> {
           unawaited(showServiceRequoteDialog(context, changes));
         }
     }
+  }
+
+  /// The sale's result as the till shows it once the provider answered.
+  Future<void> _showSaleResult(List<IntegrationChargeResult> recharges) {
+    final order = const SaleOrder(
+      id: 42,
+      status: 'paid',
+      receiptNumber: 'R20261008000042',
+      lines: [],
+      payments: [],
+      subtotal: 60,
+      total: 60,
+    );
+    return showPointyResultDialog<void>(
+      context: context,
+      builder: (dialogContext) => CheckoutSuccessView(
+        order: order,
+        saleType: SaleType.standard,
+        printStatus: InvoicePrintStatus.printed,
+        recharges: recharges,
+        soldInTestMode: widget.testMode,
+        onDone: () => Navigator.of(dialogContext).pop(),
+        handlers: CheckoutReceiptHandlers(
+          print: () async => InvoicePrintStatus.printed,
+          share: () async => OrderDocumentActionStatus.completed,
+        ),
+      ),
+    );
   }
 
   Future<void> _playBill(List<String> path) async {
@@ -437,20 +477,7 @@ class _ServicesPreviewTillState extends State<ServicesPreviewTill> {
             leading: const PointyNavigationMenuButton(),
             title: Text(l10n.appTitle),
           ),
-          body: widget.scenario == 'dialog-charging'
-              ? Stack(
-                  children: [
-                    _Workspace(viewModel: _viewModel),
-                    Positioned.fill(
-                      child: PosProviderChargeOverlay(
-                        startedAt: DateTime.now().subtract(
-                          const Duration(seconds: 17),
-                        ),
-                      ),
-                    ),
-                  ],
-                )
-              : _Workspace(viewModel: _viewModel),
+          body: _Workspace(viewModel: _viewModel),
         );
       },
     );

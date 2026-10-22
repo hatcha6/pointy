@@ -3770,6 +3770,37 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String get variantExtraBarcodesAddButton => 'إضافة باركود آخر';
+
+  @override
+  String get variantExtraBarcodesLabel => 'باركودات إضافية';
+
+  @override
+  String get variantExtraBarcodesHelper =>
+      'للمنتج نفسه إن وصل بأكثر من باركود: يُباع بأيٍّ منها عند المسح، ويبقى الباركود الأساسي هو المطبوع على الملصق.';
+
+  @override
+  String get variantExtraBarcodeInputLabel => 'امسح أو اكتب باركودًا إضافيًا';
+
+  @override
+  String get variantExtraBarcodeAddTooltip => 'إضافة الباركود';
+
+  @override
+  String get variantExtraBarcodeScanTooltip => 'مسح بالكاميرا';
+
+  @override
+  String get variantExtraBarcodeScanTitle => 'مسح باركود إضافي';
+
+  @override
+  String get variantExtraBarcodeRemoveTooltip => 'حذف الباركود';
+
+  @override
+  String get variantExtraBarcodeIsPrimary => 'هذا هو الباركود الأساسي للمنتج.';
+
+  @override
+  String get variantExtraBarcodeDuplicate => 'هذا الباركود مُضاف بالفعل.';
+
+  @override
   String get productDefaultSaleUnitLabel => 'وحدة البيع الافتراضية';
 
   @override
@@ -7857,11 +7888,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String get productTrackingIdentifyLaterConfirm => 'تفعيل التتبّع';
 
   @override
-  String purchaseOrderReceiptDeferred(String number) {
-    return 'الطلب $number أُنشئ ولم يُستلم بعد — استلمه من قائمة المشتريات بعد مسح الأرقام.';
-  }
-
-  @override
   String get purchaseLineUnitsAtReceipt =>
       'تُمسح الأرقام التسلسلية عند الاستلام.';
 
@@ -10360,20 +10386,12 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get receivePurchaseImmediatelyLabel => 'استلام أمر الشراء فورًا';
-
-  @override
   String submitPurchaseDraftButton(String amount) {
     return 'إرسال أمر الشراء $amount';
   }
 
   @override
   String get purchaseSubmitInProgressButton => 'جار الإرسال...';
-
-  @override
-  String purchaseDraftSubmitSuccess(String draftNumber) {
-    return 'تم إرسال أمر الشراء رقم $draftNumber.';
-  }
 
   @override
   String get purchaseDraftSubmitError =>
@@ -10398,11 +10416,6 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get purchaseDraftSaveInProgressButton => 'جارٍ الحفظ...';
-
-  @override
-  String purchaseDraftSaveSuccess(String draftNumber) {
-    return 'تم حفظ مسودة أمر الشراء رقم $draftNumber.';
-  }
 
   @override
   String get purchaseDraftSaveError =>
@@ -22724,6 +22737,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get migrationEntitySaleReturn => 'المرتجعات';
 
   @override
+  String get migrationEntityPurchaseReturn => 'مرتجعات المشتريات';
+
+  @override
   String get migrationEntityPayrollRun => 'مسيّرات الرواتب';
 
   @override
@@ -28467,5 +28483,925 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String notificationMoamalatAmountMismatchMore(int count) {
     return ' ومعها $count دفعات أخرى.';
+  }
+
+  @override
+  String get checkoutResultWorkingTitle => 'جارٍ إتمام البيع…';
+
+  @override
+  String get checkoutResultWorkingQuotationTitle => 'جارٍ حفظ عرض السعر…';
+
+  @override
+  String get checkoutResultWorkingHint => 'لا تُغلق الشاشة حتى يكتمل البيع.';
+
+  @override
+  String get checkoutResultStepRecord => 'تسجيل الفاتورة';
+
+  @override
+  String get checkoutResultStepCharge => 'التنفيذ لدى المزوّد';
+
+  @override
+  String get checkoutResultStepPrint => 'طباعة الإيصال';
+
+  @override
+  String checkoutResultStepChargeSlow(int seconds) {
+    return 'ما زلنا ننتظر ردّ المزوّد ($seconds ث). لا تُعد العملية ولا تُرجع المبلغ للزبون.';
+  }
+
+  @override
+  String get checkoutResultSaleTitle => 'تم البيع';
+
+  @override
+  String get checkoutResultCreditTitle => 'تم تسجيل البيع الآجل';
+
+  @override
+  String get checkoutResultQuotationTitle => 'تم حفظ عرض السعر';
+
+  @override
+  String get checkoutResultAttentionTitle =>
+      'تم تسجيل البيع، وبعض الشحن لم يكتمل';
+
+  @override
+  String checkoutResultReceiptLine(String receiptNumber, String total) {
+    return 'فاتورة رقم $receiptNumber · $total';
+  }
+
+  @override
+  String get checkoutResultBalanceDue => 'المتبقي على العميل';
+
+  @override
+  String get checkoutResultPrinted => 'طُبع الإيصال';
+
+  @override
+  String get checkoutResultPrinting => 'جارٍ الطباعة…';
+
+  @override
+  String get checkoutResultPrintFailed => 'تعذّرت طباعة الإيصال';
+
+  @override
+  String get checkoutResultNoPrinter => 'لا توجد طابعة إيصالات على هذا الجهاز';
+
+  @override
+  String get checkoutResultNoPrinterHint =>
+      'عيّنها من إعدادات الجهاز ← الطابعات.';
+
+  @override
+  String get checkoutResultNotPrinted => 'لم يُطبع إيصال لهذا البيع';
+
+  @override
+  String get checkoutResultPrintAction => 'طباعة';
+
+  @override
+  String get checkoutResultReprintAction => 'إعادة الطباعة';
+
+  @override
+  String get checkoutResultSmsAction => 'رسالة نصية';
+
+  @override
+  String get checkoutResultShareAction => 'مشاركة PDF';
+
+  @override
+  String get checkoutResultProofAction => 'سند قبض';
+
+  @override
+  String get checkoutResultProofPrinted => 'طُبع سند القبض';
+
+  @override
+  String get checkoutResultProofFailed => 'تعذّرت طباعة سند القبض';
+
+  @override
+  String get checkoutResultSmsSent => 'أُرسلت الفاتورة برسالة نصية';
+
+  @override
+  String get checkoutResultSmsFailed => 'تعذّر إرسال الرسالة';
+
+  @override
+  String get checkoutResultNewSale => 'بيع جديد';
+
+  @override
+  String get checkoutResultNextScanHint =>
+      'امسح الصنف التالي لتبدأ بيعًا جديدًا';
+
+  @override
+  String get checkoutResultDone => 'تم';
+
+  @override
+  String get checkoutResultLinkTitle => 'فاتورة الزبون على الإنترنت';
+
+  @override
+  String get checkoutResultLinkBody =>
+      'يمسح الزبون الرمز ليفتح فاتورته على هاتفه.';
+
+  @override
+  String get checkoutResultLinkOffTitle => 'رابط الفاتورة غير مفعّل';
+
+  @override
+  String get checkoutResultLinkOffBody =>
+      'فعّله ليحصل كل زبون على فاتورته برمز QR ورابط يصله برسالة نصية. تجده في الإعدادات ← الإيصالات.';
+
+  @override
+  String get checkoutResultLinkOffAction => 'فتح الإعدادات';
+
+  @override
+  String get checkoutResultCardsTitle => 'الأرقام السرية للكروت';
+
+  @override
+  String get checkoutResultCardsBody =>
+      'سلّمها للزبون. هي مطبوعة أيضًا على الإيصال إن طُبع.';
+
+  @override
+  String get checkoutSmsTitle => 'إرسال الفاتورة برسالة نصية';
+
+  @override
+  String get checkoutSmsBody =>
+      'تصل الزبونَ رسالة برقم الفاتورة ومبلغها، ورابطها إن كان مفعّلًا.';
+
+  @override
+  String get checkoutSmsPhoneLabel => 'رقم الهاتف';
+
+  @override
+  String get checkoutSmsPhoneRequired => 'أدخل رقم هاتف';
+
+  @override
+  String get checkoutSmsSend => 'إرسال';
+
+  @override
+  String get checkoutResultFailedTitle => 'لم يتم البيع';
+
+  @override
+  String get checkoutResultFailedSubtitle =>
+      'لم يُسجَّل أي مبلغ، والسلة كما هي.';
+
+  @override
+  String get checkoutResultUnansweredTitle => 'لم يصل ردّ الخادم';
+
+  @override
+  String get checkoutResultUnansweredSubtitle =>
+      'قد يكون البيع سُجّل وقد لا يكون. أعد المحاولة لتعرف.';
+
+  @override
+  String get checkoutResultFailedGeneric => 'رفض الخادم تسجيل هذا البيع.';
+
+  @override
+  String get checkoutResultWhatToDo => 'ما الذي يمكنك فعله';
+
+  @override
+  String get checkoutResultRetrySafe =>
+      'إعادة المحاولة آمنة: إن كان البيع قد سُجّل فلن يتكرر.';
+
+  @override
+  String get checkoutResultCheckConnection =>
+      'تأكّد من اتصال الجهاز بالشبكة ثم أعد المحاولة.';
+
+  @override
+  String get checkoutResultStockTitle => 'الكمية المطلوبة غير متوفرة';
+
+  @override
+  String get checkoutResultStockTip => 'خفّض الكمية أو احذف الصنف من السلة.';
+
+  @override
+  String get checkoutResultLossTip =>
+      'عدّل السعر، أو اطلب من المدير إتمام البيع.';
+
+  @override
+  String get checkoutResultCreditTipPayNow => 'أو غيّر نوع البيع إلى نقدي.';
+
+  @override
+  String get checkoutResultSessionTitle => 'جلسة الدرج مغلقة';
+
+  @override
+  String get checkoutResultSessionTip =>
+      'افتح جلسة درج جديدة، ثم ادفع مرة أخرى؛ السلة محفوظة.';
+
+  @override
+  String checkoutResultReference(String reference) {
+    return 'رمز المرجع: $reference';
+  }
+
+  @override
+  String get checkoutResultEditPayment => 'تعديل الدفع';
+
+  @override
+  String get checkoutCreditNeededLabel => 'ادفع الآن على الأقل';
+
+  @override
+  String get checkoutCreditNeededHint =>
+      'ليبقى دين العميل ضمن سقفه، ويتم البيع الآجل.';
+
+  @override
+  String get checkoutCreditOutstanding => 'عليه الآن';
+
+  @override
+  String get checkoutCreditThisInvoice => 'هذه الفاتورة';
+
+  @override
+  String get checkoutCreditLimitLabel => 'سقف الدين';
+
+  @override
+  String get checkoutCreditTipDownPayment =>
+      'اضغط «تعديل الدفع» وأضف الدفعة المقدّمة، ثم أكمل البيع.';
+
+  @override
+  String get checkoutCreditTipRaise =>
+      'رفع السقف من صفحة العميل، وهو قرار المالك.';
+
+  @override
+  String get purchaseResultWorkingTitle => 'جارٍ إرسال أمر الشراء…';
+
+  @override
+  String get purchaseResultSavingTitle => 'جارٍ حفظ التعديلات…';
+
+  @override
+  String get purchaseResultReceivingTitle => 'جارٍ استلام البضاعة…';
+
+  @override
+  String get purchaseResultWorkingHint => 'لا تُغلق الشاشة حتى يكتمل.';
+
+  @override
+  String get purchaseResultStepCreate => 'تسجيل الأمر';
+
+  @override
+  String get purchaseResultStepSubmit => 'إرسال الأمر';
+
+  @override
+  String get purchaseResultStepSave => 'حفظ التعديلات';
+
+  @override
+  String get purchaseResultStepReceive => 'إدخال البضاعة إلى المخزون';
+
+  @override
+  String purchaseResultOrderNumber(String number) {
+    return 'أمر رقم $number';
+  }
+
+  @override
+  String get purchaseResultSubmittedTitle => 'تم إرسال أمر الشراء';
+
+  @override
+  String get purchaseResultSavedTitle => 'تم حفظ التعديلات';
+
+  @override
+  String get purchaseResultReceivedTitle => 'تم استلام البضاعة';
+
+  @override
+  String get purchaseResultTotalLabel => 'إجمالي الأمر';
+
+  @override
+  String get purchaseResultAwaitingTitle => 'البضاعة لم تدخل المخزون بعد';
+
+  @override
+  String get purchaseResultAwaitingBody =>
+      'إن كانت أمامك فاستلمها الآن. وإن كانت ستصل لاحقًا فاستلمها من صفحة الأمر حين تصل.';
+
+  @override
+  String get purchaseResultDetailsTitle =>
+      'تُدخَل تفاصيل هذه الأصناف عند الاستلام';
+
+  @override
+  String get purchaseResultDraftNote =>
+      'الأمر ما زال مسودة: أرسله من صفحته حين يكتمل، ثم استلم البضاعة.';
+
+  @override
+  String get purchaseResultReceiveAction => 'استلام البضاعة';
+
+  @override
+  String get purchaseResultReceiveHint =>
+      'تُدخل الأرقام التسلسلية والدفعات في الخطوة التالية.';
+
+  @override
+  String get purchaseResultReceiveAdjustAction => 'استلام بكميات مختلفة';
+
+  @override
+  String get purchaseResultReceiveLater => 'استلام لاحقًا';
+
+  @override
+  String get purchaseResultNewOrder => 'أمر شراء جديد';
+
+  @override
+  String get purchaseResultFormSubtitle =>
+      'أدخل ما وصل فعلًا، وسجّل الأرقام والدفعات للأصناف التي تحتاجها.';
+
+  @override
+  String get purchaseResultConfirmReceive => 'تأكيد الاستلام';
+
+  @override
+  String get purchaseResultBack => 'رجوع';
+
+  @override
+  String get purchaseResultReceiveFailedTitle => 'لم تُستلم البضاعة';
+
+  @override
+  String get purchaseResultReceiveFailedBody =>
+      'الأمر محفوظ ومُرسل. أعد المحاولة، أو استلمه لاحقًا من صفحته.';
+
+  @override
+  String get purchaseResultReceivedSection => 'ما دخل المخزون';
+
+  @override
+  String purchaseResultMoreLines(int count) {
+    return '+$count أصناف أخرى';
+  }
+
+  @override
+  String get purchaseResultLabelsBody =>
+      'اطبع ملصقات الأجهزة والدفعات الآن، والعلب ما زالت مفتوحة.';
+
+  @override
+  String get purchaseResultDocumentTitle => 'مستند أمر الشراء';
+
+  @override
+  String get purchaseResultPrinted => 'أُرسل أمر الشراء إلى الطابعة';
+
+  @override
+  String get purchaseResultShared => 'جُهّز ملف PDF لأمر الشراء';
+
+  @override
+  String get purchaseResultFailedTitle => 'لم يُرسَل أمر الشراء';
+
+  @override
+  String get purchaseResultSaveFailedTitle => 'لم تُحفظ التعديلات';
+
+  @override
+  String get purchaseResultFailedSubtitle =>
+      'المسودة كما هي، ولم يتغير شيء في المخزون.';
+
+  @override
+  String get purchaseResultUnansweredSubtitle =>
+      'قد يكون الأمر سُجّل وقد لا يكون. أعد المحاولة لتعرف.';
+
+  @override
+  String get purchaseResultRetrySafe =>
+      'إعادة المحاولة آمنة: إن كان الأمر قد سُجّل فلن يتكرر.';
+
+  @override
+  String get purchaseResultInvoiceTakenTitle => 'رقم فاتورة المورد مكرر';
+
+  @override
+  String get purchaseResultEditInvoiceAction => 'تعديل رقم الفاتورة';
+
+  @override
+  String get purchaseResultBackToDraft => 'رجوع إلى المسودة';
+
+  @override
+  String get purchaseResultCostTip =>
+      'إن كانت الفاتورة تعطيك إجمالي السطر فقط، فاكتبه في «إدخال الإجمالي» بدل سعر الوحدة.';
+
+  @override
+  String get purchaseResultStillOpen =>
+      'بقي جزء من الأمر مفتوحًا. استلمه من صفحة الأمر حين يصل.';
+
+  @override
+  String get bulkPriceEditorTitle => 'تعديل الأسعار بالقواعد';
+
+  @override
+  String get bulkPriceEditorMenuAction => 'تعديل الأسعار بالقواعد';
+
+  @override
+  String get bulkPriceEditorSelectionAction => 'قواعد الأسعار';
+
+  @override
+  String get bulkPriceHistoryAction => 'سجل التعديلات';
+
+  @override
+  String get bulkPriceRulesTab => 'القواعد';
+
+  @override
+  String get bulkPricePreviewTab => 'المعاينة';
+
+  @override
+  String get bulkPriceScopeTitle => 'المنتجات المشمولة';
+
+  @override
+  String get bulkPriceScopeAll => 'كل المنتجات';
+
+  @override
+  String get bulkPriceScopeFiltered => 'حسب شروط';
+
+  @override
+  String get bulkPriceScopeAllHint =>
+      'كل المنتجات غير المؤرشفة. المنتجات المؤرشفة ومنتجات النظام لا تتغير أسعارها أبدًا.';
+
+  @override
+  String get bulkPriceGroupMatchLabel => 'تنطبق إذا تحقق';
+
+  @override
+  String get bulkPriceMatchAll => 'كل الشروط';
+
+  @override
+  String get bulkPriceMatchAny => 'أي شرط';
+
+  @override
+  String get bulkPriceJoinAnd => 'و';
+
+  @override
+  String get bulkPriceJoinOr => 'أو';
+
+  @override
+  String get bulkPriceAddCondition => 'إضافة شرط';
+
+  @override
+  String get bulkPriceAddGroup => 'إضافة مجموعة شروط';
+
+  @override
+  String get bulkPriceRemoveCondition => 'حذف الشرط';
+
+  @override
+  String get bulkPriceRemoveGroup => 'حذف المجموعة';
+
+  @override
+  String get bulkPriceNestedGroupTitle => 'مجموعة شروط';
+
+  @override
+  String get bulkPriceFieldName => 'اسم المنتج';
+
+  @override
+  String get bulkPriceFieldSku => 'رمز المنتج (SKU)';
+
+  @override
+  String get bulkPriceFieldBarcode => 'الباركود';
+
+  @override
+  String get bulkPriceFieldCategory => 'التصنيف';
+
+  @override
+  String get bulkPriceFieldSupplier => 'المورد';
+
+  @override
+  String get bulkPriceFieldProduct => 'المنتج';
+
+  @override
+  String get bulkPriceFieldPrice => 'سعر البيع';
+
+  @override
+  String get bulkPriceFieldCost => 'التكلفة';
+
+  @override
+  String get bulkPriceFieldMarkup => 'نسبة الربح على التكلفة';
+
+  @override
+  String get bulkPriceFieldStock => 'الكمية المتوفرة';
+
+  @override
+  String get bulkPriceFieldIsActive => 'المنتج مفعّل';
+
+  @override
+  String get bulkPriceFieldIsService => 'خدمة';
+
+  @override
+  String get bulkPriceFieldForeignPriced => 'مسعّر بعملة أجنبية';
+
+  @override
+  String get bulkPriceOpContains => 'يحتوي على';
+
+  @override
+  String get bulkPriceOpNotContains => 'لا يحتوي على';
+
+  @override
+  String get bulkPriceOpEquals => 'يساوي';
+
+  @override
+  String get bulkPriceOpNotEquals => 'لا يساوي';
+
+  @override
+  String get bulkPriceOpStartsWith => 'يبدأ بـ';
+
+  @override
+  String get bulkPriceOpEndsWith => 'ينتهي بـ';
+
+  @override
+  String get bulkPriceOpIsEmpty => 'غير محدد';
+
+  @override
+  String get bulkPriceOpIsNotEmpty => 'محدد';
+
+  @override
+  String get bulkPriceOpGt => 'أكبر من';
+
+  @override
+  String get bulkPriceOpGte => 'أكبر من أو يساوي';
+
+  @override
+  String get bulkPriceOpLt => 'أقل من';
+
+  @override
+  String get bulkPriceOpLte => 'أقل من أو يساوي';
+
+  @override
+  String get bulkPriceOpBetween => 'بين';
+
+  @override
+  String get bulkPriceOpIn => 'أحد';
+
+  @override
+  String get bulkPriceOpNotIn => 'ليس أحد';
+
+  @override
+  String get bulkPriceOpIsTrue => 'نعم';
+
+  @override
+  String get bulkPriceOpIsFalse => 'لا';
+
+  @override
+  String get bulkPriceBetweenAnd => 'و';
+
+  @override
+  String get bulkPriceValueHint => 'القيمة';
+
+  @override
+  String get bulkPricePickCategories => 'اختر التصنيفات';
+
+  @override
+  String get bulkPricePickSupplier => 'إضافة مورد';
+
+  @override
+  String get bulkPriceSubcategoriesHint => 'تشمل التصنيفات الفرعية';
+
+  @override
+  String get bulkPriceStepsTitle => 'خطوات تعديل السعر';
+
+  @override
+  String get bulkPriceStepsHint =>
+      'تُطبّق الخطوات بالترتيب، وكل خطوة تبدأ من السعر الذي أنتجته الخطوة التي قبلها.';
+
+  @override
+  String get bulkPriceAddStep => 'إضافة خطوة';
+
+  @override
+  String get bulkPriceStepWhenToggle => 'بشرط';
+
+  @override
+  String get bulkPriceStepWhenTitle => 'فقط للمنتجات التي';
+
+  @override
+  String get bulkPriceStepWhenHint => 'السعر هنا هو السعر بعد الخطوات السابقة.';
+
+  @override
+  String get bulkPriceStepStop => 'أوقف بقية الخطوات';
+
+  @override
+  String get bulkPriceStepStopHint =>
+      'ما تنطبق عليه هذه الخطوة لا تمسّه الخطوات بعدها — لصياغة «وإلا».';
+
+  @override
+  String get bulkPriceMoveUp => 'تحريك للأعلى';
+
+  @override
+  String get bulkPriceMoveDown => 'تحريك للأسفل';
+
+  @override
+  String get bulkPriceDuplicateStep => 'تكرار الخطوة';
+
+  @override
+  String get bulkPriceRemoveStep => 'حذف الخطوة';
+
+  @override
+  String get bulkPriceStepMenuTooltip => 'خيارات الخطوة';
+
+  @override
+  String get bulkPriceActionIncreasePercent => 'زيادة بنسبة';
+
+  @override
+  String get bulkPriceActionDecreasePercent => 'تخفيض بنسبة';
+
+  @override
+  String get bulkPriceActionIncreaseAmount => 'زيادة بمبلغ';
+
+  @override
+  String get bulkPriceActionDecreaseAmount => 'تخفيض بمبلغ';
+
+  @override
+  String get bulkPriceActionSet => 'تعيين السعر إلى';
+
+  @override
+  String get bulkPriceActionCostMarkup => 'التكلفة + نسبة ربح';
+
+  @override
+  String get bulkPriceActionCostPlus => 'التكلفة + مبلغ';
+
+  @override
+  String get bulkPriceActionMinMarkup => 'ربح لا يقل عن';
+
+  @override
+  String get bulkPriceActionMinPrice => 'سعر لا يقل عن';
+
+  @override
+  String get bulkPriceActionMaxPrice => 'سعر لا يزيد عن';
+
+  @override
+  String get bulkPriceActionRound => 'تقريب إلى مضاعفات';
+
+  @override
+  String get bulkPriceActionEnding => 'إنهاء السعر بـ';
+
+  @override
+  String get bulkPriceDirectionNearest => 'للأقرب';
+
+  @override
+  String get bulkPriceDirectionUp => 'للأعلى';
+
+  @override
+  String get bulkPriceDirectionDown => 'للأسفل';
+
+  @override
+  String get bulkPriceActionGroupAdjust => 'تعديل السعر';
+
+  @override
+  String get bulkPriceActionGroupCost => 'حسب التكلفة';
+
+  @override
+  String get bulkPriceActionGroupLimits => 'حدود';
+
+  @override
+  String get bulkPriceActionGroupRounding => 'تقريب';
+
+  @override
+  String get bulkPricePresetsTitle => 'إضافة سريعة';
+
+  @override
+  String get bulkPricePresetIncrease10 => 'زيادة ‎10%‎';
+
+  @override
+  String get bulkPricePresetDecrease10 => 'تخفيض ‎10%‎';
+
+  @override
+  String get bulkPricePresetMarkup25 => 'التكلفة + ‎25%‎';
+
+  @override
+  String get bulkPricePresetRound025 => 'تقريب ‎0.25‎';
+
+  @override
+  String get bulkPricePresetEnding => 'ينتهي بـ ‎.99‎';
+
+  @override
+  String get bulkPriceSafeguardsTitle => 'الضمانات';
+
+  @override
+  String get bulkPriceNeverBelowCost => 'لا تجعل أي سعر أقل من التكلفة';
+
+  @override
+  String get bulkPriceNeverBelowCostHint =>
+      'إن نزل السعر الناتج عن التكلفة يُرفع إليها.';
+
+  @override
+  String get bulkPriceScalePacks => 'عدّل أسعار العبوات الخاصة بنفس النسبة';
+
+  @override
+  String get bulkPriceScalePacksHint =>
+      'للعبوات التي لها سعر خاص (كالكرتونة). العبوات المحسوبة من سعر القطعة تتبعها دائمًا.';
+
+  @override
+  String get bulkPricePreviewNoSteps =>
+      'أضف خطوة واحدة على الأقل لعرض المعاينة.';
+
+  @override
+  String get bulkPricePreviewUpdating => 'جارٍ تحديث المعاينة…';
+
+  @override
+  String get bulkPricePreviewFailed => 'تعذّر تحميل المعاينة.';
+
+  @override
+  String get bulkPricePreviewRetry => 'إعادة المحاولة';
+
+  @override
+  String get bulkPriceSummaryMatched => 'مشمولة';
+
+  @override
+  String get bulkPriceSummaryChanged => 'ستتغير';
+
+  @override
+  String get bulkPriceSummaryIncreased => 'زيادة';
+
+  @override
+  String get bulkPriceSummaryDecreased => 'تخفيض';
+
+  @override
+  String get bulkPriceSummaryAverage => 'متوسط التغيير';
+
+  @override
+  String get bulkPriceSummaryWarnings => 'تنبيهات';
+
+  @override
+  String get bulkPriceViewChanged => 'ستتغير';
+
+  @override
+  String get bulkPriceViewIncreased => 'زيادة';
+
+  @override
+  String get bulkPriceViewDecreased => 'تخفيض';
+
+  @override
+  String get bulkPriceViewWarnings => 'تنبيهات';
+
+  @override
+  String get bulkPriceViewUnchanged => 'بلا تغيير';
+
+  @override
+  String get bulkPriceViewAll => 'الكل';
+
+  @override
+  String get bulkPricePreviewEmptyView => 'لا توجد أصناف في هذا القسم.';
+
+  @override
+  String get bulkPricePreviewNothingChanges => 'لن يتغير أي سعر بهذه القواعد.';
+
+  @override
+  String get bulkPricePreviewNoMatch => 'لا يطابق أي منتج هذه الشروط.';
+
+  @override
+  String get bulkPriceFlagBelowCost => 'أقل من التكلفة';
+
+  @override
+  String get bulkPriceFlagRaisedToCost => 'رُفع إلى التكلفة';
+
+  @override
+  String get bulkPriceFlagNoCost => 'تكلفة غير معروفة';
+
+  @override
+  String get bulkPriceFlagZero => 'صار صفرًا';
+
+  @override
+  String get bulkPriceFlagBigChange => 'تغيير كبير';
+
+  @override
+  String get bulkPriceFlagForeign => 'عملة أجنبية';
+
+  @override
+  String get bulkPriceLoadMore => 'عرض المزيد';
+
+  @override
+  String get bulkPriceUnchangedBadge => 'بلا تغيير';
+
+  @override
+  String get bulkPriceApplyWaiting => 'انتظر تحديث المعاينة';
+
+  @override
+  String get bulkPriceApplyNothing => 'لا تغيير لتطبيقه';
+
+  @override
+  String get bulkPriceApplyIncomplete => 'أكمل الحقول المعلّمة';
+
+  @override
+  String get bulkPriceConfirmTitle => 'تطبيق تعديل الأسعار؟';
+
+  @override
+  String get bulkPriceConfirmUndo =>
+      'يمكنك التراجع عن هذا التعديل لاحقًا من «سجل التعديلات».';
+
+  @override
+  String get bulkPriceConfirmAction => 'تطبيق';
+
+  @override
+  String get bulkPriceUndoAction => 'تراجع';
+
+  @override
+  String get bulkPriceStaleMessage =>
+      'تغيّرت بعض الأسعار منذ المعاينة، فحدّثناها. راجعها ثم طبّق مرة أخرى.';
+
+  @override
+  String get bulkPriceApplyFailed => 'تعذّر تطبيق التعديل. لم يتغير أي سعر.';
+
+  @override
+  String get bulkPriceNothingToApplyMessage =>
+      'لم يعد هناك ما يتغير بهذه القواعد.';
+
+  @override
+  String get bulkPriceHistoryTitle => 'سجل تعديلات الأسعار';
+
+  @override
+  String get bulkPriceHistoryEmpty => 'لم يُطبَّق أي تعديل بالقواعد بعد.';
+
+  @override
+  String get bulkPriceHistoryReverted => 'تم التراجع';
+
+  @override
+  String get bulkPriceHistoryLoadFailed => 'تعذّر تحميل السجل.';
+
+  @override
+  String get bulkPriceRevertConfirmTitle => 'التراجع عن هذا التعديل؟';
+
+  @override
+  String get bulkPriceRevertConfirmBody =>
+      'تعود الأسعار إلى ما كانت عليه قبله. أي سعر عدّله أحد بعد ذلك يبقى كما هو.';
+
+  @override
+  String get bulkPriceRevertFailed => 'تعذّر التراجع.';
+
+  @override
+  String get bulkPriceAlreadyReverted => 'سبق التراجع عن هذا التعديل.';
+
+  @override
+  String get bulkPriceIssueRequired => 'مطلوب';
+
+  @override
+  String get bulkPriceIssueNotANumber => 'رقم غير صالح';
+
+  @override
+  String get bulkPriceIssueNegative => 'لا يقبل قيمة سالبة';
+
+  @override
+  String get bulkPriceIssueTooManyDecimals => 'منازل عشرية أكثر من المسموح';
+
+  @override
+  String get bulkPriceIssueBoundsReversed => 'أصغر من الحد الأول';
+
+  @override
+  String get bulkPriceIssuePercentOver100 => 'لا يتجاوز 100%';
+
+  @override
+  String get bulkPriceIssueZeroIncrement => 'أكبر من صفر';
+
+  @override
+  String bulkPriceMatchedCount(int count) {
+    return 'يطابق $count صنفًا';
+  }
+
+  @override
+  String bulkPriceSelectedProducts(int count) {
+    return 'المنتجات المحددة ($count)';
+  }
+
+  @override
+  String bulkPriceStepHits(int count) {
+    return 'طُبّقت على $count';
+  }
+
+  @override
+  String bulkPriceStepExample(String before, String after) {
+    return 'مثال: $before ← $after';
+  }
+
+  @override
+  String bulkPricePreviewIncomplete(int count) {
+    return 'أكمل $count من الحقول المعلّمة لعرض المعاينة.';
+  }
+
+  @override
+  String bulkPriceRowCost(String cost) {
+    return 'التكلفة $cost';
+  }
+
+  @override
+  String bulkPriceRowMarkup(String before, String after) {
+    return 'الربح $before ← $after';
+  }
+
+  @override
+  String bulkPriceRowSteps(String steps) {
+    return 'الخطوات $steps';
+  }
+
+  @override
+  String bulkPricePacksChanged(int count) {
+    return 'و$count عبوة';
+  }
+
+  @override
+  String bulkPriceApplyButton(int count) {
+    return 'تطبيق على $count صنف';
+  }
+
+  @override
+  String bulkPriceConfirmBody(int changed, int increased, int decreased) {
+    return 'سيتغير سعر $changed صنفًا: $increased بزيادة و$decreased بتخفيض.';
+  }
+
+  @override
+  String bulkPriceConfirmPacks(int count) {
+    return 'وسيتغير سعر $count عبوة بنفس النسبة.';
+  }
+
+  @override
+  String bulkPriceConfirmWarnings(int count) {
+    return '$count صنفًا عليها تنبيهات. راجعها في «تنبيهات» قبل التطبيق.';
+  }
+
+  @override
+  String bulkPriceAppliedMessage(int count) {
+    return 'تم تعديل $count سعرًا';
+  }
+
+  @override
+  String bulkPriceHistoryEntry(int count) {
+    return '$count سعرًا';
+  }
+
+  @override
+  String bulkPriceHistoryBy(String name) {
+    return 'بواسطة $name';
+  }
+
+  @override
+  String bulkPriceHistoryDetail(int increased, int decreased, int steps) {
+    return '$increased زيادة · $decreased تخفيض · $steps خطوات';
+  }
+
+  @override
+  String bulkPriceRevertDone(int restored, int skipped) {
+    return 'استُعيد $restored سعرًا، وتُرك $skipped لأنه عُدّل بعده.';
+  }
+
+  @override
+  String bulkPriceStepExampleCost(String before, String cost, String after) {
+    return 'مثال: $before بتكلفة $cost ← $after';
   }
 }

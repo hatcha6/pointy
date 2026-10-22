@@ -24,6 +24,7 @@ const shots=[
  ['p-ftp','cameras_preview','?screen=ftp-connection&state=receiving',P],
  ['p-loan','employee_loans_preview','?screen=new',P],['p-invoice-ai','ai_ui_preview','?screen=invoice',P,{clipTop:56}],
  ['p-zreport','register_session_preview','',P],['p-customer','balances_preview','?screen=customer',P],
+ ['p-vouchers','voucher_menu_preview','?screen=menu&menu=live',P],['p-vouchers-sheet','voucher_menu_preview','?screen=sheet-countries&menu=live',P],
  ['p-login','login_preview','',P],['p-setup','shop_setup_preview','',P],['p-fx','dashboard_preview','?screen=fx',P],
  // dev/marketing_preview.dart surfaces
   ['d-pos-serial','marketing_preview','?screen=pos-serial',D],['d-payroll','marketing_preview','?screen=payroll',D],['d-attendance','marketing_preview','?screen=attendance',D],['d-exchange-rates','marketing_preview','?screen=exchange-rates',D],

@@ -371,3 +371,48 @@ def _foreign_amount_for(base_amount, rate, currency, base):
             nearest,
         )
     return nearest
+
+
+VARIANT_PRICE_FIELDS = ["unit_price", "price_amount", "price_rate", "price_rate_at", "updated_at"]
+UNIT_PRICE_FIELDS = ["price", "price_amount", "price_rate", "price_rate_at", "updated_at"]
+
+
+class BulkPriceWriter:
+    """:func:`set_base_price` for many rows at once, without saving them.
+
+    Same rule — a foreign-priced row's frozen foreign amount is restated at the
+    rate already frozen on it (today's rate for one that never had one) — but
+    with the base currency and each foreign rate looked up once rather than per
+    row, so the caller can ``bulk_update`` the result with
+    :data:`VARIANT_PRICE_FIELDS` / :data:`UNIT_PRICE_FIELDS`.
+
+    ``bulk_update`` fires no signals: follow it with
+    :func:`apps.catalog.cache.announce_bulk_catalog_write`.
+    """
+
+    def __init__(self):
+        self.base = base_currency_code()
+        self._rates = {}
+
+    def write(self, target, amount, *, at, currency=None):
+        """``currency`` defaults to ``target.product.pricing_currency_id``."""
+        if currency is None:
+            currency = target.product.pricing_currency_id
+        _write_base_price(target, amount)
+        target.updated_at = at
+        if not currency or currency == self.base:
+            target.price_amount = None
+            target.price_rate = None
+            target.price_rate_at = None
+            return
+        rate, effective_at = target.price_rate, target.price_rate_at
+        if not rate:
+            if currency not in self._rates:
+                self._rates[currency] = rate_on(currency, self.base, at=None)
+            resolved = self._rates[currency]
+            if resolved is None:
+                return  # base price written; the sheet stays as it was
+            rate, effective_at = resolved.rate, resolved.effective_at
+        target.price_amount = _foreign_amount_for(amount, rate, currency, self.base)
+        target.price_rate = rate
+        target.price_rate_at = effective_at

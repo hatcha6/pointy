@@ -131,6 +131,13 @@ const registerCloseLesson = TutorLesson(
       hint: 'المبلغ 0.50 د.ل.',
     ),
     TutorStep(
+      say: 'تم البيع. اضغط «بيع جديد» لتعود إلى الشاشة.',
+      anchor: TutorAnchor.checkoutNewSaleButton,
+      act: TutorAct.tap(),
+      expect: TutorExpect.anchorCount(TutorAnchor.checkoutNewSaleButton, 0),
+      hint: 'أو اضغط Enter.',
+    ),
+    TutorStep(
       say: 'افتح قائمة الوردية.',
       anchor: TutorAnchor.registerSessionMenuButton,
       act: TutorAct.tap(),

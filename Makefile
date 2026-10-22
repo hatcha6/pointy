@@ -135,10 +135,10 @@ ENDURANCE_WORKERS ?= 4
 	backend-tracked-simulation backend-stock-integrity backend-contract-gate backend-search-eval \
 	backend-shell backend-superuser backend-test backend-test-pg backend-test-keepdb backend-test-slowest \
 	backend-check backend-celery backend-celery-beat backend-ftp backend-ingest-footage \
-	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-camera-wedge-test frontend-camera-wedge-linux frontend-camera-wedge-linux-clean frontend-camera-wedge-preview frontend-calculator-preview frontend-e2e frontend-analyze frontend-format frontend-navigation-preview frontend-balances-preview frontend-employee-loans-preview frontend-scales-preview frontend-invoice-attribution-preview frontend-learning-preview frontend-integrations-preview frontend-moamalat-preview frontend-recharge-preview frontend-portal-payments-preview frontend-printers-preview frontend-reports-preview frontend-marketing-preview frontend-app-update-preview \
-	marketing-site marketing-site-capture \
+	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-camera-wedge-test frontend-camera-wedge-linux frontend-camera-wedge-linux-clean frontend-camera-wedge-preview frontend-calculator-preview frontend-e2e frontend-analyze frontend-format frontend-navigation-preview frontend-balances-preview frontend-employee-loans-preview frontend-scales-preview frontend-invoice-attribution-preview frontend-learning-preview frontend-integrations-preview frontend-moamalat-preview frontend-bulk-price-preview frontend-recharge-preview frontend-portal-payments-preview frontend-printers-preview frontend-reports-preview frontend-marketing-preview frontend-app-update-preview \
+	marketing-site marketing-site-capture marketing-site-dist marketing-pos-tour \
 	camera-rig camera-rig-stop camera-rig-logs camera-rig-test \
-	relay-install relay-format relay-check relay-test relay-production-test relay-fleet-test relay-run relay-connector relay-connector-remote relay-migrate relay-provision relay-subscription-update relay-remote-mint relay-remote-activate relay-remote-provision relay-cli \
+	relay-install relay-format relay-check relay-test relay-production-test relay-fleet-test relay-run relay-openserp relay-openserp-stop relay-connector relay-connector-remote relay-migrate relay-provision relay-subscription-update relay-remote-mint relay-remote-activate relay-remote-provision relay-cli \
 	onprem-test onprem-keeper-revision onprem-rehearsal onprem-rehearsal-clean onprem-move-test upgrade-rehearsal upgrade-check android-release-key \
 	format check test e2e dev dev-local dev-no-redis dev-ai dev-remote ai-enable ai-enable-remote postgres-ready clean
 
@@ -361,6 +361,12 @@ frontend-portal-payments-preview: frontend-install ## Run the "LNET top-ups done
 frontend-printers-preview: frontend-install ## Run the device printers (jobs + editor) UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/printers_preview.dart
 
+frontend-checkout-result-preview: frontend-install ## Run the sale-result dialog preview harness (?screen=board|working|success-card|failure-credit|…, &theme=dark).
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/checkout_result_preview.dart
+
+frontend-purchase-result-preview: frontend-install ## Run the purchase-order result dialog live over a fake server (?scenario=counted|tracked|partial|invoice-taken|cost|offline|receive-fails|saved, &theme=dark).
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/purchase_result_preview.dart
+
 camera-rig: docker-check ## Start the camera rig (MediaMTX + fake DVR + fake ONVIF).
 	docker compose -f $(CAMERA_RIG) up -d --build
 	@# The fake DVR encodes its frames with ffmpeg at boot, so it answers a
@@ -393,6 +399,9 @@ frontend-navigation-preview: frontend-install ## Run the navigation drawer/rail 
 
 frontend-moamalat-preview: frontend-install ## Run the Moamalat card-verification UI preview harness (?screen=board|unlinked|alive|at-risk|reauth|switched|sheet).
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/moamalat_preview.dart
+
+frontend-bulk-price-preview: frontend-install ## Run the rule-driven bulk price editor UI preview harness (?screen=editor|filtered|selection|history|board, &dark=1).
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/bulk_price_preview.dart
 
 frontend-treasury-preview: frontend-install ## Run the treasury (money position) UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/treasury_preview.dart
@@ -496,6 +505,12 @@ marketing-site: ## Serve the دفتر product page (marketing/website) at http:/
 
 marketing-site-capture: ## Re-record every screenshot and clip on the product page from the real app harnesses.
 	marketing/website/capture/run.sh
+
+marketing-site-dist: ## Build the dftr.ly upload: marketing/website/dist/site/ and dist/dftr-site.zip (for public_html).
+	marketing/website/deploy/build.sh
+
+marketing-pos-tour: ## Rebuild the vertical POS tour film from the real app (marketing/film -> marketing/promo/out/daftar-pos-tour.mp4).
+	marketing/film/run.sh
 
 frontend-wallet-preview: frontend-install ## Run the Daftar wallet (balance, Dafa top-up sheet with every method, history) UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/wallet_preview.dart
@@ -611,6 +626,12 @@ relay-console-preview: relay-console-build ## Run a throwaway relay with the con
 relay-console-dev: ## Live-reload the console app on :5173 (start the relay with CONSOLE_DEV_ORIGIN=http://localhost:5173).
 	cd "$(RELAY_DIR)/console-ui" && npm run dev
 
+relay-openserp: docker-check ## Run a local OpenSERP (image search engine) on 127.0.0.1:7000; point the relay at it with RELAY_OPENSERP_BASE_URL=http://127.0.0.1:7000.
+	docker run -d --rm --init --name pointy-openserp -p 127.0.0.1:7000:7000 karust/openserp:0.8.14 serve -a 0.0.0.0 -p 7000
+
+relay-openserp-stop: ## Stop the local OpenSERP container.
+	docker stop pointy-openserp
+
 relay-run: ## Run the relay server.
 	cd "$(RELAY_DIR)" && GOCACHE="$(abspath $(GO_CACHE))" GOMODCACHE="$(abspath $(GO_MOD_CACHE))" \
 		POINTY_RELAY_ADMIN_TOKEN="$(RELAY_ADMIN_TOKEN)" \
@@ -652,7 +673,7 @@ relay-run: ## Run the relay server.
 		POINTY_RELAY_AI_LIMIT_WEEKLY_WINDOW="$(RELAY_AI_LIMIT_WEEKLY_WINDOW)" \
 		POINTY_RELAY_AI_MAX_IMAGES="$(RELAY_AI_MAX_IMAGES)" \
 		POINTY_RELAY_AI_MAX_REQUEST_BYTES="$(RELAY_AI_MAX_REQUEST_BYTES)" \
-		POINTY_RELAY_SERPER_API_KEY="$(RELAY_SERPER_API_KEY)" \
+		POINTY_RELAY_OPENSERP_BASE_URL="$(RELAY_OPENSERP_BASE_URL)" \
 		POINTY_RELAY_RESALA_API_TOKEN="$(RELAY_RESALA_API_TOKEN)" \
 		POINTY_RELAY_RESALA_BASE_URL="$(RELAY_RESALA_BASE_URL)" \
 		POINTY_RELAY_SMS_TEMPLATES='$(RELAY_SMS_TEMPLATES)' \

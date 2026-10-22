@@ -1,0 +1,22 @@
+{
+  "shop_name": "بقالة الياسمين",
+  "receipt_header": "طرابلس · شارع النصر",
+  "receipt_footer": "شكراً لزيارتكم",
+  "shop_logo_data_uri": "",
+  "receipt_number": "R20261005000413",
+  "status": "paid",
+  "customer_name": "",
+  "subtotal": "47.70",
+  "discount_total": "1.50",
+  "extra_discount_amount": "0.00",
+  "total": "46.20",
+  "created_at": "2026-10-20T12:41:00+02:00",
+  "lines": [
+    {"product_name": "ماء معدني 500 مل", "variant_name": "", "quantity": 2.0, "unit_label": "كرتون",
+     "unit_price": "15.00", "line_subtotal": "30.00", "discount_total": "0.00", "line_total": "30.00", "modifiers": [], "identifiers": []},
+    {"product_name": "كرواسون بالجبنة والزعتر الأخضر", "variant_name": "", "quantity": 1.0, "unit_label": "",
+     "unit_price": "3.20", "line_subtotal": "3.20", "discount_total": "0.00", "line_total": "3.20", "modifiers": [], "identifiers": []},
+    {"product_name": "قهوة عربية مختصة", "variant_name": "", "quantity": 2.0, "unit_label": "",
+     "unit_price": "7.25", "line_subtotal": "14.50", "discount_total": "0.00", "line_total": "14.50", "modifiers": [], "identifiers": []}
+  ]
+}

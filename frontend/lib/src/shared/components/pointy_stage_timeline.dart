@@ -35,9 +35,18 @@ class PointyStageEntry {
 /// The running stage gets a determinate bar when it can report a percentage and
 /// a spinner when it cannot — a bar that does not move is worse than no bar.
 class PointyStageTimeline extends StatelessWidget {
-  const PointyStageTimeline({super.key, required this.stages});
+  const PointyStageTimeline({
+    super.key,
+    required this.stages,
+    this.showRunningBar = true,
+  });
 
   final List<PointyStageEntry> stages;
+
+  /// Whether the running stage carries a progress bar under its label. Off
+  /// where something else on screen already says "working" — a second
+  /// indicator beside it reads as two things happening.
+  final bool showRunningBar;
 
   @override
   Widget build(BuildContext context) {
@@ -53,6 +62,7 @@ class PointyStageTimeline extends StatelessWidget {
             child: _StageRow(
               stage: stages[index],
               isLast: index == stages.length - 1,
+              showRunningBar: showRunningBar,
             ),
           ),
       ],
@@ -61,10 +71,15 @@ class PointyStageTimeline extends StatelessWidget {
 }
 
 class _StageRow extends StatelessWidget {
-  const _StageRow({required this.stage, required this.isLast});
+  const _StageRow({
+    required this.stage,
+    required this.isLast,
+    required this.showRunningBar,
+  });
 
   final PointyStageEntry stage;
   final bool isLast;
+  final bool showRunningBar;
 
   @override
   Widget build(BuildContext context) {
@@ -100,7 +115,7 @@ class _StageRow extends StatelessWidget {
                   ),
                 ),
               ],
-              if (running) ...[
+              if (running && showRunningBar) ...[
                 const SizedBox(height: 8),
                 PointyProgressBar(
                   // A stage that cannot say how far along it is gets an

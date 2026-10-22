@@ -329,9 +329,9 @@ class RelayControlClient:
         return self._request("GET", path, relay_token=access_token)
 
     def search_product_images(self, *, access_token, query, page=1, page_size=30):
-        """Run a relay-hosted product image search (Serper.dev).
+        """Run a relay-hosted product image search (the company's OpenSERP).
 
-        The relay holds the Serper key — so shops never manage one — and gates on
+        The relay owns the search engine — so shops never manage one — and gates on
         the installation's remote-access entitlement (subscription +
         relay_enabled), exactly like a relayed request. Returns the decoded
         ``{"results": [...]}`` payload; raises ``RelayControlError`` on transport

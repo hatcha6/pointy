@@ -62,16 +62,6 @@ const purchasingCreatePoLesson = TutorLesson(
       hint: 'التكلفة هي ما تدفعه للمورّد، لا سعر البيع.',
     ),
     TutorStep(
-      say:
-          'انظر إلى «استلام فوري»: وهو مُفعَّل، فالبضاعة تدخل المخزون لحظة '
-          'إرسال الأمر. اتركه مُفعَّلًا هنا — البضاعة على الطاولة أمامك. '
-          'أطفئه حين تطلب بضاعة ستصل لاحقًا.',
-      anchor: TutorAnchor.purchaseReceiveImmediatelyToggle,
-      act: TutorAct.observe(),
-      expect: TutorExpect.visible(TutorAnchor.purchaseReceiveImmediatelyToggle),
-      hint: 'الفرق بين «طلبتها» و«استلمتها» هو الفرق بين مخزون صحيح وخاطئ.',
-    ),
-    TutorStep(
       say: 'افتح إعدادات الأمر لاختيار المورّد.',
       anchor: TutorAnchor.purchaseSettingsButton,
       act: TutorAct.tap(),
@@ -107,11 +97,31 @@ const purchasingCreatePoLesson = TutorLesson(
       expect: TutorExpect.purchaseOrderCount(1),
       hint: 'لا يُرسَل أمر بلا مورّد — ولهذا اخترناه أولًا.',
     ),
+    TutorStep(
+      say:
+          'أُرسل الأمر، لكن البضاعة لم تدخل المخزون بعد. هي أمامك على '
+          'الطاولة: اضغط «استلام البضاعة».',
+      anchor: TutorAnchor.purchaseResultReceiveButton,
+      act: TutorAct.tap(),
+      expect: TutorExpect.lastPurchaseOrderStatus('received'),
+      // The difference between "ordered" and "received" is the difference
+      // between stock that is right and stock that is wrong.
+      hint:
+          'حين تطلب بضاعة ستصل لاحقًا، اضغط «استلام لاحقًا» واستلمها من '
+          'صفحة الأمر عند وصولها.',
+    ),
+    TutorStep(
+      say: 'دخلت البضاعة المخزون. اضغط «أمر شراء جديد» لتعود إلى الشاشة.',
+      anchor: TutorAnchor.purchaseResultDoneButton,
+      act: TutorAct.tap(),
+      expect: TutorExpect.anchorCount(TutorAnchor.purchaseResultDoneButton, 0),
+      hint: 'من هنا أيضًا تطبع أمر الشراء أو تشاركه.',
+    ),
   ],
   outcome: TutorExpect.all([
     TutorExpect.purchaseOrderCount(1),
-    // Sent *and* received, because «استلام فوري» was left on: the goods were
-    // on the counter. The stock rose by exactly the one unit ordered.
+    // Sent, then received from its result: the goods were on the counter.
+    // The stock rose by exactly the one unit ordered.
     TutorExpect.lastPurchaseOrderStatus('received'),
     TutorExpect.receivedQuantityOf('PCE3', 1),
     TutorExpect.stockOf('PCE3', 16),

@@ -1,16 +1,27 @@
-// The site's clips, recorded from the real harnesses. Usage: node videos.js [v-pos v-ai v-cam v-ops v-phone-dash]
+// The site's clips, recorded from the real harnesses. Usage: node videos.js [v-pos v-vouchers v-ai v-cam v-ops v-phone-dash]
 const L=require('./lib'); const fsrv=require('./footage-server');
 const sleep=(p,ms)=>p.waitForTimeout(ms);
 const tapper=page=>async(x,y,wait=650)=>{ await page.mouse.move(x,y,{steps:18}); await sleep(page,120); await page.mouse.down(); await sleep(page,90); await page.mouse.up(); await sleep(page,wait); };
 const scenes={
- async 'v-pos'(){ const {page,ctx}=await L.open('pos_preview','?screen=pos',{w:1440,h:900,dpr:2}); const tap=tapper(page);
+ async 'v-pos'(){ // links=on: the result offers the customer's online invoice (QR); printer=on: the receipt prints
+  const {page,ctx}=await L.open('pos_preview','?screen=pos&links=on&printer=on',{w:1440,h:900,dpr:2}); const tap=tapper(page);
   await page.mouse.click(56,112); await sleep(page,500); await page.mouse.click(612,520); await sleep(page,900);
   await page.evaluate(()=>window.__touches=true); await page.mouse.move(1200,500);
   await L.record(page,'v-pos',async()=>{ await sleep(page,600);
    await tap(920,160,300); await L.type(page,'قهوة',120); await sleep(page,600);
    await tap(1062,390,500); await tap(1062,390,700); await tap(698,158,500); await tap(888,218,700);
    await tap(1062,390,700); await tap(1067,218,700); await tap(830,390,900);
-   await tap(230,848,1400); await tap(960,432,900); await tap(310,744,2400); });
+   // pay -> 20.00 cash -> confirm: the sale's progress, then «تم البيع» with the change, QR and «طُبع الإيصال»
+   await tap(230,848,1400); await tap(960,432,900); await tap(310,757,5600); });
+  await ctx.close(); },
+ async 'v-vouchers'(){ const {page,ctx}=await L.open('voucher_menu_preview','?screen=menu&seed=off&printer=on&menu=live',{w:1440,h:900,dpr:2}); const tap=tapper(page);
+  await page.evaluate(()=>window.__touches=true); await page.mouse.move(900,700);
+  await L.record(page,'v-vouchers',async()=>{ await sleep(page,900);
+   // the whole live shelf, the games tab, then ببجي موبايل -> 325 شدة -> pay; the card's PIN comes back in the result
+   await L.smoothScroll(page,1400,22,830,620); await sleep(page,900); await L.smoothScroll(page,-1400,16,830,620); await sleep(page,500);
+   await tap(735,289,1400); await tap(1140,289,900);
+   await tap(575,375,1500); await tap(806,615,1200);
+   await tap(230,848,1500); await tap(310,757,6400); });
   await ctx.close(); },
  async 'v-ai'(){ const {page,ctx}=await L.open('ai_chat_preview','?screen=ui-live',{w:1440,h:900,dpr:2}); const tap=tapper(page);
   await page.evaluate(()=>window.__touches=true); await page.mouse.move(700,600);

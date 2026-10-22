@@ -73,9 +73,12 @@ fleet the release's **update bundle**, `pointy-update-<v>.zip`, not the full
 `pointy-onprem-<v>.zip`:
 
 ```sh
-pointy-relay artifacts upload --version 1.4.0 --bundle pointy-update-1.4.0.zip
-# or, on a slow line, have the relay download it itself:
-pointy-relay artifacts upload --version 1.4.0 --url https://…/pointy-update-1.4.0.zip
+pointy-relay artifacts upload --version 1.4.0 --bundle pointy-update-1.4.0.zip \
+  --signature pointy-update-1.4.0.zip.sig
+# or, on a slow line, have the relay download it itself (the .sig is tiny —
+# download it locally and pass it):
+pointy-relay artifacts upload --version 1.4.0 --url https://…/pointy-update-1.4.0.zip \
+  --signature pointy-update-1.4.0.zip.sig
 pointy-relay fleet set-version 1.4.0 --channel stable --rollout canary
 pointy-relay fleet rollout 50%        # widen once the canaries look healthy
 pointy-relay fleet rollout all

@@ -15,6 +15,7 @@ class ProductVariant {
     this.displayName = '',
     this.fullName = '',
     this.barcode = '',
+    this.extraBarcodes = const [],
     this.gtin = '',
     this.isActive = true,
     this.isDefault = false,
@@ -42,6 +43,17 @@ class ProductVariant {
   final String fullName;
   final String sku;
   final String barcode;
+
+  /// Further barcodes a scan also resolves to this variant. [barcode] stays the
+  /// primary one: labels print it, receipts and exports name it.
+  final List<String> extraBarcodes;
+
+  /// Whether [code] is this variant's barcode, primary or extra.
+  bool answersToBarcode(String code) {
+    final trimmed = code.trim();
+    return trimmed.isNotEmpty &&
+        (barcode.trim() == trimmed || extraBarcodes.contains(trimmed));
+  }
 
   /// The GS1 trade-item number, stored as GTIN-14, that a scanned DataMatrix
   /// resolves to this variant by (§6.3). Blank for nearly every variant.
@@ -195,6 +207,7 @@ class ProductVariant {
       fullName: json['full_name']?.toString() ?? '',
       sku: json['sku']?.toString() ?? '',
       barcode: json['barcode']?.toString() ?? '',
+      extraBarcodes: _stringListFromJson(json['extra_barcodes']),
       gtin: json['gtin']?.toString() ?? '',
       unitPrice: _moneyFromJson(json['unit_price']),
       isActive: _boolFromJson(json['is_active'], fallback: true),
@@ -259,6 +272,7 @@ class ProductVariant {
       'full_name': fullName,
       'sku': sku,
       'barcode': barcode,
+      if (extraBarcodes.isNotEmpty) 'extra_barcodes': extraBarcodes,
       'unit_price': unitPrice.toStringAsFixed(2),
       'is_active': isActive,
       'is_default': isDefault,
@@ -289,6 +303,7 @@ class ProductVariant {
       fullName: fullName,
       sku: sku,
       barcode: barcode,
+      extraBarcodes: extraBarcodes,
       gtin: gtin,
       unitPrice: unitPrice ?? this.unitPrice,
       isActive: isActive,
@@ -403,6 +418,17 @@ bool _boolFromJson(Object? value, {bool fallback = false}) {
     return fallback;
   }
   return value.toString() == 'true';
+}
+
+List<String> _stringListFromJson(Object? value) {
+  if (value is! List<Object?>) {
+    return const [];
+  }
+  return [
+    for (final item in value)
+      if (item != null && item.toString().trim().isNotEmpty)
+        item.toString().trim(),
+  ];
 }
 
 List<int> _intListFromJson(Object? value) {

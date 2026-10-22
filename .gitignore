@@ -52,3 +52,6 @@ fahd_migration.sqlite
 # Local relay build output and the console app's TypeScript build cache
 /relay/pointy-relay
 relay/console-ui/tsconfig.tsbuildinfo
+
+# Local design archives (screenshots, notes, restorable mock patches)
+/ui/restaurant-ordering/

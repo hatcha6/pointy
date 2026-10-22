@@ -47,10 +47,17 @@ class SalesApiClient {
   }
 
   /// Queues the invoice SMS and returns the queued message — which can
-  /// already be a refusal (a bad number) the screen should name.
-  Future<MessagingSendResult> sendInvoiceSms(int saleOrderId) async {
+  /// already be a refusal (a bad number) the screen should name. [phone]
+  /// sends it to that number instead of the customer's own; without one the
+  /// body is left empty, exactly as before.
+  Future<MessagingSendResult> sendInvoiceSms(
+    int saleOrderId, {
+    String? phone,
+  }) async {
+    final trimmed = phone?.trim() ?? '';
     final response = await _session.post(
       'crm/orders/$saleOrderId/send-invoice-sms/',
+      body: trimmed.isEmpty ? null : {'phone': trimmed},
     );
     _session.throwApiException(response, 'Send invoice SMS failed with status');
     final decoded = _session.decodedBodyOrNull(response);

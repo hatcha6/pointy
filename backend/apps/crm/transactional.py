@@ -19,6 +19,7 @@ from decimal import Decimal
 from apps.core.models import ShopSettings
 from apps.core.timeutils import business_local_date
 from apps.messaging.models import OutboundMessage
+from apps.messaging.phone import normalize_phone
 from apps.messaging.automation import send_automatic
 from apps.messaging.services import enqueue_message
 from apps.messaging.shop_values import money, shop_name, sms_date
@@ -57,14 +58,28 @@ def _validity(order) -> str:
     return f"ساري حتى {sms_date(valid_until)}"
 
 
-def send_invoice_sms(order, *, actor=None) -> OutboundMessage:
+def send_invoice_sms(order, *, actor=None, phone: str | None = None) -> OutboundMessage:
     """Queue an invoice SMS to the order's customer (idempotent per order). A
     quotation goes out as one: an offer, with how long it holds — never as a
-    "thank you for shopping"."""
+    "thank you for shopping".
+
+    ``phone`` sends it to a number the cashier typed instead — a walk-in sale
+    has no customer to read one from. Idempotent per order and number, so the
+    customer's own copy and one typed for somebody else do not swallow each
+    other."""
     customer = getattr(order, "customer", None)
-    phone = (getattr(customer, "phone", "") or "").strip() if customer else ""
+    customer_phone = (getattr(customer, "phone", "") or "").strip() if customer else ""
+    typed = (phone or "").strip()
+    phone = typed or customer_phone
     if not phone:
         raise NoRecipientPhone()
+    # Compared as E.164, so the customer's own number typed in another shape
+    # (091… for +21891…) is still their copy, not a second one.
+    recipient = normalize_phone(phone) or phone
+    if recipient == (normalize_phone(customer_phone) or customer_phone):
+        dedup_key = f"invoice:{order.id}"
+    else:
+        dedup_key = f"invoice:{order.id}:{recipient}"
 
     shop_name, currency = _shop_context()
     # An account entry has no invoice page: the public page refuses it.
@@ -83,7 +98,7 @@ def send_invoice_sms(order, *, actor=None) -> OutboundMessage:
         to=phone,
         template=template,
         consent_class=_TRANSACTIONAL,
-        dedup_key=f"invoice:{order.id}",
+        dedup_key=dedup_key,
         source_type="invoice",
         source_id=order.id,
     )

@@ -194,12 +194,6 @@ class _SheetPreview extends StatelessWidget {
           enableTransferPayments: false,
           requireCardReceipt: false,
           trustedCardTerminalIds: const [],
-          showPrintInvoiceToggle: false,
-          printInvoiceAfterPayment: false,
-          onPrintInvoiceChanged: (_) {},
-          showShareInvoiceToggle: false,
-          shareInvoiceAfterPayment: false,
-          onShareInvoiceChanged: (_) {},
           moamalatRepository: _FakeRepository(
             _statusFor('alive'),
             swiped: swiped,

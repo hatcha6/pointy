@@ -1237,6 +1237,38 @@ class ProductVariant(TimeStampedModel):
         return f"{self.sku} - {self.full_name}"
 
 
+class ProductVariantBarcode(TimeStampedModel):
+    """A further barcode that rings up this same variant.
+
+    The same goods often arrive under more than one code — the importer's EAN
+    and the distributor's, an old pack and its redesign, a shop sticker on stock
+    that also carries the factory code. ``ProductVariant.barcode`` stays the
+    primary one (labels print it, receipts and exports name it); these are the
+    others a scan also resolves. A child table rather than more columns for the
+    same reason as :class:`ProductUnitBarcode`.
+
+    Uniqueness is global across this table; collisions with variant primary
+    barcodes and packaging barcodes are different tables and are enforced in
+    :mod:`apps.catalog.identity` instead."""
+
+    variant = models.ForeignKey(
+        ProductVariant,
+        on_delete=models.CASCADE,
+        related_name="extra_barcodes",
+    )
+    barcode = models.CharField(max_length=64, unique=True)
+
+    class Meta:
+        ordering = ["id"]
+
+    def save(self, *args, **kwargs):
+        self.barcode = normalize_barcode(self.barcode)
+        return super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return self.barcode
+
+
 def validate_variant_option_values(product, option_values, *, variant=None):
     option_values = list(option_values)
     selected_options = {}
@@ -1625,3 +1657,40 @@ class ScalePlu(TimeStampedModel):
 
         highest = cls.objects.aggregate(models.Max("plu_number"))["plu_number__max"]
         return int(highest or 0) + 1
+
+
+class BulkPriceChange(TimeStampedModel):
+    """One applied rule-driven bulk price change, kept so it can be undone.
+
+    ``changes`` lists every price this run wrote, with the old value and the
+    old frozen foreign-price trio, so an undo restores exactly what was there.
+    An undo only touches a row whose price is still the one this run wrote: a
+    price someone has edited since is theirs, and is left alone and counted.
+    See :mod:`apps.catalog.bulk_pricing`.
+    """
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="bulk_price_changes",
+        null=True,
+        blank=True,
+    )
+    spec = models.JSONField(default=dict)
+    summary = models.JSONField(default=dict)
+    changes = models.JSONField(default=list)
+    reverted_at = models.DateTimeField(null=True, blank=True)
+    reverted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="reverted_bulk_price_changes",
+        null=True,
+        blank=True,
+    )
+    revert_summary = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self) -> str:
+        return f"Bulk price change #{self.pk}"

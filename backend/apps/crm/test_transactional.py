@@ -82,6 +82,23 @@ class InvoiceSmsTests(TestCase):
         with self.assertRaises(NoRecipientPhone):
             send_invoice_sms(order)
 
+    def test_a_typed_number_reaches_a_customer_with_no_phone(self):
+        order = make_credit_order(Customer.objects.create(full_name="بلا هاتف", phone=""))
+        message = send_invoice_sms(order, phone=" 0923456789 ")
+        self.assertEqual(message.to_phone, "+218923456789")
+        self.assertEqual(message.dedup_key, f"invoice:{order.id}:+218923456789")
+
+    def test_a_typed_number_is_its_own_copy_beside_the_customers(self):
+        own = send_invoice_sms(self.order)
+        typed = send_invoice_sms(self.order, phone="+218923456789")
+        self.assertNotEqual(own.pk, typed.pk)
+        self.assertEqual(typed.to_phone, "+218923456789")
+
+    def test_the_customers_own_number_typed_is_the_same_copy(self):
+        own = send_invoice_sms(self.order)
+        again = send_invoice_sms(self.order, phone="0912345678")
+        self.assertEqual(own.pk, again.pk)
+
 
 class DebtReminderTests(TestCase):
     def setUp(self):
@@ -224,6 +241,13 @@ class SendInvoiceApiTests(TestCase):
         order = make_credit_order(Customer.objects.create(full_name="B", phone=""))
         self.client.force_authenticate(self.manager)
         self.assertEqual(self.client.post(self._url(order)).status_code, 400)
+
+    def test_a_typed_phone_sends_a_walk_in_invoice(self):
+        order = make_credit_order(Customer.objects.create(full_name="B", phone=""))
+        self.client.force_authenticate(self.cashier)
+        resp = self.client.post(self._url(order), {"phone": "0923456789"}, format="json")
+        self.assertEqual(resp.status_code, 201, resp.content)
+        self.assertEqual(resp.data["source_type"], "invoice")
 
     def test_outsider_forbidden(self):
         self.client.force_authenticate(self.outsider)

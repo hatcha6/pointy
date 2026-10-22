@@ -8,7 +8,6 @@ import (
 	"io"
 	"math/big"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"pointy/relay/internal/bnplus"
@@ -92,31 +91,6 @@ func OpenRouterBalance(client *http.Client, baseURL, apiKey, managementKey strin
 			return nil, errors.New("openrouter limit_remaining is not a number")
 		}
 		return remaining, nil
-	}
-}
-
-// SerperBalance reads the search credits left at Serper (GET /account on the
-// host of the images endpoint the relay already uses).
-func SerperBalance(client *http.Client, endpoint, apiKey string) func(context.Context) (*big.Rat, error) {
-	accountURL := "https://google.serper.dev/account"
-	if parsed, err := url.Parse(strings.TrimSpace(endpoint)); err == nil && parsed.Host != "" {
-		accountURL = parsed.Scheme + "://" + parsed.Host + "/account"
-	}
-	return func(ctx context.Context) (*big.Rat, error) {
-		var answer struct {
-			Balance *json.Number `json:"balance"`
-		}
-		if err := getJSON(ctx, client, accountURL, "X-API-KEY", strings.TrimSpace(apiKey), &answer); err != nil {
-			return nil, err
-		}
-		if answer.Balance == nil {
-			return nil, errors.New("serper account answer has no balance")
-		}
-		balance, ok := new(big.Rat).SetString(answer.Balance.String())
-		if !ok {
-			return nil, errors.New("serper balance is not a number")
-		}
-		return balance, nil
 	}
 }
 

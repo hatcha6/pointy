@@ -276,7 +276,7 @@ def lookup_price(
     variant = (
         ProductVariant.objects.select_related("product")
         .filter(
-            barcode__in=readings,
+            Q(barcode__in=readings) | Q(extra_barcodes__barcode__in=readings),
             is_active=True,
             product__is_active=True,
             product__archived_at__isnull=True,

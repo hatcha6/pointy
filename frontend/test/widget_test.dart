@@ -597,7 +597,7 @@ void main() {
       {'variant': 1, 'quantity': '2'},
     ]);
     expect(find.text('لا توجد عناصر في السلة'), findsOneWidget);
-    expect(find.text('تم تسجيل البيع. رقم الإيصال: R-100'), findsOneWidget);
+    _expectSaleRecorded('R-100');
   });
 
   testWidgets('checkout can select an existing customer', (
@@ -704,12 +704,6 @@ void main() {
           enableTransferPayments: false,
           requireCardReceipt: true,
           trustedCardTerminalIds: const ['0JA8Y13W'],
-          showPrintInvoiceToggle: false,
-          printInvoiceAfterPayment: false,
-          onPrintInvoiceChanged: (_) {},
-          showShareInvoiceToggle: false,
-          shareInvoiceAfterPayment: false,
-          onShareInvoiceChanged: (_) {},
           onSubmit: (submitted) => result = submitted,
           onCancel: () {},
         ),
@@ -823,24 +817,21 @@ void main() {
       await tester.tap(find.byType(ProductTile).first);
       await tester.pump();
 
-      expect(find.text('طباعة الفاتورة بعد الدفع'), findsNothing);
-
       await tester.tap(find.text('ادفع 3.50 د.ل'));
       await tester.pumpAndSettle(const Duration(seconds: 1));
       await _confirmPayment(tester);
 
       expect(checkoutBody?['print_invoice'], isA<Map<String, Object?>>());
       expect(reportCalls, 1);
+      _expectSaleRecorded('R-100');
       expect(
-        find.text(
-          'تم تسجيل البيع. رقم الإيصال: R-100 تم إرسال الفاتورة للطابعة.',
-        ),
+        find.byKey(const ValueKey('checkout_print_status_printed')),
         findsOneWidget,
       );
     },
   );
 
-  testWidgets('checkout prints invoice when cashier selects the checkbox', (
+  testWidgets('a sale that does not print itself prints from its result', (
     WidgetTester tester,
   ) async {
     _setFakePrinterConfig();
@@ -868,20 +859,27 @@ void main() {
     await tester.tap(find.byType(ProductTile).first);
     await tester.pump();
 
-    expect(find.text('طباعة الفاتورة بعد الدفع'), findsOneWidget);
-    await tester.tap(find.text('طباعة الفاتورة بعد الدفع'));
-    await tester.pump();
+    // The checkbox the cart pane used to carry is gone: the result offers it.
+    expect(find.text('طباعة الفاتورة بعد الدفع'), findsNothing);
 
     await tester.tap(find.text('ادفع 3.50 د.ل'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
     await _confirmPayment(tester);
 
-    expect(checkoutBody?['print_invoice'], isA<Map<String, Object?>>());
+    expect(checkoutBody?['print_invoice'], isNull);
+    expect(reportCalls, 0);
+    _expectSaleRecorded('R-100');
+    expect(
+      find.byKey(const ValueKey('checkout_print_status_notRequested')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('checkout_action_print')));
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
     expect(reportCalls, 1);
     expect(
-      find.text(
-        'تم تسجيل البيع. رقم الإيصال: R-100 تم إرسال الفاتورة للطابعة.',
-      ),
+      find.byKey(const ValueKey('checkout_print_status_printed')),
       findsOneWidget,
     );
   });
@@ -1166,11 +1164,25 @@ void main() {
     await tester.pumpAndSettle(const Duration(seconds: 1));
     await _confirmPayment(tester);
 
-    expect(find.text('ادفع 3.50 د.ل'), findsOneWidget);
+    // The refusal stays on screen, says nothing was taken, and offers the
+    // retry the idempotency key makes safe.
+    expect(find.byKey(const ValueKey('checkout_failure')), findsOneWidget);
+    expect(find.text('لم يُسجَّل أي مبلغ، والسلة كما هي.'), findsOneWidget);
     expect(
-      find.text('تعذر تسجيل البيع. تحقق من جلسة الدرج وحاول مرة أخرى.'),
+      find.byKey(const ValueKey('checkout_failure_retry')),
       findsOneWidget,
     );
+
+    await tester.tap(
+      find.byKey(const ValueKey('checkout_failure_editPayment')),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+    // Back to the payment sheet, the sale untouched.
+    expect(find.text('إتمام الدفع'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle(const Duration(seconds: 1));
+
+    expect(find.text('ادفع 3.50 د.ل'), findsOneWidget);
     expect(find.text('لا توجد عناصر في السلة'), findsNothing);
   });
 
@@ -1246,7 +1258,7 @@ void main() {
     await _confirmPayment(tester);
 
     expect(checkoutBody, isNotNull);
-    expect(find.text('تم تسجيل البيع. رقم الإيصال: R-100'), findsOneWidget);
+    _expectSaleRecorded('R-100');
   });
 
   testWidgets('checkout sells a made-to-order product with no own stock', (
@@ -1288,7 +1300,7 @@ void main() {
     await _confirmPayment(tester);
 
     expect(checkoutBody, isNotNull);
-    expect(find.text('تم تسجيل البيع. رقم الإيصال: R-100'), findsOneWidget);
+    _expectSaleRecorded('R-100');
   });
 
   testWidgets('checkout blocks loss sale when protection is enabled', (
@@ -1374,7 +1386,7 @@ void main() {
     await _confirmPayment(tester);
 
     expect(checkoutBody, isNotNull);
-    expect(find.text('تم تسجيل البيع. رقم الإيصال: R-100'), findsOneWidget);
+    _expectSaleRecorded('R-100');
   });
 
   testWidgets('a cashier is told which lines are below cost, not by how much', (
@@ -2320,6 +2332,7 @@ void main() {
       expect(purchaseBody?['supplier'], 14);
       expect(purchaseBody?['supplier_invoice_number'], 'SUP-2026-55');
       expect(purchaseBody?['supplier_invoice_date'], '2026-05-18');
+      expect(find.text('تم إرسال أمر الشراء'), findsOneWidget);
     },
   );
 
@@ -2367,7 +2380,8 @@ void main() {
 
       // The created product's default variant is added straight to the order.
       expect(find.text('سكر المورد'), findsWidgets);
-      expect(find.text('استلام أمر الشراء فورًا'), findsOneWidget);
+      // Receiving is asked in the order's result now, not by a switch here.
+      expect(find.text('استلام أمر الشراء فورًا'), findsNothing);
       expect(find.text('اختر موردًا قبل إرسال أمر الشراء.'), findsOneWidget);
 
       // Set a purchase cost on the freshly added line, then submit the order.
@@ -2386,10 +2400,15 @@ void main() {
       await tester.tap(find.textContaining('إرسال أمر الشراء'));
       await tester.pumpAndSettle(const Duration(seconds: 1));
 
-      expect(
-        find.text('تم استلام أمر الشراء رقم P20260515000200.'),
-        findsOneWidget,
-      );
+      // Sent, not yet received: the result asks whether the goods are here.
+      expect(find.text('تم إرسال أمر الشراء'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('purchase_result_receive')));
+      await tester.pumpAndSettle(const Duration(seconds: 1));
+
+      expect(find.text('تم استلام البضاعة'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('purchase_result_done')));
+      await tester.pumpAndSettle(const Duration(seconds: 1));
+      expect(find.text('تم استلام البضاعة'), findsNothing);
     },
   );
 
@@ -4940,17 +4959,17 @@ void main() {
           if (request.url.path.endsWith('/products/image-search/')) {
             final page = int.parse(request.url.queryParameters['page'] ?? '1');
             requestedPages.add(page);
-            expect(request.url.queryParameters['page_size'], '30');
+            expect(request.url.queryParameters['page_size'], '50');
             final results = page == 1
                 ? List.generate(
-                    30,
+                    50,
                     (index) => {
                       'title': 'قهوة ${index + 1}',
                       'thumbnail_url':
                           'https://images.example.com/thumb-$index.jpg',
                       'source_url': 'https://shop.example.com/coffee-$index',
                       'source_name': 'متجر الصور',
-                      'provider': 'serper',
+                      'provider': 'openserp',
                       'import_token': 'token-$index',
                     },
                   )
@@ -5239,6 +5258,12 @@ Future<void> _openPosFromDashboard(WidgetTester tester) async {
     return;
   }
   await _openNavigationDestination(tester, 'شاشة البيع');
+}
+
+/// The sale's result is up, naming the receipt.
+void _expectSaleRecorded(String receiptNumber) {
+  expect(find.byKey(const ValueKey('checkout_success')), findsOneWidget);
+  expect(find.textContaining(receiptNumber), findsWidgets);
 }
 
 Future<void> _confirmPayment(WidgetTester tester) async {

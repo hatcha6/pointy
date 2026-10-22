@@ -35,8 +35,9 @@ final RegExp _dialString = RegExp(r'^[0-9*#]{3,40}$');
 /// sixteen-character code copied off a phone's camera is one nobody mistypes
 /// — so the code is the PIN itself, which every phone offers to copy. Never a
 /// guessed redemption link: a wrong one sends the customer somewhere else with
-/// a card they paid for. Null for a PIN a phone could misread (anything but
-/// printable ASCII) or too long for a receipt code.
+/// a card they paid for (an issuer's own link is [redeemQrData]'s). Null for a
+/// PIN a phone could misread (anything but printable ASCII) or too long for a
+/// receipt code.
 String? pinQrData(String pin) {
   final value = pin.trim();
   if (value.length < 4 ||
@@ -48,6 +49,23 @@ String? pinQrData(String pin) {
 }
 
 final RegExp _printableAscii = RegExp(r'^[\x20-\x7E]+$');
+
+/// What the QR code of a card its issuer redeems by link holds: that link,
+/// which a phone's camera offers to open.
+///
+/// The server sends it only for an issuer whose own link it lists (Apple's
+/// App Store redeem sheet, the code filled in); it is checked again here
+/// against the links this till knows, so a malformed or unknown address
+/// never becomes a code a customer trusts. Null for anything else, and the
+/// card keeps its PIN code.
+String? redeemQrData(String url) {
+  final value = url.trim();
+  return _redeemLinks.any((link) => link.hasMatch(value)) ? value : null;
+}
+
+final List<RegExp> _redeemLinks = [
+  RegExp(r'^https://apps\.apple\.com/redeem\?code=X[A-Z0-9]{15}$'),
+];
 
 /// A QR symbol at error-correction level H, in its smallest version.
 class PrintQrCode {

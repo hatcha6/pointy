@@ -64,8 +64,13 @@ class SaleRepository {
   /// latches "no active rules" against it to skip preview requests.
   String? get discountsVersionToken => _service.discountsVersionToken;
 
-  Future<Result<MessagingSendResult>> sendInvoiceSms(int saleOrderId) {
-    return Result.guard(() => _service.sendInvoiceSms(saleOrderId));
+  Future<Result<MessagingSendResult>> sendInvoiceSms(
+    int saleOrderId, {
+    String? phone,
+  }) {
+    return Result.guard(
+      () => _service.sendInvoiceSms(saleOrderId, phone: phone),
+    );
   }
 
   Future<Result<SaleOrder>> checkout(

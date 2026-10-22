@@ -284,14 +284,14 @@ class PurchaseOrder {
     );
   }
 
-  PurchaseSubmission toSubmission({bool awaitsIdentifiers = false}) {
+  PurchaseSubmission toSubmission() {
     return PurchaseSubmission(
       draftNumber: orderNumber,
       lineCount: lineCount,
       total: total,
       status: status,
       orderId: id,
-      awaitsIdentifiers: awaitsIdentifiers,
+      order: this,
     );
   }
 
@@ -635,6 +635,23 @@ class PurchaseOrderLine {
 
 class PurchaseReceiveDraft {
   const PurchaseReceiveDraft({required this.lines, this.note = ''});
+
+  /// Everything still open on [order], all of it sound — the delivery that
+  /// matched its paperwork. Only for goods counted rather than named: see
+  /// [PurchaseOrder.receiptNeedsIdentifiers].
+  factory PurchaseReceiveDraft.everythingOpen(PurchaseOrder order) {
+    return PurchaseReceiveDraft(
+      lines: [
+        for (final line in order.lines)
+          if (line.receivableQuantity > 0)
+            PurchaseReceiveLineDraft(
+              purchaseLineId: line.id,
+              quantityReceived: line.receivableQuantity,
+              quantityDamaged: 0,
+            ),
+      ],
+    );
+  }
 
   final List<PurchaseReceiveLineDraft> lines;
   final String note;

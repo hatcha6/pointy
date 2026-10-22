@@ -171,13 +171,10 @@ type alertSettings struct {
 	ReloadlyFloor   string
 	BNPlusFloor     string
 	OpenRouterFloor string
-	SerperFloor     string
-	// OpenRouter and Serper are read with the keys the relay already holds.
+	// OpenRouter is read with the keys the relay already holds.
 	OpenRouterAPIKey        string
 	OpenRouterBaseURL       string
 	OpenRouterManagementKey string
-	SerperAPIKey            string
-	SerperBaseURL           string
 }
 
 // consoleLinkBase is where alert links point: the operator console, when it
@@ -262,11 +259,6 @@ func buildAlerts(
 		errs = append(errs, add("openrouter", "OpenRouter", "USD", settings.OpenRouterFloor, func() alerts.BalanceSource {
 			return alerts.BalanceSource{Read: alerts.OpenRouterBalance(client, settings.OpenRouterBaseURL,
 				settings.OpenRouterAPIKey, settings.OpenRouterManagementKey), Link: "/integrations"}
-		}))
-	}
-	if strings.TrimSpace(settings.SerperAPIKey) != "" {
-		errs = append(errs, add("serper", "Serper", "credits", settings.SerperFloor, func() alerts.BalanceSource {
-			return alerts.BalanceSource{Read: alerts.SerperBalance(client, settings.SerperBaseURL, settings.SerperAPIKey), Link: "/integrations"}
 		}))
 	}
 	for _, err := range errs {

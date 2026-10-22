@@ -204,13 +204,16 @@ var usageSections = []usageSection{
 	{
 		name: "artifacts",
 		synopsis: []string{
-			"pointy-relay artifacts upload --version X --bundle pointy-update-X.zip",
-			"pointy-relay artifacts upload --version X --url https://host/pointy-update-X.zip [--sha256 H]",
+			"pointy-relay artifacts upload --version X --bundle pointy-update-X.zip [--signature pointy-update-X.zip.sig]",
+			"pointy-relay artifacts upload --version X --url https://host/pointy-update-X.zip [--sha256 H] [--signature F]",
 			"pointy-relay artifacts status --version X [--wait]",
+			"pointy-relay artifacts sign --version X --signature pointy-update-X.zip.sig | --remove",
 		},
 		detail: `  artifacts      upload --version X --bundle pointy-update-X.zip   serve a bundle
                    upload --version X --url URL   the relay downloads it itself (slow line)
-                   status --version X [--wait]    progress of a --url download`,
+                   upload ... --signature F       publish the release's .sig with it
+                   status --version X [--wait]    progress of a --url download
+                   sign --version X --signature F   attach a .sig to a bundle already uploaded`,
 		adminAPI: true,
 	},
 	{

@@ -774,22 +774,12 @@ Future<void> _showReceivingDialog(
 ) async {
   final l10n = AppLocalizations.of(context)!;
   final messenger = ScaffoldMessenger.of(context);
-  final result = await showDialog<_PurchaseReceiveDialogResult>(
-    context: context,
-    builder: (context) => _PurchaseReceiveDialog(
-      order: viewModel.order,
-      permissions: UnitIntakePermissions.of(viewModel.capabilities),
-    ),
+  final result = await showPurchaseReceiveCaptureDialog(
+    context,
+    order: viewModel.order,
+    permissions: UnitIntakePermissions.of(viewModel.capabilities),
   );
   if (result == null) {
-    return;
-  }
-  if (result.lines.isEmpty) {
-    messenger
-      ..clearSnackBars()
-      ..showSnackBar(
-        SnackBar(content: Text(l10n.purchaseReceiveNoItemsSelected)),
-      );
     return;
   }
 

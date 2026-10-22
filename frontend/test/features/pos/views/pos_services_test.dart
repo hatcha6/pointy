@@ -6,7 +6,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pointy_frontend/dev/services_fixtures.dart';
 import 'package:pointy_frontend/src/core/result.dart';
 import 'package:pointy_frontend/src/data/models/integration_card.dart';
-import 'package:pointy_frontend/src/data/models/sale_order.dart';
 import 'package:pointy_frontend/src/data/models/service_kinds.dart';
 import 'package:pointy_frontend/src/data/models/service_quote.dart';
 import 'package:pointy_frontend/src/data/models/voucher_menu.dart';
@@ -601,7 +600,7 @@ void main() {
     );
 
     testServices(
-      'the till is covered, and counts the seconds, until it answers',
+      'the sale\'s dialog shows the provider step, then what it delivered',
       (tester) async {
         final integrations = ServicesTillIntegrations();
         final gate = Completer<void>();
@@ -614,37 +613,39 @@ void main() {
         disposeWithTest(viewModel.dispose);
         await pumpPosScreen(tester, viewModel, integrations);
         viewModel.addServiceLine(quote: airtime, variantId: 9301, title: 'شحن');
-        await tester.pump();
-        expect(key('provider_charge_overlay'), findsNothing);
-
-        final checkout = viewModel.checkoutCurrentSale(
-          payments: const [
-            SaleCheckoutPaymentDraft(method: PaymentMethod.cash, amount: 96.5),
-          ],
-        );
-        await tester.pump();
         await tester.pump(const Duration(milliseconds: 50));
 
-        expect(key('provider_charge_overlay'), findsOneWidget);
-        expect(find.text('جارٍ تنفيذ الشحن… لا تُغلق الشاشة'), findsOneWidget);
-        expect(find.text('لم تمضِ ثانية'), findsOneWidget);
-        await tester.pump(const Duration(seconds: 3));
-        expect(find.text('مضت 3 ثوانٍ'), findsOneWidget);
-        // Nothing under it can be touched, and a tap on it closes nothing.
-        final barrier = tester.widget<ModalBarrier>(
-          find.descendant(
-            of: key('provider_charge_overlay'),
-            matching: find.byType(ModalBarrier),
-          ),
-        );
-        expect(barrier.dismissible, isFalse);
+        await tester.tap(find.textContaining('ادفع').first);
+        await tester.pump(const Duration(milliseconds: 200));
+        await tester.pump(const Duration(milliseconds: 200));
+        await tester.tap(key('payment_confirm_button'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+
+        expect(key('checkout_progress'), findsOneWidget);
+        expect(viewModel.checkoutProgress?.step, PosCheckoutStep.charge);
+        expect(find.text('التنفيذ لدى المزوّد'), findsOneWidget);
+        // A tap outside closes nothing while the provider has not answered.
+        await tester.tapAt(const Offset(8, 8));
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(key('checkout_progress'), findsOneWidget);
+        // A slow provider is said to be slow, not left to look hung.
+        await tester.pump(const Duration(seconds: 16));
+        expect(find.textContaining('ما زلنا ننتظر'), findsOneWidget);
 
         gate.complete();
-        final outcome = await checkout;
         await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
 
-        expect(outcome.recharges.single.isCharged, isTrue);
-        expect(key('provider_charge_overlay'), findsNothing);
+        expect(key('checkout_success'), findsOneWidget);
+        expect(key('service_delivered_details'), findsOneWidget);
+        expect(viewModel.checkoutProgress, isNull);
+
+        await tester.tap(key('checkout_new_sale'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(key('checkout_success'), findsNothing);
       },
     );
 
@@ -657,7 +658,8 @@ void main() {
         await pumpPosScreen(tester, viewModel, integrations);
 
         expect(viewModel.isChargingProviders, isFalse);
-        expect(key('provider_charge_overlay'), findsNothing);
+        expect(viewModel.checkoutProgress, isNull);
+        expect(key('checkout_progress'), findsNothing);
       },
     );
   });

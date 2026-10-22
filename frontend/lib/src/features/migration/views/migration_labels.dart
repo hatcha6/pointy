@@ -29,6 +29,7 @@ String migrationEntityLabel(
     'supplier' => l10n.migrationEntitySupplier,
     'party_balance' => l10n.migrationEntityPartyBalance,
     'purchase_order' => l10n.migrationEntityPurchaseOrder,
+    'purchase_return' => l10n.migrationEntityPurchaseReturn,
     'supplier_payment' => l10n.migrationEntitySupplierPayment,
     'sale' => l10n.migrationEntitySale,
     'sale_return' => l10n.migrationEntitySaleReturn,

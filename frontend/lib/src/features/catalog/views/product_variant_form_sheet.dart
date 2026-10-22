@@ -15,6 +15,7 @@ import '../view_models/product_details_view_model.dart';
 import 'auto_sku_filler.dart';
 import 'product_form_fields.dart';
 import 'product_form_section.dart';
+import 'variant_extra_barcodes_field.dart';
 import 'variant_option_creation_dialogs.dart';
 import 'variant_generation_fields.dart';
 import 'variant_gtin_field.dart';
@@ -46,6 +47,7 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
   late final TextEditingController _barcodeController;
   late final TextEditingController _priceController;
   late final TextEditingController _gtinController;
+  late final ExtraBarcodesController _extraBarcodes;
   String? _gtinError;
   late final VariantIdentityWatcher _identity;
   late final AutoSkuFiller _autoSku;
@@ -72,6 +74,9 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
     _skuController = TextEditingController(text: variant?.sku ?? '');
     _barcodeController = TextEditingController(text: variant?.barcode ?? '');
     _gtinController = TextEditingController(text: variant?.gtin ?? '');
+    _extraBarcodes = ExtraBarcodesController(
+      variant?.extraBarcodes ?? const [],
+    );
     _priceController = TextEditingController(
       text: variant == null ? '' : variant.unitPrice.toStringAsFixed(2),
     );
@@ -103,6 +108,7 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
     _skuController.dispose();
     _barcodeController.dispose();
     _gtinController.dispose();
+    _extraBarcodes.dispose();
     _priceController.dispose();
     super.dispose();
   }
@@ -117,6 +123,7 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
           (_skuController.text.trim().isNotEmpty &&
               !_autoSku.holdsFilledValue(_skuController)) ||
           _barcodeController.text.trim().isNotEmpty ||
+          _extraBarcodes.isDirty ||
           _gtinController.text.trim().isNotEmpty ||
           _priceController.text.trim().isNotEmpty ||
           _selectedOptionValueIds.isNotEmpty;
@@ -124,6 +131,7 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
     return _variantNameController.text.trim() != variant.name.trim() ||
         _skuController.text.trim() != variant.sku.trim() ||
         _barcodeController.text.trim() != variant.barcode.trim() ||
+        _extraBarcodes.isDirty ||
         _gtinController.text.trim() != variant.gtin ||
         _parseNumber(_priceController.text) != variant.unitPrice ||
         _isActive != variant.isActive ||
@@ -148,7 +156,11 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
 
   Widget _buildSheet(BuildContext context, AppLocalizations l10n) {
     return ListenableBuilder(
-      listenable: Listenable.merge([widget.viewModel, _identity]),
+      listenable: Listenable.merge([
+        widget.viewModel,
+        _identity,
+        _extraBarcodes,
+      ]),
       builder: (context, _) {
         return Material(
           color: context.pointyColors.surface,
@@ -189,6 +201,13 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
                         ),
                         skuFieldKey: _skuFieldKey,
                         barcodeFieldKey: _barcodeFieldKey,
+                        extraBarcodesField: VariantExtraBarcodesField(
+                          controller: _extraBarcodes,
+                          primaryBarcode: _barcodeController,
+                          catalogRepository: widget.viewModel.catalogRepository,
+                          excludeVariantId: widget.variant?.id,
+                          enabled: !widget.viewModel.isSavingVariant,
+                        ),
                       ),
                       if (_showsGtin) ...[
                         const SizedBox(height: 12),
@@ -222,7 +241,9 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
                       // A rejected save with a known field conflict already
                       // marks the offending input; the footer only has to point
                       // at it rather than repeat a generic "could not save".
-                      _identity.hasConflict || _gtinError != null
+                      _identity.hasConflict ||
+                              _extraBarcodes.hasConflict ||
+                              _gtinError != null
                           ? l10n.formFixHighlightedFieldsError
                           : _saveErrorKey == 'variant_update_error'
                           ? l10n.variantUpdateError
@@ -334,6 +355,9 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
       name: _variantNameController.text.trim(),
       sku: _skuController.text.trim(),
       barcode: _barcodeController.text.trim(),
+      extraBarcodes: _extraBarcodes.codesForSave(
+        primary: _barcodeController.text,
+      ),
       gtin: _showsGtin ? gtinFieldValue(_gtinController.text) : null,
       unitPrice: _parseNumber(_priceController.text)!,
       isActive: _isActive,
@@ -352,6 +376,7 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
       // The server re-checks every write: a clash it found (including one that
       // appeared between the live check and the save) lands on its field.
       _identity.applyConflicts(widget.viewModel.variantSaveConflicts);
+      _extraBarcodes.applyConflicts(widget.viewModel.variantSaveConflicts);
       setState(
         () => _gtinError = gtinConflictText(
           l10n,

@@ -179,7 +179,9 @@ class SendInvoiceSmsView(APIView):
 
         order = get_object_or_404(Order, pk=order_id)
         try:
-            message = send_invoice_sms(order, actor=request.user)
+            message = send_invoice_sms(
+                order, actor=request.user, phone=str(request.data.get("phone") or "")
+            )
         except NoRecipientPhone:
             return Response({"detail": "لا يوجد رقم هاتف للعميل."}, status=400)
         except NoGatewayConfigured as exc:

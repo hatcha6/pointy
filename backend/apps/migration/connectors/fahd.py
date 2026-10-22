@@ -15,19 +15,20 @@ This connector reads that *prepared* file (the version spec requires the
 ``fahd_*`` tables, so pointing it at a raw conversion fails compatibility
 loudly). Differences from :class:`FahdBaseConnector` beyond the transport:
 
-* **Sub-barcodes.** ``CAR_PART_D`` (sub-items — flavours/colours of a main
-  item) holds plain alias barcodes: emitted as additional
-  :class:`CanonicalVariant` records so scanning any historical barcode
-  resolves, and so reconstructed invoice lines that reference a sub-barcode
-  land on the right product. Their price columns are always zero in the wild,
-  so they inherit the parent's retail price.
+* **Sub-barcodes.** ``CAR_PART_D`` (sub-items of a main item) holds plain
+  alias barcodes. They become the parent's *extra barcodes* — not variants of
+  their own — so scanning any historical code rings up the parent, and the
+  reconstructed invoice lines that reference a sub-barcode are filed under the
+  parent itself. Their price columns are always zero in the wild (the old
+  system rang them at the parent's price), and they never held stock of their
+  own, which is what makes them codes rather than things to sell.
 * **Pack codes become units.** ``CAR_PART_D2`` rows are the pack (عبوة/كرتون)
   codes — ``TAK_ONE`` holds the pieces-per-pack count. They are emitted as
   :class:`CanonicalProductUnit` records (one per parent × count) carrying the
   code(s) as *unit barcodes*, so scanning a carton EAN rings up a carton, and
   purchasing defaults to the pack the shop actually orders in. Codes whose
-  sale history shows they were really used to ring loose pieces stay alias
-  variants instead — see ``_unit_plan``.
+  sale history shows they were really used to ring loose pieces stay piece
+  codes — extra barcodes on the parent — instead; see ``_unit_plan``.
 * **Active flags are forced on.** In MDB exports ``hideornot`` is ``1`` on
   every product/customer/supplier row (the flag means something different in
   the Access build), so honouring it would import the whole catalogue hidden.
@@ -268,6 +269,36 @@ class FahdConnector(FahdBaseConnector):
             ctx.cache["fahd_sub_barcodes"] = cached
         return cached
 
+    def _aliases(self, transport, ctx: ExtractContext) -> dict:
+        """sub ser → parent ser for every code that rings one piece of its
+        parent: every sub-barcode except the pack codes ``_unit_plan`` moved
+        onto a packaging unit."""
+        cached = ctx.cache.get("fahd_aliases")
+        if cached is None:
+            pack_sers = self._unit_plan(transport, ctx)["pack_sers"]
+            cached = {
+                ser: parent
+                for ser, parent in self._sub_barcodes(transport, ctx).items()
+                if ser not in pack_sers
+            }
+            ctx.cache["fahd_aliases"] = cached
+        return cached
+
+    def _extra_barcodes_by_parent(self, transport, ctx: ExtractContext) -> dict:
+        cached = ctx.cache.get("fahd_extra_barcodes")
+        if cached is None:
+            cached = {}
+            for ser, parent in self._aliases(transport, ctx).items():
+                cached.setdefault(parent, []).append(ser)
+            for codes in cached.values():
+                codes.sort()
+            ctx.cache["fahd_extra_barcodes"] = cached
+        return cached
+
+    def _line_key(self, transport, ctx: ExtractContext, ser: str) -> str:
+        """The item a historical line belongs to: a piece code is its parent."""
+        return self._aliases(transport, ctx).get(ser, ser)
+
     # --- packaging units (CAR_PART_D2) -------------------------------------
     def _unit_plan(self, transport, ctx: ExtractContext) -> dict:
         """Classify the CAR_PART_D2 pack codes into real packaging units vs
@@ -278,8 +309,8 @@ class FahdConnector(FahdBaseConnector):
         used to ring **loose pieces** (when the piece EAN was missing), so:
 
         * codes whose sales are predominantly piece-priced (below
-          ``_PACK_PRICE_FLOOR`` of piece price × count) stay alias variants —
-          scanning them must keep ringing one piece;
+          ``_PACK_PRICE_FLOOR`` of piece price × count) stay piece codes (the
+          parent's extra barcodes) — scanning them must keep ringing one piece;
         * everything else becomes a ``ProductUnit`` on the parent (one per
           distinct count), carrying the code(s) as unit barcodes. The unit's own
           price comes from the modal genuinely-pack-priced sale when there is
@@ -470,6 +501,7 @@ class FahdConnector(FahdBaseConnector):
     # --- catalogue --------------------------------------------------------
     def _products_with_ghosts(self, transport, ctx: ExtractContext):
         catalog = self._catalog(transport, ctx)
+        extra_barcodes = self._extra_barcodes_by_parent(transport, ctx)
         for row in transport.iter_records(
             "CAR_PART", fields=["ser", "CAR_PART", "SER_KETAEE", "SER_GOMLA", "TASNEEF"]
         ):
@@ -489,6 +521,7 @@ class FahdConnector(FahdBaseConnector):
                 category_source_keys=categories,
                 sku=ser,
                 barcode=ser,
+                extra_barcodes=list(extra_barcodes.get(ser, ())),
                 unit_price=_retail_price(record),
             )
 
@@ -515,6 +548,10 @@ class FahdConnector(FahdBaseConnector):
                 )
 
     def _variants(self, transport, ctx: ExtractContext):
+        """Only the retired pack codes. A piece code is an extra barcode on its
+        parent (see ``_aliases``); a pack code's barcode lives on its packaging
+        unit, and this inactive, barcode-less row exists purely so historical
+        invoice lines that sold the pack keep their own line."""
         catalog = self._catalog(transport, ctx)
         pack_sers = self._unit_plan(transport, ctx)["pack_sers"]
         emitted: set[str] = set()
@@ -526,6 +563,8 @@ class FahdConnector(FahdBaseConnector):
                 ser = _clean(record.get("ser"))
                 parent = _clean(record.get("no_n"))
                 if not ser or _is_placeholder(ser) or ser in catalog or ser in emitted:
+                    continue
+                if ser not in pack_sers:
                     continue
                 parent_info = catalog.get(parent)
                 if parent_info is None:
@@ -542,21 +581,16 @@ class FahdConnector(FahdBaseConnector):
                         if row_name and not _is_placeholder(row_name) and row_name != parent_name
                         else ""
                     )
-                # Pack (عبوة) codes become ProductUnit barcodes instead of
-                # scannable variants — see _unit_plan. Their variant row is kept
-                # inactive and barcode-less purely so historical invoice lines
-                # that reference the code keep resolving.
-                is_pack = ser in pack_sers
                 yield canonical.CanonicalVariant(
                     source_key=ser,
                     product_source_key=parent,
                     sku=ser,
-                    barcode="" if is_pack else ser,
+                    barcode="",
                     name=label,
                     # Sub-barcode price columns are always 0 in the wild — the
                     # old system rang them at the parent's price too.
                     unit_price=parent_price,
-                    is_active=not is_pack,
+                    is_active=False,
                     is_default=False,
                 )
 
@@ -674,7 +708,7 @@ class FahdConnector(FahdBaseConnector):
             rounding_discount = max(Decimal("0"), (quantity * price - line_total).quantize(_MONEY))
             lines.append(
                 canonical.CanonicalSaleLine(
-                    variant_source_key=ser,
+                    variant_source_key=self._line_key(transport, ctx, ser),
                     quantity=quantity,
                     unit_price=price,
                     unit_cost=unit_cost(ser).quantize(_MONEY, rounding=ROUND_HALF_UP),
@@ -736,7 +770,7 @@ class FahdConnector(FahdBaseConnector):
             true_gross += _to_decimal(row.get("line_total"))
             lines.append(
                 canonical.CanonicalPurchaseLine(
-                    variant_source_key=ser,
+                    variant_source_key=self._line_key(transport, ctx, ser),
                     quantity=quantity,
                     unit_cost=cost,
                 )

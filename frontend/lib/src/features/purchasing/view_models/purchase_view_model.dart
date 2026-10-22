@@ -63,6 +63,18 @@ class PurchaseSearchResetController extends ChangeNotifier {
 /// the draft scroll.
 enum PurchaseScanStatus { idle, resolving, found, notFound, error }
 
+/// The call a purchase order's progress screen is waiting on.
+enum PurchaseSubmitStep {
+  /// A new order being recorded.
+  create,
+
+  /// The recorded order being sent.
+  submit,
+
+  /// A reopened order's edits being saved.
+  save,
+}
+
 /// A line lifted out of the draft, with where it sat — enough to put it back
 /// exactly, so deleting a line is always one tap from undone.
 class RemovedPurchaseDraftLine {
@@ -186,7 +198,7 @@ class PurchaseViewModel extends ChangeNotifier {
   bool _isLoading = false;
   bool _isLoadingMore = false;
   bool _isSubmitting = false;
-  bool _receiveImmediately = true;
+  PurchaseSubmitStep? _submitStep;
   bool _hasMoreProducts = true;
   int _nextVariantPage = 1;
   // Monotonic token so a fast typist's superseded catalog request can't land its
@@ -292,7 +304,10 @@ class PurchaseViewModel extends ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isLoadingMore => _isLoadingMore;
   bool get isSubmitting => _isSubmitting;
-  bool get receiveImmediately => _receiveImmediately;
+
+  /// Which call a submit or save is waiting on, for its progress screen.
+  /// Null when nothing is being sent.
+  PurchaseSubmitStep? get submitStep => _submitStep;
   bool get hasMoreProducts => _hasMoreProducts;
   String get supplierInvoiceNumber => _supplierInvoiceNumber;
 
@@ -1183,15 +1198,6 @@ class PurchaseViewModel extends ChangeNotifier {
     unawaited(refreshDiscountPreview());
   }
 
-  void updateReceiveImmediately(bool value) {
-    if (_isSubmitting) {
-      return;
-    }
-    _receiveImmediately = value;
-    _touchSubmissionIntent();
-    notifyListeners();
-  }
-
   void updateSupplierInvoiceNumber(String value) {
     if (_isSubmitting) {
       return;
@@ -1345,11 +1351,11 @@ class PurchaseViewModel extends ChangeNotifier {
     }
 
     _isSubmitting = true;
+    _submitStep = PurchaseSubmitStep.create;
     notifyListeners();
 
     final result = await _purchaseRepository.submitDraft(
       List.of(_draft),
-      receiveImmediately: _receiveImmediately,
       supplierId: supplier.id,
       warehouseId: _selectedWarehouse?.id,
       supplierInvoiceNumber: _supplierInvoiceNumber,
@@ -1362,6 +1368,10 @@ class PurchaseViewModel extends ChangeNotifier {
       extraDiscountAmount: _extraDiscount,
       idempotencyKey: _submitIdempotencyKey,
       acknowledgeCostWarnings: acknowledgeCostWarnings,
+      onCreated: () {
+        _submitStep = PurchaseSubmitStep.submit;
+        notifyListeners();
+      },
     );
     switch (result) {
       case Ok<PurchaseSubmission>():
@@ -1384,28 +1394,33 @@ class PurchaseViewModel extends ChangeNotifier {
     }
 
     _isSubmitting = false;
+    _submitStep = null;
     notifyListeners();
     return result;
   }
 
-  /// The order a submit just created, read back whole for its receiving
-  /// dialog — the submit result carries only a summary.
-  Future<Result<PurchaseOrder>> loadOrderForReceipt(int orderId) {
-    return _purchaseRepository.loadPurchaseOrder(orderId);
-  }
-
-  /// Receives an order this workspace created, with the identifiers the
-  /// receiver scanned (see [PurchaseSubmission.awaitsIdentifiers]).
+  /// Receives an order this workspace just sent or saved, from its result.
+  ///
+  /// The same delivery sent twice — a retry after the network swallowed the
+  /// answer — carries the same key, so the server books it once. A changed
+  /// count is a different receipt and gets its own.
   Future<Result<PurchaseOrder>> receiveCreatedOrder(
     int orderId,
     PurchaseReceiveDraft draft,
   ) {
+    final signature = '$orderId:${jsonEncode(draft.toJson())}';
+    final key = _receiveIdempotencyKeys.putIfAbsent(
+      signature,
+      () => _newPurchaseIdempotencyKey('purchase-receive'),
+    );
     return _purchaseRepository.receiveLines(
       purchaseOrderId: orderId,
       draft: draft,
-      idempotencyKey: _newPurchaseIdempotencyKey('purchase-receive'),
+      idempotencyKey: key,
     );
   }
+
+  final Map<String, String> _receiveIdempotencyKeys = {};
 
   /// Reopens an existing **draft** purchase [order] in this workspace for
   /// editing. Reconstructs the draft lines — resolving each line's full product
@@ -1442,8 +1457,6 @@ class PurchaseViewModel extends ChangeNotifier {
     _landedCostEntries = _normalizedLandedCostEntries(order.landedCostEntries);
     _landedCostAllocationMethod = order.landedCostAllocationMethod;
     _extraDiscount = order.extraDiscountAmount;
-    // Receiving-on-submit is a submit-time concern; editing only saves a draft.
-    _receiveImmediately = false;
     _submitIdempotencyKey = _newPurchaseIdempotencyKey('purchase-edit');
 
     final lines = await _draftLinesForOrder(order);
@@ -1476,6 +1489,7 @@ class PurchaseViewModel extends ChangeNotifier {
     }
 
     _isSubmitting = true;
+    _submitStep = PurchaseSubmitStep.save;
     notifyListeners();
 
     final result = await _purchaseRepository.updateDraftOrder(
@@ -1504,6 +1518,7 @@ class PurchaseViewModel extends ChangeNotifier {
     }
 
     _isSubmitting = false;
+    _submitStep = null;
     notifyListeners();
     return result;
   }
@@ -1966,7 +1981,6 @@ class PurchaseViewModel extends ChangeNotifier {
       _selectedSupplier = supplierJson is Map
           ? SupplierContact.fromJson(supplierJson.cast<String, Object?>())
           : null;
-      _receiveImmediately = map['receiveImmediately'] != false;
       _supplierInvoiceNumber = map['supplierInvoiceNumber']?.toString() ?? '';
       _supplierInvoiceDateInput =
           map['supplierInvoiceDateInput']?.toString() ?? '';
@@ -2028,7 +2042,6 @@ class PurchaseViewModel extends ChangeNotifier {
       'version': 1,
       'lines': [for (final line in _draft) line.toJson()],
       'supplier': _selectedSupplier?.toJson(),
-      'receiveImmediately': _receiveImmediately,
       'supplierInvoiceNumber': _supplierInvoiceNumber,
       'supplierInvoiceDateInput': _supplierInvoiceDateInput,
       'discountCode': _discountCode,
@@ -2313,7 +2326,6 @@ class PurchaseViewModel extends ChangeNotifier {
             'submission_status': submission.status,
             'supplier_id': supplier.id,
             'supplier_name': supplier.name,
-            'receive_immediately': _receiveImmediately,
             'supplier_invoice_number_present': _supplierInvoiceNumber
                 .trim()
                 .isNotEmpty,

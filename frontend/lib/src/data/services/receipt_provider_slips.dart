@@ -21,6 +21,8 @@ import '../models/provider_receipt_fields.dart';
 const String receiptPinLabel = 'الرقم السري';
 const String receiptScanToRedeem = 'امسح الرمز بكاميرا الهاتف للشحن';
 const String receiptScanToCopyPin = 'امسح الرمز لنسخ الرقم السري';
+const String receiptScanToRedeemApple =
+    'امسح الرمز بكاميرا الآيفون لاسترداد البطاقة';
 const String receiptDialToRedeem = 'للشحن اطلب:';
 const String receiptOrDial = 'أو اطلب:';
 
@@ -261,10 +263,14 @@ ReceiptProviderSlip receiptProviderSlip({
     // is checked again here before a phone is told to call it.
     final dialLink = pin.isEmpty ? null : dialQrData(field('dial'));
     final dial = dialLink == null ? '' : field('dial');
+    // Where its issuer redeems by link (Apple's App Store), the link that
+    // opens the redemption with the code filled in, checked here too.
+    final redeemLink = pin.isEmpty ? null : redeemQrData(field('redeem_url'));
     // Every card with a PIN gets a code: one that dials it where its operator
-    // redeems by dialling, else the PIN itself, to copy rather than type.
+    // redeems by dialling, or opens its issuer's redemption, else the PIN
+    // itself, to copy rather than type.
     final pinCopy = pinQrData(pin);
-    final qrData = !printQrCodes ? null : dialLink ?? pinCopy;
+    final qrData = !printQrCodes ? null : dialLink ?? redeemLink ?? pinCopy;
     return ReceiptProviderSlip(
       title: title,
       logo: slipLogo,
@@ -276,6 +282,8 @@ ReceiptProviderSlip receiptProviderSlip({
           ? ''
           : dialLink != null
           ? receiptScanToRedeem
+          : redeemLink != null
+          ? receiptScanToRedeemApple
           : receiptScanToCopyPin,
       rows: [
         if (field('serial').isNotEmpty) 'الرقم التسلسلي: ${field('serial')}',

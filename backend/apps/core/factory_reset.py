@@ -115,6 +115,7 @@ WIPED_MODELS = (
     "catalog.productunit",
     "catalog.productunitbarcode",
     "catalog.productvariant",
+    "catalog.productvariantbarcode",
     "catalog.scaleplu",
     # Words searched for and not found: about the catalogue being wiped, and
     # pointing at its products.

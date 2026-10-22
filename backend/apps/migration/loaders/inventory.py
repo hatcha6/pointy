@@ -18,10 +18,16 @@ from decimal import Decimal
 
 from django.utils import timezone
 
-from apps.catalog.models import ProductVariant, normalize_barcode, normalize_sku
-from apps.inventory.models import StockItem, StockLedgerEntry, StockValuationBin
+from apps.catalog.models import Product, ProductVariant, normalize_barcode, normalize_sku
+from apps.inventory.models import (
+    StockBatchBalance,
+    StockItem,
+    StockLedgerEntry,
+    StockValuationBin,
+)
 from apps.inventory.services import resolve_warehouse_id
 
+from ..canonical import CanonicalStockLot
 from ..entity_plan import STOCK, VARIANT
 from .base import (
     CREATED,
@@ -96,6 +102,12 @@ class StockLoader(BaseLoader):
             return self._declare_cost(variant_pk, record, resolver)
 
         quantity = to_decimal(record.quantity_on_hand)
+        if quantity > 0 and variant.product.tracking_mode == Product.TrackingMode.BATCH:
+            # A lot-tracked shelf is only ever whole in lots. Without the
+            # source's split (a reconstructed quantity, say) it is one lot with
+            # no number and no date, which the owner can split at a count.
+            lots = getattr(record, "lots", None) or [CanonicalStockLot(quantity=quantity)]
+            return self._open_lots(variant, quantity, lots, record, resolver)
         defaults = {"quantity_on_hand": quantity}
         if record.reorder_level is not None:
             defaults["reorder_level"] = int(record.reorder_level)
@@ -108,6 +120,89 @@ class StockLoader(BaseLoader):
             self._open_valuation(variant_pk, quantity, to_decimal(record.unit_cost))
         resolver.remember(self.entity_type, record.source_key, stock_item)
         return LoadOutcome(CREATED if created else UPDATED, stock_item.pk)
+
+    def _open_lots(self, variant, quantity, lots, record, resolver):
+        """Put a lot-tracked product's stock on the shelf, lot by lot.
+
+        Through ``open_stock_balance`` — the same opening a person performs by
+        hand — so each lot gets its balance, its expiry and its allocation under
+        one OPENING ledger entry, and the integrity checks see what a live
+        opening would have written.
+
+        Opening *adds* to the shelf, so it runs only on an empty one: the first
+        import of this product. A re-run finds the lots already there and leaves
+        them alone rather than opening them a second time; a stock count is how
+        a live shop corrects a lot.
+        """
+        from rest_framework.exceptions import ValidationError
+
+        from apps.inventory.opening_balance import open_stock_balance
+        from apps.inventory.tracking import generated_lot_code, resolve_batch
+
+        if StockBatchBalance.objects.filter(variant=variant).exists() or (
+            StockItem.objects.filter(variant=variant).exclude(quantity_on_hand=0).exists()
+        ):
+            stock_item = StockItem.objects.filter(variant=variant).first()
+            if stock_item is not None:
+                resolver.remember(self.entity_type, record.source_key, stock_item)
+            return LoadOutcome(
+                SKIPPED,
+                getattr(stock_item, "pk", None),
+                [
+                    Issue(
+                        WARNING,
+                        "lots_kept_live",
+                        "دفعات هذا الصنف موجودة في دفتر من قبل — لم تُفتح مرة ثانية.",
+                        source_key=str(record.variant_source_key),
+                    )
+                ],
+            )
+        rows = [
+            {
+                "quantity": to_decimal(lot.quantity),
+                "code": (lot.code or "").strip(),
+                "expiry_date": lot.expiry_date,
+            }
+            for lot in lots
+            if to_decimal(lot.quantity) > 0
+        ]
+        if sum((row["quantity"] for row in rows), Decimal("0")) != quantity:
+            raise LoaderError("مجموع كميات الدفعات لا يساوي الكمية الموجودة.", code="lots_mismatch")
+        try:
+            batches = []
+            for row in rows:
+                # The opening planner takes a lot by code, or by id; a lot the
+                # source never numbered gets a generated code, marked so the
+                # app shows «بدون رقم دفعة», keyed by its expiry so a second
+                # batch of the same date is the same lot.
+                if row["code"]:
+                    batches.append(row)
+                    continue
+                lot, _created = resolve_batch(
+                    variant=variant,
+                    code=generated_lot_code(
+                        key=f"OPEN-V{variant.pk}-{row['expiry_date'] or 'NODATE'}"
+                    ),
+                    expiry_date=row["expiry_date"],
+                    code_is_generated=True,
+                )
+                batches.append({"id": lot.pk, "quantity": row["quantity"]})
+            open_stock_balance(
+                variant=variant,
+                quantity=quantity,
+                unit_cost=to_decimal(record.unit_cost) if record.unit_cost else Decimal("0"),
+                batches=batches,
+                note="رصيد افتتاحي من النظام السابق",
+            )
+        except ValidationError as exc:
+            raise LoaderError(f"تعذّر فتح دفعات الصنف: {exc.detail}", code="lots_refused") from exc
+        stock_item = StockItem.objects.filter(variant=variant).order_by("pk").first()
+        if record.reorder_level is not None:
+            StockItem.objects.filter(pk=stock_item.pk).update(
+                reorder_level=int(record.reorder_level)
+            )
+        resolver.remember(self.entity_type, record.source_key, stock_item)
+        return LoadOutcome(CREATED, stock_item.pk)
 
     @staticmethod
     def _by_code(record):

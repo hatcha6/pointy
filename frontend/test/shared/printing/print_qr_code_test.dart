@@ -18,6 +18,7 @@ import 'phone_camera.dart';
 void main() {
   const almadar = 'tel:*112*1111222233334%23';
   const libyana = 'tel:1201111222233334';
+  const apple = 'https://apps.apple.com/redeem?code=X8K2MQ4TZ7WJ9R3N';
 
   group('what the code holds', () {
     test('a USSD code keeps its # as %23, or the phone drops it', () {
@@ -26,6 +27,23 @@ void main() {
 
     test('a call keeps its number as it is', () {
       expect(dialQrData('1201111222233334'), libyana);
+    });
+
+    test('Apple\'s redemption link is coded as the server sent it', () {
+      expect(redeemQrData(' $apple\n'), apple);
+    });
+
+    test('a link that is not one this till knows gets no code', () {
+      for (final url in [
+        '',
+        'https://apps.apple.com/redeem?code=',
+        'https://apps.apple.com/redeem?code=X8K2MQ4TZ7WJ9R3',
+        'https://apps.apple.com/redeem?ref=OGC&code=X8K2MQ4TZ7WJ9R3N',
+        'https://apps.apple.com.example/redeem?code=X8K2MQ4TZ7WJ9R3N',
+        'apps.apple.com/redeem?code=X8K2MQ4TZ7WJ9R3N',
+      ]) {
+        expect(redeemQrData(url), isNull, reason: url);
+      }
     });
 
     test('anything that is not a dial string gets no code', () {
@@ -67,6 +85,7 @@ void main() {
         'tel:*120*9876543210123%23',
         'tel:#102*1234567890123456%23',
         'https://relay.example/i/abc',
+        apple,
       ]) {
         final code = PrintQrCode.tryEncode(data)!;
         final raster = _Raster.parse(escPosQrRaster(code, moduleDots: 9));
@@ -154,6 +173,57 @@ void main() {
       bool blot(int x, int y) =>
           (x - cx) * (x - cx) + (y - cy) * (y - cy) < radius * radius;
       expect(raster.read(lost: blot), almadar);
+    });
+  });
+
+  group('Apple\'s redemption link off a tired head', () {
+    // A link is a bigger symbol than a dial code (a byte-mode address, the
+    // code in capitals as alphanumerics), put through the same damage at the
+    // same 9-dot modules.
+    late _Raster raster;
+    setUp(() {
+      final code = PrintQrCode.tryEncode(apple)!;
+      raster = _Raster.parse(escPosQrRaster(code, moduleDots: 9));
+    });
+
+    test('is still a small symbol at level H', () {
+      final code = PrintQrCode.tryEncode(apple)!;
+      final bytesOnly = QrCode.fromData(
+        data: apple,
+        errorCorrectLevel: QrErrorCorrectLevel.H,
+      );
+      expect(code.version, lessThanOrEqualTo(bytesOnly.typeNumber));
+      expect(code.version, lessThanOrEqualTo(6));
+    });
+
+    test('survives dead heating elements', () {
+      final dead = {41, 42, 100, 144, 190, 251, 300, 352};
+      expect(raster.read(lost: (x, y) => dead.contains(x)), apple);
+    });
+
+    test('mostly survives a faded head that drops a third of its dots', () {
+      // A third of the dots gone is past what any one layout promises, so
+      // this counts reads over ten fades rather than betting on one: the
+      // link reads 7 of 10 at this size, the PIN code it replaces 8.
+      var reads = 0;
+      for (var seed = 0; seed < 10; seed++) {
+        final random = math.Random(seed);
+        final dropped = {
+          for (var i = 0; i < raster.width * raster.height; i++)
+            if (random.nextDouble() < 0.33) i,
+        };
+        if (raster.read(
+              lost: (x, y) => dropped.contains(y * raster.width + x),
+            ) ==
+            apple) {
+          reads++;
+        }
+      }
+      expect(reads, greaterThanOrEqualTo(7));
+    });
+
+    test('survives paper that stuttered through the feed', () {
+      expect(raster.read(lost: (x, y) => y % 60 < 2), apple);
     });
   });
 

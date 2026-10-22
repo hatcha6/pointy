@@ -10,16 +10,12 @@ Future<PurchaseReceiveDraft?> showPurchaseReceiveCaptureDialog(
   BuildContext context, {
   required PurchaseOrder order,
   UnitIntakePermissions permissions = UnitIntakePermissions.none,
-}) async {
-  final result = await showDialog<_PurchaseReceiveDialogResult>(
+}) {
+  return showDialog<PurchaseReceiveDraft>(
     context: context,
     builder: (context) =>
         _PurchaseReceiveDialog(order: order, permissions: permissions),
   );
-  if (result == null || result.lines.isEmpty) {
-    return null;
-  }
-  return PurchaseReceiveDraft(lines: result.lines, note: result.note);
 }
 
 class _PurchaseReceiveDialog extends StatefulWidget {
@@ -36,6 +32,79 @@ class _PurchaseReceiveDialog extends StatefulWidget {
 }
 
 class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
+  final _form = GlobalKey<PurchaseReceiveFormState>();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final compact = MediaQuery.sizeOf(context).width < 600;
+    final hasOpenLines = widget.order.lines.any(
+      (line) => line.receivableQuantity > 0,
+    );
+
+    return AlertDialog(
+      // A phone gives the three quantity boxes every pixel it has: the
+      // default 40-point inset cut their labels to «مستلم…» and «مرفو…».
+      insetPadding: compact
+          ? const EdgeInsets.symmetric(horizontal: 12, vertical: 24)
+          : const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
+      contentPadding: compact
+          ? const EdgeInsets.fromLTRB(16, 16, 16, 0)
+          : const EdgeInsets.fromLTRB(24, 16, 24, 0),
+      icon: const Icon(Icons.inventory_2_outlined),
+      title: Text(l10n.purchaseReceiveTitle),
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 620),
+        child: SingleChildScrollView(
+          child: PurchaseReceiveForm(
+            key: _form,
+            order: widget.order,
+            permissions: widget.permissions,
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(l10n.cancelButton),
+        ),
+        TutorTarget(
+          anchor: TutorAnchor.purchaseReceiveConfirmButton,
+          child: FilledButton(
+            onPressed: hasOpenLines
+                ? () {
+                    final draft = _form.currentState?.collect();
+                    if (draft != null) Navigator.of(context).pop(draft);
+                  }
+                : null,
+            child: Text(l10n.confirmButton),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// What arrived, line by line: the sound, the damaged and the refused, and
+/// for goods that carry identity, the serials and lots scanned off the boxes.
+///
+/// Only the fields — the caller puts it in a dialog or a result and reads it
+/// with [PurchaseReceiveFormState.collect] when the receiver confirms.
+class PurchaseReceiveForm extends StatefulWidget {
+  const PurchaseReceiveForm({
+    super.key,
+    required this.order,
+    this.permissions = UnitIntakePermissions.none,
+  });
+
+  final PurchaseOrder order;
+  final UnitIntakePermissions permissions;
+
+  @override
+  State<PurchaseReceiveForm> createState() => PurchaseReceiveFormState();
+}
+
+class PurchaseReceiveFormState extends State<PurchaseReceiveForm> {
   late final List<PurchaseOrderLine> _receivableLines = widget.order.lines
       .where((line) => line.receivableQuantity > 0)
       .toList(growable: false);
@@ -85,87 +154,57 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
     final colors = context.pointyColors;
     final compact = MediaQuery.sizeOf(context).width < 600;
 
-    return AlertDialog(
-      // A phone gives the three quantity boxes every pixel it has: the
-      // default 40-point inset cut their labels to «مستلم…» and «مرفو…».
-      insetPadding: compact
-          ? const EdgeInsets.symmetric(horizontal: 12, vertical: 24)
-          : const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
-      contentPadding: compact
-          ? const EdgeInsets.fromLTRB(16, 16, 16, 0)
-          : const EdgeInsets.fromLTRB(24, 16, 24, 0),
-      icon: const Icon(Icons.inventory_2_outlined),
-      title: Text(l10n.purchaseReceiveTitle),
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 620),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (_receivableLines.isEmpty)
-                Text(l10n.purchaseReceiveNoOpenLines)
-              else
-                for (final line in _receivableLines)
-                  _PurchaseReceiveLineInput(
-                    line: line,
-                    stackQuantities: compact,
-                    receivedController: _receivedControllers[line.id]!,
-                    damagedController: _damagedControllers[line.id]!,
-                    rejectedController: _rejectedControllers[line.id]!,
-                    capture: _captures[line.id],
-                    onCapture: line.trackingMode.isTracked
-                        ? () => _captureFor(line)
-                        : null,
-                    onChanged: () => setState(() {
-                      _showQuantityError = false;
-                      _showCaptureError = false;
-                    }),
-                  ),
-              if (_showQuantityError) ...[
-                const SizedBox(height: 8),
-                Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: Text(
-                    l10n.purchaseReceiveInvalidQuantityError,
-                    style: TextStyle(color: colors.danger),
-                  ),
-                ),
-              ],
-              if (_showCaptureError) ...[
-                const SizedBox(height: 8),
-                Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: Text(
-                    l10n.purchaseReceiveCaptureRequired,
-                    key: const ValueKey('purchase-receive-capture-error'),
-                    style: TextStyle(color: colors.danger),
-                  ),
-                ),
-              ],
-              const SizedBox(height: 12),
-              TextField(
-                controller: _noteController,
-                decoration: InputDecoration(
-                  labelText: l10n.purchaseReceiveNoteLabel,
-                  hintText: l10n.purchaseReceiveNoteHint,
-                ),
-                maxLines: 2,
-              ),
-            ],
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (_receivableLines.isEmpty)
+          Text(l10n.purchaseReceiveNoOpenLines)
+        else
+          for (final line in _receivableLines)
+            _PurchaseReceiveLineInput(
+              line: line,
+              stackQuantities: compact,
+              receivedController: _receivedControllers[line.id]!,
+              damagedController: _damagedControllers[line.id]!,
+              rejectedController: _rejectedControllers[line.id]!,
+              capture: _captures[line.id],
+              onCapture: line.trackingMode.isTracked
+                  ? () => _captureFor(line)
+                  : null,
+              onChanged: () => setState(() {
+                _showQuantityError = false;
+                _showCaptureError = false;
+              }),
+            ),
+        if (_showQuantityError) ...[
+          const SizedBox(height: 8),
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: Text(
+              l10n.purchaseReceiveInvalidQuantityError,
+              style: TextStyle(color: colors.danger),
+            ),
           ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(l10n.cancelButton),
-        ),
-        TutorTarget(
-          anchor: TutorAnchor.purchaseReceiveConfirmButton,
-          child: FilledButton(
-            onPressed: _receivableLines.isEmpty ? null : _submit,
-            child: Text(l10n.confirmButton),
+        ],
+        if (_showCaptureError) ...[
+          const SizedBox(height: 8),
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: Text(
+              l10n.purchaseReceiveCaptureRequired,
+              key: const ValueKey('purchase-receive-capture-error'),
+              style: TextStyle(color: colors.danger),
+            ),
           ),
+        ],
+        const SizedBox(height: 12),
+        TextField(
+          controller: _noteController,
+          decoration: InputDecoration(
+            labelText: l10n.purchaseReceiveNoteLabel,
+            hintText: l10n.purchaseReceiveNoteHint,
+          ),
+          maxLines: 2,
         ),
       ],
     );
@@ -271,7 +310,10 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
     return true;
   }
 
-  void _submit() {
+  /// What the receiver entered, ready to send — or null, with the reason now
+  /// on screen, when a count is unreadable or a line's identifiers no longer
+  /// cover what is being received.
+  PurchaseReceiveDraft? collect() {
     final lines = <PurchaseReceiveLineDraft>[];
     for (final line in _receivableLines) {
       final received = double.tryParse(
@@ -290,7 +332,7 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
           damaged < 0 ||
           rejected < 0) {
         setState(() => _showQuantityError = true);
-        return;
+        return null;
       }
       if (received > 0 || damaged > 0 || rejected > 0) {
         final capture = _captures[line.id];
@@ -304,7 +346,7 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
             (received > 0 || damaged > 0) &&
             !_captureCovers(line, received, damaged)) {
           setState(() => _showCaptureError = true);
-          return;
+          return null;
         }
         lines.add(
           PurchaseReceiveLineDraft(
@@ -322,15 +364,15 @@ class _PurchaseReceiveDialogState extends State<_PurchaseReceiveDialog> {
     }
     if (lines.isEmpty) {
       setState(() => _showQuantityError = true);
-      return;
+      return null;
     }
-    _showQuantityError = false;
-    _showCaptureError = false;
-    Navigator.of(context).pop(
-      _PurchaseReceiveDialogResult(
-        lines: lines,
-        note: _noteController.text.trim(),
-      ),
+    setState(() {
+      _showQuantityError = false;
+      _showCaptureError = false;
+    });
+    return PurchaseReceiveDraft(
+      lines: lines,
+      note: _noteController.text.trim(),
     );
   }
 }
@@ -592,11 +634,4 @@ class _CaptureRow extends StatelessWidget {
       ],
     );
   }
-}
-
-class _PurchaseReceiveDialogResult {
-  const _PurchaseReceiveDialogResult({required this.lines, required this.note});
-
-  final List<PurchaseReceiveLineDraft> lines;
-  final String note;
 }

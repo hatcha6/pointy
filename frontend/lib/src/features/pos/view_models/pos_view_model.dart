@@ -13,6 +13,7 @@ import '../../../data/models/barcode_resolution.dart';
 import '../../../data/models/cart_line.dart';
 import '../../../data/models/integration_card.dart';
 import '../../../data/models/integration_provider.dart';
+import '../../../data/models/messaging_gateway.dart';
 import '../../../data/models/service_kinds.dart';
 import '../../../data/models/service_quote.dart';
 import '../../../data/models/modifier_group.dart';
@@ -437,6 +438,7 @@ class PosViewModel extends ChangeNotifier {
   bool _isCheckingOut = false;
   bool _isPreparingCheckout = false;
   bool _isChargingProviders = false;
+  PosCheckoutProgress? _checkoutProgress;
   DateTime? _providerChargeStartedAt;
 
   /// The register session the services were last used in: a different one is
@@ -608,26 +610,6 @@ class PosViewModel extends ChangeNotifier {
     _activeSaleSession.hasDiscountPreviewError = value;
   }
 
-  bool get _printInvoiceAfterPayment {
-    return _activeSaleSession.printInvoiceAfterPayment;
-  }
-
-  set _printInvoiceAfterPayment(bool value) {
-    _activeSaleSession
-      ..printInvoiceAfterPayment = value
-      ..touch();
-  }
-
-  bool get _shareInvoiceAfterPayment {
-    return _activeSaleSession.shareInvoiceAfterPayment;
-  }
-
-  set _shareInvoiceAfterPayment(bool value) {
-    _activeSaleSession
-      ..shareInvoiceAfterPayment = value
-      ..touch();
-  }
-
   List<Product> get products => List.unmodifiable(_products);
   List<CartLine> get cart => List.unmodifiable(_cart);
   List<PosSaleSessionSummary> get saleSessions {
@@ -689,6 +671,9 @@ class PosViewModel extends ChangeNotifier {
 
   /// When that began, for the seconds the screen counts.
   DateTime? get providerChargeStartedAt => _providerChargeStartedAt;
+
+  /// What the sale being sent is doing right now; null when none is.
+  PosCheckoutProgress? get checkoutProgress => _checkoutProgress;
   BarcodeScanStatus get barcodeScanStatus => _barcodeScanStatus;
   bool get isResolvingBarcode =>
       _barcodeScanStatus == BarcodeScanStatus.resolving;
@@ -711,8 +696,6 @@ class PosViewModel extends ChangeNotifier {
     _notifyChanged();
   }
 
-  bool get printInvoiceAfterPayment => _printInvoiceAfterPayment;
-  bool get shareInvoiceAfterPayment => _shareInvoiceAfterPayment;
   Customer? get selectedCustomer => _selectedCustomer;
 
   /// Whether a background refresh may touch the screen right now.
@@ -861,18 +844,10 @@ class PosViewModel extends ChangeNotifier {
     );
   }
 
-  /// The manual print box appears whenever the sale is not going to print by
-  /// itself — auto-print off, or a sale under the shop's auto-print floor. A
-  /// floor says what prints unasked; it must never leave a cashier with no way
-  /// to hand over a slip the customer asked for.
-  bool get shouldShowPrintInvoiceCheckbox =>
-      _checkoutSettings != null && !cartWouldAutoPrintReceipt();
-
-  /// Sharing is not printing: a floor decides what the printer does, and has
-  /// nothing to say about sending the customer a link. So this keeps the rule
-  /// it always had — the box shows whenever the shop is not auto-printing.
-  bool get shouldShowShareInvoiceCheckbox =>
-      _checkoutSettings != null && !_checkoutSettings!.autoPrintReceipts;
+  /// Whether the shop publishes a link and QR for each invoice. When it does
+  /// not, the sale's result tells whoever can switch it on where it lives.
+  bool get onlineInvoicesEnabled =>
+      _checkoutSettings?.enableOnlineInvoices ?? false;
   bool get enableCashPayments => _checkoutSettings?.enableCashPayments ?? true;
   bool get enableCardPayments => _checkoutSettings?.enableCardPayments ?? true;
   bool get enableTransferPayments =>
@@ -1002,16 +977,9 @@ class PosViewModel extends ChangeNotifier {
           code: result.value.currencyCode,
         );
         _checkoutShopLogoBytes = await _loadShopLogoBytes(result.value);
-        // Only when the box can never appear again. With a floor set it can,
-        // and a tick the cashier made for the small sale in front of them must
-        // survive a settings refresh.
-        if (result.value.autoPrintReceipts && !result.value.hasAutoPrintFloor) {
-          _clearManualInvoiceActionsForSaleSessions();
-        }
       case Error<ShopSettings>():
         _checkoutSettings = null;
         _checkoutShopLogoBytes = null;
-        _clearManualInvoiceActionsForSaleSessions();
         _hasCheckoutSettingsError = true;
     }
 
@@ -1029,26 +997,6 @@ class PosViewModel extends ChangeNotifier {
       Ok<Uint8List?>(value: final bytes) => bytes,
       Error<Uint8List?>() => null,
     };
-  }
-
-  void updatePrintInvoiceAfterPayment(bool value) {
-    if (!shouldShowPrintInvoiceCheckbox ||
-        _isCheckingOut ||
-        value == _printInvoiceAfterPayment) {
-      return;
-    }
-    _printInvoiceAfterPayment = value;
-    _notifyChanged();
-  }
-
-  void updateShareInvoiceAfterPayment(bool value) {
-    if (!shouldShowShareInvoiceCheckbox ||
-        _isCheckingOut ||
-        value == _shareInvoiceAfterPayment) {
-      return;
-    }
-    _shareInvoiceAfterPayment = value;
-    _notifyChanged();
   }
 
   Future<OrderDocumentActionStatus> sharePaidInvoice(SaleOrder order) {
@@ -1119,18 +1067,6 @@ class PosViewModel extends ChangeNotifier {
   double _saleSessionSubtotal(_PosSaleSession session) {
     return session.cart.fold(0, (sum, line) => sum + line.subtotal);
   }
-
-  void _clearManualInvoiceActionsForSaleSessions() {
-    for (final session in _saleSessions) {
-      if (session.printInvoiceAfterPayment ||
-          session.shareInvoiceAfterPayment) {
-        session
-          ..printInvoiceAfterPayment = false
-          ..shareInvoiceAfterPayment = false
-          ..touch();
-      }
-    }
-  }
 }
 
 class _PosSaleSession {
@@ -1152,8 +1088,6 @@ class _PosSaleSession {
   SaleDiscountPreview? discountPreview;
   bool isLoadingDiscountPreview = false;
   bool hasDiscountPreviewError = false;
-  bool printInvoiceAfterPayment = false;
-  bool shareInvoiceAfterPayment = false;
   int discountPreviewRequestVersion = 0;
 
   bool get isEmpty => cart.isEmpty;

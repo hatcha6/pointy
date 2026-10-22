@@ -48,8 +48,12 @@ signature is refused. So the rollout order is fixed:
 
 1. Ship a release that is **signed** (secret set) while shops still have an empty
    `POINTY_RELEASE_PUBKEY`. They ignore the signature; nothing changes.
-2. Teach the relay to serve `bundle.signature` (base64, from the `.sig` file
-   the release workflow produces) in the `/v1/agent/manifest` response.
+2. Give the relay each bundle's signature: `pointy-relay artifacts upload …
+   --signature pointy-update-<v>.zip.sig` (or `artifacts sign --version <v>
+   --signature …` for a bundle already uploaded). The relay serves it as
+   `bundle.signature` in `/v1/agent/manifest`. Every version you may still
+   assign — including one you might pin a shop back to — needs its signature
+   before step 3, or shops will refuse it.
 3. Only then ship the public key to shops.
 
 Doing 3 before 2 strands every shop on its current version: the agent asks for a

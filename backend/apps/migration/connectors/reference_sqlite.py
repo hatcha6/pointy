@@ -17,6 +17,12 @@ single-price POS catalogues:
     customers(id, full_name, phone, email, notes, is_active)
     suppliers(id, name, contact_name, phone, email, address, notes, is_active)
     stock(product_id, quantity, reorder_level)
+    product_barcodes(product_id, barcode)      -- optional
+
+``product_barcodes`` holds the further codes a product answers to (a second
+supplier's EAN, an old pack). They become the product's extra barcodes — the
+way any source with several codes per item must be mapped, never one variant
+per code.
 """
 
 from __future__ import annotations
@@ -95,7 +101,21 @@ class ReferenceSqliteConnector(BaseConnector):
                 is_active=bool(row.get("is_active", 1)),
             )
 
+    def _extra_barcodes(self, transport) -> dict[str, list[str]]:
+        extras: dict[str, list[str]] = {}
+        if not transport.has_table("product_barcodes"):
+            return extras
+        for row in transport.iter_records("product_barcodes"):
+            code = str(row.get("barcode") or "").strip()
+            if row.get("product_id") is None or not code:
+                continue
+            codes = extras.setdefault(str(row["product_id"]), [])
+            if code not in codes:
+                codes.append(code)
+        return extras
+
     def _products(self, transport):
+        extras = self._extra_barcodes(transport)
         for row in transport.iter_records("products"):
             category_id = row.get("category_id")
             price = row.get("price")
@@ -110,6 +130,7 @@ class ReferenceSqliteConnector(BaseConnector):
                 category_source_keys=[str(category_id)] if category_id is not None else [],
                 sku=row.get("sku") or "",
                 barcode=row.get("barcode") or "",
+                extra_barcodes=extras.get(str(row["id"]), []),
                 unit_price=Decimal(str(price)) if price is not None else Decimal("0"),
             )
 
@@ -185,6 +206,7 @@ def build_sample_database(path: str, *, with_bad_rows: bool = False) -> None:
             CREATE TABLE stock (
                 product_id INTEGER PRIMARY KEY, quantity REAL, reorder_level INTEGER
             );
+            CREATE TABLE product_barcodes (product_id INTEGER, barcode TEXT);
             """
         )
         connection.executemany(
@@ -205,6 +227,11 @@ def build_sample_database(path: str, *, with_bad_rows: bool = False) -> None:
             "INSERT INTO products (id, name, description, category_id, unit, price, sku, "
             "barcode, is_service, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             products,
+        )
+        # Water arrives from two suppliers under two EANs: one product.
+        connection.executemany(
+            "INSERT INTO product_barcodes (product_id, barcode) VALUES (?, ?)",
+            [(3, "1000013"), (3, "1000023")],
         )
         connection.executemany(
             "INSERT INTO customers (id, full_name, phone, email) VALUES (?, ?, ?, ?)",

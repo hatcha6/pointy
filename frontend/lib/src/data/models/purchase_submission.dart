@@ -14,7 +14,7 @@ class PurchaseSubmission {
     required this.total,
     required this.status,
     this.orderId,
-    this.awaitsIdentifiers = false,
+    this.order,
   });
 
   final String draftNumber;
@@ -23,11 +23,9 @@ class PurchaseSubmission {
   final String status;
   final int? orderId;
 
-  /// The buyer asked to receive at once, and some of the goods carry identity
-  /// — serials or lots — that has to be scanned off the boxes first. The order
-  /// is created and submitted and the receipt waits for the capture, rather
-  /// than receiving handsets with no numbers and medicine with no lot.
-  final bool awaitsIdentifiers;
+  /// The order as the server answered it, lines and all — what its result
+  /// prints, and what receiving it right away reads its open quantities from.
+  final PurchaseOrder? order;
 }
 
 enum PurchaseOrderStatusFilter implements QueryFilterSet {

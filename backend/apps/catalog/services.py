@@ -94,6 +94,7 @@ def variant_detail_queryset():
         image_attachment_prefetch("product__attachments"),
         unit_detail_prefetch("product__units__unit"),
         "product__units__barcodes",
+        "extra_barcodes",
         "option_values",
         "option_values__option",
         # product_detail (ProductCatalogSummarySerializer) serializes the parent

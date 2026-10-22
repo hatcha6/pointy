@@ -249,6 +249,17 @@ SandboxProduct _createProduct(SandboxShop shop, SandboxRequest request) {
     variants: variants,
   );
 
+  // A variant's own further codes scan to it like its main one.
+  for (final code
+      in (single is Map<String, Object?>
+          ? single['extra_barcodes'] as List<Object?>? ?? const []
+          : const <Object?>[])) {
+    shop.addBarcode(
+      variantId: product.defaultVariant.id,
+      barcode: code.toString(),
+    );
+  }
+
   // Packaging codes ride along on the product's units — the carton's own EAN,
   // which scans to the same product at the carton's price.
   for (final unit in request.rows('units')) {

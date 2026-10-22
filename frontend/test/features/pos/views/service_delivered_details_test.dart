@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pointy_frontend/src/data/models/integration_card.dart';
-import 'package:pointy_frontend/src/features/pos/views/direct_services/service_delivered_dialog.dart';
+import 'package:pointy_frontend/src/features/pos/views/direct_services/service_delivered_details.dart';
 
 import '../../../support/services_testing.dart';
 import '../../../support/test_fonts.dart';
@@ -59,7 +59,7 @@ void main() {
     },
   });
 
-  /// The dialog, opened from a button the way the cart opens it.
+  /// The details, as the sale's result shows them.
   Future<void> open(
     WidgetTester tester,
     List<IntegrationChargeResult> results, {
@@ -70,23 +70,12 @@ void main() {
     useWindow(tester, size);
     await tester.pumpWidget(
       servicesApp(
-        Builder(
-          builder: (context) => Center(
-            child: FilledButton(
-              key: const ValueKey('open'),
-              onPressed: () => showServiceDeliveredDialog(
-                context,
-                results,
-                testMode: testMode,
-              ),
-              child: const Text('open'),
-            ),
-          ),
+        SingleChildScrollView(
+          child: ServiceDeliveredDetails(results: results, testMode: testMode),
         ),
         textScale: textScale,
       ),
     );
-    await tester.tap(key('open'));
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
   }
 
@@ -154,24 +143,6 @@ void main() {
       expect(key('service_delivered_token'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
-  });
-
-  testServices('«تم» closes it', (tester) async {
-    await open(tester, [airtime]);
-
-    await tester.tap(key('service_delivered_done'));
-    await tester.pumpAndSettle(const Duration(milliseconds: 100));
-
-    expect(key('service_delivered_dialog'), findsNothing);
-  });
-
-  testServices('airtime can be dismissed by a tap outside', (tester) async {
-    await open(tester, [airtime]);
-
-    await tester.tapAt(const Offset(8, 8));
-    await tester.pumpAndSettle(const Duration(milliseconds: 100));
-
-    expect(key('service_delivered_dialog'), findsNothing);
   });
 
   group('a prepaid meter\'s token', () {
@@ -282,16 +253,6 @@ void main() {
       });
     }
 
-    testServices('is never lost to a stray tap outside', (tester) async {
-      await open(tester, [electricity]);
-
-      await tester.tapAt(const Offset(8, 8));
-      await tester.pumpAndSettle(const Duration(milliseconds: 100));
-
-      expect(key('service_delivered_dialog'), findsOneWidget);
-      expect(key('service_delivered_token'), findsOneWidget);
-    });
-
     testServices('is copied with one tap, and the copy is said', (
       tester,
     ) async {
@@ -358,7 +319,7 @@ void main() {
       await open(tester, [airtime, electricity], size: size, textScale: scale);
 
       expect(tester.takeException(), isNull);
-      expect(key('service_delivered_done'), findsOneWidget);
+      expect(key('service_delivered_details'), findsOneWidget);
     });
   }
 }

@@ -121,23 +121,31 @@ Common upload entry points:
   token so product image previews can render in the Flutter web app without
   exposing unrestricted file URLs
 
-Internet product image search is relay-hosted (Serper.dev): the relay holds one
-search key for every shop and gates each request on the shop's relay
-subscription, so individual deployments never manage a search API key. Set the
-key on the relay, not on the backend:
+Internet product image search is relay-hosted: the relay asks the company's
+self-hosted [OpenSERP](https://github.com/karust/openserp) server (a headless
+Chrome scraper, no API key and no per-search fee) and gates each request on the
+shop's relay subscription, so individual deployments never manage a search
+service. Every configured engine is searched at once and the answers come back
+as one merged page of up to 50 images (no "load more"). Point the relay at OpenSERP, not the backend:
 
 ```sh
+make relay-openserp   # local OpenSERP on 127.0.0.1:7000 (make relay-openserp-stop)
 # relay/.env (or the relay's environment)
-POINTY_RELAY_SERPER_API_KEY=your-serper-key
+POINTY_RELAY_OPENSERP_BASE_URL=http://127.0.0.1:7000
 # Optional overrides (defaults shown):
-# POINTY_RELAY_SERPER_BASE_URL=https://google.serper.dev/images
-# POINTY_RELAY_SERPER_IMAGE_LANGUAGE=ar
-# POINTY_RELAY_SERPER_IMAGE_COUNTRY=us
+# POINTY_RELAY_OPENSERP_ENGINES=bing,yandex,ecosia
+# POINTY_RELAY_OPENSERP_LANGUAGE=ar
+# POINTY_RELAY_OPENSERP_REGION=
 ```
+
+In production run the image built from `deploy/openserp/Dockerfile` (upstream
+OpenSERP repackaged on Debian 12, because JPaaS rejects upstream's Debian 13
+base; ~1 GB RAM for its Chrome pool) on the relay's private network only: it
+has no auth of its own.
 
 The backend forwards `GET /api/products/image-search/` to the relay's
 `POST /v1/image-search` endpoint using the shop's relay access token; an empty
-key (or a shop without an active relay subscription) simply disables the feature.
+base URL (or a shop without an active relay subscription) simply disables the feature.
 The backend still owns the import/download settings:
 
 ```sh
@@ -219,6 +227,22 @@ read. Design and API shapes are in `tools/moamalat-capture/`. Stop it
 fleet-wide with `pointy-relay integrations disable moamalat --reason "…"`. Preview with
 `make frontend-moamalat-preview` (`?screen=board|unlinked|alive|at-risk|reauth|switched|sheet`).
 
+## Bulk price editor (rules)
+
+Products page → «⋯» → «تعديل الأسعار بالقواعد» (or «قواعد الأسعار» on a
+multi-selection) opens a rule-driven repricing screen: a filter tree
+(all/any groups over name, SKU, barcode, category incl. sub-categories,
+supplier, price, cost, markup, stock and flags), an ordered chain of price
+steps each with an optional condition of its own and an optional "stop"
+(else-if), and safeguards (never below cost, packs scale with their piece).
+The preview is live; apply sends its fingerprint and is refused (409) if any
+price or cost moved since. Every apply is recorded and can be undone from
+«سجل التعديلات» — an undo skips prices someone edited afterwards. Backend:
+`apps/catalog/bulk_pricing.py` (rules + planner), `bulk_pricing_data.py`
+(load/apply/undo), `bulk_pricing_views.py` (`/api/bulk-price-changes/`).
+Preview with `make frontend-bulk-price-preview`
+(`?screen=editor|filtered|selection|history|board`).
+
 ## App updates after a backend update
 
 Every API response names the backend's release in `X-Pointy-Server-Version`. When
@@ -249,6 +273,10 @@ harnesses above (plus `make frontend-marketing-preview` for updates,
 attendance, payroll, per-product currency and the IMEI till).
 `make marketing-site-capture` rebuilds the harnesses and re-records and
 re-encodes all of it; see `marketing/website/README.md`.
+`make marketing-site-dist` builds the upload for https://dftr.ly
+(`marketing/website/dist/dftr-site.zip`, extracted into `public_html`).
+`make marketing-pos-tour` rebuilds the vertical POS tour film (TikTok,
+1080 × 1920) from real recordings of the till; see `marketing/film/README.md`.
 
 ## Searched but not found
 
@@ -280,6 +308,34 @@ and labels, with every setting and label calibration — and each save mirrors t
 receipt and kitchen printers back into the old keys so an older build still
 prints. Preview with `make frontend-printers-preview`
 (`?screen=settings|board|migrated|empty|add|edit-receipt|edit-labels`).
+
+## The Sale's Result
+
+Confirming payment opens one dialog that stays up through the whole sale: the
+steps while it is recorded, charged at a provider (cards, top-ups, bills) and
+printed, then the result in place. A recorded sale shows the change to count
+out, every card PIN or bill token (always, not only when the receipt failed),
+the invoice QR when online invoices are on (or, to an owner, where to switch
+them on), and print / SMS / PDF / proof-of-payment actions. A refused sale says
+nothing was taken, why, and what to do, with retry, edit-payment or review-cart
+in front. The cart pane's print checkbox and the payment sheet's print, share
+and proof toggles are gone. The invoice SMS can go to a typed number
+(`POST crm/orders/<id>/send-invoice-sms/` with `{"phone": …}`), so walk-in
+customers can get one. Preview with `make frontend-checkout-result-preview`
+(`?screen=board|working|working-slow|success|success-change|success-link|success-card|success-attention|success-credit|failure-credit|failure-stock|failure-network`, `&theme=dark`).
+
+A purchase order ends the same way. «إرسال أمر الشراء» (or saving a reopened
+order) opens one dialog: the create and submit steps, then the order with its
+total, print / PDF actions, and «استلام البضاعة» as the main action. Submitting
+never receives on its own, and the draft's receive-immediately checkbox is
+gone. Goods counted rather than named go in with one tap; when the order holds
+serial or lot products, the same dialog becomes the receiving form, scan
+sheets included, so ordering, scanning and stocking happen in one pass. The
+received result lists what went in and offers the handset and lot stickers. A
+taken supplier invoice number, a doubted cost, or no answer from the server is
+explained in place, with the way back to the draft. Try it live with
+`make frontend-purchase-result-preview`
+(`?scenario=counted|tracked|partial|invoice-taken|cost|offline|receive-fails|saved`, `&theme=dark`).
 
 ## Balance Sheet and Zakat
 

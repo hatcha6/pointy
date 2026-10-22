@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pointy_frontend/src/data/models/integration_card.dart';
-import 'package:pointy_frontend/src/features/pos/views/recharge_outcome_dialog.dart';
+import 'package:pointy_frontend/src/features/pos/views/recharge_outcome_details.dart';
 
 import '../../../support/services_testing.dart';
 import '../../../support/test_fonts.dart';
@@ -36,18 +36,9 @@ void main() {
     useWindow(tester, const Size(1366, 768));
     await tester.pumpWidget(
       servicesApp(
-        Builder(
-          builder: (context) => Center(
-            child: FilledButton(
-              key: const ValueKey('open'),
-              onPressed: () => showRechargeOutcomeDialog(context, rows),
-              child: const Text('open'),
-            ),
-          ),
-        ),
+        SingleChildScrollView(child: RechargeOutcomeDetails(rows: rows)),
       ),
     );
-    await tester.tap(find.byKey(const ValueKey('open')));
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
   }
 

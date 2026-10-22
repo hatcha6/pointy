@@ -215,7 +215,8 @@ def build_phone_shop_sample(path: Path, items: list | None = None) -> None:
             "INSERT INTO CUSTOMERS VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 (0, "N/A", "", "", "", "", 1, 0),
-                (1, "زبون نقدي", "0910000001", "", "", "", 0, 0),
+                # A named buyer, so a sold handset can say who has it.
+                (1, "سالم الورفلي", "0910000001", "", "", "", 0, 0),
                 (2, "مورد الهواتف", "", "0912000002", "", "طرابلس", 1, 0),
             ],
         )
@@ -234,6 +235,7 @@ def build_phone_shop_sample(path: Path, items: list | None = None) -> None:
         # Sales: one invoice per sold handset, plus five of the accessory.
         invoices = []
         lines = []
+        receipts = []
         line_id = 1
         for invoice_id, (item, _name, cost, _price, sold, _hand) in enumerate(
             rows, start=1
@@ -242,6 +244,9 @@ def build_phone_shop_sample(path: Path, items: list | None = None) -> None:
                 continue
             invoices.append((invoice_id, SALE_DATE, 1, 0, 0))
             quantity = 5 if item == 202 else 1
+            # Paid at the counter: AboGhris books the receipt against the
+            # invoice, or the sale would import as owed (آجل).
+            receipts.append((invoice_id, SALE_DATE, sold * quantity, 1, invoice_id, 1))
             lines.append(
                 (line_id, invoice_id, item, quantity, sold, sold, sold, cost, cost)
             )
@@ -252,6 +257,11 @@ def build_phone_shop_sample(path: Path, items: list | None = None) -> None:
         db.executemany(
             "INSERT INTO SALE_ITEMS VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", lines
         )
+        db.execute(
+            "CREATE TABLE TAKE (T_ID INTEGER, T_DATE TEXT, T_VALUE REAL, CUST_ID INTEGER,"
+            " S_ID INTEGER, T_STATUES INTEGER)"
+        )
+        db.executemany("INSERT INTO TAKE VALUES (?, ?, ?, ?, ?, ?)", receipts)
         db.executemany(
             "INSERT INTO EXPENCES VALUES (?, ?, ?)", [(0, "N/A", 0)]
         )

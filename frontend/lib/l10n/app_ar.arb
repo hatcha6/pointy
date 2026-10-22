@@ -2427,6 +2427,16 @@
       }
     }
   },
+  "variantExtraBarcodesAddButton": "إضافة باركود آخر",
+  "variantExtraBarcodesLabel": "باركودات إضافية",
+  "variantExtraBarcodesHelper": "للمنتج نفسه إن وصل بأكثر من باركود: يُباع بأيٍّ منها عند المسح، ويبقى الباركود الأساسي هو المطبوع على الملصق.",
+  "variantExtraBarcodeInputLabel": "امسح أو اكتب باركودًا إضافيًا",
+  "variantExtraBarcodeAddTooltip": "إضافة الباركود",
+  "variantExtraBarcodeScanTooltip": "مسح بالكاميرا",
+  "variantExtraBarcodeScanTitle": "مسح باركود إضافي",
+  "variantExtraBarcodeRemoveTooltip": "حذف الباركود",
+  "variantExtraBarcodeIsPrimary": "هذا هو الباركود الأساسي للمنتج.",
+  "variantExtraBarcodeDuplicate": "هذا الباركود مُضاف بالفعل.",
   "productDefaultSaleUnitLabel": "وحدة البيع الافتراضية",
   "productDefaultPurchaseUnitLabel": "وحدة الشراء الافتراضية",
   "productUnitBaseOption": "{unit} (أساسية)",
@@ -4951,15 +4961,6 @@
     }
   },
   "productTrackingIdentifyLaterConfirm": "تفعيل التتبّع",
-  "purchaseOrderReceiptDeferred": "الطلب {number} أُنشئ ولم يُستلم بعد — استلمه من قائمة المشتريات بعد مسح الأرقام.",
-  "@purchaseOrderReceiptDeferred": {
-    "description": "An order whose serial/lot goods were not received because the receiving dialog was closed or refused.",
-    "placeholders": {
-      "number": {
-        "type": "String"
-      }
-    }
-  },
   "purchaseLineUnitsAtReceipt": "تُمسح الأرقام التسلسلية عند الاستلام.",
   "purchaseLineLotsAtReceipt": "تُسجَّل الدفعات وتواريخ صلاحيتها عند الاستلام.",
   "stockUnitIdentifyTitle": "إدخال رقم الجهاز",
@@ -6763,7 +6764,6 @@
       }
     }
   },
-  "receivePurchaseImmediatelyLabel": "استلام أمر الشراء فورًا",
   "submitPurchaseDraftButton": "إرسال أمر الشراء {amount}",
   "@submitPurchaseDraftButton": {
     "description": "Submit purchase order button label with total amount.",
@@ -6774,15 +6774,6 @@
     }
   },
   "purchaseSubmitInProgressButton": "جار الإرسال...",
-  "purchaseDraftSubmitSuccess": "تم إرسال أمر الشراء رقم {draftNumber}.",
-  "@purchaseDraftSubmitSuccess": {
-    "description": "Message shown after a purchase order is submitted.",
-    "placeholders": {
-      "draftNumber": {
-        "type": "String"
-      }
-    }
-  },
   "purchaseDraftSubmitError": "تعذر إرسال أمر الشراء. راجع العناصر ورقم فاتورة المورد وحاول مرة أخرى.",
   "purchaseSupplierInvoiceNumberTaken": "رقم فاتورة المورد هذا مسجّل من قبل على أمر شراء آخر لنفس المورد. صحّح الرقم أو امسحه ثم أرسل.",
   "@purchaseSupplierInvoiceNumberTaken": {
@@ -6807,15 +6798,6 @@
   "purchaseDraftSaveInProgressButton": "جارٍ الحفظ...",
   "@purchaseDraftSaveInProgressButton": {
     "description": "Primary button label while a draft purchase order is being saved."
-  },
-  "purchaseDraftSaveSuccess": "تم حفظ مسودة أمر الشراء رقم {draftNumber}.",
-  "@purchaseDraftSaveSuccess": {
-    "description": "Message shown after a draft purchase order's edits are saved.",
-    "placeholders": {
-      "draftNumber": {
-        "type": "String"
-      }
-    }
   },
   "purchaseDraftSaveError": "تعذر حفظ المسودة. راجع العناصر ورقم فاتورة المورد وحاول مرة أخرى.",
   "@purchaseDraftSaveError": {
@@ -16995,6 +16977,10 @@
   "@migrationEntitySaleReturn": {
     "description": "Data migration screen."
   },
+  "migrationEntityPurchaseReturn": "مرتجعات المشتريات",
+  "@migrationEntityPurchaseReturn": {
+    "description": "Data migration screen: goods sent back to suppliers."
+  },
   "migrationEntityPayrollRun": "مسيّرات الرواتب",
   "@migrationEntityPayrollRun": {
     "description": "Data migration screen."
@@ -24672,6 +24658,464 @@
       "count": {
         "type": "int"
       }
+    }
+  },
+  "checkoutResultWorkingTitle": "جارٍ إتمام البيع…",
+  "checkoutResultWorkingQuotationTitle": "جارٍ حفظ عرض السعر…",
+  "checkoutResultWorkingHint": "لا تُغلق الشاشة حتى يكتمل البيع.",
+  "checkoutResultStepRecord": "تسجيل الفاتورة",
+  "checkoutResultStepCharge": "التنفيذ لدى المزوّد",
+  "checkoutResultStepPrint": "طباعة الإيصال",
+  "checkoutResultStepChargeSlow": "ما زلنا ننتظر ردّ المزوّد ({seconds} ث). لا تُعد العملية ولا تُرجع المبلغ للزبون.",
+  "@checkoutResultStepChargeSlow": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "checkoutResultSaleTitle": "تم البيع",
+  "checkoutResultCreditTitle": "تم تسجيل البيع الآجل",
+  "checkoutResultQuotationTitle": "تم حفظ عرض السعر",
+  "checkoutResultAttentionTitle": "تم تسجيل البيع، وبعض الشحن لم يكتمل",
+  "checkoutResultReceiptLine": "فاتورة رقم {receiptNumber} · {total}",
+  "@checkoutResultReceiptLine": {
+    "placeholders": {
+      "receiptNumber": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "checkoutResultBalanceDue": "المتبقي على العميل",
+  "checkoutResultPrinted": "طُبع الإيصال",
+  "checkoutResultPrinting": "جارٍ الطباعة…",
+  "checkoutResultPrintFailed": "تعذّرت طباعة الإيصال",
+  "checkoutResultNoPrinter": "لا توجد طابعة إيصالات على هذا الجهاز",
+  "checkoutResultNoPrinterHint": "عيّنها من إعدادات الجهاز ← الطابعات.",
+  "checkoutResultNotPrinted": "لم يُطبع إيصال لهذا البيع",
+  "checkoutResultPrintAction": "طباعة",
+  "checkoutResultReprintAction": "إعادة الطباعة",
+  "checkoutResultSmsAction": "رسالة نصية",
+  "checkoutResultShareAction": "مشاركة PDF",
+  "checkoutResultProofAction": "سند قبض",
+  "checkoutResultProofPrinted": "طُبع سند القبض",
+  "checkoutResultProofFailed": "تعذّرت طباعة سند القبض",
+  "checkoutResultSmsSent": "أُرسلت الفاتورة برسالة نصية",
+  "checkoutResultSmsFailed": "تعذّر إرسال الرسالة",
+  "checkoutResultNewSale": "بيع جديد",
+  "checkoutResultNextScanHint": "امسح الصنف التالي لتبدأ بيعًا جديدًا",
+  "checkoutResultDone": "تم",
+  "checkoutResultLinkTitle": "فاتورة الزبون على الإنترنت",
+  "checkoutResultLinkBody": "يمسح الزبون الرمز ليفتح فاتورته على هاتفه.",
+  "checkoutResultLinkOffTitle": "رابط الفاتورة غير مفعّل",
+  "checkoutResultLinkOffBody": "فعّله ليحصل كل زبون على فاتورته برمز QR ورابط يصله برسالة نصية. تجده في الإعدادات ← الإيصالات.",
+  "checkoutResultLinkOffAction": "فتح الإعدادات",
+  "checkoutResultCardsTitle": "الأرقام السرية للكروت",
+  "checkoutResultCardsBody": "سلّمها للزبون. هي مطبوعة أيضًا على الإيصال إن طُبع.",
+  "checkoutSmsTitle": "إرسال الفاتورة برسالة نصية",
+  "checkoutSmsBody": "تصل الزبونَ رسالة برقم الفاتورة ومبلغها، ورابطها إن كان مفعّلًا.",
+  "checkoutSmsPhoneLabel": "رقم الهاتف",
+  "checkoutSmsPhoneRequired": "أدخل رقم هاتف",
+  "checkoutSmsSend": "إرسال",
+  "checkoutResultFailedTitle": "لم يتم البيع",
+  "checkoutResultFailedSubtitle": "لم يُسجَّل أي مبلغ، والسلة كما هي.",
+  "checkoutResultUnansweredTitle": "لم يصل ردّ الخادم",
+  "checkoutResultUnansweredSubtitle": "قد يكون البيع سُجّل وقد لا يكون. أعد المحاولة لتعرف.",
+  "checkoutResultFailedGeneric": "رفض الخادم تسجيل هذا البيع.",
+  "checkoutResultWhatToDo": "ما الذي يمكنك فعله",
+  "checkoutResultRetrySafe": "إعادة المحاولة آمنة: إن كان البيع قد سُجّل فلن يتكرر.",
+  "checkoutResultCheckConnection": "تأكّد من اتصال الجهاز بالشبكة ثم أعد المحاولة.",
+  "checkoutResultStockTitle": "الكمية المطلوبة غير متوفرة",
+  "checkoutResultStockTip": "خفّض الكمية أو احذف الصنف من السلة.",
+  "checkoutResultLossTip": "عدّل السعر، أو اطلب من المدير إتمام البيع.",
+  "checkoutResultCreditTipPayNow": "أو غيّر نوع البيع إلى نقدي.",
+  "checkoutResultSessionTitle": "جلسة الدرج مغلقة",
+  "checkoutResultSessionTip": "افتح جلسة درج جديدة، ثم ادفع مرة أخرى؛ السلة محفوظة.",
+  "checkoutResultReference": "رمز المرجع: {reference}",
+  "@checkoutResultReference": {
+    "placeholders": {
+      "reference": {
+        "type": "String"
+      }
+    }
+  },
+  "checkoutResultEditPayment": "تعديل الدفع",
+  "checkoutCreditNeededLabel": "ادفع الآن على الأقل",
+  "checkoutCreditNeededHint": "ليبقى دين العميل ضمن سقفه، ويتم البيع الآجل.",
+  "checkoutCreditOutstanding": "عليه الآن",
+  "checkoutCreditThisInvoice": "هذه الفاتورة",
+  "checkoutCreditLimitLabel": "سقف الدين",
+  "checkoutCreditTipDownPayment": "اضغط «تعديل الدفع» وأضف الدفعة المقدّمة، ثم أكمل البيع.",
+  "checkoutCreditTipRaise": "رفع السقف من صفحة العميل، وهو قرار المالك.",
+  "purchaseResultWorkingTitle": "جارٍ إرسال أمر الشراء…",
+  "purchaseResultSavingTitle": "جارٍ حفظ التعديلات…",
+  "purchaseResultReceivingTitle": "جارٍ استلام البضاعة…",
+  "purchaseResultWorkingHint": "لا تُغلق الشاشة حتى يكتمل.",
+  "purchaseResultStepCreate": "تسجيل الأمر",
+  "purchaseResultStepSubmit": "إرسال الأمر",
+  "purchaseResultStepSave": "حفظ التعديلات",
+  "purchaseResultStepReceive": "إدخال البضاعة إلى المخزون",
+  "purchaseResultOrderNumber": "أمر رقم {number}",
+  "@purchaseResultOrderNumber": {"placeholders": {"number": {"type": "String"}}},
+  "purchaseResultSubmittedTitle": "تم إرسال أمر الشراء",
+  "purchaseResultSavedTitle": "تم حفظ التعديلات",
+  "purchaseResultReceivedTitle": "تم استلام البضاعة",
+  "purchaseResultTotalLabel": "إجمالي الأمر",
+  "purchaseResultAwaitingTitle": "البضاعة لم تدخل المخزون بعد",
+  "purchaseResultAwaitingBody": "إن كانت أمامك فاستلمها الآن. وإن كانت ستصل لاحقًا فاستلمها من صفحة الأمر حين تصل.",
+  "purchaseResultDetailsTitle": "تُدخَل تفاصيل هذه الأصناف عند الاستلام",
+  "purchaseResultDraftNote": "الأمر ما زال مسودة: أرسله من صفحته حين يكتمل، ثم استلم البضاعة.",
+  "purchaseResultReceiveAction": "استلام البضاعة",
+  "purchaseResultReceiveHint": "تُدخل الأرقام التسلسلية والدفعات في الخطوة التالية.",
+  "purchaseResultReceiveAdjustAction": "استلام بكميات مختلفة",
+  "purchaseResultReceiveLater": "استلام لاحقًا",
+  "purchaseResultNewOrder": "أمر شراء جديد",
+  "purchaseResultFormSubtitle": "أدخل ما وصل فعلًا، وسجّل الأرقام والدفعات للأصناف التي تحتاجها.",
+  "purchaseResultConfirmReceive": "تأكيد الاستلام",
+  "purchaseResultBack": "رجوع",
+  "purchaseResultReceiveFailedTitle": "لم تُستلم البضاعة",
+  "purchaseResultReceiveFailedBody": "الأمر محفوظ ومُرسل. أعد المحاولة، أو استلمه لاحقًا من صفحته.",
+  "purchaseResultReceivedSection": "ما دخل المخزون",
+  "purchaseResultMoreLines": "+{count} أصناف أخرى",
+  "@purchaseResultMoreLines": {"placeholders": {"count": {"type": "int"}}},
+  "purchaseResultLabelsBody": "اطبع ملصقات الأجهزة والدفعات الآن، والعلب ما زالت مفتوحة.",
+  "purchaseResultDocumentTitle": "مستند أمر الشراء",
+  "purchaseResultPrinted": "أُرسل أمر الشراء إلى الطابعة",
+  "purchaseResultShared": "جُهّز ملف PDF لأمر الشراء",
+  "purchaseResultFailedTitle": "لم يُرسَل أمر الشراء",
+  "purchaseResultSaveFailedTitle": "لم تُحفظ التعديلات",
+  "purchaseResultFailedSubtitle": "المسودة كما هي، ولم يتغير شيء في المخزون.",
+  "purchaseResultUnansweredSubtitle": "قد يكون الأمر سُجّل وقد لا يكون. أعد المحاولة لتعرف.",
+  "purchaseResultRetrySafe": "إعادة المحاولة آمنة: إن كان الأمر قد سُجّل فلن يتكرر.",
+  "purchaseResultInvoiceTakenTitle": "رقم فاتورة المورد مكرر",
+  "purchaseResultEditInvoiceAction": "تعديل رقم الفاتورة",
+  "purchaseResultBackToDraft": "رجوع إلى المسودة",
+  "purchaseResultCostTip": "إن كانت الفاتورة تعطيك إجمالي السطر فقط، فاكتبه في «إدخال الإجمالي» بدل سعر الوحدة.",
+  "purchaseResultStillOpen": "بقي جزء من الأمر مفتوحًا. استلمه من صفحة الأمر حين يصل.",
+  "bulkPriceEditorTitle": "تعديل الأسعار بالقواعد",
+  "bulkPriceEditorMenuAction": "تعديل الأسعار بالقواعد",
+  "bulkPriceEditorSelectionAction": "قواعد الأسعار",
+  "bulkPriceHistoryAction": "سجل التعديلات",
+  "bulkPriceRulesTab": "القواعد",
+  "bulkPricePreviewTab": "المعاينة",
+  "bulkPriceScopeTitle": "المنتجات المشمولة",
+  "bulkPriceScopeAll": "كل المنتجات",
+  "bulkPriceScopeFiltered": "حسب شروط",
+  "bulkPriceScopeAllHint": "كل المنتجات غير المؤرشفة. المنتجات المؤرشفة ومنتجات النظام لا تتغير أسعارها أبدًا.",
+  "bulkPriceGroupMatchLabel": "تنطبق إذا تحقق",
+  "bulkPriceMatchAll": "كل الشروط",
+  "bulkPriceMatchAny": "أي شرط",
+  "bulkPriceJoinAnd": "و",
+  "bulkPriceJoinOr": "أو",
+  "bulkPriceAddCondition": "إضافة شرط",
+  "bulkPriceAddGroup": "إضافة مجموعة شروط",
+  "bulkPriceRemoveCondition": "حذف الشرط",
+  "bulkPriceRemoveGroup": "حذف المجموعة",
+  "bulkPriceNestedGroupTitle": "مجموعة شروط",
+  "bulkPriceFieldName": "اسم المنتج",
+  "bulkPriceFieldSku": "رمز المنتج (SKU)",
+  "bulkPriceFieldBarcode": "الباركود",
+  "bulkPriceFieldCategory": "التصنيف",
+  "bulkPriceFieldSupplier": "المورد",
+  "bulkPriceFieldProduct": "المنتج",
+  "bulkPriceFieldPrice": "سعر البيع",
+  "bulkPriceFieldCost": "التكلفة",
+  "bulkPriceFieldMarkup": "نسبة الربح على التكلفة",
+  "bulkPriceFieldStock": "الكمية المتوفرة",
+  "bulkPriceFieldIsActive": "المنتج مفعّل",
+  "bulkPriceFieldIsService": "خدمة",
+  "bulkPriceFieldForeignPriced": "مسعّر بعملة أجنبية",
+  "bulkPriceOpContains": "يحتوي على",
+  "bulkPriceOpNotContains": "لا يحتوي على",
+  "bulkPriceOpEquals": "يساوي",
+  "bulkPriceOpNotEquals": "لا يساوي",
+  "bulkPriceOpStartsWith": "يبدأ بـ",
+  "bulkPriceOpEndsWith": "ينتهي بـ",
+  "bulkPriceOpIsEmpty": "غير محدد",
+  "bulkPriceOpIsNotEmpty": "محدد",
+  "bulkPriceOpGt": "أكبر من",
+  "bulkPriceOpGte": "أكبر من أو يساوي",
+  "bulkPriceOpLt": "أقل من",
+  "bulkPriceOpLte": "أقل من أو يساوي",
+  "bulkPriceOpBetween": "بين",
+  "bulkPriceOpIn": "أحد",
+  "bulkPriceOpNotIn": "ليس أحد",
+  "bulkPriceOpIsTrue": "نعم",
+  "bulkPriceOpIsFalse": "لا",
+  "bulkPriceBetweenAnd": "و",
+  "bulkPriceValueHint": "القيمة",
+  "bulkPricePickCategories": "اختر التصنيفات",
+  "bulkPricePickSupplier": "إضافة مورد",
+  "bulkPriceSubcategoriesHint": "تشمل التصنيفات الفرعية",
+  "bulkPriceStepsTitle": "خطوات تعديل السعر",
+  "bulkPriceStepsHint": "تُطبّق الخطوات بالترتيب، وكل خطوة تبدأ من السعر الذي أنتجته الخطوة التي قبلها.",
+  "bulkPriceAddStep": "إضافة خطوة",
+  "bulkPriceStepWhenToggle": "بشرط",
+  "bulkPriceStepWhenTitle": "فقط للمنتجات التي",
+  "bulkPriceStepWhenHint": "السعر هنا هو السعر بعد الخطوات السابقة.",
+  "bulkPriceStepStop": "أوقف بقية الخطوات",
+  "bulkPriceStepStopHint": "ما تنطبق عليه هذه الخطوة لا تمسّه الخطوات بعدها — لصياغة «وإلا».",
+  "bulkPriceMoveUp": "تحريك للأعلى",
+  "bulkPriceMoveDown": "تحريك للأسفل",
+  "bulkPriceDuplicateStep": "تكرار الخطوة",
+  "bulkPriceRemoveStep": "حذف الخطوة",
+  "bulkPriceStepMenuTooltip": "خيارات الخطوة",
+  "bulkPriceActionIncreasePercent": "زيادة بنسبة",
+  "bulkPriceActionDecreasePercent": "تخفيض بنسبة",
+  "bulkPriceActionIncreaseAmount": "زيادة بمبلغ",
+  "bulkPriceActionDecreaseAmount": "تخفيض بمبلغ",
+  "bulkPriceActionSet": "تعيين السعر إلى",
+  "bulkPriceActionCostMarkup": "التكلفة + نسبة ربح",
+  "bulkPriceActionCostPlus": "التكلفة + مبلغ",
+  "bulkPriceActionMinMarkup": "ربح لا يقل عن",
+  "bulkPriceActionMinPrice": "سعر لا يقل عن",
+  "bulkPriceActionMaxPrice": "سعر لا يزيد عن",
+  "bulkPriceActionRound": "تقريب إلى مضاعفات",
+  "bulkPriceActionEnding": "إنهاء السعر بـ",
+  "bulkPriceDirectionNearest": "للأقرب",
+  "bulkPriceDirectionUp": "للأعلى",
+  "bulkPriceDirectionDown": "للأسفل",
+  "bulkPriceActionGroupAdjust": "تعديل السعر",
+  "bulkPriceActionGroupCost": "حسب التكلفة",
+  "bulkPriceActionGroupLimits": "حدود",
+  "bulkPriceActionGroupRounding": "تقريب",
+  "bulkPricePresetsTitle": "إضافة سريعة",
+  "bulkPricePresetIncrease10": "زيادة ‎10%‎",
+  "bulkPricePresetDecrease10": "تخفيض ‎10%‎",
+  "bulkPricePresetMarkup25": "التكلفة + ‎25%‎",
+  "bulkPricePresetRound025": "تقريب ‎0.25‎",
+  "bulkPricePresetEnding": "ينتهي بـ ‎.99‎",
+  "bulkPriceSafeguardsTitle": "الضمانات",
+  "bulkPriceNeverBelowCost": "لا تجعل أي سعر أقل من التكلفة",
+  "bulkPriceNeverBelowCostHint": "إن نزل السعر الناتج عن التكلفة يُرفع إليها.",
+  "bulkPriceScalePacks": "عدّل أسعار العبوات الخاصة بنفس النسبة",
+  "bulkPriceScalePacksHint": "للعبوات التي لها سعر خاص (كالكرتونة). العبوات المحسوبة من سعر القطعة تتبعها دائمًا.",
+  "bulkPricePreviewNoSteps": "أضف خطوة واحدة على الأقل لعرض المعاينة.",
+  "bulkPricePreviewUpdating": "جارٍ تحديث المعاينة…",
+  "bulkPricePreviewFailed": "تعذّر تحميل المعاينة.",
+  "bulkPricePreviewRetry": "إعادة المحاولة",
+  "bulkPriceSummaryMatched": "مشمولة",
+  "bulkPriceSummaryChanged": "ستتغير",
+  "bulkPriceSummaryIncreased": "زيادة",
+  "bulkPriceSummaryDecreased": "تخفيض",
+  "bulkPriceSummaryAverage": "متوسط التغيير",
+  "bulkPriceSummaryWarnings": "تنبيهات",
+  "bulkPriceViewChanged": "ستتغير",
+  "bulkPriceViewIncreased": "زيادة",
+  "bulkPriceViewDecreased": "تخفيض",
+  "bulkPriceViewWarnings": "تنبيهات",
+  "bulkPriceViewUnchanged": "بلا تغيير",
+  "bulkPriceViewAll": "الكل",
+  "bulkPricePreviewEmptyView": "لا توجد أصناف في هذا القسم.",
+  "bulkPricePreviewNothingChanges": "لن يتغير أي سعر بهذه القواعد.",
+  "bulkPricePreviewNoMatch": "لا يطابق أي منتج هذه الشروط.",
+  "bulkPriceFlagBelowCost": "أقل من التكلفة",
+  "bulkPriceFlagRaisedToCost": "رُفع إلى التكلفة",
+  "bulkPriceFlagNoCost": "تكلفة غير معروفة",
+  "bulkPriceFlagZero": "صار صفرًا",
+  "bulkPriceFlagBigChange": "تغيير كبير",
+  "bulkPriceFlagForeign": "عملة أجنبية",
+  "bulkPriceLoadMore": "عرض المزيد",
+  "bulkPriceUnchangedBadge": "بلا تغيير",
+  "bulkPriceApplyWaiting": "انتظر تحديث المعاينة",
+  "bulkPriceApplyNothing": "لا تغيير لتطبيقه",
+  "bulkPriceApplyIncomplete": "أكمل الحقول المعلّمة",
+  "bulkPriceConfirmTitle": "تطبيق تعديل الأسعار؟",
+  "bulkPriceConfirmUndo": "يمكنك التراجع عن هذا التعديل لاحقًا من «سجل التعديلات».",
+  "bulkPriceConfirmAction": "تطبيق",
+  "bulkPriceUndoAction": "تراجع",
+  "bulkPriceStaleMessage": "تغيّرت بعض الأسعار منذ المعاينة، فحدّثناها. راجعها ثم طبّق مرة أخرى.",
+  "bulkPriceApplyFailed": "تعذّر تطبيق التعديل. لم يتغير أي سعر.",
+  "bulkPriceNothingToApplyMessage": "لم يعد هناك ما يتغير بهذه القواعد.",
+  "bulkPriceHistoryTitle": "سجل تعديلات الأسعار",
+  "bulkPriceHistoryEmpty": "لم يُطبَّق أي تعديل بالقواعد بعد.",
+  "bulkPriceHistoryReverted": "تم التراجع",
+  "bulkPriceHistoryLoadFailed": "تعذّر تحميل السجل.",
+  "bulkPriceRevertConfirmTitle": "التراجع عن هذا التعديل؟",
+  "bulkPriceRevertConfirmBody": "تعود الأسعار إلى ما كانت عليه قبله. أي سعر عدّله أحد بعد ذلك يبقى كما هو.",
+  "bulkPriceRevertFailed": "تعذّر التراجع.",
+  "bulkPriceAlreadyReverted": "سبق التراجع عن هذا التعديل.",
+  "bulkPriceIssueRequired": "مطلوب",
+  "bulkPriceIssueNotANumber": "رقم غير صالح",
+  "bulkPriceIssueNegative": "لا يقبل قيمة سالبة",
+  "bulkPriceIssueTooManyDecimals": "منازل عشرية أكثر من المسموح",
+  "bulkPriceIssueBoundsReversed": "أصغر من الحد الأول",
+  "bulkPriceIssuePercentOver100": "لا يتجاوز 100%",
+  "bulkPriceIssueZeroIncrement": "أكبر من صفر",
+  "bulkPriceMatchedCount": "يطابق {count} صنفًا",
+  "@bulkPriceMatchedCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bulkPriceSelectedProducts": "المنتجات المحددة ({count})",
+  "@bulkPriceSelectedProducts": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bulkPriceStepHits": "طُبّقت على {count}",
+  "@bulkPriceStepHits": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bulkPriceStepExample": "مثال: {before} ← {after}",
+  "@bulkPriceStepExample": {
+    "placeholders": {
+      "before": {
+        "type": "String"
+      },
+      "after": {
+        "type": "String"
+      }
+    }
+  },
+  "bulkPricePreviewIncomplete": "أكمل {count} من الحقول المعلّمة لعرض المعاينة.",
+  "@bulkPricePreviewIncomplete": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bulkPriceRowCost": "التكلفة {cost}",
+  "@bulkPriceRowCost": {
+    "placeholders": {
+      "cost": {
+        "type": "String"
+      }
+    }
+  },
+  "bulkPriceRowMarkup": "الربح {before} ← {after}",
+  "@bulkPriceRowMarkup": {
+    "placeholders": {
+      "before": {
+        "type": "String"
+      },
+      "after": {
+        "type": "String"
+      }
+    }
+  },
+  "bulkPriceRowSteps": "الخطوات {steps}",
+  "@bulkPriceRowSteps": {
+    "placeholders": {
+      "steps": {
+        "type": "String"
+      }
+    }
+  },
+  "bulkPricePacksChanged": "و{count} عبوة",
+  "@bulkPricePacksChanged": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bulkPriceApplyButton": "تطبيق على {count} صنف",
+  "@bulkPriceApplyButton": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bulkPriceConfirmBody": "سيتغير سعر {changed} صنفًا: {increased} بزيادة و{decreased} بتخفيض.",
+  "@bulkPriceConfirmBody": {
+    "placeholders": {
+      "changed": {
+        "type": "int"
+      },
+      "increased": {
+        "type": "int"
+      },
+      "decreased": {
+        "type": "int"
+      }
+    }
+  },
+  "bulkPriceConfirmPacks": "وسيتغير سعر {count} عبوة بنفس النسبة.",
+  "@bulkPriceConfirmPacks": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bulkPriceConfirmWarnings": "{count} صنفًا عليها تنبيهات. راجعها في «تنبيهات» قبل التطبيق.",
+  "@bulkPriceConfirmWarnings": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bulkPriceAppliedMessage": "تم تعديل {count} سعرًا",
+  "@bulkPriceAppliedMessage": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bulkPriceHistoryEntry": "{count} سعرًا",
+  "@bulkPriceHistoryEntry": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bulkPriceHistoryBy": "بواسطة {name}",
+  "@bulkPriceHistoryBy": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "bulkPriceHistoryDetail": "{increased} زيادة · {decreased} تخفيض · {steps} خطوات",
+  "@bulkPriceHistoryDetail": {
+    "placeholders": {
+      "increased": {
+        "type": "int"
+      },
+      "decreased": {
+        "type": "int"
+      },
+      "steps": {
+        "type": "int"
+      }
+    }
+  },
+  "bulkPriceRevertDone": "استُعيد {restored} سعرًا، وتُرك {skipped} لأنه عُدّل بعده.",
+  "@bulkPriceRevertDone": {
+    "placeholders": {
+      "restored": {
+        "type": "int"
+      },
+      "skipped": {
+        "type": "int"
+      }
+    }
+  },
+  "bulkPriceStepExampleCost": "مثال: {before} بتكلفة {cost} ← {after}",
+  "@bulkPriceStepExampleCost": {
+    "placeholders": {
+      "before": {"type": "String"},
+      "cost": {"type": "String"},
+      "after": {"type": "String"}
     }
   }
 }

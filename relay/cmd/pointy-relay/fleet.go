@@ -17,13 +17,15 @@ import (
 // runArtifacts manages the on-prem update bundles the relay serves to the fleet.
 func runArtifacts(args []string) error {
 	if len(args) == 0 {
-		return usageError("missing artifacts command (upload, status)")
+		return usageError("missing artifacts command (upload, status, sign)")
 	}
 	switch args[0] {
 	case "upload":
 		return runArtifactsUpload(args[1:])
 	case "status":
 		return runArtifactsStatus(args[1:])
+	case "sign":
+		return runArtifactsSign(args[1:])
 	default:
 		return usageError("unknown artifacts command %q", args[0])
 	}
@@ -42,6 +44,7 @@ func runArtifactsUpload(args []string) error {
 	var headers headerFlags
 	flags.Var(&headers, "header", "with --url: extra download header \"Name: value\" (repeatable), e.g. Authorization for a private asset")
 	noWait := flags.Bool("no-wait", false, "with --url: start the download and return; check it with artifacts status")
+	signaturePath := flags.String("signature", "", "the release's <zip>.sig for this bundle; shops with a release key refuse a bundle without one")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
@@ -53,19 +56,93 @@ func runArtifactsUpload(args []string) error {
 	if (bundlePath == "") == (source == "") {
 		return usageError("pass exactly one of --bundle or --url")
 	}
+	signature, err := readSignatureFile(*signaturePath)
+	if err != nil {
+		return err
+	}
 	if bundlePath == "" {
-		return runArtifactsFetch(admin, ver, source, *sha, headers, !*noWait)
+		return runArtifactsFetch(admin, ver, source, *sha, signature, headers, !*noWait)
+	}
+	var extra map[string]string
+	if signature != "" {
+		extra = map[string]string{"X-Pointy-Artifact-Signature": signature}
 	}
 	raw, err := admin.uploadFile(
 		http.MethodPost,
 		"/v1/artifacts/"+url.PathEscape(ver),
 		bundlePath,
+		extra,
 	)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Uploaded bundle for %s.\n\n", ver)
+	fmt.Printf("Uploaded %s bundle for %s.\n\n", signedWord(signature), ver)
 	return printRawJSON(raw)
+}
+
+// runArtifactsSign attaches a release signature to a bundle the relay already
+// has, or removes it with --remove.
+func runArtifactsSign(args []string) error {
+	flags := flag.NewFlagSet("artifacts sign", flag.ExitOnError)
+	admin := registerAdminControlFlags(flags)
+	version := flags.String("version", "", "version of the uploaded bundle")
+	signaturePath := flags.String("signature", "", "the release's <zip>.sig for that exact bundle")
+	remove := flags.Bool("remove", false, "remove the bundle's signature instead")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	ver := strings.TrimSpace(*version)
+	if ver == "" {
+		return usageError("--version is required")
+	}
+	if (strings.TrimSpace(*signaturePath) == "") == !*remove {
+		return usageError("pass exactly one of --signature or --remove")
+	}
+	path := "/v1/artifacts/" + url.PathEscape(ver) + "/signature"
+	if *remove {
+		raw, err := admin.requestJSON(http.MethodDelete, path, nil, nil)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Removed the signature of %s.\n\n", ver)
+		return printRawJSON(raw)
+	}
+	signature, err := readSignatureFile(*signaturePath)
+	if err != nil {
+		return err
+	}
+	raw, err := admin.requestJSON(http.MethodPut, path, nil, map[string]string{"signature": signature})
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Signed %s.\n\n", ver)
+	return printRawJSON(raw)
+}
+
+// readSignatureFile reads a release .sig ("" for no path). The file is tiny,
+// so with --url an operator on a slow line downloads it next to nothing and
+// passes it here; the relay never fetches it from the release itself.
+func readSignatureFile(path string) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", nil
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("read signature: %w", err)
+	}
+	signature := strings.TrimSpace(string(content))
+	if signature == "" {
+		return "", fmt.Errorf("signature file %s is empty", path)
+	}
+	return signature, nil
+}
+
+func signedWord(signature string) string {
+	if signature == "" {
+		return "UNSIGNED"
+	}
+	return "signed"
 }
 
 type artifactFetchStatus struct {
@@ -80,10 +157,13 @@ type artifactFetchStatus struct {
 
 // runArtifactsFetch has the relay download the bundle on its own connection, so
 // the operator's line only carries the URL.
-func runArtifactsFetch(admin *adminControlFlags, version, source, sha string, headers headerFlags, wait bool) error {
+func runArtifactsFetch(admin *adminControlFlags, version, source, sha, signature string, headers headerFlags, wait bool) error {
 	body := map[string]any{"url": source}
 	if strings.TrimSpace(sha) != "" {
 		body["sha256"] = strings.TrimSpace(sha)
+	}
+	if signature != "" {
+		body["signature"] = signature
 	}
 	if len(headers) > 0 {
 		body["headers"] = map[string]string(headers)
@@ -551,7 +631,7 @@ func twoPositionals(args []string, flags *flag.FlagSet, aName, bName string) (st
 	return a, b, nil
 }
 
-func (a *adminControlFlags) uploadFile(method, path, filePath string) (json.RawMessage, error) {
+func (a *adminControlFlags) uploadFile(method, path, filePath string, extraHeaders map[string]string) (json.RawMessage, error) {
 	if strings.TrimSpace(*a.adminToken) == "" {
 		return nil, fmt.Errorf("admin token is required (set --admin-token or POINTY_RELAY_ADMIN_TOKEN)")
 	}
@@ -587,6 +667,9 @@ func (a *adminControlFlags) uploadFile(method, path, filePath string) (json.RawM
 	request.Header.Set("Content-Type", "application/zip")
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("Authorization", "Bearer "+strings.TrimSpace(*a.adminToken))
+	for name, value := range extraHeaders {
+		request.Header.Set(name, value)
+	}
 	response, err := client.Do(request)
 	if err != nil {
 		return nil, err

@@ -54,7 +54,7 @@
 # without it). A copy only ever replaces a LOWER revision: the release in the
 # distro and the copy the till carries both offer one, and an older server must
 # not undo a newer till's keeper.
-# pointy-keeper-revision: 1
+# pointy-keeper-revision: 2
 [CmdletBinding()]
 param(
     [switch]$Install,
@@ -96,6 +96,11 @@ $GuestDir     = "/opt/pointy"
 # kills - any client whose command line matches its own.
 $AnchorSleep  = "2147483647"
 $CheckEverySec = 60
+# Until the server answers after WSL starts: the stack is usually up well inside
+# a minute, and a till (or the client's restart wait) should not sit out the
+# rest of the minute for the keeper to notice.
+$StartupCheckEverySec = 5
+$StartupWindowSec = 600
 $script:WslExe = ""
 # Release updates land inside the distro (update-lib.sh adopts them into
 # $GuestDir). The keeper copies these out, this often: path under $GuestDir ->
@@ -766,6 +771,15 @@ function Test-KeeperReplaced {
 }
 
 
+# How long the loop sleeps: a minute while the server answers, 5 seconds while
+# it does not yet - for the first ten minutes after WSL starts, then a minute
+# again so a server that never comes up is not polled hard all day.
+function Get-CheckWaitSec {
+    param([bool]$Healthy, [int]$SinceStart, [bool]$Held)
+    if ($Healthy -or $Held -or $SinceStart -ge $StartupWindowSec) { return $CheckEverySec }
+    return $StartupCheckEverySec
+}
+
 # ---------------------------------------------------------------------------
 # The keeper. What the PointyKeepAlive task runs at sign-in.
 # ---------------------------------------------------------------------------
@@ -811,7 +825,8 @@ function Invoke-KeepAlive {
 
     $anchor = $null
     $wslIp = $null
-    $failures = 0
+    $downSince = $null
+    $nextNudge = $null
     $restarts = 0
     $oldTaskHandled = $false
     $notRegisteredLogged = $false
@@ -903,18 +918,22 @@ function Invoke-KeepAlive {
                         $where = (@(Get-LanIPv4) | ForEach-Object { "http://${_}:${ApiPort}" }) -join ", "
                         Write-Log "Pointy is up; tills reach it at ${where}"
                     }
-                    $failures = 0
+                    $downSince = $null
                     Set-Title "RUNNING"
                 } else {
-                    $failures++
+                    # By the clock, not by cycles: a cycle is 5 seconds while
+                    # the server is starting and a minute after.
+                    if (-not $downSince) { $downSince = Get-Date; $nextNudge = $downSince.AddMinutes(3) }
+                    $downMinutes = [int][math]::Floor(((Get-Date) - $downSince).TotalMinutes)
                     # Three minutes of silence is not a slow start any more. Then
                     # once every ten minutes: the watchdog heals, the keeper nudges.
-                    if ($failures -eq 3 -or ($failures -gt 3 -and $failures % 10 -eq 3)) {
-                        Write-Log "Pointy has not answered for ${failures} minute(s); asking the stack to start" "WARN"
+                    if ((Get-Date) -ge $nextNudge) {
+                        Write-Log "Pointy has not answered for ${downMinutes} minute(s); asking the stack to start" "WARN"
                         Start-Stack
                         if ($wslIp) { Update-LanBridge -WslIp $wslIp -Force }
+                        $nextNudge = (Get-Date).AddMinutes(10)
                     }
-                    if ($sinceStart -lt 600 -and $failures -lt 5) { Set-Title "STARTING" } else { Set-Title "PROBLEM - see log" }
+                    if ($sinceStart -lt 600 -and $downMinutes -lt 5) { Set-Title "STARTING" } else { Set-Title "PROBLEM - see log" }
                 }
                 $lastHealthy = $healthy
 
@@ -949,8 +968,9 @@ function Invoke-KeepAlive {
         # 7. Sleep until the next check, but wake the moment WSL stops the distro.
         if (Test-ProcessAlive $anchor) {
             $exited = $false
-            try { $exited = $anchor.WaitForExit($CheckEverySec * 1000) } catch { Start-Sleep -Seconds $CheckEverySec }
-            $sinceStart += $CheckEverySec
+            $wait = Get-CheckWaitSec -Healthy ($lastHealthy -eq $true) -SinceStart $sinceStart -Held (Test-Path $HoldFile)
+            try { $exited = $anchor.WaitForExit($wait * 1000) } catch { Start-Sleep -Seconds $wait }
+            $sinceStart += $wait
             if ($exited) {
                 Write-Log "WSL stopped the distro (a WSL update, 'wsl --shutdown', or a crash); starting it again" "WARN"
                 $anchor = $null
@@ -1220,23 +1240,67 @@ function Invoke-Export {
 # -Restart: what the client's restart button runs, elevated.
 # ---------------------------------------------------------------------------
 
-# The keeper this session runs, by its heartbeat's PID - only while that PID is
-# still a PowerShell running this script, never whatever reused the number.
-# Returns that PID (0 when there was none), stopped or not.
-function Stop-RunningKeeper {
-    $keeperPid = 0
-    try {
-        if (-not (Test-Path $StateFile)) { return 0 }
-        $keeperPid = [int]((Get-Content -Raw $StateFile | ConvertFrom-Json).keeper_pid)
-        if ($keeperPid -le 0 -or $keeperPid -eq $PID) { return 0 }
-        $row = Get-CimInstance -ClassName Win32_Process -Filter "ProcessId=$keeperPid" -ErrorAction Stop
-        if (-not $row -or "$($row.CommandLine)" -notlike "*keep-pointy-running.ps1*") { return $keeperPid }
-        Stop-Process -Id $keeperPid -Force -ErrorAction Stop
-        Write-Log "stopped the keeper that was running (PID ${keeperPid})"
-    } catch {
-        Write-Log "could not stop the running keeper: $($_.Exception.Message)" "WARN"
+# The keepers running in this session, from their command lines: the heartbeat
+# names only the last keeper that could write it, and a keeper that cannot
+# (or a stale file) left -Restart stopping nothing while the old keeper held
+# the lock. A -Restart that fell back to keeping counts; this process, and the
+# one-shot modes, do not.
+function Select-KeeperProcesses {
+    param($Rows, [int]$Self, [int]$Session)
+    $found = @()
+    foreach ($row in @($Rows)) {
+        if (-not $row) { continue }
+        $cmd = "$($row.CommandLine)"
+        if ([int]$row.ProcessId -eq $Self -or [int]$row.SessionId -ne $Session) { continue }
+        if ("$($row.Name)" -notin @("powershell.exe", "pwsh.exe")) { continue }
+        if ($cmd -notlike "*${KeeperFileName}*") { continue }
+        if ($cmd -match '(^|\s)-(Install|Uninstall|ExportTo)(\s|:|$)') { continue }
+        $found += $row
     }
-    return $keeperPid
+    return ,$found
+}
+
+function Find-RunningKeepers {
+    $rows = @(Get-CimInstance -ClassName Win32_Process -ErrorAction Stop `
+        -Filter "Name='powershell.exe' OR Name='pwsh.exe'")
+    return Select-KeeperProcesses -Rows $rows -Self $PID -Session ((Get-Process -Id $PID).SessionId)
+}
+
+# Stops every keeper in this session and says why when one survives. Returns
+# the PID the heartbeat names, so the wait below never takes that keeper's last
+# heartbeat for a new one.
+$script:OldKeeperPids = @()
+function Stop-RunningKeeper {
+    $statePid = 0
+    try {
+        if (Test-Path $StateFile) { $statePid = [int]((Get-Content -Raw $StateFile | ConvertFrom-Json).keeper_pid) }
+    } catch { Write-Log "could not read ${StateFile}: $($_.Exception.Message)" "WARN" }
+    try { $keepers = @(Find-RunningKeepers) }
+    catch {
+        Write-Log "could not list the running keepers, so none was stopped: $($_.Exception.Message)" "WARN"
+        return $statePid
+    }
+    if ($keepers.Count -eq 0) {
+        Write-Log "no keeper was running in this session (the heartbeat names PID ${statePid})"
+        return $statePid
+    }
+    foreach ($k in $keepers) {
+        $keeperPid = [int]$k.ProcessId
+        $script:OldKeeperPids += $keeperPid
+        try {
+            Stop-Process -Id $keeperPid -Force -ErrorAction Stop
+            Wait-Process -Id $keeperPid -Timeout 10 -ErrorAction SilentlyContinue
+            if (Get-Process -Id $keeperPid -ErrorAction SilentlyContinue) {
+                Write-Log "asked the keeper (PID ${keeperPid}) to stop, but it was still running 10 seconds later" "WARN"
+            } else {
+                Write-Log "stopped the keeper that was running (PID ${keeperPid})"
+            }
+        } catch {
+            Write-Log "could not stop the keeper (PID ${keeperPid}): $($_.Exception.Message)" "WARN"
+        }
+    }
+    if ($statePid -le 0) { $statePid = [int]$keepers[0].ProcessId }
+    return $statePid
 }
 
 function Invoke-Restart {
@@ -1262,6 +1326,23 @@ function Invoke-Restart {
     # nothing, updates nothing, and has the task's every-minute trigger open
     # (and close) another window beside it for as long as it runs.
     if (Start-KeeperTaskAndWait -PreviousPid $previousPid) { return }
+    # The task is a no-op while a keeper it started still runs (IgnoreNew), and
+    # so is the lock below: name the survivor rather than end in silence.
+    try {
+        $left = @(Find-RunningKeepers)
+        $old = @($left | Where-Object { $script:OldKeeperPids -contains [int]$_.ProcessId })
+        if ($old.Count) {
+            $ids = ($old | ForEach-Object { $_.ProcessId }) -join ", "
+            Write-Log ("the restart could not replace the keeper still running (PID ${ids}); " +
+                       "it starts WSL again by itself. End it in Task Manager and press restart again if the server stays down.") "WARN"
+            return
+        }
+        if ($left.Count) {
+            $ids = ($left | ForEach-Object { $_.ProcessId }) -join ", "
+            Write-Log "a new keeper (PID ${ids}) is starting but has not written its heartbeat yet; leaving it to run"
+            return
+        }
+    } catch { }
     Write-Log "the '${TaskName}' task did not start a keeper; running it here instead" "WARN"
     Invoke-KeepAlive -LockWaitMs 15000
 }

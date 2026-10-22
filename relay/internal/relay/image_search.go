@@ -1,16 +1,15 @@
 package relay
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"pointy/relay/internal/limit"
@@ -18,13 +17,16 @@ import (
 )
 
 const (
-	defaultImageSearchRequestTimeout = 8 * time.Second
-	defaultSerperImagesEndpoint      = "https://google.serper.dev/images"
-	defaultSerperImageLanguage       = "ar"
-	defaultSerperImageCountry        = "us"
+	// Leaves room for one OpenSERP retry inside the backend's 15 s budget.
+	defaultImageSearchRequestTimeout = 12 * time.Second
+	// The engines that answer from a server IP. Bing leads: it alone sends real
+	// thumbnails and source pages. Google refuses headless traffic almost at
+	// once and DuckDuckGo times out, so neither is on by default.
+	defaultOpenSERPImageEngines  = "bing,yandex,ecosia"
+	defaultOpenSERPImageLanguage = "ar"
 	// imageSearchMaxRequestBytes caps the tiny inbound JSON (query + paging).
 	imageSearchMaxRequestBytes = 4 << 10
-	// imageSearchMaxResponseBytes caps the Serper response we read.
+	// imageSearchMaxResponseBytes caps the OpenSERP response we read.
 	imageSearchMaxResponseBytes = 2 << 20
 	imageSearchMaxPageSize      = 50
 )
@@ -50,10 +52,10 @@ type imageSearchResult struct {
 
 // handleImageSearch serves relay-hosted product image search. Like the AI chat
 // endpoint it does NOT tunnel to the on-prem connector: the relay holds the
-// Serper.dev key (so shops never manage one), gates on the installation's
-// remote-access entitlement (subscription + relay_enabled, via
-// ValidateAccessToken), runs the Serper image search, and returns the
-// normalized results as JSON.
+// search engine (a self-hosted OpenSERP server, so shops never manage a key),
+// gates on the installation's remote-access entitlement (subscription +
+// relay_enabled, via ValidateAccessToken), runs the image search, and returns
+// the normalized results as JSON.
 func (s HTTPServer) handleImageSearch(w http.ResponseWriter, r *http.Request) {
 	startedAt := time.Now()
 	statusCode := http.StatusOK
@@ -66,7 +68,7 @@ func (s HTTPServer) handleImageSearch(w http.ResponseWriter, r *http.Request) {
 		})
 	}()
 
-	if strings.TrimSpace(s.SerperAPIKey) == "" {
+	if strings.TrimSpace(s.OpenSERPBaseURL) == "" {
 		statusCode = http.StatusServiceUnavailable
 		outcome = "image_search_unconfigured"
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "relay image search is not configured"})
@@ -144,7 +146,7 @@ func (s HTTPServer) handleImageSearch(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), s.imageSearchRequestTimeout())
 	defer cancel()
 
-	results, err := s.fetchSerperImages(ctx, query, page, pageSize)
+	results, err := s.searchImages(ctx, installation.ID, query, page, pageSize)
 	if err != nil {
 		statusCode = http.StatusBadGateway
 		outcome = "image_search_failed"
@@ -156,36 +158,128 @@ func (s HTTPServer) handleImageSearch(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"results": results})
 }
 
-// fetchSerperImages calls Serper.dev's image search and maps the response into
-// the normalized result shape, deduping by image URL and capping to pageSize.
-func (s HTTPServer) fetchSerperImages(
+// searchImages asks every configured OpenSERP engine at once and merges their
+// answers into one list: round-robin by rank in the configured engine order,
+// deduped by image URL, capped to pageSize. An engine that is blocked or slow
+// only drops out; the search fails only when every engine does.
+//
+// It answers one page only. OpenSERP's offsets do not page reliably (Bing and
+// Ecosia hand back the same images for a later start, and /mega/image ignores
+// start altogether), so page 2 would only repeat page 1. Returning nothing for
+// it ends the app's "load more" after the first, merged page.
+func (s HTTPServer) searchImages(
 	ctx context.Context,
+	installationID string,
 	query string,
 	page int,
 	pageSize int,
 ) ([]imageSearchResult, error) {
-	body, err := json.Marshal(map[string]any{
-		"q":    query,
-		"page": page,
-		"num":  pageSize,
-		"hl":   s.serperImageLanguage(),
-		"gl":   s.serperImageCountry(),
-	})
+	if page > 1 {
+		return []imageSearchResult{}, nil
+	}
+	engines := s.openSERPEngines()
+	answers := make([][]imageSearchResult, len(engines))
+	errs := make([]error, len(engines))
+	var wg sync.WaitGroup
+	for i, engine := range engines {
+		wg.Add(1)
+		go func(i int, engine string) {
+			defer wg.Done()
+			answers[i], errs[i] = s.fetchOpenSERPImages(ctx, engine, query, pageSize)
+		}(i, engine)
+	}
+	wg.Wait()
+
+	var firstErr error
+	answered := 0
+	for i, err := range errs {
+		if err == nil {
+			answered++
+			continue
+		}
+		if firstErr == nil {
+			firstErr = err
+		}
+		s.logger().Info("image search engine failed", "installation_id", installationID, "engine", engines[i], "error", err)
+	}
+	if answered == 0 {
+		return nil, firstErr
+	}
+	return mergeImageResults(answers, pageSize), nil
+}
+
+// mergeImageResults interleaves the engines' answers rank by rank so every
+// engine shows near the top. When two engines found the same image, the first
+// one kept gains the other's thumbnail and source page if it lacked them
+// (only Bing sends real thumbnails). A result left without a thumbnail shows
+// the image itself.
+func mergeImageResults(answers [][]imageSearchResult, limit int) []imageSearchResult {
+	merged := make([]imageSearchResult, 0, limit)
+	index := make(map[string]int, limit)
+	for rank := 0; ; rank++ {
+		more := false
+		for _, answer := range answers {
+			if rank >= len(answer) {
+				continue
+			}
+			more = true
+			item := answer[rank]
+			key := strings.ToLower(item.ImageURL)
+			if at, dup := index[key]; dup {
+				kept := &merged[at]
+				if kept.ThumbnailURL == "" {
+					kept.ThumbnailURL = item.ThumbnailURL
+				}
+				if kept.SourceURL == "" || kept.SourceURL == kept.ImageURL {
+					kept.SourceURL, kept.SourceName = item.SourceURL, item.SourceName
+				}
+				continue
+			}
+			if len(merged) < limit {
+				index[key] = len(merged)
+				merged = append(merged, item)
+			}
+		}
+		if !more {
+			break
+		}
+	}
+	for i := range merged {
+		if merged[i].ThumbnailURL == "" {
+			merged[i].ThumbnailURL = merged[i].ImageURL
+		}
+	}
+	return merged
+}
+
+// fetchOpenSERPImages runs one engine's image search on the company's
+// self-hosted OpenSERP server (GET /{engine}/image) and maps its answer into
+// the normalized result shape. ThumbnailURL stays empty when the engine sent
+// none, so the merge can take one from another engine.
+func (s HTTPServer) fetchOpenSERPImages(
+	ctx context.Context,
+	engine string,
+	query string,
+	limit int,
+) ([]imageSearchResult, error) {
+	endpoint, err := url.Parse(strings.TrimRight(strings.TrimSpace(s.OpenSERPBaseURL), "/") + "/" + url.PathEscape(engine) + "/image")
 	if err != nil {
 		return nil, err
 	}
-	request, err := http.NewRequestWithContext(
-		ctx,
-		http.MethodPost,
-		s.serperEndpoint(),
-		bytes.NewReader(body),
-	)
+	params := url.Values{}
+	params.Set("text", query)
+	params.Set("limit", strconv.Itoa(limit))
+	params.Set("lang", s.openSERPLanguage())
+	if region := strings.TrimSpace(s.OpenSERPRegion); region != "" {
+		params.Set("region", region)
+	}
+	endpoint.RawQuery = params.Encode()
+
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
 	if err != nil {
 		return nil, err
 	}
-	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json")
-	request.Header.Set("X-API-KEY", strings.TrimSpace(s.SerperAPIKey))
 
 	response, err := s.imageSearchHTTPClient().Do(request)
 	if err != nil {
@@ -197,74 +291,84 @@ func (s HTTPServer) fetchSerperImages(
 	if err != nil {
 		return nil, err
 	}
-	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		return nil, fmt.Errorf("serper returned %d", response.StatusCode)
-	}
 
 	var parsed struct {
-		Images  []map[string]any `json:"images"`
-		Error   string           `json:"error"`
-		Message string           `json:"message"`
+		Results []struct {
+			Title string `json:"title"`
+			Image struct {
+				URL       string `json:"url"`
+				Thumbnail string `json:"thumbnail"`
+				Width     int    `json:"width"`
+				Height    int    `json:"height"`
+			} `json:"image"`
+			Source struct {
+				PageURL string `json:"page_url"`
+				Domain  string `json:"domain"`
+			} `json:"source"`
+		} `json:"results"`
+		// Errors come back as {"error": "<code>", "message": "..."}, e.g.
+		// "captcha_detected" or "blocked" when the engine refuses us.
+		Error   string `json:"error"`
+		Message string `json:"message"`
 	}
-	if err := json.Unmarshal(raw, &parsed); err != nil {
-		return nil, err
+	decodeErr := json.Unmarshal(raw, &parsed)
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		if detail := firstNonEmpty(parsed.Error, parsed.Message); decodeErr == nil && detail != "" {
+			return nil, fmt.Errorf("openserp %s returned %d: %s", engine, response.StatusCode, detail)
+		}
+		return nil, fmt.Errorf("openserp %s returned %d", engine, response.StatusCode)
 	}
-	if msg := firstNonEmpty(parsed.Error, parsed.Message); msg != "" {
-		return nil, errors.New(msg)
+	if decodeErr != nil {
+		return nil, decodeErr
 	}
 
-	results := make([]imageSearchResult, 0, pageSize)
-	seen := make(map[string]struct{}, pageSize)
-	for _, item := range parsed.Images {
-		imageURL := firstString(item, "imageUrl", "image_url", "original")
+	results := make([]imageSearchResult, 0, len(parsed.Results))
+	for _, item := range parsed.Results {
+		imageURL := strings.TrimSpace(item.Image.URL)
 		if !isSupportedImageURL(imageURL) {
 			continue
 		}
-		key := strings.ToLower(imageURL)
-		if _, dup := seen[key]; dup {
-			continue
+		thumbnailURL := strings.TrimSpace(item.Image.Thumbnail)
+		if !isSupportedImageURL(thumbnailURL) {
+			thumbnailURL = ""
 		}
-		thumbnailURL := firstString(item, "thumbnailUrl", "thumbnail_url", "thumbnail")
-		if thumbnailURL == "" {
-			thumbnailURL = imageURL
-		}
-		sourceURL := firstString(item, "link", "sourceUrl")
+		sourceURL := strings.TrimSpace(item.Source.PageURL)
 		results = append(results, imageSearchResult{
-			Title:        firstString(item, "title"),
+			Title:        strings.TrimSpace(item.Title),
 			ThumbnailURL: thumbnailURL,
 			ImageURL:     imageURL,
 			SourceURL:    sourceURL,
-			SourceName:   serperSourceName(item, sourceURL),
-			Width:        firstInt(item, "imageWidth", "image_width", "width", "original_width"),
-			Height:       firstInt(item, "imageHeight", "image_height", "height", "original_height"),
+			SourceName:   imageSourceName(item.Source.Domain, sourceURL),
+			Width:        item.Image.Width,
+			Height:       item.Image.Height,
 		})
-		seen[key] = struct{}{}
-		if len(results) >= pageSize {
-			break
-		}
 	}
 	return results, nil
 }
 
-func (s HTTPServer) serperEndpoint() string {
-	if endpoint := strings.TrimSpace(s.SerperBaseURL); endpoint != "" {
-		return endpoint
+// openSERPEngines is the configured engine list, in merge order.
+func (s HTTPServer) openSERPEngines() []string {
+	var engines []string
+	seen := map[string]struct{}{}
+	for _, engine := range strings.Split(s.OpenSERPEngines, ",") {
+		engine = strings.ToLower(strings.TrimSpace(engine))
+		if _, dup := seen[engine]; engine == "" || dup {
+			continue
+		}
+		seen[engine] = struct{}{}
+		engines = append(engines, engine)
 	}
-	return defaultSerperImagesEndpoint
+	if len(engines) == 0 {
+		return strings.Split(defaultOpenSERPImageEngines, ",")
+	}
+	return engines
 }
 
-func (s HTTPServer) serperImageLanguage() string {
-	if value := strings.TrimSpace(s.SerperImageLanguage); value != "" {
+func (s HTTPServer) openSERPLanguage() string {
+	if value := strings.TrimSpace(s.OpenSERPLanguage); value != "" {
 		return value
 	}
-	return defaultSerperImageLanguage
-}
-
-func (s HTTPServer) serperImageCountry() string {
-	if value := strings.TrimSpace(s.SerperImageCountry); value != "" {
-		return value
-	}
-	return defaultSerperImageCountry
+	return defaultOpenSERPImageLanguage
 }
 
 func (s HTTPServer) imageSearchRequestTimeout() time.Duration {
@@ -285,10 +389,10 @@ func imageSearchRateLimitKey(installationID string) string {
 	return "image-search:" + strings.TrimSpace(installationID)
 }
 
-// serperSourceName prefers Serper's own source/domain label, falling back to the
-// host of the result link.
-func serperSourceName(item map[string]any, sourceURL string) string {
-	if name := firstString(item, "source", "domain"); name != "" {
+// imageSourceName prefers OpenSERP's own domain label, falling back to the
+// host of the result page.
+func imageSourceName(domain, sourceURL string) string {
+	if name := strings.TrimSpace(domain); name != "" {
 		return name
 	}
 	if parsed, err := url.Parse(strings.TrimSpace(sourceURL)); err == nil {
@@ -312,35 +416,4 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
-}
-
-// firstString returns the first non-empty string value among the given keys,
-// tolerating the mixed casing Serper uses across response shapes.
-func firstString(item map[string]any, keys ...string) string {
-	for _, key := range keys {
-		if value, ok := item[key].(string); ok && strings.TrimSpace(value) != "" {
-			return strings.TrimSpace(value)
-		}
-	}
-	return ""
-}
-
-// firstInt returns the first parseable integer among the given keys. JSON
-// numbers decode as float64; some Serper fields arrive as numeric strings.
-func firstInt(item map[string]any, keys ...string) int {
-	for _, key := range keys {
-		switch value := item[key].(type) {
-		case float64:
-			return int(value)
-		case json.Number:
-			if parsed, err := value.Int64(); err == nil {
-				return int(parsed)
-			}
-		case string:
-			if parsed, err := strconv.Atoi(strings.TrimSpace(value)); err == nil {
-				return parsed
-			}
-		}
-	}
-	return 0
 }

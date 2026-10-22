@@ -179,6 +179,7 @@ class ProductVariantFormFields extends StatelessWidget {
     this.skuIsAutomatic = false,
     this.skuFieldKey,
     this.barcodeFieldKey,
+    this.extraBarcodesField,
   });
 
   final TextEditingController variantNameController;
@@ -209,6 +210,9 @@ class ProductVariantFormFields extends StatelessWidget {
   /// Keys the parent uses to scroll a rejected field into view.
   final Key? skuFieldKey;
   final Key? barcodeFieldKey;
+
+  /// The variant's further barcodes, under the grid that holds its barcode.
+  final Widget? extraBarcodesField;
 
   @override
   Widget build(BuildContext context) {
@@ -266,6 +270,10 @@ class ProductVariantFormFields extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         ResponsiveFormGrid(maxColumns: 2, children: fields),
+        if (extraBarcodesField != null) ...[
+          const SizedBox(height: 4),
+          extraBarcodesField!,
+        ],
         const SizedBox(height: 12),
         if (showOptionValues) ...[
           AsyncSelectionField<int>(

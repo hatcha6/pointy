@@ -201,8 +201,9 @@ class ProductRetrieveConditionalGetTests(TestCase):
     revalidates like the list and reads in fewer round trips."""
 
     # Measured 9 after folding the 1:1 / FK hops into their parent prefetches
-    # (was 12); the list's per-request shape is guarded separately.
-    MAX_RETRIEVE_QUERIES = 10
+    # (was 12); the list's per-request shape is guarded separately. +1 for the
+    # variants' extra barcodes: one prefetch per request, never per variant.
+    MAX_RETRIEVE_QUERIES = 11
 
     def setUp(self):
         cache.clear()

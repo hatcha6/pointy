@@ -14,6 +14,10 @@ import (
 
 const connectorTokenHeaderName = "X-Pointy-Connector-Token"
 
+// artifactSignatureHeaderName carries a bundle's release signature (the
+// content of the release's <zip>.sig) on an upload, whose body is the zip.
+const artifactSignatureHeaderName = "X-Pointy-Artifact-Signature"
+
 // withConnectorToken authenticates an on-prem update-agent request by its
 // connector token (the same secret the connector tunnel handshake uses, which
 // the agent reads from the connector-state volume) and hands the resolved
@@ -65,6 +69,10 @@ type bundleDescriptor struct {
 	SHA256  string `json:"sha256"`
 	Size    int64  `json:"size"`
 	Path    string `json:"path"`
+	// Signature is what update-agent.sh verifies against the release key
+	// baked into it; omitted for an unsigned bundle, which an agent with a
+	// key refuses (deploy/onprem/SIGNING.md).
+	Signature string `json:"signature,omitempty"`
 }
 
 type agentManifestResponse struct {
@@ -111,10 +119,11 @@ func (s HTTPServer) handleAgentManifest(
 	if directive == "apply" && s.Artifacts != nil {
 		if meta, found, err := s.Artifacts.Get(version); err == nil && found {
 			resp.Bundle = &bundleDescriptor{
-				Version: meta.Version,
-				SHA256:  meta.SHA256,
-				Size:    meta.Size,
-				Path:    "/v1/agent/artifacts/" + meta.Version,
+				Version:   meta.Version,
+				SHA256:    meta.SHA256,
+				Size:      meta.Size,
+				Path:      "/v1/agent/artifacts/" + meta.Version,
+				Signature: meta.Signature,
 			}
 		}
 	}
@@ -342,13 +351,24 @@ func (s HTTPServer) handleAdminArtifact(w http.ResponseWriter, r *http.Request) 
 		s.handleAdminArtifactFetch(w, r, store, fetchVersion)
 		return
 	}
+	if signedVersion, isSignature := strings.CutSuffix(version, "/signature"); isSignature {
+		s.handleAdminArtifactSignature(w, r, store, signedVersion)
+		return
+	}
 	if version == "" || strings.Contains(version, "/") {
 		writeNotFound(w)
 		return
 	}
 	switch r.Method {
 	case http.MethodPost, http.MethodPut:
-		meta, err := store.Put(version, r.Body)
+		// Checked before the body is read, so a wrong .sig is refused
+		// without first taking a gigabyte of upload.
+		signature, err := artifacts.NormalizeSignature(r.Header.Get(artifactSignatureHeaderName))
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		meta, err := store.PutSigned(version, r.Body, signature)
 		if err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 			return
@@ -390,9 +410,10 @@ func (s HTTPServer) handleAdminArtifactList(w http.ResponseWriter, r *http.Reque
 }
 
 type artifactFetchRequest struct {
-	URL     string            `json:"url"`
-	SHA256  string            `json:"sha256,omitempty"`
-	Headers map[string]string `json:"headers,omitempty"`
+	URL       string            `json:"url"`
+	SHA256    string            `json:"sha256,omitempty"`
+	Headers   map[string]string `json:"headers,omitempty"`
+	Signature string            `json:"signature,omitempty"`
 }
 
 // handleAdminArtifactFetch starts (POST) or reports (GET) a relay-side download
@@ -416,7 +437,7 @@ func (s HTTPServer) handleAdminArtifactFetch(
 			return
 		}
 		status, err := store.Fetch(version, artifacts.FetchRequest{
-			URL: req.URL, SHA256: req.SHA256, Headers: req.Headers,
+			URL: req.URL, SHA256: req.SHA256, Headers: req.Headers, Signature: req.Signature,
 		})
 		if errors.Is(err, artifacts.ErrFetchInProgress) {
 			writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
@@ -442,6 +463,53 @@ func (s HTTPServer) handleAdminArtifactFetch(
 	default:
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 	}
+}
+
+type artifactSignatureRequest struct {
+	Signature string `json:"signature"`
+}
+
+// handleAdminArtifactSignature attaches (PUT/POST) a release signature to a
+// bundle already uploaded, or removes it (DELETE).
+func (s HTTPServer) handleAdminArtifactSignature(
+	w http.ResponseWriter,
+	r *http.Request,
+	store *artifacts.Store,
+	version string,
+) {
+	if version == "" || strings.Contains(version, "/") {
+		writeNotFound(w)
+		return
+	}
+	var signature string
+	switch r.Method {
+	case http.MethodPost, http.MethodPut:
+		var req artifactSignatureRequest
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+			return
+		}
+		if strings.TrimSpace(req.Signature) == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "signature is required (DELETE removes one)"})
+			return
+		}
+		signature = req.Signature
+	case http.MethodDelete:
+	default:
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	meta, err := store.SetSignature(version, signature)
+	if errors.Is(err, artifacts.ErrNotFound) {
+		writeNotFound(w)
+		return
+	}
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	s.logger().Info("artifact signature set", "version", meta.Version, "signed", meta.Signature != "")
+	writeJSON(w, http.StatusOK, meta)
 }
 
 type installationUpdateConfigRequest struct {

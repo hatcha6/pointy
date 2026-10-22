@@ -327,8 +327,9 @@ def _lines_by_code(readings, windowed):
     for variant_id, sku in ProductVariant.objects.filter(
         Q(barcode__in=readings)
         | Q(sku__in=skus)
+        | Q(extra_barcodes__barcode__in=readings)
         | Q(product__units__barcodes__barcode__in=readings)
-    ).values_list("id", "sku"):
+    ).distinct().values_list("id", "sku"):
         variant_ids.add(variant_id)
         if sku in skus:
             sku_ids.add(variant_id)

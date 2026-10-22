@@ -32,7 +32,6 @@ from apps.purchasing.models import Supplier
 
 from . import canonical, services, storage, uploads
 from .connectors import get_connector
-from .connectors.base import ExtractContext
 from .connectors.reference_sqlite import build_sample_database
 from .identity import IdentityResolver
 from .preparation import detect as detection
@@ -172,6 +171,25 @@ class DryRunTests(MigrationTestBase):
 
 
 class ImportTests(MigrationTestBase):
+    def test_extra_barcode_owned_elsewhere_is_skipped_with_a_warning(self):
+        from apps.catalog.testing import create_product_with_default_variant
+
+        create_product_with_default_variant(
+            name="ماء آخر", sku="OTHER-1", barcode="1000013", unit_price=Decimal("1")
+        )
+        build_sample_database(self.db_path)
+        source = self.make_source()
+
+        run = self.run_sync(source, IMPORT)
+
+        water = ProductVariant.objects.get(barcode="1000003")
+        self.assertEqual(list(water.extra_barcodes.values_list("barcode", flat=True)), ["1000023"])
+        # The other product keeps its code, and the run says why it was skipped.
+        self.assertTrue(ProductVariant.objects.filter(barcode="1000013", sku="OTHER-1").exists())
+        self.assertTrue(
+            MigrationIssue.objects.filter(run=run, code="extra_barcode_conflict").exists()
+        )
+
     def test_import_creates_master_data(self):
         build_sample_database(self.db_path)
         source = self.make_source()
@@ -183,6 +201,12 @@ class ImportTests(MigrationTestBase):
         self.assertCreated(Product, 5)
         # One default variant created per product (single-price source schema).
         self.assertCreated(ProductVariant, 5)
+        # product_barcodes rows are the product's extra barcodes.
+        water = ProductVariant.objects.get(barcode="1000003")
+        self.assertEqual(
+            list(water.extra_barcodes.values_list("barcode", flat=True)),
+            ["1000013", "1000023"],
+        )
         # Stock only for the four non-service products that have a stock row.
         self.assertCreated(StockItem, 4)
         self.assertCreated(Customer, 2)
@@ -275,8 +299,10 @@ class VariantLoaderTests(MigrationTestBase):
 
 
 def build_aboghris_sample(path):
-    """A tiny SQLite database shaped like the AboGhris (SQL Server) schema, so
-    the AboGhris connector's mapping is testable without pyodbc/MSSQL."""
+    """A tiny SQLite database shaped like what MssqlToSqlite exports from an
+    AboGhris SQL Server: same table names, typed columns, dates with
+    milliseconds, and the unsaved (``*_STATUES = 0``) invoices a live till
+    leaves behind."""
     import sqlite3
 
     connection = sqlite3.connect(path)
@@ -287,27 +313,41 @@ def build_aboghris_sample(path):
             CREATE TABLE CATEGORY1 (CAT1_ID INTEGER, CAT1_NAME TEXT, CAT1_INVISIBLE INTEGER);
             CREATE TABLE CATEGORY2 (CAT2_ID INTEGER, CAT2_NAME TEXT, CAT2_INVISIBLE INTEGER);
             CREATE TABLE ITEMS (ITEM_ID INTEGER, ITEM_MODEL TEXT, ITEM_NAME TEXT,
-                                CAT1_ID INTEGER, CAT2_ID INTEGER, ITEM_INVISIBLE INTEGER);
+                                CAT1_ID INTEGER, CAT2_ID INTEGER, ITEM_INVISIBLE INTEGER,
+                                AVER_COST REAL, LAST_COST REAL);
             CREATE TABLE BARCODE (BAR_ID INTEGER, UNIT_ID INTEGER, ITEM_ID INTEGER,
                                   BARCODE TEXT, PRICE1 REAL, PUBLIC_PRICE REAL, UNIT_QTY REAL);
-            CREATE TABLE ITEMS_SUB (ITEM_SUB_ID INTEGER, ITEM_ID INTEGER, STORE_ID INTEGER, QTY REAL);
+            CREATE TABLE ITEMS_SUB (ITEM_SUB_ID INTEGER, ITEM_ID INTEGER, STORE_ID INTEGER,
+                                    QTY REAL, CATEOGRY3 TEXT);
+            CREATE TABLE TAKE (T_ID INTEGER, T_NO TEXT, T_DATE TEXT, T_VALUE REAL,
+                               CUST_ID INTEGER, S_ID INTEGER, T_NOTE TEXT, T_STATUES INTEGER);
+            CREATE TABLE B_R_INVOICE (B_R_ID INTEGER, B_R_DATE TEXT, CUST_ID INTEGER,
+                                      B_R_NOTE TEXT, B_R_STATUES INTEGER);
+            CREATE TABLE BANKS (BANK_ID INTEGER, BANK_NAME TEXT);
+            INSERT INTO BANKS VALUES (0, 'N/A'), (1, 'حساب الخزينة'), (2, 'مصرف الوحده');
+            CREATE TABLE B_R_ITEMS (B_R_ITEM_ID INTEGER, B_R_ID INTEGER, ITEM_ID INTEGER,
+                                    QTY REAL, PRICE REAL);
             CREATE TABLE CUSTOMERS (CUST_ID INTEGER, CUST_NAME TEXT, CUST_PHONE TEXT,
                                     CUST_MOBILE TEXT, CUST_E_MAIL TEXT, CUST_ADRESS TEXT,
                                     CUST_VENDOR INTEGER, CUST_INVISIBLE INTEGER);
             CREATE TABLE SALE_INVOICE (S_ID INTEGER, S_DATE TEXT, CUST_ID INTEGER,
-                                       S_DISCOUNT REAL, BANK_ID INTEGER);
+                                       S_DISCOUNT REAL, BANK_ID INTEGER, S_STATUES INTEGER);
             CREATE TABLE SALE_ITEMS (S_ITEM_ID INTEGER, S_ID INTEGER, ITEM_ID INTEGER,
                                      QTY REAL, PRICE REAL, UNIT_PRICE REAL,
                                      PUBLIC_PRICE REAL, AVER_COST REAL, LAST_COST REAL);
             CREATE TABLE BUY_INVOICE (B_ID INTEGER, B_DATE TEXT, CUST_ID INTEGER,
-                                      S_REF_NO TEXT, B_DISCOUNT REAL);
+                                      S_REF_NO TEXT, B_DISCOUNT REAL, B_STATUES INTEGER);
+            CREATE TABLE R_S_INVOICE (S_R_ID INTEGER, S_R_DATE TEXT, CUST_ID INTEGER,
+                                      S_R_NOTE TEXT, S_R_STATUES INTEGER);
+            CREATE TABLE R_S_ITEMS (S_R_ITEM_ID INTEGER, S_R_ID INTEGER, ITEM_ID INTEGER,
+                                    QTY REAL, PRICE REAL, S_ID INTEGER);
             CREATE TABLE BUY_ITEMS (B_ITEM_ID INTEGER, B_ID INTEGER, ITEM_ID INTEGER,
                                     QTY REAL, PRICE REAL);
             CREATE TABLE EXPENCES (EXPENCES_ID INTEGER, EXPENSE_DISC TEXT,
                                    EXPENSE_INVISIBLE INTEGER);
             CREATE TABLE GIVE (G_ID INTEGER, G_DATE TEXT, G_VALUE REAL, G_NOTE TEXT,
                                G_NO TEXT, EXPENCES_ID INTEGER, BANK_ID INTEGER,
-                               CUST_ID INTEGER);
+                               CUST_ID INTEGER, G_STATUES INTEGER);
             """
         )
         connection.executemany(
@@ -323,12 +363,13 @@ def build_aboghris_sample(path):
             [(0, "N/A", 0), (44, "Group A", 0), (45, "Group B", 0)],
         )
         connection.executemany(
-            "INSERT INTO ITEMS VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO ITEMS VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             [
-                (401, "", "Item 401", 59, 44, 0),
-                (402, "", "Item 402", 59, 44, 0),
-                (404, "", "Item 404", 59, 45, 0),
-                (500, "MODEL-X", "Item 500", 0, 0, 1),
+                (401, "", "Item 401", 59, 44, 0, 9.5, 9.0),
+                (402, "", "Item 402", 59, 44, 0, 2.0, 2.0),
+                # never averaged -> the last cost stands in
+                (404, "", "Item 404", 59, 45, 0, 0.0, 0.8),
+                (500, "MODEL-X", "Item 500", 0, 0, 1, 0.0, 0.0),
             ],
         )
         connection.executemany(
@@ -340,11 +381,19 @@ def build_aboghris_sample(path):
                 (1159, 94, 404, "8600097001533", 0, 3, 2),  # box, public price 3
                 (1160, 92, 404, "", 0, 1.5, 1),  # base piece, public price 1.5
                 (1161, 92, 500, "5550005", 5, 0, 1),
+                # A second EAN for 401's piece (another supplier's pack).
+                (1162, 92, 401, "6291100080496", 12, 0, 1),
             ],
         )
         connection.executemany(
-            "INSERT INTO ITEMS_SUB VALUES (?, ?, ?, ?)",
-            [(1, 401, 1, 50), (2, 402, 1, 12), (3, 500, 1, 0)],
+            "INSERT INTO ITEMS_SUB VALUES (?, ?, ?, ?, ?)",
+            [
+                # 401 sits in two dated batches -> lot-tracked with expiry
+                (1, 401, 1, 30, "2029-03-01 00:00:00"),
+                (4, 401, 1, 20, "2029-02-01 00:00:00"),
+                (2, 402, 1, 12, None),
+                (3, 500, 1, 0, None),
+            ],
         )
         connection.executemany(
             "INSERT INTO CUSTOMERS VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -353,13 +402,23 @@ def build_aboghris_sample(path):
                 (1, "زبون نقدي", "2676373", "", "", "", 0, 0),
                 (2, "شركة النسيم", "", "0912000002", "", "طرابلس", 1, 0),
                 (3, "", "", "", "", "", 1, 0),
+                # tills booked as customers: their sales are paid by card/transfer
+                (4, "بطاقة مصرفية", "", "", "", "", 0, 0),
+                (5, "تحويل", "", "", "", "", 0, 0),
+                # a real customer buying on account
+                (6, "منير", "0913000006", "", "", "", 0, 0),
             ],
         )
         connection.executemany(
-            "INSERT INTO SALE_INVOICE VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO SALE_INVOICE VALUES (?, ?, ?, ?, ?, ?)",
             [
-                (1, "2026-06-13 00:58:52", 1, 0, 0),
-                (2, "2026-06-13 16:22:07", 1, 0, 0),
+                (1, "2026-06-13 00:58:52.517", 1, 0, 0, 1),
+                (2, "2026-06-13 16:22:07.12", 1, 0, 0, 1),
+                # never saved: held at the till when the export ran
+                (3, "2026-06-14 09:00:00", 1, 0, 0, 0),
+                (4, "2026-06-15 10:00:00", 4, 0, 0, 1),  # card
+                (5, "2026-06-15 11:00:00", 5, 0, 0, 1),  # transfer
+                (6, "2026-06-16 12:00:00", 6, 0, 0, 1),  # منير, 60 on account
             ],
         )
         connection.executemany(
@@ -370,17 +429,62 @@ def build_aboghris_sample(path):
                 # invoice 2: 1 × item 402 @ 5 + 3 × item 404 @ 1.5
                 (2, 2, 402, 1, 5, 5, 5, 4, 4),
                 (3, 2, 404, 3, 1.5, 1.5, 1.5, 1, 1),
+                (4, 3, 401, 7, 12, 12, 12, 10, 10),
+                (5, 4, 401, 1, 12, 12, 12, 10, 10),
+                (6, 5, 401, 1, 12, 12, 12, 10, 10),
+                (7, 6, 401, 5, 12, 12, 12, 10, 10),
             ],
         )
         connection.executemany(
-            "INSERT INTO BUY_INVOICE VALUES (?, ?, ?, ?, ?)",
-            [(1, "2026-05-15 19:48:40", 2, "REF-001", 0)],
+            "INSERT INTO TAKE VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                # the walk-in's own receipt: not a customer payment
+                (1, "T1", "2026-06-13 00:59:00", 24, 1, 1, "", 1),
+                # first rung as walk-in, then moved to منير: superseded
+                (2, "T2", "2026-06-16 12:00:30", 60, 1, 6, "", 2),
+                # منير pays 20 at the counter -> 40 left on the invoice
+                (3, "T3", "2026-06-16 12:01:00", 20, 6, 6, "", 1),
+                # and 15 against the account a week later
+                (4, "T4", "2026-06-23 09:00:00", 15, 6, 0, "", 1),
+                # never saved
+                (5, "T5", "2026-06-24 09:00:00", 99, 6, 0, "", 0),
+            ],
+        )
+        connection.executemany(
+            "INSERT INTO BUY_INVOICE VALUES (?, ?, ?, ?, ?, ?)",
+            [
+                (1, "2026-05-15 19:48:40.26", 2, "REF-001", 0, 1),
+                (2, "2026-05-16 10:00:00", 2, "DRAFT", 0, 0),  # never saved
+            ],
         )
         connection.executemany(
             "INSERT INTO BUY_ITEMS VALUES (?, ?, ?, ?, ?)",
             [
                 (1, 1, 401, 10, 9.0),
                 (2, 1, 402, 5, 2.0),
+                (3, 2, 401, 99, 9.0),
+            ],
+        )
+        connection.executemany(
+            "INSERT INTO R_S_INVOICE VALUES (?, ?, ?, ?, ?)",
+            [(1, "2026-06-20 12:00:00.5", 1, "", 1)],
+        )
+        connection.executemany(
+            "INSERT INTO R_S_ITEMS VALUES (?, ?, ?, ?, ?, ?)",
+            [
+                (1, 1, 401, 1, 12.0, 1),  # back off invoice 1
+                (2, 1, 402, 1, 5.0, 0),  # taken back without the invoice
+            ],
+        )
+        connection.executemany(
+            "INSERT INTO B_R_INVOICE VALUES (?, ?, ?, ?, ?)",
+            [(1, "2026-05-20 10:00:00", 2, "", 1)],
+        )
+        connection.executemany(
+            "INSERT INTO B_R_ITEMS VALUES (?, ?, ?, ?, ?)",
+            [
+                (1, 1, 401, 2, 9.0),  # off REF-001, which bought 10
+                (2, 1, 404, 1, 1.0),  # never bought from this supplier
             ],
         )
         connection.executemany(
@@ -392,14 +496,16 @@ def build_aboghris_sample(path):
             ],
         )
         connection.executemany(
-            "INSERT INTO GIVE VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO GIVE VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 # expense: electricity (category 2), 250
-                (1, "2026-05-20 10:00:00", 250.0, "كهرباء مايو", "V1", 2, 1, 0),
+                (1, "2026-05-20 10:00:00", 250.0, "كهرباء مايو", "V1", 2, 1, 0, 1),
                 # supplier payment (EXPENCES_ID 0) to vendor 2 (شركة النسيم)
-                (2, "2026-05-21 10:00:00", 6200.0, "دفعة مورد", "V2", 0, 1, 2),
+                (2, "2026-05-21 10:00:00", 6200.0, "دفعة مورد", "V2", 0, 1, 2, 1),
                 # zero-amount expense voucher -> skipped
-                (3, "2026-05-22 10:00:00", 0.0, "صفر", "V3", 1, 1, 0),
+                (3, "2026-05-22 10:00:00", 0.0, "صفر", "V3", 1, 1, 0, 1),
+                # a payment that was never saved -> skipped
+                (4, "2026-05-23 10:00:00", 500.0, "", "V4", 0, 1, 2, 0),
             ],
         )
         connection.commit()
@@ -616,19 +722,30 @@ class AboGhrisConnectorTests(MigrationTestBase):
         # Base-unit price + barcode landed on the default variant.
         v401 = ProductVariant.objects.get(barcode="6291100080489")
         self.assertEqual(v401.unit_price, Decimal("12.00"))
+        # The piece's other code is an extra barcode, not a second variant.
+        self.assertEqual(
+            list(v401.extra_barcodes.values_list("barcode", flat=True)),
+            ["6291100080496"],
+        )
         v404 = ProductVariant.objects.get(product__name="Item 404")
         self.assertEqual(v404.unit_price, Decimal("1.50"))  # base piece public price
         # Extra units became ProductUnits (box of 3 for 402, box of 2 @3 for 404).
         item402 = Product.objects.get(name="Item 402")
         box402 = ProductUnit.objects.get(product=item402, unit__code="u94")
         self.assertEqual(box402.factor_to_base, Decimal("3.000000"))
+        # The box's own EAN rings up a box.
+        self.assertEqual(list(box402.barcodes.values_list("barcode", flat=True)), ["6267638162164"])
         item404 = Product.objects.get(name="Item 404")
         box404 = ProductUnit.objects.get(product=item404, unit__code="u94")
         self.assertEqual(box404.factor_to_base, Decimal("2.000000"))
         self.assertEqual(box404.price, Decimal("3.00"))
-        # Stock summed from ITEMS_SUB (404 has no row -> no stock item).
+        # Stock summed from ITEMS_SUB. 404 has no row: nothing on hand, but its
+        # cost still comes across — every item card carries one.
         self.assertEqual(StockItem.objects.get(variant=v401).quantity_on_hand, Decimal("50.000"))
-        self.assertFalse(StockItem.objects.filter(variant=v404).exists())
+        self.assertEqual(StockItem.objects.get(variant=v404).quantity_on_hand, Decimal("0.000"))
+        # AVER_COST for 401/402, LAST_COST standing in for 404; 500 has neither.
+        self.assertEqual(run.summary["stock"]["costed"], 3)
+        self.assertEqual(run.summary["stock"]["uncosted"], 1)
         # Customers vs suppliers split on CUST_VENDOR; N/A row skipped.
         self.assertCreated(Customer, 1)
         self.assertCreated(Supplier, 2)
@@ -652,15 +769,17 @@ class AboGhrisConnectorTests(MigrationTestBase):
         run = self.run_sync(source, IMPORT)
 
         self.assertIn(run.status, (MigrationRun.Status.SUCCEEDED, MigrationRun.Status.PARTIAL))
-        # Sales: two invoices, each fully paid; totals computed from lines.
-        self.assertEqual(Order.objects.count() - orders_before, 2)
-        self.assertEqual(Payment.objects.count() - payments_before, 2)
+        # Sales: five posted invoices; totals computed from lines. Invoice 3
+        # was never saved (S_STATUES=0) and is not history.
+        self.assertEqual(Order.objects.count() - orders_before, 5)
+        self.assertGreater(Payment.objects.count(), payments_before)
         sale1 = Order.objects.get(total=Decimal("24.00"))  # 2 × 12
         self.assertEqual(sale1.status, "paid")
-        self.assertEqual(sale1.payments.first().amount, Decimal("24.00"))
+        self.assertEqual(sale1.payments.get(amount__gt=0).amount, Decimal("24.00"))
         self.assertEqual(sale1.created_at.year, 2026)  # historical date preserved
         self.assertTrue(Order.objects.filter(total=Decimal("9.50")).exists())  # 5 + 3×1.5
-        # Purchase order: one invoice, two lines, total 10×9 + 5×2 = 100.
+        # Purchase order: one posted invoice (the draft is skipped), two lines,
+        # total 10×9 + 5×2 = 100.
         self.assertEqual(PurchaseOrder.objects.count() - pos_before, 1)
         po = PurchaseOrder.objects.get(supplier_invoice_number="REF-001")
         self.assertEqual(po.total, Decimal("100.00"))
@@ -682,6 +801,208 @@ class AboGhrisConnectorTests(MigrationTestBase):
         payment = SupplierPayment.objects.get(reference="V2")
         self.assertEqual(payment.amount, Decimal("6200.00"))
         self.assertEqual(payment.supplier.name, "شركة النسيم")
+
+    def test_tills_booked_as_customers_are_payment_methods(self):
+        """«بطاقة مصرفية» and «تحويل» are how AboGhris takes cards and
+        transfers: paid sales by that method, never a customer owing the shop."""
+        from apps.sales.models import Order
+
+        build_aboghris_sample(self.db_path)
+        self.run_sync(self._aboghris_source(), IMPORT)
+
+        for name in ("زبون نقدي", "بطاقة مصرفية", "تحويل"):
+            self.assertFalse(Customer.objects.filter(full_name=name).exists(), name)
+        card, transfer = (
+            Order.objects.filter(total=Decimal("12.00"), customer__isnull=True)
+            .exclude(payments__method="cash")
+            .order_by("created_at")
+        )
+        self.assertEqual(card.status, "paid")
+        self.assertEqual(list(card.payments.values_list("method", flat=True)), ["card"])
+        self.assertEqual(
+            list(transfer.payments.values_list("method", flat=True)), ["transfer"]
+        )
+
+    def test_a_customer_owes_what_the_receipts_left(self):
+        """منير bought 60, paid 20 at the counter and 15 on account a week on.
+
+        The superseded receipt (status 2) from when the sale was rung up as
+        walk-in, and the one never saved (status 0), count for nothing."""
+        from apps.sales.models import Order
+
+        build_aboghris_sample(self.db_path)
+        self.run_sync(self._aboghris_source(), IMPORT)
+
+        munir = Customer.objects.get(full_name="منير")
+        sale = Order.objects.get(customer=munir)
+        self.assertEqual(sale.sale_type, Order.SaleType.CREDIT)
+        self.assertEqual(sale.total, Decimal("60.00"))
+        paid = sum(
+            (payment.amount for payment in sale.payments.all()), Decimal("0")
+        )
+        self.assertEqual(paid, Decimal("35.00"))
+
+    def test_purchase_returns_become_supplier_credit(self):
+        from apps.purchasing.models import (
+            PurchaseOrder,
+            PurchaseOrderAdjustment,
+            SupplierCredit,
+        )
+
+        build_aboghris_sample(self.db_path)
+        source = self._aboghris_source()
+        run = self.run_sync(source, IMPORT)
+
+        po = PurchaseOrder.objects.get(supplier_invoice_number="REF-001")
+        adjustment = PurchaseOrderAdjustment.objects.get(purchase_order=po)
+        self.assertEqual(adjustment.adjustment_type, "return")
+        self.assertEqual(adjustment.amount, Decimal("18.00"))  # 2 × 9
+        self.assertEqual(adjustment.created_at.date().isoformat(), "2026-05-20")
+        credit = SupplierCredit.objects.get(adjustment=adjustment)
+        self.assertEqual(credit.supplier.name, "شركة النسيم")
+        self.assertEqual(credit.remaining_amount, Decimal("18.00"))
+        # 404 was never bought from this supplier: reported, not invented.
+        self.assertTrue(
+            MigrationIssue.objects.filter(
+                run=run, code="purchase_return_without_order"
+            ).exists()
+        )
+        # A re-run rebuilds the return rather than stacking a second one.
+        self.run_sync(source, IMPORT)
+        self.assertEqual(PurchaseOrderAdjustment.objects.filter(purchase_order=po).count(), 1)
+        self.assertEqual(SupplierCredit.objects.filter(purchase_order=po).count(), 1)
+
+    def test_dated_batches_arrive_as_lots_with_expiry(self):
+        from apps.inventory.models import StockBatchBalance
+
+        build_aboghris_sample(self.db_path)
+        source = self._aboghris_source()
+        self.run_sync(source, IMPORT)
+
+        item401 = Product.objects.get(name="Item 401")
+        self.assertEqual(item401.tracking_mode, Product.TrackingMode.BATCH)
+        self.assertTrue(item401.expiry_required)
+        balances = {
+            balance.batch.expiry_date.isoformat(): balance.remaining_quantity
+            for balance in StockBatchBalance.objects.filter(
+                variant__product=item401
+            ).select_related("batch")
+        }
+        self.assertEqual(
+            balances, {"2029-02-01": Decimal("20.000"), "2029-03-01": Decimal("30.000")}
+        )
+        v401 = ProductVariant.objects.get(barcode="6291100080489")
+        self.assertEqual(StockItem.objects.get(variant=v401).quantity_on_hand, Decimal("50.000"))
+        # Undated stock stays a plain quantity.
+        self.assertEqual(
+            Product.objects.get(name="Item 402").tracking_mode, Product.TrackingMode.QUANTITY
+        )
+        # A re-run leaves the lots alone instead of opening them twice.
+        self.run_sync(source, IMPORT)
+        self.assertEqual(StockItem.objects.get(variant=v401).quantity_on_hand, Decimal("50.000"))
+        self.assertEqual(StockBatchBalance.objects.filter(variant=v401).count(), 2)
+        # And the shelf is one a live opening could have written: bin, value,
+        # ledger allocations and lot balances all agree.
+        from apps.inventory.integrity import tracking_invariant_violations
+
+        self.assertEqual(tracking_invariant_violations([v401.pk]), [])
+
+    def test_the_owners_balances_are_not_moved_by_the_old_history(self):
+        """AboGhris books every payment to one treasury, cash or bank, so its
+        history replayed would put the cash box hundreds of thousands under.
+        The owner enters today's cash and bank in الخزينة, dated go-live day,
+        and the imported history — all of it older — must not move them."""
+        from django.utils import timezone
+
+        from apps.purchasing.models import SupplierPayment
+        from apps.treasury.models import MoneyAccount
+        from apps.treasury.position import treasury_position
+
+        build_aboghris_sample(self.db_path)
+        self.run_sync(self._aboghris_source(), IMPORT)
+        self.assertFalse(MoneyAccount.objects.filter(opening_balance__gt=0).exists())
+
+        today = timezone.localdate()
+        MoneyAccount.objects.filter(is_default=True).update(is_default=False)
+        cash = MoneyAccount.objects.create(
+            name="الخزينة",
+            kind=MoneyAccount.Kind.CASH,
+            opening_balance=Decimal("22000.00"),
+            opening_at=today,
+            is_default=True,
+        )
+        bank = MoneyAccount.objects.create(
+            name="المصرف",
+            kind=MoneyAccount.Kind.BANK,
+            opening_balance=Decimal("28000.00"),
+            opening_at=today,
+            is_default=True,
+        )
+
+        balances = {
+            row["account"].pk: Decimal(str(row["expected_balance"]))
+            for row in treasury_position()["accounts"]
+        }
+        self.assertEqual(balances[cash.pk], Decimal("22000.00"))
+        self.assertEqual(balances[bank.pk], Decimal("28000.00"))
+        # The old payment still says it went out, and that nobody wrote down how.
+        payment = SupplierPayment.objects.get(reference="V2")
+        self.assertIn("لم تُسجَّل في النظام السابق", payment.notes)
+
+    def test_a_shop_that_records_its_bank_keeps_its_methods(self):
+        """Generic, not this pharmacy's rule: a voucher booked to a bank account
+        is a bank payment, and a shop that does record banks gets no warning."""
+        import sqlite3
+
+        from apps.purchasing.models import SupplierPayment
+
+        build_aboghris_sample(self.db_path)
+        connection = sqlite3.connect(self.db_path)
+        try:
+            connection.execute("UPDATE GIVE SET BANK_ID = 2 WHERE G_NO = 'V2'")
+            connection.commit()
+        finally:
+            connection.close()
+        self.run_sync(self._aboghris_source(), IMPORT)
+
+        payment = SupplierPayment.objects.get(reference="V2")
+        self.assertEqual(payment.method, SupplierPayment.Method.BANK_TRANSFER)
+        self.assertNotIn("لم تُسجَّل في النظام السابق", payment.notes)
+
+    def test_sale_returns_land_on_their_invoice(self):
+        from apps.sales.models import Order, OrderAdjustment
+
+        build_aboghris_sample(self.db_path)
+        source = self._aboghris_source()
+
+        run = self.run_sync(source, IMPORT)
+
+        sale1 = Order.objects.get(total=Decimal("24.00"))
+        returned = OrderAdjustment.objects.get(order=sale1, adjustment_type="return")
+        self.assertEqual(returned.amount, Decimal("12.00"))
+        self.assertEqual(returned.created_at.date().isoformat(), "2026-06-20")
+        # The line taken back without its invoice is reported, not dropped.
+        warning = MigrationIssue.objects.get(run=run, code="return_without_sale")
+        self.assertEqual(warning.detail["amount"], "5.00")
+
+    def test_only_stocked_products(self):
+        build_aboghris_sample(self.db_path)
+        source = self._aboghris_source()
+
+        run = self.run_sync(
+            source,
+            IMPORT,
+            options={"only_stocked_products": True},
+            entities=["product", "product_unit", "stock"],
+        )
+
+        self.assertIn(run.status, (MigrationRun.Status.SUCCEEDED, MigrationRun.Status.PARTIAL))
+        # 401 and 402 are on the shelf; 404 has no ITEMS_SUB row, 500 holds 0.
+        self.assertEqual(
+            set(Product.objects.filter(name__startswith="Item ").values_list("name", flat=True)),
+            {"Item 401", "Item 402"},
+        )
+        self.assertFalse(MigrationIssue.objects.filter(run=run, severity="error").exists())
 
     def test_products_without_quantities_option_skips_stock(self):
         build_aboghris_sample(self.db_path)
@@ -722,8 +1043,8 @@ class AboGhrisConnectorTests(MigrationTestBase):
         v402 = ProductVariant.objects.get(product__name="Item 402")
         v404 = ProductVariant.objects.get(product__name="Item 404")
         # On-hand = purchases − sales, NOT the stored snapshot (50 / 12 / none):
-        #   401: bought 10, sold 2 -> 8     402: bought 5, sold 1 -> 4
-        self.assertEqual(StockItem.objects.get(variant=v401).quantity_on_hand, Decimal("8.000"))
+        #   401: bought 10, sold 2+1+1+5 -> 1     402: bought 5, sold 1 -> 4
+        self.assertEqual(StockItem.objects.get(variant=v401).quantity_on_hand, Decimal("1.000"))
         self.assertEqual(StockItem.objects.get(variant=v402).quantity_on_hand, Decimal("4.000"))
         # 404 sold 3 but was never purchased -> clamped to 0 with a clear hint.
         self.assertEqual(StockItem.objects.get(variant=v404).quantity_on_hand, Decimal("0.000"))
@@ -749,7 +1070,7 @@ class AboGhrisConnectorTests(MigrationTestBase):
         # 402 reconstructed lower than the old system claimed, so the difference
         # is reported as a likely un-invoiced opening balance.
         self.assertEqual(recon["old_system_higher"], 2)
-        self.assertEqual(recon["total_implied_opening_units"], "50")  # (50-8)+(12-4)
+        self.assertEqual(recon["total_implied_opening_units"], "57")  # (50-1)+(12-4)
         self.assertTrue(MigrationIssue.objects.filter(run=run, code="snapshot_comparison").exists())
         higher = {
             issue.detail.get("product"): issue.detail
@@ -758,11 +1079,11 @@ class AboGhrisConnectorTests(MigrationTestBase):
             )
         }
         self.assertEqual(higher["Item 401"]["old_system"], "50")
-        self.assertEqual(higher["Item 401"]["reconstructed"], "8")
-        self.assertEqual(higher["Item 401"]["difference"], "42")
+        self.assertEqual(higher["Item 401"]["reconstructed"], "1")
+        self.assertEqual(higher["Item 401"]["difference"], "49")
         # Money view: stored vs invoice-supported stock value at last cost (401@9,
-        # 402@2) — 8×9+4×2=80 reconstructed vs 50×9+12×2=474 stored.
-        self.assertEqual(recon["reconstructed_inventory_value"], "80.00")
+        # 402@2) — 1×9+4×2=17 reconstructed vs 50×9+12×2=474 stored.
+        self.assertEqual(recon["reconstructed_inventory_value"], "17.00")
         self.assertEqual(recon["snapshot_inventory_value"], "474.00")
         self.assertTrue(MigrationIssue.objects.filter(run=run, code="inventory_valuation").exists())
 
@@ -781,7 +1102,7 @@ class AboGhrisConnectorTests(MigrationTestBase):
 
         self.assertIn(run.status, (MigrationRun.Status.SUCCEEDED, MigrationRun.Status.PARTIAL))
         v401 = ProductVariant.objects.get(barcode="6291100080489")
-        self.assertEqual(StockItem.objects.get(variant=v401).quantity_on_hand, Decimal("8.000"))
+        self.assertEqual(StockItem.objects.get(variant=v401).quantity_on_hand, Decimal("1.000"))
 
 
 class StockReconstructorTests(MigrationTestBase):
@@ -1051,9 +1372,9 @@ def build_fahd_database(path):
             ("SUB222", "2002", "حليب مجفف", "0", 6.0),
             ("SUB111", "2002", "0", "0", 12.0),  # duplicate of the D row -> skipped
             # Pack code that the shop really used to ring loose pieces (its
-            # sale history below is predominantly piece-priced): the barcode
-            # stays on the alias variant, but the pack unit is still created
-            # (barcode-less) with the observed pack price.
+            # sale history below is predominantly piece-priced): the code stays
+            # a piece code — an extra barcode on the parent — but the pack unit
+            # is still created (barcode-less) with the observed pack price.
             ("SUB333", "1001", "عصير برتقال", "0", 12.0),
         ],
     )
@@ -1164,15 +1485,18 @@ class FahdSqliteTests(MigrationTestBase):
 
         # 3 catalogue products + 1 ghost for the deleted item in invoice 102.
         self.assertCreated(Product, 4)
-        # A default variant per product + the three sub-barcode variants.
-        self.assertCreated(ProductVariant, 7)
+        # A default variant per product + the retired pack pseudo-variant. The
+        # piece sub-barcodes are NOT variants: they are codes, not goods.
+        self.assertCreated(ProductVariant, 5)
 
-        # Sub-barcodes scan straight to their parent product.
-        sub = ProductVariant.objects.get(barcode="SUB111")
-        self.assertEqual(sub.product.name, "عصير برتقال")
-        self.assertFalse(sub.is_default)
-        self.assertEqual(sub.name, "برتقالي")
-        self.assertEqual(sub.unit_price, Decimal("2.50"))
+        # Sub-barcodes are the parent's extra barcodes, so they scan straight
+        # to the parent itself — one shelf, one stock figure.
+        juice = ProductVariant.objects.get(barcode="1001")
+        self.assertEqual(
+            sorted(juice.extra_barcodes.values_list("barcode", flat=True)),
+            ["SUB111", "SUB333"],
+        )
+        self.assertFalse(ProductVariant.objects.filter(barcode="SUB111").exists())
         # The pack (D2) code became a ProductUnit barcode on the parent, and
         # its pseudo-variant was retired: inactive, barcode-less, history-only.
         pack_variant = ProductVariant.objects.get(sku="SUB222")
@@ -1189,12 +1513,9 @@ class FahdSqliteTests(MigrationTestBase):
         # Lines still default to the piece — the pack is an option, never the
         # default (a pack default proved too surprising when typing quantities).
         self.assertEqual(pack_unit.product.default_purchase_unit, "")
-        # A pack code that really rang loose pieces keeps its alias variant
-        # (scanning must keep selling one piece), while the pack unit is still
-        # created barcode-less with the observed pack price.
-        alias = ProductVariant.objects.get(barcode="SUB333")
-        self.assertTrue(alias.is_active)
-        self.assertEqual(alias.unit_price, Decimal("2.50"))
+        # A pack code that really rang loose pieces stays a piece code (an
+        # extra barcode, above — scanning must keep selling one piece), while
+        # the pack unit is still created barcode-less with the observed price.
         juice_unit = ProductUnit.objects.get(product__name="عصير برتقال")
         self.assertEqual(juice_unit.factor_to_base, Decimal("12"))
         self.assertEqual(juice_unit.price, Decimal("27.00"))
@@ -1218,8 +1539,13 @@ class FahdSqliteTests(MigrationTestBase):
             for identity in MigrationIdentityMap.objects.filter(entity_type="sale")
         }
         self.assertEqual(len(orders), 4)
-        # The mixed piece/pack history behind SUB333 keeps its exact total.
+        # The mixed piece/pack history behind SUB333 keeps its exact total, and
+        # is filed under the parent it was always a code of.
         self.assertEqual(orders["sale-104"].total, Decimal("96.00"))
+        self.assertEqual(
+            set(orders["sale-104"].lines.values_list("variant__sku", flat=True)),
+            {"1001"},
+        )
         sale_101 = orders["sale-101"]
         self.assertEqual(sale_101.total, Decimal("14.50"))
         self.assertEqual(sale_101.discount_total, Decimal("0.50"))
@@ -1325,9 +1651,45 @@ class FahdSqliteTests(MigrationTestBase):
             [entry.barcode for entry in pack_unit.barcodes.all()], ["SUB222"]
         )
         self.assertEqual(pack_unit.product.default_purchase_unit, "")
-        # The piece-alias code was left alone: still an active scannable variant.
-        alias = ProductVariant.objects.get(barcode="SUB333")
-        self.assertTrue(alias.is_active)
+        # The piece-alias code was left alone: still the parent's extra barcode.
+        self.assertTrue(
+            ProductVariant.objects.get(barcode="1001")
+            .extra_barcodes.filter(barcode="SUB333")
+            .exists()
+        )
+
+    def test_alias_backfill_upgrades_prior_import(self):
+        """A shop migrated while piece sub-barcodes were imported as variants of
+        their own is repaired by re-running the product entities: each code
+        moves onto its parent as an extra barcode and the old pseudo-variant is
+        retired in place, its sales untouched."""
+        source = self.make_fahd_source()
+        self.run_sync(source, IMPORT, options={"stock_source": "none", "keep_file": True})
+        juice = ProductVariant.objects.get(barcode="1001")
+        # Rewind to what the old importer left: an active alias variant per code.
+        juice.extra_barcodes.all().delete()
+        old_aliases = [
+            ProductVariant.objects.create(
+                product=juice.product, sku=code, barcode=code, unit_price=Decimal("2.50")
+            )
+            for code in ("SUB111", "SUB333")
+        ]
+
+        run = self.run_sync(
+            source,
+            IMPORT,
+            entities=["product"],
+            options={"stock_source": "none", "keep_file": True},
+        )
+        self.assertIn(run.status, (MigrationRun.Status.SUCCEEDED, MigrationRun.Status.PARTIAL))
+        self.assertEqual(
+            sorted(juice.extra_barcodes.values_list("barcode", flat=True)),
+            ["SUB111", "SUB333"],
+        )
+        for alias in old_aliases:
+            alias.refresh_from_db()
+            self.assertEqual(alias.barcode, "")
+            self.assertFalse(alias.is_active)
 
     def test_stock_snapshot_mode_still_available(self):
         source = self.make_fahd_source()
@@ -1502,12 +1864,12 @@ class PurchaseQuantityFidelityTests(MigrationTestBase):
         connection = sqlite3.connect(self.db_path)
         try:
             connection.execute(
-                "INSERT INTO BUY_INVOICE VALUES (?, ?, ?, ?, ?)",
-                (2, "2026-05-16 09:00:00", 2, "REF-FRAC", 0),
+                "INSERT INTO BUY_INVOICE VALUES (?, ?, ?, ?, ?, ?)",
+                (3, "2026-05-16 09:00:00", 2, "REF-FRAC", 0, 1),
             )
             connection.execute(
                 "INSERT INTO BUY_ITEMS VALUES (?, ?, ?, ?, ?)",
-                (3, 2, 401, 2.5, 4.0),
+                (4, 3, 401, 2.5, 4.0),
             )
             connection.commit()
         finally:
@@ -2409,169 +2771,6 @@ class UploadApiTests(MigrationTestBase):
 
         self.assertEqual(freed, 4096)
         self.assertFalse(orphan.exists())
-
-
-def rewrite_as_access_conversion(path, boolean_columns):
-    """Rewrite a fixture the way ``mdbtools`` hands an Access database over.
-
-    Two things change on the way through ``preparation/access.py``, and both are
-    invisible until a real shop's file arrives:
-
-    * **Every value becomes text.** ``mdb-export`` emits SQL literals, and
-      ``mdb-schema`` types the columns loosely, so a connector that was written
-      against a driver returning ``int``/``Decimal``/``datetime`` now sees
-      strings.
-    * **Access stores True as -1.** A Jet Yes/No field is a bitmask, so a
-      boolean column arrives as ``"-1"`` rather than ``"1"``.
-
-    ``boolean_columns`` names the Yes/No fields, which is the one thing that
-    cannot be inferred from a SQL Server-shaped fixture: nothing distinguishes a
-    flag from a count once both are integers.
-    """
-    connection = sqlite3.connect(path)
-    try:
-        tables = [
-            row[0]
-            for row in connection.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            )
-        ]
-        flags = {name.lower() for name in boolean_columns}
-        for table in tables:
-            columns = [
-                row[1] for row in connection.execute(f'PRAGMA table_info("{table}")')
-            ]
-            rows = list(connection.execute(f'SELECT * FROM "{table}"'))
-            connection.execute(f'DROP TABLE "{table}"')
-            declared = ", ".join(f'"{column}" TEXT' for column in columns)
-            connection.execute(f'CREATE TABLE "{table}" ({declared})')
-            converted = []
-            for row in rows:
-                values = []
-                for column, value in zip(columns, row):
-                    if value is None:
-                        values.append(None)
-                    elif column.lower() in flags:
-                        values.append("-1" if value else "0")
-                    else:
-                        values.append(str(value))
-                converted.append(tuple(values))
-            placeholders = ", ".join("?" for _ in columns)
-            connection.executemany(
-                f'INSERT INTO "{table}" VALUES ({placeholders})', converted
-            )
-        connection.commit()
-    finally:
-        connection.close()
-
-
-#: The Yes/No fields in the AboGhris schema.
-ABOGHRIS_BOOLEAN_COLUMNS = (
-    "CUST_VENDOR",
-    "CUST_INVISIBLE",
-    "ITEM_INVISIBLE",
-    "CAT1_INVISIBLE",
-    "CAT2_INVISIBLE",
-    "EXPENSE_INVISIBLE",
-)
-
-
-class AboGhrisAccessConversionTests(MigrationTestBase):
-    """AboGhris arriving as an Access file rather than a SQL Server connection.
-
-    The connector was written from a SQL Server schema export and read through
-    pyodbc. Shops hand over `.mdb` files, so the same mapping now runs over an
-    mdbtools conversion — every value text, every Yes/No field ``-1``. These
-    assert the import is *identical* either way, because a difference here would
-    not raise: it would quietly file every supplier as a customer.
-    """
-
-    def _access_source(self):
-        build_aboghris_sample(self.db_path)
-        rewrite_as_access_conversion(self.db_path, ABOGHRIS_BOOLEAN_COLUMNS)
-        return self.make_source(name="AboGhris", system_key="aboghris")
-
-    def test_the_schema_is_still_recognised_after_conversion(self):
-        build_aboghris_sample(self.db_path)
-        rewrite_as_access_conversion(self.db_path, ABOGHRIS_BOOLEAN_COLUMNS)
-
-        with build_transport("sqlite", {"database": str(self.db_path)}) as transport:
-            result = detection.detect(transport)
-
-        self.assertTrue(result.matched, result.failure_message())
-        self.assertEqual(result.match.system_key, "aboghris")
-
-    def test_suppliers_are_still_suppliers(self):
-        """The one that would have been silent.
-
-        Suppliers are split from customers on ``CUST_VENDOR``. Read Access's
-        ``-1`` as false and every supplier lands in the customer list instead,
-        with no error and no missing rows to notice.
-        """
-        source = self._access_source()
-
-        run = self.run_sync(source, IMPORT, options={"stock_source": "none"})
-
-        self.assertIn(
-            run.status, (MigrationRun.Status.SUCCEEDED, MigrationRun.Status.PARTIAL)
-        )
-        self.assertTrue(Supplier.objects.filter(name="شركة النسيم").exists())
-        self.assertFalse(Customer.objects.filter(full_name="شركة النسيم").exists())
-        # And the one genuine customer did not drift the other way.
-        self.assertTrue(Customer.objects.filter(full_name="زبون نقدي").exists())
-
-    def test_hidden_rows_stay_hidden(self):
-        source = self._access_source()
-
-        self.run_sync(source, IMPORT, options={"stock_source": "none"})
-
-        # ITEM_INVISIBLE is set on item 500 only.
-        hidden = Product.objects.filter(name="Item 500").first()
-        self.assertIsNotNone(hidden)
-        self.assertFalse(hidden.is_active)
-        self.assertTrue(Product.objects.get(name="Item 401").is_active)
-
-    def test_the_connector_reads_both_shapes_identically(self):
-        """The strongest form of the claim: same records out, either way in.
-
-        Comparing imported row counts cannot show this — the loaders dedupe on
-        natural keys, so importing the same shop twice correctly updates rather
-        than duplicates. What matters is upstream of that: whether the connector
-        understands a converted file the same way it understood a live one. So
-        compare the canonical records it emits, field by field.
-        """
-        native_path = Path(self._tmpdir.name) / "native.sqlite"
-        build_aboghris_sample(native_path)
-        access_path = Path(self._tmpdir.name) / "access.sqlite"
-        build_aboghris_sample(access_path)
-        rewrite_as_access_conversion(access_path, ABOGHRIS_BOOLEAN_COLUMNS)
-
-        connector = get_connector("aboghris")
-
-        def extracted(path):
-            out = {}
-            with build_transport("sqlite", {"database": str(path)}) as transport:
-                for entity_type in connector.supported_entities:
-                    context = ExtractContext(run_options={})
-                    out[entity_type] = [
-                        repr(record)
-                        for record in connector.extract(entity_type, transport, context)
-                    ]
-            return out
-
-        native = extracted(native_path)
-        converted = extracted(access_path)
-
-        self.assertEqual(sorted(native), sorted(converted))
-        for entity_type in native:
-            self.assertEqual(
-                native[entity_type],
-                converted[entity_type],
-                f"{entity_type} differs between the two shapes",
-            )
-        # Guard against the comparison passing because both read nothing.
-        self.assertGreater(len(native["product"]), 0)
-        self.assertGreater(len(native["supplier"]), 0)
 
 
 class JetBooleanTests(TestCase):

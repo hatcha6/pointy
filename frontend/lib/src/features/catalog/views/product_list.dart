@@ -5,6 +5,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/analytics_engine.dart';
 import '../../../core/authorization.dart';
+import '../../../data/models/bulk_price_rule.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/product_query.dart';
 import '../../../data/repositories/catalog_repository.dart';
@@ -27,6 +28,7 @@ import '../../../shared/tutor/tutor_target.dart';
 import '../view_models/catalog_view_model.dart';
 import '../view_models/pricing_currency_options.dart';
 import '../view_models/product_details_view_model.dart';
+import 'bulk_price/bulk_price_editor_screen.dart';
 import 'product_bulk_actions.dart';
 import 'product_details_screen.dart';
 
@@ -112,6 +114,7 @@ class ProductList extends StatelessWidget {
                 ? _CatalogOverflowMenu(
                     isViewingArchived: viewModel.isViewingArchived,
                     onBulkSelect: viewModel.enterSelectionMode,
+                    onBulkPriceRules: () => _openBulkPriceEditor(context),
                     onToggleArchived: () => viewModel.setViewingArchived(
                       !viewModel.isViewingArchived,
                     ),
@@ -133,6 +136,10 @@ class ProductList extends StatelessWidget {
               isViewingArchived: viewModel.isViewingArchived,
               onArchive: () => _runArchive(context),
               onReprice: () => _openReprice(context),
+              onPriceRules: () => _openBulkPriceEditor(
+                context,
+                fromSelection: true,
+              ),
               onCategorize: () => _openCategorize(context),
               onFlags: () => _openFlags(context),
             )
@@ -277,6 +284,28 @@ class ProductList extends StatelessWidget {
     }
   }
 
+  Future<void> _openBulkPriceEditor(
+    BuildContext context, {
+    bool fromSelection = false,
+  }) {
+    final names = {
+      for (final product in viewModel.products) product.id: product.name,
+    };
+    final selected = fromSelection
+        ? [
+            for (final id in viewModel.selectedIds)
+              BulkPriceRef(id: id, label: names[id] ?? '#$id'),
+          ]
+        : const <BulkPriceRef>[];
+    return openBulkPriceEditor(
+      context,
+      catalogRepository: viewModel.catalogRepository,
+      contactRepository: contactRepository,
+      selectedProducts: selected,
+      onPricesChanged: viewModel.loadProducts,
+    );
+  }
+
   Future<void> _openCategorize(BuildContext context) async {
     final choice = await showBulkCategorizeSheet(
       context,
@@ -370,12 +399,14 @@ class _CatalogOverflowMenu extends StatelessWidget {
   const _CatalogOverflowMenu({
     required this.isViewingArchived,
     required this.onBulkSelect,
+    required this.onBulkPriceRules,
     required this.onToggleArchived,
     required this.onRefresh,
   });
 
   final bool isViewingArchived;
   final VoidCallback onBulkSelect;
+  final VoidCallback onBulkPriceRules;
   final VoidCallback onToggleArchived;
   final VoidCallback onRefresh;
 
@@ -389,6 +420,8 @@ class _CatalogOverflowMenu extends StatelessWidget {
         switch (action) {
           case _CatalogMenuAction.bulkSelect:
             onBulkSelect();
+          case _CatalogMenuAction.bulkPriceRules:
+            onBulkPriceRules();
           case _CatalogMenuAction.toggleArchived:
             onToggleArchived();
           case _CatalogMenuAction.refresh:
@@ -402,6 +435,15 @@ class _CatalogOverflowMenu extends StatelessWidget {
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.checklist_outlined),
             title: Text(l10n.bulkSelectTooltip),
+          ),
+        ),
+        PopupMenuItem(
+          key: const ValueKey('catalog_menu_bulk_price_rules'),
+          value: _CatalogMenuAction.bulkPriceRules,
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.price_change_outlined),
+            title: Text(l10n.bulkPriceEditorMenuAction),
           ),
         ),
         PopupMenuItem(
@@ -433,7 +475,7 @@ class _CatalogOverflowMenu extends StatelessWidget {
   }
 }
 
-enum _CatalogMenuAction { bulkSelect, toggleArchived, refresh }
+enum _CatalogMenuAction { bulkSelect, bulkPriceRules, toggleArchived, refresh }
 
 class _BulkSelectionBar extends StatelessWidget {
   const _BulkSelectionBar({
@@ -441,6 +483,7 @@ class _BulkSelectionBar extends StatelessWidget {
     required this.isViewingArchived,
     required this.onArchive,
     required this.onReprice,
+    required this.onPriceRules,
     required this.onCategorize,
     required this.onFlags,
   });
@@ -449,6 +492,7 @@ class _BulkSelectionBar extends StatelessWidget {
   final bool isViewingArchived;
   final VoidCallback onArchive;
   final VoidCallback onReprice;
+  final VoidCallback onPriceRules;
   final VoidCallback onCategorize;
   final VoidCallback onFlags;
 
@@ -526,6 +570,12 @@ class _BulkSelectionBar extends StatelessWidget {
               onPressed: enabled ? onReprice : null,
               icon: const Icon(Icons.sell_outlined),
               label: Text(l10n.bulkRepriceAction),
+            ),
+            OutlinedButton.icon(
+              key: const ValueKey('catalog_bulk_price_rules'),
+              onPressed: enabled ? onPriceRules : null,
+              icon: const Icon(Icons.price_change_outlined),
+              label: Text(l10n.bulkPriceEditorSelectionAction),
             ),
             OutlinedButton.icon(
               onPressed: enabled ? onCategorize : null,

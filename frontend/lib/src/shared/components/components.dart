@@ -28,6 +28,7 @@ export 'pointy_progress.dart';
 export 'pointy_stage_timeline.dart';
 export 'pointy_step_rail.dart';
 export 'pointy_qr_image.dart';
+export 'pointy_result_dialog.dart';
 export 'pointy_searchable_picker.dart';
 export 'pointy_section_header.dart';
 export 'pointy_skeleton.dart';

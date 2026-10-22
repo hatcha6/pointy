@@ -12,6 +12,7 @@ from . import gs1, scale_barcodes
 from .tracking_modes import assert_mode_change_allowed, identify_stock_on_hand
 from .identity import (
     BARCODE_FIELD,
+    EXTRA_BARCODES_FIELD,
     GTIN_FIELD,
     KIND_PAYLOAD,
     KIND_RACE,
@@ -26,6 +27,11 @@ from .identity import (
     find_sku_conflict,
 )
 from .sku_series import allocate_variant_sku
+from .variant_barcodes import (
+    MAX_EXTRA_BARCODES,
+    clean_extra_barcodes,
+    replace_extra_barcodes,
+)
 from .system_products import refuse_system_product
 from .models import (
     ModifierGroup,
@@ -36,6 +42,7 @@ from .models import (
     ProductUnit,
     ProductUnitBarcode,
     ProductVariant,
+    ProductVariantBarcode,
     ScaleBarcodeRule,
     UnitOfMeasure,
     VariantOption,
@@ -184,8 +191,32 @@ def _gtin_field():
     )
 
 
+def _extra_barcodes_field(**kwargs):
+    # A variant's further barcodes, beside the primary ``barcode``. No
+    # ``default``: an absent key keeps the stored codes (a client that predates
+    # the field must not wipe them); sending a list replaces them.
+    return serializers.ListField(
+        child=serializers.CharField(max_length=64, allow_blank=True),
+        required=False,
+        max_length=MAX_EXTRA_BARCODES,
+        **kwargs,
+    )
+
+
+def _clean_variant_extra_barcodes(attrs, *, instance=None):
+    """Tidy ``extra_barcodes`` against the primary barcode it will sit beside."""
+    if attrs.get(EXTRA_BARCODES_FIELD) is None:
+        attrs.pop(EXTRA_BARCODES_FIELD, None)
+        return attrs
+    primary = attrs.get(BARCODE_FIELD, getattr(instance, "barcode", ""))
+    attrs[EXTRA_BARCODES_FIELD] = clean_extra_barcodes(
+        attrs[EXTRA_BARCODES_FIELD], primary=primary
+    )
+    return attrs
+
+
 def variant_identity_conflicts(data, *, exclude_variant_ids=(), target, index=None):
-    """Conflicts for one variant payload's SKU, barcode and GTIN."""
+    """Conflicts for one variant payload's SKU, barcode, extra barcodes and GTIN."""
     conflicts = []
     if data.get(GTIN_FIELD):
         conflict = find_gtin_conflicts(
@@ -208,6 +239,13 @@ def variant_identity_conflicts(data, *, exclude_variant_ids=(), target, index=No
         )
         if conflict is not None:
             conflicts.append(conflict.at(target, index))
+    extras = data.get(EXTRA_BARCODES_FIELD) or []
+    if extras:
+        taken = find_conflicts(barcodes=extras, exclude_variant_ids=exclude_variant_ids)
+        for code in extras:
+            conflict = taken.get((BARCODE_FIELD, code))
+            if conflict is not None:
+                conflicts.append(conflict.as_field(EXTRA_BARCODES_FIELD).at(target, index))
     return conflicts
 
 
@@ -672,6 +710,7 @@ class DefaultProductVariantInputSerializer(serializers.Serializer):
         trim_whitespace=True,
         default="",
     )
+    extra_barcodes = _extra_barcodes_field()
     gtin = _gtin_field()
     unit_price = serializers.DecimalField(
         max_digits=10,
@@ -726,6 +765,9 @@ class DefaultProductVariantInputSerializer(serializers.Serializer):
 
     def validate_gtin(self, value):
         return validated_gtin(value)
+
+    def validate(self, attrs):
+        return _clean_variant_extra_barcodes(attrs)
 
 
 class DefaultProductVariantField(serializers.Field):
@@ -824,6 +866,9 @@ class ProductVariantSerializer(serializers.ModelSerializer):
         allow_blank=True,
         validators=[],
     )
+    # Write-only because the model side is a reverse relation; reads are filled
+    # in by ``to_representation`` as a plain list, like a unit's ``barcodes``.
+    extra_barcodes = _extra_barcodes_field(write_only=True)
     # GS1 trade-item number, stored as GTIN-14 (§4.2, §6.3).
     gtin = _gtin_field()
     product_name = serializers.CharField(source="product.name", read_only=True)
@@ -896,6 +941,7 @@ class ProductVariantSerializer(serializers.ModelSerializer):
             "full_name",
             "sku",
             "barcode",
+            "extra_barcodes",
             "gtin",
             # Always the shop's base currency — see ProductVariant.unit_price.
             "unit_price",
@@ -929,6 +975,13 @@ class ProductVariantSerializer(serializers.ModelSerializer):
         if value < 0:
             raise serializers.ValidationError("Unit price cannot be negative.")
         return value
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data[EXTRA_BARCODES_FIELD] = [
+            entry.barcode for entry in instance.extra_barcodes.all()
+        ]
+        return data
 
     def get_primary_image(self, variant):
         return primary_attachment_summary(
@@ -983,6 +1036,7 @@ class ProductVariantSerializer(serializers.ModelSerializer):
         except DjangoValidationError as error:
             raise_serializer_validation(error)
 
+        _clean_variant_extra_barcodes(attrs, instance=self.instance)
         raise_identity_conflicts(
             variant_identity_conflicts(
                 attrs,
@@ -994,6 +1048,7 @@ class ProductVariantSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         option_values = validated_data.pop("option_values", [])
+        extra_barcodes = validated_data.pop(EXTRA_BARCODES_FIELD, None)
         try:
             with transaction.atomic():
                 if validated_data.get("is_default"):
@@ -1008,6 +1063,8 @@ class ProductVariantSerializer(serializers.ModelSerializer):
                     validated_data["sku"] = allocate_variant_sku()
                 variant = ProductVariant.objects.create(**validated_data)
                 _derive_base_price(variant, foreign_amount)
+                if extra_barcodes:
+                    replace_extra_barcodes(variant, extra_barcodes)
                 if option_values:
                     variant.option_values.set(option_values)
                     variant.refresh_from_db(fields=["option_signature"])
@@ -1023,6 +1080,7 @@ class ProductVariantSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         option_values = validated_data.pop("option_values", None)
+        extra_barcodes = validated_data.pop(EXTRA_BARCODES_FIELD, None)
         try:
             with transaction.atomic():
                 if validated_data.get("is_default") is True:
@@ -1040,6 +1098,8 @@ class ProductVariantSerializer(serializers.ModelSerializer):
                     setattr(instance, field, value)
                 instance.save()
                 _derive_base_price(instance, foreign_amount)
+                if extra_barcodes is not None:
+                    replace_extra_barcodes(instance, extra_barcodes)
                 if option_values is not None:
                     instance.option_values.set(option_values)
                     instance.refresh_from_db(fields=["option_signature"])
@@ -1074,6 +1134,7 @@ class ProductVariantInputSerializer(serializers.Serializer):
         trim_whitespace=True,
         default="",
     )
+    extra_barcodes = _extra_barcodes_field()
     gtin = _gtin_field()
     unit_price = serializers.DecimalField(
         max_digits=10,
@@ -1129,6 +1190,9 @@ class ProductVariantInputSerializer(serializers.Serializer):
 
     def validate_gtin(self, value):
         return validated_gtin(value)
+
+    def validate(self, attrs):
+        return _clean_variant_extra_barcodes(attrs)
 
 
 class ProductVariantListField(serializers.Field):
@@ -1446,19 +1510,23 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
 
         # Every code in the payload paired with where it sits, so the whole
         # request resolves in one batched lookup instead of two queries a row.
+        # An extra barcode is looked up as a barcode (a scan cannot tell them
+        # apart) and reported under its own field so the form marks that input.
         fields = (SKU_FIELD, BARCODE_FIELD, GTIN_FIELD)
-        entries = [
-            (TARGET_VARIANTS, index, field, value)
-            for index, data in enumerate(variants_data or [])
-            for field in fields
-            if (value := _normalized_identity(field, data.get(field)))
-        ]
+        rows = [(TARGET_VARIANTS, index, data) for index, data in enumerate(variants_data or [])]
         if default_variant_data is not None:
+            rows.append((TARGET_DEFAULT_VARIANT, None, default_variant_data))
+        entries = []
+        reported_as = {}
+        for target, index, data in rows:
             entries.extend(
-                (TARGET_DEFAULT_VARIANT, None, field, value)
+                (target, index, field, value)
                 for field in fields
-                if (value := _normalized_identity(field, default_variant_data.get(field)))
+                if (value := _normalized_identity(field, data.get(field)))
             )
+            for code in data.get(EXTRA_BARCODES_FIELD) or []:
+                reported_as[len(entries)] = EXTRA_BARCODES_FIELD
+                entries.append((target, index, BARCODE_FIELD, code))
 
         taken = find_conflicts(
             skus=[value for _, _, field, value in entries if field == SKU_FIELD],
@@ -1476,11 +1544,12 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
 
         conflicts = []
         seen: dict[tuple[str, str], int] = {}
-        for target, index, field, value in entries:
+        for position, (target, index, field, value) in enumerate(entries):
+            report_field = reported_as.get(position, field)
             if (field, value) in seen:
                 conflicts.append(
                     IdentityConflict(
-                        field=field,
+                        field=report_field,
                         value=value,
                         kind=KIND_PAYLOAD,
                     ).at(target, index)
@@ -1489,7 +1558,7 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
             seen[(field, value)] = index
             conflict = taken.get((field, value))
             if conflict is not None:
-                conflicts.append(conflict.at(target, index))
+                conflicts.append(conflict.as_field(report_field).at(target, index))
 
         # A code that resolves to both a variant and a packaging unit is
         # ambiguous at the scanner, so the two lists in one payload must not
@@ -1499,11 +1568,11 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
             for data in (attrs.get("units") or [])
             for code in (data.get("barcodes") or [])
         }
-        for target, index, field, value in entries:
+        for position, (target, index, field, value) in enumerate(entries):
             if field == BARCODE_FIELD and value in unit_barcodes:
                 conflicts.append(
                     IdentityConflict(
-                        field=field,
+                        field=reported_as.get(position, field),
                         value=value,
                         kind=KIND_PAYLOAD,
                     ).at(target, index)
@@ -1598,6 +1667,11 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
             return
         variant_clash = list(
             ProductVariant.objects.filter(barcode__in=codes).values_list("barcode", flat=True)
+        )
+        variant_clash += list(
+            ProductVariantBarcode.objects.filter(barcode__in=codes).values_list(
+                "barcode", flat=True
+            )
         )
         if variant_clash:
             raise serializers.ValidationError(
@@ -1743,9 +1817,12 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
         # or a product created in one request would store the dollar figure and
         # never derive a dinar one.
         foreign_amount = variant_data.pop("price_amount", None)
+        extra_barcodes = variant_data.pop(EXTRA_BARCODES_FIELD, None)
         opening_stock = _pop_opening_stock(variant_data)
         variant = product.ensure_default_variant(**variant_data)
         _derive_base_price(variant, foreign_amount)
+        if extra_barcodes is not None:
+            replace_extra_barcodes(variant, extra_barcodes)
         if option_values is not None:
             validate_variant_option_values(product, option_values, variant=variant)
             variant.option_values.set(option_values)
@@ -1764,6 +1841,19 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
             variants_data[0]["is_default"] = True
 
         self._validate_variant_payload_combinations(variants_data)
+
+        # Rows are written one by one, so an extra barcode moving from one of
+        # this product's variants to another would meet its old row still
+        # holding it. Clear every list this payload rewrites first.
+        rewritten = [
+            data["id"]
+            for data in variants_data
+            if data.get("id") and data.get(EXTRA_BARCODES_FIELD) is not None
+        ]
+        if rewritten:
+            ProductVariantBarcode.objects.filter(
+                variant__product=product, variant_id__in=rewritten
+            ).delete()
 
         for variant_data in variants_data:
             self._upsert_product_variant(product, variant_data, opening=opening)
@@ -1794,6 +1884,7 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
         # Same reason as the default-variant path: this writes the model
         # directly, so the derivation has to happen explicitly.
         foreign_amount = data.pop("price_amount", None)
+        extra_barcodes = data.pop(EXTRA_BARCODES_FIELD, None)
         opening_stock = _pop_opening_stock(data)
 
         if variant_id is None:
@@ -1829,6 +1920,8 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
                 setattr(variant, field, value)
             variant.save()
         _derive_base_price(variant, foreign_amount)
+        if extra_barcodes is not None:
+            replace_extra_barcodes(variant, extra_barcodes)
         variant.option_values.set(option_values)
         if opening:
             self._open_stock(variant, opening_stock)

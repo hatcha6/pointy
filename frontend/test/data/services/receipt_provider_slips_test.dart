@@ -96,6 +96,63 @@ void main() {
       expect(slip.rows, ['طريقة الشحن: من موقع LTT']);
     });
 
+    test('an Apple card codes the App Store redemption link, and keeps '
+        'its instructions', () {
+      const link = 'https://apps.apple.com/redeem?code=X8K2MQ4TZ7WJ9R3N';
+      final slip = receiptProviderSlip(
+        title: 'آيتونز - 10 دولار',
+        kind: 'voucher',
+        status: 'confirmed',
+        printed: const {
+          'code': 'X8K2MQ4TZ7WJ9R3N',
+          'redeem_url': link,
+          'instructions': 'App Store ← استرداد بطاقة الهدايا',
+        },
+      );
+      expect(slip.qrData, link);
+      expect(slip.qrCaption, receiptScanToRedeemApple);
+      expect(slip.dial, isEmpty);
+      expect(slip.pin, 'X8K2MQ4TZ7WJ9R3N');
+      // The link fills in the same code the steps tell them to type.
+      expect(slip.rows, ['طريقة الشحن: App Store ← استرداد بطاقة الهدايا']);
+    });
+
+    test('a redemption link this till does not know codes the PIN '
+        'instead', () {
+      for (final url in [
+        'https://apps.apple.com.evil.example/redeem?code=X8K2MQ4TZ7WJ9R3N',
+        'http://apps.apple.com/redeem?code=X8K2MQ4TZ7WJ9R3N',
+        'https://apps.apple.com/redeem?code=X8K2MQ4TZ7WJ9R3N&ref=x',
+        'https://apps.apple.com/redeem?code=x8k2mq4tz7wj9r3n',
+        'https://apps.apple.com/redeem?code=',
+        'https://example.com/redeem?code=X8K2MQ4TZ7WJ9R3N',
+      ]) {
+        final slip = receiptProviderSlip(
+          title: 'آيتونز - 10 دولار',
+          kind: 'voucher',
+          status: 'confirmed',
+          printed: {'code': 'X8K2MQ4TZ7WJ9R3N', 'redeem_url': url},
+        );
+        expect(slip.qrData, 'X8K2MQ4TZ7WJ9R3N', reason: url);
+        expect(slip.qrCaption, receiptScanToCopyPin, reason: url);
+      }
+    });
+
+    test('a shop that prints no QR codes gets no redemption code', () {
+      final slip = receiptProviderSlip(
+        title: 'آيتونز - 10 دولار',
+        kind: 'voucher',
+        status: 'confirmed',
+        printQrCodes: false,
+        printed: const {
+          'code': 'X8K2MQ4TZ7WJ9R3N',
+          'redeem_url': 'https://apps.apple.com/redeem?code=X8K2MQ4TZ7WJ9R3N',
+        },
+      );
+      expect(slip.qrData, isNull);
+      expect(slip.pin, 'X8K2MQ4TZ7WJ9R3N');
+    });
+
     test('every card with a PIN a phone can read gets a code', () {
       for (final code in ['481246145737', 'X4K9-2LMQ-77ZP-QQ01', 'AB CD 12']) {
         final slip = receiptProviderSlip(

@@ -35,7 +35,7 @@ from django.db import connection, transaction
 from django.db.models import BigIntegerField, Case, Max, Q, When
 from django.db.models.functions import Cast
 
-from .models import ProductUnitBarcode, ProductVariant
+from .models import ProductUnitBarcode, ProductVariant, ProductVariantBarcode
 
 #: Where a shop with no plain-number codes starts counting.
 SKU_SERIES_START = 1000
@@ -91,9 +91,17 @@ def _highest_code() -> int | None:
     units = ProductUnitBarcode.objects.filter(barcode__regex=_SERIES_CODE).aggregate(
         barcode=Max(Cast("barcode", BigIntegerField()))
     )
+    extras = ProductVariantBarcode.objects.filter(barcode__regex=_SERIES_CODE).aggregate(
+        barcode=Max(Cast("barcode", BigIntegerField()))
+    )
     found = [
         value
-        for value in (variants["sku"], variants["barcode"], units["barcode"])
+        for value in (
+            variants["sku"],
+            variants["barcode"],
+            units["barcode"],
+            extras["barcode"],
+        )
         if value is not None
     ]
     return max(found, default=None)

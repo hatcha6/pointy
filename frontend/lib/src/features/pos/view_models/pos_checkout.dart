@@ -191,13 +191,32 @@ extension PosCheckoutActions on PosViewModel {
       ),
   ];
 
+  /// Whether [payments] still pay for the cart as it stands.
+  ///
+  /// A standard sale is paid exactly in full — the server refuses anything
+  /// else. The payment sheet took its total when it opened; if the cart's
+  /// total has moved since, the tender is for a different sale. Asked before
+  /// the sale's progress is put on screen, so a stale tender reopens the sheet
+  /// instead of flashing a result dialog.
+  bool tenderMatchesTotal(
+    List<SaleCheckoutPaymentDraft> payments, {
+    SaleType saleType = SaleType.standard,
+  }) {
+    if (saleType != SaleType.standard) {
+      return true;
+    }
+    final tenderedCents =
+        (payments.fold<double>(0, (sum, payment) => sum + payment.amount) * 100)
+            .round();
+    return tenderedCents == (total * 100).round();
+  }
+
   Future<SaleCheckoutOutcome> checkoutCurrentSale({
     required List<SaleCheckoutPaymentDraft> payments,
     SaleType saleType = SaleType.standard,
     DateTime? validUntil,
     DateTime? dueDate,
     bool reserveStock = false,
-    bool printProof = false,
   }) async {
     if (_isCheckingOut) {
       return const SaleCheckoutOutcome.failure();
@@ -205,11 +224,8 @@ extension PosCheckoutActions on PosViewModel {
     if (_activeRegisterSession == null || _cart.isEmpty) {
       return const SaleCheckoutOutcome.failure();
     }
-    // A standard sale is paid exactly in full — the server refuses anything
-    // else. The payment sheet took its total when it opened; if the cart's
-    // total has moved since, the tender is for a different sale. Refused here,
-    // before anything is sent, so the cashier is shown the right amount
-    // instead of a bare rejection they cannot act on.
+    // Refused here, before anything is sent, so the cashier is shown the right
+    // amount instead of a bare rejection they cannot act on.
     if (saleType == SaleType.standard) {
       final tenderedCents =
           (payments.fold<double>(0, (sum, payment) => sum + payment.amount) *
@@ -240,6 +256,19 @@ extension PosCheckoutActions on PosViewModel {
     }
 
     _isCheckingOut = true;
+    final providerLabels = [
+      for (final line in _cart)
+        if (line.isProviderLine) line.variant.displayLabel,
+    ];
+    _checkoutProgress = PosCheckoutProgress(
+      step: PosCheckoutStep.record,
+      chargeLabels: providerLabels,
+      // Known before anything is sent, so the list the cashier watches does
+      // not grow a row halfway through.
+      prints:
+          _cart.any((line) => line.isVoucher || line.isDirectService) ||
+          cartWouldAutoPrintReceipt(saleType: saleType),
+    );
     _notifyChanged();
 
     final checkoutStopwatch = Stopwatch()..start();
@@ -283,15 +312,11 @@ extension PosCheckoutActions on PosViewModel {
     // everything, rather than a receipt now and a slip later.
     final hasProviderLines = cartSnapshot.any((line) => line.isProviderLine);
     // Auto-print only carries a sale that clears the shop's floor; below it the
-    // POS showed the print box instead, so a tick there is the whole answer.
-    // A card is the exception: its receipt IS the thing sold — the PIN is on
-    // it — so it prints whatever the floor says. Airtime sent and a bill paid
-    // are the same: the receipt is the customer's only proof of it, and a
-    // prepaid meter's token is on it.
-    final shouldPrintInvoice =
-        cartWouldAutoPrintReceipt(saleType: saleType) ||
-        _printInvoiceAfterPayment ||
-        cartSnapshot.any((line) => line.isVoucher || line.isDirectService);
+    // sale's result offers the print instead. A card is the exception: its
+    // receipt IS the thing sold — the PIN is on it — so it prints whatever the
+    // floor says. Airtime sent and a bill paid are the same: the receipt is the
+    // customer's only proof of it, and a prepaid meter's token is on it.
+    final shouldPrintInvoice = _checkoutProgress!.prints;
     PrinterConfig? invoicePrinterConfig;
     // No printer on this till does receipts. Said as that after the sale, not
     // as a failed print: it is fixed in the device's printer settings, and
@@ -382,6 +407,9 @@ extension PosCheckoutActions on PosViewModel {
         // steps got its own full deadline, so two hung printers summed to ~2x
         // and froze the POS for ~40s (the checkout-hang tail seen in the field).
         final printDeadline = DateTime.now().add(_checkoutPrintDeadline);
+        if (shouldPrintInvoice && !hasProviderLines) {
+          _advanceCheckoutProgress(PosCheckoutStep.print);
+        }
         var printStatus = !shouldPrintInvoice || hasProviderLines
             ? InvoicePrintStatus.notRequested
             : receiptPrinterMissing
@@ -401,16 +429,6 @@ extension PosCheckoutActions on PosViewModel {
             deadline: printDeadline,
           );
         }
-        if (printProof) {
-          // Hand the customer a سند قبض for the credit down-payment(s) just
-          // taken. Best-effort — the sale is already committed.
-          await _guardedPrintVoid(
-            () => _printDownPaymentProofs(result.value),
-            label: 'down_payment_proof',
-            order: result.value,
-            deadline: printDeadline,
-          );
-        }
         // A quotation moves no stock on the backend, so don't optimistically
         // decrement the local catalog either (a held quotation reserves, not
         // sells; the next catalog refresh reflects any hold).
@@ -425,8 +443,10 @@ extension PosCheckoutActions on PosViewModel {
         if (waitsForProviders) {
           _isChargingProviders = true;
           _providerChargeStartedAt = DateTime.now();
+          _advanceCheckoutProgress(PosCheckoutStep.charge);
         } else {
           _isCheckingOut = false;
+          _checkoutProgress = null;
         }
         _notifyChanged();
         unawaited(
@@ -484,6 +504,7 @@ extension PosCheckoutActions on PosViewModel {
         try {
           recharges = await _performSoldRecharges(result.value);
           if (hasProviderLines && shouldPrintInvoice) {
+            _advanceCheckoutProgress(PosCheckoutStep.print);
             printStatus = receiptPrinterMissing
                 ? InvoicePrintStatus.noPrinter
                 : await _printAfterProviders(
@@ -497,6 +518,7 @@ extension PosCheckoutActions on PosViewModel {
             _isChargingProviders = false;
             _providerChargeStartedAt = null;
             _isCheckingOut = false;
+            _checkoutProgress = null;
             _notifyChanged();
           }
         }
@@ -507,6 +529,7 @@ extension PosCheckoutActions on PosViewModel {
         );
       case Error<SaleOrder>(:final exception):
         _isCheckingOut = false;
+        _checkoutProgress = null;
         _notifyChanged();
         if (exception is SaleCheckoutNoSessionException) {
           // The cached register session is gone on the backend. Drop it so the
@@ -656,7 +679,112 @@ extension PosCheckoutActions on PosViewModel {
               ) ??
               Future<void>.value(),
         );
-        return SaleCheckoutOutcome.failure(reason: _arabicReason(exception));
+        return SaleCheckoutOutcome.failure(
+          reason: _arabicReason(exception),
+          reference: _checkoutReference(attempt.idempotencyKey),
+          // No status, or 0: no HTTP response came back at all.
+          unanswered: (apiStatusCode(exception) ?? 0) == 0,
+        );
+    }
+  }
+
+  void _advanceCheckoutProgress(PosCheckoutStep step) {
+    final progress = _checkoutProgress;
+    if (progress == null || progress.step == step) {
+      return;
+    }
+    _checkoutProgress = progress.copyWith(
+      step: step,
+      chargeStartedAt: step == PosCheckoutStep.charge ? DateTime.now() : null,
+    );
+    _notifyChanged();
+  }
+
+  /// A short handle on the attempt a failed sale was sent as, for the cashier
+  /// to read out to support: the server logs the same key.
+  static String _checkoutReference(String idempotencyKey) {
+    final compact = idempotencyKey.replaceAll('-', '');
+    return compact.length <= 8
+        ? compact.toUpperCase()
+        : compact.substring(0, 8).toUpperCase();
+  }
+
+  /// Prints the sale's receipt again from its result, on the receipt printer.
+  ///
+  /// The order is read back first, so a sale whose provider has answered
+  /// since prints the answer — a card's PIN — and [recharges] lays this
+  /// checkout's own answers over it for the moment the server still lags.
+  Future<InvoicePrintStatus> reprintPaidInvoice(
+    SaleOrder order, {
+    List<IntegrationChargeResult> recharges = const [],
+  }) async {
+    final config = await _printingRepository.loadReceiptPrinterConfig();
+    if (config case Error<PrinterConfig>(:final exception)) {
+      return exception is PrinterRoleUnassigned
+          ? InvoicePrintStatus.noPrinter
+          : InvoicePrintStatus.failed;
+    }
+    var printable = order;
+    try {
+      if (await _saleRepository.loadOrder(order.id) case Ok<SaleOrder>(
+        :final value,
+      )) {
+        printable = value;
+      }
+    } on Object {
+      // The sale as it was recorded still prints.
+    }
+    printable = orderWithPerformedRecharges(printable, recharges);
+    return _guardedPrintValue(
+      () async {
+        final result = await _printingRepository.printSaleInvoice(
+          order: printable,
+          shopSettings: _checkoutSettings,
+          shopLogoBytes: _checkoutShopLogoBytes,
+        );
+        return result.isSuccess
+            ? InvoicePrintStatus.printed
+            : InvoicePrintStatus.failed;
+      },
+      fallback: InvoicePrintStatus.failed,
+      label: 'invoice_reprint',
+      order: printable,
+      deadline: DateTime.now().add(_checkoutPrintDeadline),
+    );
+  }
+
+  /// Prints the سند قبض for each down-payment the sale took. False when any
+  /// slip did not print.
+  Future<bool> printDownPaymentProofs(SaleOrder order) async {
+    var printed = true;
+    await _guardedPrintVoid(
+      () async => printed = await _printDownPaymentProofs(order),
+      label: 'down_payment_proof',
+      order: order,
+      deadline: DateTime.now().add(_checkoutPrintDeadline),
+    );
+    return printed;
+  }
+
+  /// Texts the customer a link to the sale. [phone] sends it to a number the
+  /// cashier typed — a walk-in customer has no record to read one from. Null
+  /// once it is on its way; otherwise the refusal's code and the server's
+  /// words, for the screen to say in Arabic.
+  Future<({String code, String detail})?> sendPaidInvoiceSms(
+    SaleOrder order, {
+    String? phone,
+  }) async {
+    final result = await _saleRepository.sendInvoiceSms(order.id, phone: phone);
+    switch (result) {
+      case Ok<MessagingSendResult>(value: final sent):
+        return sent.isFailure
+            ? (code: sent.errorCode, detail: sent.errorDetail)
+            : null;
+      case Error<MessagingSendResult>(:final exception):
+        return (
+          code: apiErrorCode(exception) ?? '',
+          detail: apiErrorDetail(exception),
+        );
     }
   }
 
@@ -878,10 +1006,11 @@ extension PosCheckoutActions on PosViewModel {
   /// checkout — one slip per tender, so a split down-payment yields one
   /// receipt per method. The repository records a payment_receipt audit event
   /// per slip (keyed on the payment id). Mirrors the invoice-details proof.
-  Future<void> _printDownPaymentProofs(SaleOrder order) async {
+  Future<bool> _printDownPaymentProofs(SaleOrder order) async {
     if (order.payments.isEmpty) {
-      return;
+      return true;
     }
+    var printed = true;
     const labels = OrderDocumentLabels.arabic();
     for (final payment in order.payments) {
       final proof = PaymentProof(
@@ -901,14 +1030,16 @@ extension PosCheckoutActions on PosViewModel {
         balanceAfter: order.balanceDue,
         createdAt: payment.createdAt ?? DateTime.now(),
       );
-      await _printingRepository.printProofOfPayment(
+      final result = await _printingRepository.printProofOfPayment(
         proof: proof,
         paymentId: payment.id,
         paymentKind: PrintAuditPaymentKind.customer,
         shopSettings: _checkoutSettings,
         shopLogoBytes: _checkoutShopLogoBytes,
       );
+      printed = printed && result.isSuccess;
     }
+    return printed;
   }
 
   void _applySoldQuantities(List<CartLine> soldLines) {
@@ -985,6 +1116,43 @@ double _checkoutCartTotal(List<CartLine> lines) {
   return lines.fold(0, (sum, line) => sum + line.total);
 }
 
+/// The part of a sale the till is on, for the screen that shows it happening.
+enum PosCheckoutStep { record, charge, print }
+
+/// What a checkout under way is doing, and what it still has to do.
+class PosCheckoutProgress {
+  const PosCheckoutProgress({
+    required this.step,
+    required this.prints,
+    this.chargeLabels = const [],
+    this.chargeStartedAt,
+  });
+
+  final PosCheckoutStep step;
+
+  /// Whether the receipt prints by itself as part of the sale.
+  final bool prints;
+
+  /// The lines a provider performs — a card, a top-up — by name. Empty when
+  /// the sale sold none, and then there is no charging step.
+  final List<String> chargeLabels;
+
+  /// When the provider was asked.
+  final DateTime? chargeStartedAt;
+
+  bool get charges => chargeLabels.isNotEmpty;
+
+  PosCheckoutProgress copyWith({
+    PosCheckoutStep? step,
+    DateTime? chargeStartedAt,
+  }) => PosCheckoutProgress(
+    step: step ?? this.step,
+    prints: prints,
+    chargeLabels: chargeLabels,
+    chargeStartedAt: chargeStartedAt ?? this.chargeStartedAt,
+  );
+}
+
 enum InvoicePrintStatus {
   notRequested,
   printed,
@@ -1008,6 +1176,8 @@ class SaleCheckoutOutcome {
     this.creditLimit,
     this.recharges = const [],
     this.failureReason,
+    this.reference,
+    this.isUnanswered = false,
   });
 
   const SaleCheckoutOutcome.success(
@@ -1026,13 +1196,22 @@ class SaleCheckoutOutcome {
   /// [reason] is the server's own sentence when it wrote one in Arabic — "this
   /// handset has no number yet", "not enough in sellable lots" — which tells
   /// the cashier what to do where a generic "checkout failed" cannot.
-  const SaleCheckoutOutcome.failure({String? reason})
-    : this._(
-        isSuccess: false,
-        isStockRejected: false,
-        isLossRejected: false,
-        failureReason: reason,
-      );
+  ///
+  /// [unanswered] says the request never got a reply — the network, not the
+  /// server — so the sale may or may not be recorded; sending it again is
+  /// what finds out, and cannot record it twice.
+  const SaleCheckoutOutcome.failure({
+    String? reason,
+    String? reference,
+    bool unanswered = false,
+  }) : this._(
+         isSuccess: false,
+         isStockRejected: false,
+         isLossRejected: false,
+         failureReason: reason,
+         reference: reference,
+         isUnanswered: unanswered,
+       );
 
   const SaleCheckoutOutcome.sessionExpired()
     : this._(
@@ -1097,6 +1276,12 @@ class SaleCheckoutOutcome {
   /// Why a failed checkout failed, in the server's Arabic; null when it did not
   /// say, and on every outcome that has a dialog of its own.
   final String? failureReason;
+
+  /// The handle support can find the failed attempt by.
+  final String? reference;
+
+  /// The request left and nothing came back.
+  final bool isUnanswered;
 
   /// Sent, and never answered. Nothing may retry these: somebody has to look
   /// at the card before anything else happens to them.

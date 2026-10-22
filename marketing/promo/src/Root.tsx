@@ -5,6 +5,7 @@ import {PosCheckout} from './videos/PosCheckout';
 import {AiAssistant} from './videos/AiAssistant';
 import {Inventory} from './videos/Inventory';
 import {Reports} from './videos/Reports';
+import {PosTour, TOUR_FPS, tourDuration} from './tour/PosTour';
 import {POSTER} from './posters/kit';
 import {BrandPoster} from './posters/Brand';
 import {CheckoutPoster} from './posters/Checkout';
@@ -57,6 +58,14 @@ export const RemotionRoot: React.FC = () => (
     <Composition id="AiAssistant" component={AiAssistant} {...base} />
     <Composition id="Inventory" component={Inventory} {...base} />
     <Composition id="Reports" component={Reports} {...base} />
+    <Composition
+      id="PosTour"
+      component={PosTour}
+      durationInFrames={tourDuration()}
+      fps={TOUR_FPS}
+      width={VIDEO.w}
+      height={VIDEO.h}
+    />
 
     <Composition id="PosterBrand" component={BrandPoster} {...still} />
     <Composition id="PosterCheckout" component={CheckoutPoster} {...still} />

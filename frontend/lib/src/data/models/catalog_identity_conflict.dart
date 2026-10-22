@@ -2,7 +2,9 @@ import '../services/api_session.dart';
 
 /// Which catalog field a duplicate landed on. [gtin] is the GS1 trade-item
 /// number, refused when another variant already answers to it.
-enum CatalogIdentityField { sku, barcode, gtin }
+/// [extraBarcodes] is one of a variant's further barcodes — looked up exactly
+/// like the primary one, but marked on its own input.
+enum CatalogIdentityField { sku, barcode, gtin, extraBarcodes }
 
 /// What the duplicate collided with.
 enum CatalogIdentityConflictKind {
@@ -155,6 +157,7 @@ CatalogIdentityField _fieldFrom(Object? value) {
   return switch (_text(value)) {
     'sku' => CatalogIdentityField.sku,
     'gtin' => CatalogIdentityField.gtin,
+    'extra_barcodes' => CatalogIdentityField.extraBarcodes,
     _ => CatalogIdentityField.barcode,
   };
 }

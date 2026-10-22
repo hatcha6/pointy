@@ -38,7 +38,6 @@ import '../view_models/pos_view_model.dart';
 import 'pos_cash_purchase_sheet.dart';
 import 'direct_services/service_requote_dialog.dart';
 import 'pos_cart_pane.dart';
-import 'pos_provider_charge_overlay.dart';
 import 'pos_catalog_pane.dart';
 import 'pos_shortcuts_sheet.dart';
 import 'pos_unit_pick.dart';
@@ -141,6 +140,15 @@ class PosScreen extends StatelessWidget {
                       ? _PosWorkspace(
                           viewModel: viewModel,
                           contactRepository: contactRepository,
+                          // Where a sale's result sends an owner who has not
+                          // switched on invoice links.
+                          onOpenShopSettings: capabilities.canManageShopSettings
+                              ? () => navigation.navigateTo(
+                                  context,
+                                  AppNavigationDestination.settings,
+                                  from: AppNavigationDestination.pos,
+                                )
+                              : null,
                           integrationsRepository: integrationsRepository,
                           walletRepository: walletRepository,
                           capabilities: capabilities,
@@ -151,14 +159,6 @@ class PosScreen extends StatelessWidget {
                         ),
                 ),
               ),
-              // A provider is performing what the sale sold, which can take
-              // over a minute: the till is not free to sell until it answers.
-              if (viewModel.isChargingProviders)
-                Positioned.fill(
-                  child: PosProviderChargeOverlay(
-                    startedAt: viewModel.providerChargeStartedAt,
-                  ),
-                ),
             ],
           ),
         );
@@ -559,6 +559,7 @@ class _PosWorkspace extends StatefulWidget {
     required this.integrationsRepository,
     required this.capabilities,
     this.walletRepository,
+    this.onOpenShopSettings,
   });
 
   final PosViewModel viewModel;
@@ -566,6 +567,7 @@ class _PosWorkspace extends StatefulWidget {
   final IntegrationsRepository integrationsRepository;
   final AuthorizationCapabilities capabilities;
   final WalletRepository? walletRepository;
+  final VoidCallback? onOpenShopSettings;
 
   @override
   State<_PosWorkspace> createState() => _PosWorkspaceState();
@@ -852,6 +854,7 @@ class _PosWorkspaceState extends State<_PosWorkspace> {
                 contactRepository: widget.contactRepository,
                 capabilities: capabilities,
                 checkoutController: _checkoutController,
+                onOpenShopSettings: widget.onOpenShopSettings,
               ),
             );
           }
@@ -863,6 +866,7 @@ class _PosWorkspaceState extends State<_PosWorkspace> {
             rechargeProviders: _rechargeProviders,
             onRecharge: _openRecharge,
             onTransferVoucherBalance: _voucherTransfer,
+            onOpenShopSettings: widget.onOpenShopSettings,
           );
         },
       ),
@@ -878,6 +882,7 @@ class _CompactPosWorkspace extends StatelessWidget {
     this.rechargeProviders = const [],
     this.onRecharge,
     this.onTransferVoucherBalance,
+    this.onOpenShopSettings,
   });
 
   final PosViewModel viewModel;
@@ -886,6 +891,7 @@ class _CompactPosWorkspace extends StatelessWidget {
   final List<String> rechargeProviders;
   final void Function(String providerKey)? onRecharge;
   final Future<bool> Function()? onTransferVoucherBalance;
+  final VoidCallback? onOpenShopSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -936,6 +942,7 @@ class _CompactPosWorkspace extends StatelessWidget {
               viewModel: viewModel,
               contactRepository: contactRepository,
               capabilities: capabilities,
+              onOpenShopSettings: onOpenShopSettings,
               onCheckoutSuccess: () {
                 Navigator.of(sheetContext).pop();
               },

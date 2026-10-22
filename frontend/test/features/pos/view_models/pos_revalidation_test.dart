@@ -92,15 +92,14 @@ void main() {
 
   test('a settings change reaches the till', () async {
     await pos.loadCheckoutSettings();
-    // The checkbox is shown only while the shop is NOT auto-printing, so it
-    // reads the setting the till actually acts on.
-    expect(pos.shouldShowPrintInvoiceCheckbox, isTrue);
+    // Whether a sale prints by itself reads the setting the till acts on.
+    expect(pos.cartWouldAutoPrintReceipt(), isFalse);
 
     api.settings = _settingsWith(autoPrint: true);
     api.serverState.apply({ServerStateDomain.settings: '2'});
     await _settle();
 
-    expect(pos.shouldShowPrintInvoiceCheckbox, isFalse);
+    expect(pos.cartWouldAutoPrintReceipt(), isTrue);
   });
 
   test(

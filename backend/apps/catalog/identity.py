@@ -15,12 +15,22 @@ one red line under the whole dialog.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
-from .models import ProductUnitBarcode, ProductVariant, normalize_barcode, normalize_sku
+from .models import (
+    ProductUnitBarcode,
+    ProductVariant,
+    ProductVariantBarcode,
+    normalize_barcode,
+    normalize_sku,
+)
 
 SKU_FIELD = "sku"
 BARCODE_FIELD = "barcode"
+# A variant's further barcodes (``ProductVariantBarcode``). Looked up exactly
+# like the primary one — a scan cannot tell them apart — but reported under
+# its own field so the form marks the extra-barcode input, not the main one.
+EXTRA_BARCODES_FIELD = "extra_barcodes"
 # The GS1 trade-item number. Not held unique by the database — the plan keeps
 # it advisory so a wrong one stays correctable — but two variants answering to
 # one GTIN make a DataMatrix scan pick whichever the query meets first, so a
@@ -64,26 +74,19 @@ class IdentityConflict:
 
     def at(self, target: str, index: int | None = None) -> "IdentityConflict":
         """Copy tagged with the payload position the value came from."""
-        return IdentityConflict(
-            field=self.field,
-            value=self.value,
-            kind=self.kind,
-            product_id=self.product_id,
-            product_name=self.product_name,
-            variant_id=self.variant_id,
-            variant_sku=self.variant_sku,
-            variant_name=self.variant_name,
-            unit_code=self.unit_code,
-            is_archived=self.is_archived,
-            target=target,
-            index=index,
-        )
+        return replace(self, target=target, index=index)
+
+    def as_field(self, field: str) -> "IdentityConflict":
+        """Copy reported under another payload field (same lookup, other input)."""
+        return replace(self, field=field)
 
     @property
     def label(self) -> str:
         if self.field == GTIN_FIELD:
             return "GTIN"
-        return "Barcode" if self.field == BARCODE_FIELD else "SKU"
+        if self.field in (BARCODE_FIELD, EXTRA_BARCODES_FIELD):
+            return "Barcode"
+        return "SKU"
 
     @property
     def message(self) -> str:
@@ -175,8 +178,9 @@ def find_conflicts(
 
     Batched deliberately: a generated-variant payload can carry dozens of rows,
     and a per-row lookup would put the catalog's heaviest write back into N+1
-    territory. Three queries cover any payload size — SKUs, variant barcodes,
-    then packaging barcodes for whatever the second query left unmatched.
+    territory. Four queries cover any payload size — SKUs, variant barcodes,
+    then a variant's extra barcodes and packaging barcodes for whatever the
+    earlier queries left unmatched.
 
     Archived products count as owners: their variants keep their codes, so a
     reuse would still fail at the unique index.
@@ -217,6 +221,25 @@ def find_conflicts(
     unmatched = [
         value
         for value in barcode_values
+        if (BARCODE_FIELD, value) not in conflicts
+    ]
+    if not unmatched:
+        return conflicts
+
+    extra_barcodes = ProductVariantBarcode.objects.select_related(
+        "variant__product"
+    ).filter(barcode__in=unmatched)
+    if excluded:
+        extra_barcodes = extra_barcodes.exclude(variant_id__in=excluded)
+    for extra in extra_barcodes:
+        conflicts.setdefault(
+            (BARCODE_FIELD, extra.barcode),
+            _variant_conflict(BARCODE_FIELD, extra.barcode, extra.variant),
+        )
+
+    unmatched = [
+        value
+        for value in unmatched
         if (BARCODE_FIELD, value) not in conflicts
     ]
     if not unmatched:

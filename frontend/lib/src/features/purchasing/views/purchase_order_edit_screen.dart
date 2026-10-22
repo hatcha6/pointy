@@ -11,6 +11,7 @@ import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
 import '../../../shared/navigation/app_navigation.dart';
+import '../view_models/purchase_order_documents.dart';
 import '../view_models/purchase_view_model.dart';
 import 'purchasing_screen.dart';
 import '../../../shared/components/pointy_progress.dart';
@@ -32,6 +33,7 @@ class PurchaseOrderEditScreen extends StatefulWidget {
     required this.analyticsEngine,
     required this.capabilities,
     required this.navigation,
+    this.documents,
   });
 
   final int purchaseOrderId;
@@ -41,6 +43,9 @@ class PurchaseOrderEditScreen extends StatefulWidget {
   final AnalyticsEngine analyticsEngine;
   final AuthorizationCapabilities capabilities;
   final AppNavigation navigation;
+
+  /// The saved order as paper, and the stickers for what its receipt brings.
+  final PurchaseOrderDocuments? documents;
 
   @override
   State<PurchaseOrderEditScreen> createState() =>
@@ -109,6 +114,7 @@ class _PurchaseOrderEditScreenState extends State<PurchaseOrderEditScreen> {
         capabilities: widget.capabilities,
         navigation: widget.navigation,
         showBackButton: true,
+        documents: widget.documents,
         onSaved: () => Navigator.of(context).maybePop(),
       );
     }

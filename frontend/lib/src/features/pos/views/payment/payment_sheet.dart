@@ -35,16 +35,14 @@ import 'tender_line_editor.dart';
 class PaymentSheetResult {
   const PaymentSheetResult({
     required this.payments,
-    required this.shareInvoiceAfterPayment,
     this.saleType = SaleType.standard,
     this.validUntil,
     this.dueDate,
     this.reserveStock = false,
-    this.printProof = false,
+    this.changeDue = 0,
   });
 
   final List<SaleCheckoutPaymentDraft> payments;
-  final bool shareInvoiceAfterPayment;
 
   /// How the sale is recorded (standard / credit / quotation).
   final SaleType saleType;
@@ -59,8 +57,10 @@ class PaymentSheetResult {
   /// Quotation-only: hold the quoted quantities until [validUntil].
   final bool reserveStock;
 
-  /// Credit-only: print a down-payment proof (سند قبض) after checkout.
-  final bool printProof;
+  /// The cash the customer is owed back: what was handed over beyond the
+  /// total. The sale records the total; this is only for the screen that
+  /// follows it, which says the figure the cashier counts out.
+  final double changeDue;
 }
 
 Future<PaymentSheetResult?> showPosPaymentSheet({
@@ -73,12 +73,6 @@ Future<PaymentSheetResult?> showPosPaymentSheet({
   required List<String> trustedCardTerminalIds,
   List<MoneyAccount> bankAccounts = const [],
   MoneyAccount? Function(String terminalId)? accountForTerminal,
-  required bool showPrintInvoiceToggle,
-  required bool printInvoiceAfterPayment,
-  required ValueChanged<bool> onPrintInvoiceChanged,
-  required bool showShareInvoiceToggle,
-  required bool shareInvoiceAfterPayment,
-  required ValueChanged<bool> onShareInvoiceChanged,
   bool hasCustomer = false,
   bool requireCustomerForCredit = false,
   bool enableQuotations = true,
@@ -98,12 +92,6 @@ Future<PaymentSheetResult?> showPosPaymentSheet({
       trustedCardTerminalIds: trustedCardTerminalIds,
       bankAccounts: bankAccounts,
       accountForTerminal: accountForTerminal,
-      showPrintInvoiceToggle: showPrintInvoiceToggle,
-      printInvoiceAfterPayment: printInvoiceAfterPayment,
-      onPrintInvoiceChanged: onPrintInvoiceChanged,
-      showShareInvoiceToggle: showShareInvoiceToggle,
-      shareInvoiceAfterPayment: shareInvoiceAfterPayment,
-      onShareInvoiceChanged: onShareInvoiceChanged,
       hasCustomer: hasCustomer,
       requireCustomerForCredit: requireCustomerForCredit,
       enableQuotations: enableQuotations,
@@ -137,12 +125,6 @@ class PaymentSheet extends StatefulWidget {
     required this.trustedCardTerminalIds,
     this.bankAccounts = const [],
     this.accountForTerminal,
-    required this.showPrintInvoiceToggle,
-    required this.printInvoiceAfterPayment,
-    required this.onPrintInvoiceChanged,
-    required this.showShareInvoiceToggle,
-    required this.shareInvoiceAfterPayment,
-    required this.onShareInvoiceChanged,
     required this.onSubmit,
     required this.onCancel,
     this.hasCustomer = false,
@@ -170,12 +152,6 @@ class PaymentSheet extends StatefulWidget {
   /// has mapped no terminals, in which case a scanned receipt still attaches
   /// to its payment; it just does not choose a bank.
   final MoneyAccount? Function(String terminalId)? accountForTerminal;
-  final bool showPrintInvoiceToggle;
-  final bool printInvoiceAfterPayment;
-  final ValueChanged<bool> onPrintInvoiceChanged;
-  final bool showShareInvoiceToggle;
-  final bool shareInvoiceAfterPayment;
-  final ValueChanged<bool> onShareInvoiceChanged;
   final ValueChanged<PaymentSheetResult> onSubmit;
   final VoidCallback onCancel;
 
@@ -228,14 +204,11 @@ class _PaymentSheetState extends State<PaymentSheet> {
   var _isBalancingTender = false;
   var _saleType = SaleType.standard;
   var _reserveStock = false;
-  var _printProof = false;
   DateTime? _validUntil;
   // Seeded from the customer's (or the shop's) terms the first time the credit
   // type is chosen, then owned by the cashier. Kept apart from _validUntil
   // because a quotation's expiry and a debt's due date are different promises.
   DateTime? _dueDate;
-  late var _printInvoiceAfterPayment = widget.printInvoiceAfterPayment;
-  late var _shareInvoiceAfterPayment = widget.shareInvoiceAfterPayment;
 
   /// A receipt that passed every check but has no payment line to prove yet —
   /// scanned before the cashier set the tender up, or released by a line that
@@ -952,42 +925,6 @@ class _PaymentSheetState extends State<PaymentSheet> {
           SizedBox(height: spacing.md),
           _buildCreditDueDatePicker(l10n),
         ],
-        if (widget.showPrintInvoiceToggle) ...[
-          SizedBox(height: spacing.md),
-          ReceiptToggleRow(
-            label: l10n.printInvoiceAfterPaymentLabel,
-            subtitle: l10n.receiptToggleSubtitle,
-            tooltip: l10n.receiptToggleTooltip,
-            value: _printInvoiceAfterPayment,
-            onChanged: (value) {
-              setState(() => _printInvoiceAfterPayment = value);
-              widget.onPrintInvoiceChanged(value);
-            },
-          ),
-        ],
-        if (widget.showShareInvoiceToggle) ...[
-          SizedBox(height: spacing.sm),
-          ReceiptToggleRow(
-            label: l10n.shareInvoiceAfterPaymentLabel,
-            subtitle: l10n.shareInvoiceToggleSubtitle,
-            tooltip: l10n.shareInvoiceToggleTooltip,
-            value: _shareInvoiceAfterPayment,
-            onChanged: (value) {
-              setState(() => _shareInvoiceAfterPayment = value);
-              widget.onShareInvoiceChanged(value);
-            },
-          ),
-        ],
-        if (_isCredit) ...[
-          SizedBox(height: spacing.sm),
-          ReceiptToggleRow(
-            label: l10n.printDownPaymentProofLabel,
-            subtitle: l10n.printDownPaymentProofSubtitle,
-            tooltip: l10n.printDownPaymentProofLabel,
-            value: _printProof,
-            onChanged: (value) => setState(() => _printProof = value),
-          ),
-        ],
       ],
     );
   }
@@ -1311,14 +1248,13 @@ class _PaymentSheetState extends State<PaymentSheet> {
     widget.onSubmit(
       PaymentSheetResult(
         payments: payments,
-        shareInvoiceAfterPayment: _shareInvoiceAfterPayment,
         saleType: _saleType,
         // A quotation carries a stock-hold deadline only when it actually
         // holds stock; a credit invoice carries its own, separate due date.
         validUntil: _isQuotation && _reserveStock ? _validUntil : null,
         dueDate: _isCredit ? _dueDate : null,
         reserveStock: _isQuotation && _reserveStock,
-        printProof: _isCredit && _printProof,
+        changeDue: _isQuotation ? 0 : _summary.changeDue,
       ),
     );
   }

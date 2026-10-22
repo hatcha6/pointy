@@ -8,17 +8,12 @@ import '../../../shared/barcode/scan_burst_guard.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
-import '../../../core/error_messages.dart';
 import '../../../core/parsing.dart';
-import '../../../core/result.dart';
-import '../../../data/services/api_error_detail.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/product_unit.dart';
 import '../../../data/models/product_variant.dart';
-import '../../../data/models/tracking_mode.dart';
 import '../../../data/models/purchase_submission.dart';
 import '../../../data/repositories/contact_repository.dart';
-import '../../../data/repositories/printing_repository.dart';
 import '../../../shared/catalog/catalog.dart';
 import '../../../shared/contact_picker_sheet.dart';
 import '../../../shared/components/components.dart';
@@ -34,13 +29,12 @@ import '../../../data/models/warehouse.dart';
 import '../../../shared/tutor/anchors.dart';
 import '../../../shared/tutor/tutor_target.dart';
 import 'supplier_currency_field.dart';
+import '../view_models/purchase_order_documents.dart';
 import '../view_models/purchase_view_model.dart';
 import 'purchase_pricing_sheet.dart';
-import 'purchase_cost_warning_dialog.dart';
-import 'purchase_order_details_screen.dart'
-    show showPurchaseReceiveCaptureDialog;
+import 'purchase_receipt_hint.dart';
+import 'purchase_result/purchase_result_dialog.dart';
 import 'purchase_suggestion_strip.dart';
-import 'receipt_labels.dart';
 
 /// Lets the draft pane publish its footer actions to the workspace above it, so
 /// the global keyboard handler can run the very same flows — Ctrl/Cmd+Enter to
@@ -65,7 +59,7 @@ class PurchaseDraftPane extends StatefulWidget {
     this.submitController,
     this.onSubmitSuccess,
     this.capabilities,
-    this.printingRepository,
+    this.documents,
   });
 
   final PurchaseViewModel viewModel;
@@ -74,13 +68,13 @@ class PurchaseDraftPane extends StatefulWidget {
   /// Publishes this pane's footer actions for the global keyboard handler.
   final PurchaseSubmitController? submitController;
 
-  /// Who is buying. The receiving dialog a submit can open asks it whether a
+  /// Who is buying: whether the result may receive the goods, and whether a
   /// scanned article may be priced or given its own warranty there.
   final AuthorizationCapabilities? capabilities;
 
-  /// Stickers for what a submit-and-receive just brought. Null skips the
-  /// offer.
-  final PrintingRepository? printingRepository;
+  /// The order as paper, and the stickers for what its receipt brought.
+  /// Null offers neither.
+  final PurchaseOrderDocuments? documents;
   final VoidCallback? onSubmitSuccess;
 
   @override
@@ -219,17 +213,9 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
                 6,
               ),
               primaryActionHeight: short ? PointyDimensions.buttonHeight : 52,
-              summary: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _PurchaseDraftTotals(viewModel: viewModel),
-                  // Receiving on submit is a submit-time choice; saving a draft
-                  // never receives stock, so the toggle is hidden when editing.
-                  if (!isEditing)
-                    _ReceiveImmediatelyToggle(viewModel: viewModel),
-                ],
-              ),
+              // Whether the goods are in is asked in the order's result, not
+              // decided beforehand by a switch here.
+              summary: _PurchaseDraftTotals(viewModel: viewModel),
               primaryAction: isEditing
                   ? _buildSaveButton(context, l10n)
                   : _buildSubmitButton(context, l10n),
@@ -331,164 +317,40 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
         );
       return;
     }
-    var result = await viewModel.submitDraft();
-    if (!context.mounted) {
-      return;
-    }
-
-    // The backend refused because a cost reads as a typo — the bread bought for
-    // 130 and entered as 130 *per loaf*. Show what it found and let the buyer
-    // decide: clearance stock and thin margins are real, so this asks rather
-    // than blocks. (A POS cash purchase gets no such offer.)
-    if (result is Error<PurchaseSubmission> &&
-        viewModel.costWarnings.isNotEmpty) {
-      final confirmed = await showPurchaseCostWarningDialog(
-        context,
-        warnings: viewModel.costWarnings,
-      );
-      if (!context.mounted) {
-        return;
-      }
-      if (!confirmed) {
-        viewModel.clearCostWarnings();
-        return;
-      }
-      result = await viewModel.submitDraft(acknowledgeCostWarnings: true);
-      if (!context.mounted) {
-        return;
-      }
-    }
-
-    // Goods that carry identity were ordered but not received: the receipt
-    // waits for the receiver to scan them, in the same dialog an order's own
-    // page uses, opened right here while the boxes are still on the counter.
-    if (result case Ok(:final value) when value.awaitsIdentifiers) {
-      await _receiveWithIdentifiers(context, value);
-      if (context.mounted) {
-        widget.onSubmitSuccess?.call();
-      }
-      return;
-    }
-
-    // A supplier invoice number already on another order is the one refusal
-    // here the buyer fixes by changing what they typed; sending the same order
-    // again cannot help, so it gets its own words and no Retry.
-    final duplicateInvoice =
-        result is Error<PurchaseSubmission> &&
-        _refusesSupplierInvoiceNumber(result.exception);
-    final message = switch (result) {
-      Ok(:final value) =>
-        value.status == 'received'
-            ? l10n.purchaseOrderReceiveSuccess(value.draftNumber)
-            : l10n.purchaseDraftSubmitSuccess(value.draftNumber),
-      Error() when duplicateInvoice => l10n.purchaseSupplierInvoiceNumberTaken,
-      Error() => l10n.purchaseDraftSubmitError,
-    };
-
-    messenger
-      ..clearSnackBars()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          action: result is Ok<PurchaseSubmission> || duplicateInvoice
-              ? null
-              : SnackBarAction(
-                  label: l10n.retryButton,
-                  onPressed: () {
-                    if (context.mounted) {
-                      _submitDraft(context);
-                    }
-                  },
-                ),
-        ),
-      );
-
-    if (result is Ok<PurchaseSubmission>) {
-      widget.onSubmitSuccess?.call();
-    }
+    await _showResult(context, PurchaseResultMode.submit);
   }
 
-  /// Receives an order [_submitDraft] just created, once its serials and lots
-  /// are scanned. Closing the dialog leaves the order submitted and waiting —
-  /// said so, because the stock has not moved.
-  Future<void> _receiveWithIdentifiers(
+  /// Sends the draft in the dialog that shows its progress and then its
+  /// result — where the order is printed, and its goods received when they
+  /// are on the counter, scanned in place when they carry serials or lots.
+  Future<void> _showResult(
     BuildContext context,
-    PurchaseSubmission submission,
+    PurchaseResultMode mode,
   ) async {
-    final l10n = AppLocalizations.of(context)!;
-    final messenger = ScaffoldMessenger.of(context);
-    void deferred([String? reason]) {
-      messenger
-        ..clearSnackBars()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(
-              [
-                ?reason,
-                l10n.purchaseOrderReceiptDeferred(submission.draftNumber),
-              ].join(' '),
-            ),
-          ),
-        );
-    }
-
-    final orderId = submission.orderId;
-    final loaded = orderId == null
-        ? null
-        : await viewModel.loadOrderForReceipt(orderId);
-    if (!context.mounted) {
-      return;
-    }
-    if (orderId == null || loaded is! Ok<PurchaseOrder>) {
-      deferred();
-      return;
-    }
-    final draft = await showPurchaseReceiveCaptureDialog(
-      context,
-      order: loaded.value,
-      permissions: UnitIntakePermissions.of(widget.capabilities),
+    final capabilities = widget.capabilities;
+    final exit = await showPurchaseResultDialog(
+      context: context,
+      viewModel: viewModel,
+      mode: mode,
+      documents: widget.documents,
+      permissions: UnitIntakePermissions.of(capabilities),
+      canReceive: capabilities?.canReceivePurchaseOrder ?? true,
     );
     if (!context.mounted) {
       return;
     }
-    if (draft == null) {
-      deferred();
-      return;
-    }
-    final received = await viewModel.receiveCreatedOrder(orderId, draft);
-    if (!context.mounted) {
-      return;
-    }
-    switch (received) {
-      case Ok<PurchaseOrder>(:final value):
-        showReceiptDoneSnackBar(
-          context,
-          messenger: messenger,
-          message: l10n.purchaseOrderReceiveSuccess(
-            value.orderNumber.isEmpty
-                ? submission.draftNumber
-                : value.orderNumber,
-          ),
-          entries: receiptLabelEntries(
-            orderLines: loaded.value.lines,
-            received: draft.lines,
-            l10n: l10n,
-          ),
-          printingRepository: widget.printingRepository,
-        );
-      case Error<PurchaseOrder>(:final exception):
-        deferred(errorMessageFor(exception, l10n));
+    switch (exit) {
+      case PurchaseResultDone():
+        widget.onSubmitSuccess?.call();
+      case PurchaseResultEditInvoice():
+        await _showPurchaseDraftSettingsDialog(context);
+      case PurchaseResultBackToDraft():
+        break;
     }
   }
 
-  static bool _refusesSupplierInvoiceNumber(Object exception) {
-    return apiStatusCode(exception) == 400 &&
-        apiErrorHasField(exception, 'supplier_invoice_number');
-  }
-
-  /// Saves edits to a reopened draft without committing it. Mirrors
-  /// [_submitDraft]'s discount validation, but stays a draft (no submit/receive)
-  /// and does not require expiry dates.
+  /// Saves edits to a reopened order. Mirrors [_submitDraft]'s discount
+  /// validation; the order keeps its status.
   Future<void> _saveDraft(BuildContext context) async {
     final l10n = AppLocalizations.of(context)!;
     final messenger = ScaffoldMessenger.of(context);
@@ -521,67 +383,7 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
         );
       return;
     }
-    var result = await viewModel.saveDraft();
-    if (!context.mounted) {
-      return;
-    }
-
-    // Saving an edit hits the same cost guard as submitting a new draft, but
-    // until now it had no way past it: no acknowledgement was ever sent, so a
-    // flagged cost made the edit unsavable and the Retry below re-ran the
-    // identical request. One shop hit that wall 41 times across two orders on
-    // 4–5 September 2026. Offer the same choice the draft pane offers.
-    if (result is Error<PurchaseOrder> && viewModel.costWarnings.isNotEmpty) {
-      final confirmed = await showPurchaseCostWarningDialog(
-        context,
-        warnings: viewModel.costWarnings,
-      );
-      if (!context.mounted) {
-        return;
-      }
-      if (!confirmed) {
-        viewModel.clearCostWarnings();
-        return;
-      }
-      result = await viewModel.saveDraft(acknowledgeCostWarnings: true);
-      if (!context.mounted) {
-        return;
-      }
-    }
-
-    final message = switch (result) {
-      Ok(:final value) => l10n.purchaseDraftSaveSuccess(value.orderNumber),
-      Error(:final exception) when _refusesSupplierInvoiceNumber(exception) =>
-        l10n.purchaseSupplierInvoiceNumberTaken,
-      // The server said why. Saying it back beats a generic failure the buyer
-      // can only answer by pressing the same button again.
-      Error(:final exception) => switch (apiErrorDetail(exception)) {
-        '' => l10n.purchaseDraftSaveError,
-        final detail => '${l10n.purchaseDraftSaveError}: $detail',
-      },
-    };
-
-    messenger
-      ..clearSnackBars()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          action: result is Ok<PurchaseOrder>
-              ? null
-              : SnackBarAction(
-                  label: l10n.retryButton,
-                  onPressed: () {
-                    if (context.mounted) {
-                      _saveDraft(context);
-                    }
-                  },
-                ),
-        ),
-      );
-
-    if (result is Ok<PurchaseOrder>) {
-      widget.onSubmitSuccess?.call();
-    }
+    await _showResult(context, PurchaseResultMode.save);
   }
 }
 
@@ -1312,27 +1114,6 @@ class _PurchaseDraftTotals extends StatelessWidget {
           isStrong: true,
         ),
       ],
-    );
-  }
-}
-
-class _ReceiveImmediatelyToggle extends StatelessWidget {
-  const _ReceiveImmediatelyToggle({required this.viewModel});
-
-  final PurchaseViewModel viewModel;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-
-    return TutorTarget(
-      anchor: TutorAnchor.purchaseReceiveImmediatelyToggle,
-      child: PointyOrderToggleRow(
-        label: l10n.receivePurchaseImmediatelyLabel,
-        value: viewModel.receiveImmediately,
-        enabled: !viewModel.isSubmitting,
-        onChanged: viewModel.updateReceiveImmediately,
-      ),
     );
   }
 }
@@ -2565,19 +2346,10 @@ class _DestinationField extends StatelessWidget {
 }
 
 /// What the receiver will be asked for when this line's goods arrive — said
-/// on the order line, because the order itself carries only a count. A lot of
-/// paint is named but never dated, so only goods whose lots must expire say so.
-String _receiptHint(AppLocalizations l10n, ProductVariant variant) {
-  return switch (variant.trackingMode) {
-    TrackingMode.serial => l10n.purchaseLineUnitsAtReceipt,
-    TrackingMode.serialBatch =>
-      variant.expiryRequired
-          ? l10n.purchaseLineSerialLotExpiryAtReceipt
-          : l10n.purchaseLineSerialLotAtReceipt,
-    TrackingMode.batch =>
-      variant.expiryRequired
-          ? l10n.purchaseLineLotsAtReceipt
-          : l10n.purchaseLineLotsNoExpiryAtReceipt,
-    TrackingMode.quantity => '',
-  };
-}
+/// on the order line, because the order itself carries only a count.
+String _receiptHint(AppLocalizations l10n, ProductVariant variant) =>
+    purchaseReceiptHint(
+      l10n,
+      variant.trackingMode,
+      expiryRequired: variant.expiryRequired,
+    );

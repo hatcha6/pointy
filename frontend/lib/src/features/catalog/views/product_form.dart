@@ -43,6 +43,7 @@ import 'product_image_picker.dart';
 import 'product_more_details.dart';
 import 'product_tracking_fields.dart';
 import 'product_units_editor.dart';
+import 'variant_extra_barcodes_field.dart';
 import 'variant_generation_fields.dart';
 import 'variant_identity_watcher.dart';
 import 'variant_gtin_field.dart';
@@ -149,6 +150,9 @@ class _ProductFormState extends State<ProductForm> {
   // not one — carried over, it would code every variant "1042-RED".
   final _skuPrefixController = TextEditingController();
   final _barcodeController = TextEditingController();
+
+  /// The default variant's further barcodes. Codes, so never carried or copied.
+  final _extraBarcodes = ExtraBarcodesController();
 
   /// The default variant's GS1 number, offered with the lot policy only. A
   /// code, so like the barcode it is never carried or copied.
@@ -442,6 +446,7 @@ class _ProductFormState extends State<ProductForm> {
     _skuPrefixController.removeListener(_fillGeneratedSkus);
     _skuPrefixController.dispose();
     _barcodeController.dispose();
+    _extraBarcodes.dispose();
     _gtinController.dispose();
     _priceController.removeListener(_syncGeneratedPricesFromBase);
     _priceController.removeListener(_refreshPricePreview);
@@ -527,6 +532,7 @@ class _ProductFormState extends State<ProductForm> {
             : _skuController.text.trim(),
         _skuPrefixController.text.trim(),
         _barcodeController.text.trim(),
+        ..._extraBarcodes.codesForSave(primary: ''),
         _gtinController.text.trim(),
         _priceController.text.trim(),
         _openingQuantityController.text.trim(),
@@ -563,7 +569,11 @@ class _ProductFormState extends State<ProductForm> {
 
   Widget _buildForm(BuildContext context, AppLocalizations l10n) {
     return ListenableBuilder(
-      listenable: Listenable.merge([widget.viewModel, _identity]),
+      listenable: Listenable.merge([
+        widget.viewModel,
+        _identity,
+        _extraBarcodes,
+      ]),
       builder: (context, _) {
         final isSaving = widget.viewModel.isSaving;
         return RouteKeyboardShortcuts(
@@ -752,6 +762,12 @@ class _ProductFormState extends State<ProductForm> {
                             : widget.viewModel.rateFor(_pricingCurrency),
                         enteredAmount: _parseNumber(_priceController.text),
                       ),
+                extraBarcodesField: VariantExtraBarcodesField(
+                  controller: _extraBarcodes,
+                  primaryBarcode: _barcodeController,
+                  catalogRepository: widget.viewModel.catalogRepository,
+                  enabled: !widget.viewModel.isSaving,
+                ),
                 pins: pins,
                 pinScopes: _pinScopes,
                 nameWarning: !_run.repeatsPreviousName(_nameController.text)
@@ -1295,6 +1311,9 @@ class _ProductFormState extends State<ProductForm> {
       variantName: _variantNameController.text.trim(),
       variantSku: _skuController.text.trim(),
       variantBarcode: _barcodeController.text.trim(),
+      variantExtraBarcodes: _showsSellingFields
+          ? _extraBarcodes.codesForSave(primary: _barcodeController.text)
+          : null,
       // Sent only where the field is shown, so a product that is not
       // lot-tracked never writes one.
       variantGtin: _showsSellingFields && tracking.mode.tracksLots
@@ -1395,6 +1414,7 @@ class _ProductFormState extends State<ProductForm> {
     // Codes belong to one product, a picture to one product, and a shelf is
     // counted rather than copied — none of these ever carry.
     _barcodeController.clear();
+    _extraBarcodes.reset();
     _gtinController.clear();
     _gtinError = null;
     _skuController.clear();
@@ -1649,6 +1669,7 @@ class _ProductFormState extends State<ProductForm> {
       }
     });
     _identity.applyConflicts(single);
+    _extraBarcodes.applyConflicts(single);
     _scrollToFirstConflict();
   }
 
@@ -1757,7 +1778,9 @@ class _ProductFormState extends State<ProductForm> {
   }
 
   bool get _hasFieldConflict =>
-      _identity.hasConflict || _generatedConflicts.isNotEmpty;
+      _identity.hasConflict ||
+      _extraBarcodes.hasConflict ||
+      _generatedConflicts.isNotEmpty;
 
   void _toggleOptionValue(VariantOption option, int valueId) {
     setState(() {

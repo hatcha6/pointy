@@ -18,27 +18,13 @@ import 'service_test_mode_banner.dart';
 /// receipt prints, so what the cashier sees is what the customer is given.
 ///
 /// [testMode] says the sale was made while the relay was buying from its test
-/// supplier — the till knows it from the lines it sold — and the dialog then
-/// says «عملية تجريبية»; an answer that says so itself does the same.
-Future<void> showServiceDeliveredDialog(
-  BuildContext context,
-  List<IntegrationChargeResult> delivered, {
-  bool testMode = false,
-}) {
-  final hasToken = delivered.any(
-    (row) => (row.receipt['pin'] ?? '').trim().isNotEmpty,
-  );
-  return showDialog<void>(
-    context: context,
-    // A token is the thing that was bought: it is not dismissed by a stray tap.
-    barrierDismissible: !hasToken,
-    builder: (dialogContext) =>
-        ServiceDeliveredDialog(results: delivered, testMode: testMode),
-  );
-}
-
-class ServiceDeliveredDialog extends StatelessWidget {
-  const ServiceDeliveredDialog({
+/// supplier — the till knows it from the lines it sold — and it then says
+/// «عملية تجريبية»; an answer that says so itself does the same.
+///
+/// Shown inside the sale's result (see `PosCheckoutDialog`), whatever the
+/// printer did: a bill's token is the thing bought.
+class ServiceDeliveredDetails extends StatelessWidget {
+  const ServiceDeliveredDetails({
     super.key,
     required this.results,
     this.testMode = false,
@@ -58,36 +44,35 @@ class ServiceDeliveredDialog extends StatelessWidget {
         : results.every((row) => row.isAirtime)
         ? l10n.posServicesSuccessAirtimeTitle
         : l10n.posServicesSuccessMixedTitle;
-    return AlertDialog(
-      key: const ValueKey('service_delivered_dialog'),
-      icon: Icon(Icons.check_circle_rounded, color: colors.success, size: 44),
-      title: Text(title, textAlign: TextAlign.center),
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (testMode || results.any((row) => row.testMode)) ...[
-                const Center(child: ServiceTestModeMark()),
-                const SizedBox(height: 12),
-              ],
-              for (final (index, row) in results.indexed) ...[
-                if (index > 0) const Divider(height: 24),
-                _DeliveredSection(result: row),
-              ],
-            ],
-          ),
+    final textTheme = Theme.of(context).textTheme;
+    return Column(
+      key: const ValueKey('service_delivered_details'),
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.check_circle_rounded, color: colors.success, size: 20),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                title,
+                style: textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
         ),
-      ),
-      actionsAlignment: MainAxisAlignment.center,
-      actions: [
-        FilledButton(
-          key: const ValueKey('service_delivered_done'),
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(l10n.posServicesSuccessDone),
-        ),
+        const SizedBox(height: 8),
+        if (testMode || results.any((row) => row.testMode)) ...[
+          const Center(child: ServiceTestModeMark()),
+          const SizedBox(height: 12),
+        ],
+        for (final (index, row) in results.indexed) ...[
+          if (index > 0) const Divider(height: 24),
+          _DeliveredSection(result: row),
+        ],
       ],
     );
   }

@@ -203,5 +203,4 @@
   });
 
   // ---- placeholder contact links: say so instead of jumping to the top ----
-  $$('[data-todo]').forEach((a) => a.addEventListener('click', (e) => e.preventDefault()));
 })();

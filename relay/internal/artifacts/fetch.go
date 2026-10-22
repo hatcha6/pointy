@@ -77,6 +77,9 @@ type FetchRequest struct {
 	// GitHub release asset). They are never stored or echoed back, and Go's
 	// client drops Authorization when a redirect leaves the original host.
 	Headers map[string]string
+	// Signature is the bundle's release signature, published with it (see
+	// Meta.Signature). Optional; an empty one publishes the bundle unsigned.
+	Signature string
 }
 
 // FetchStatus is a snapshot of a background download.
@@ -115,6 +118,12 @@ func (s *Store) Fetch(version string, req FetchRequest) (FetchStatus, error) {
 	if err != nil {
 		return FetchStatus{}, err
 	}
+	// Checked before the download starts: an hour of downloading should not
+	// end in "the .sig you passed was the wrong file".
+	signature, err := NormalizeSignature(req.Signature)
+	if err != nil {
+		return FetchStatus{}, err
+	}
 
 	s.mu.Lock()
 	if s.fetches == nil {
@@ -135,7 +144,7 @@ func (s *Store) Fetch(version string, req FetchRequest) (FetchStatus, error) {
 	snapshot := job.snapshot()
 	s.mu.Unlock()
 
-	go s.runFetch(job, clean, source.String(), expected, req.Headers)
+	go s.runFetch(job, clean, source.String(), expected, signature, req.Headers)
 	return snapshot, nil
 }
 
@@ -172,8 +181,8 @@ func (j *fetchJob) snapshot() FetchStatus {
 	return status
 }
 
-func (s *Store) runFetch(job *fetchJob, version, source, expected string, headers map[string]string) {
-	meta, err := s.download(job, version, source, expected, headers)
+func (s *Store) runFetch(job *fetchJob, version, source, expected, signature string, headers map[string]string) {
+	meta, err := s.download(job, version, source, expected, signature, headers)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -188,10 +197,10 @@ func (s *Store) runFetch(job *fetchJob, version, source, expected string, header
 	job.status.Artifact = &meta
 }
 
-func (s *Store) download(job *fetchJob, version, source, expected string, headers map[string]string) (Meta, error) {
+func (s *Store) download(job *fetchJob, version, source, expected, signature string, headers map[string]string) (Meta, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), fetchTimeout)
 	defer cancel()
-	return s.write(version, expected, func(tmp *os.File, hasher hash.Hash) (int64, error) {
+	return s.write(version, expected, signature, func(tmp *os.File, hasher hash.Hash) (int64, error) {
 		d := &resumableDownload{
 			store: s, job: job, source: source, headers: headers,
 			file: tmp, hasher: hasher, total: -1,

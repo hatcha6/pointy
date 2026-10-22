@@ -10,6 +10,7 @@ from apps.catalog.models import (
     ProductUnit,
     ProductUnitBarcode,
     ProductVariant,
+    ProductVariantBarcode,
     UnitDimension,
     UnitOfMeasure,
     normalize_barcode,
@@ -31,6 +32,78 @@ from .base import (
 )
 
 _VALID_DIMENSIONS = set(UnitDimension.values)
+
+
+def attach_extra_barcodes(variant, codes, *, source_key) -> list[Issue]:
+    """Give ``variant`` the source's further codes as extra barcodes.
+
+    Additive: a code already there stays, and nothing the shop added by hand
+    since an earlier import is taken away. A code an earlier import made into a
+    separate non-default variant of the *same* product moves here and that
+    pseudo-variant is retired in place (its history untouched) — the same rule
+    packaging barcodes follow. A code that means something anywhere else is
+    skipped with a warning: one code must never ring up two things.
+    """
+    issues: list[Issue] = []
+    primary = normalize_barcode(variant.barcode)
+    wanted: list[str] = []
+    for code in codes or []:
+        code = normalize_barcode(clean_str(code))
+        if code and code != primary and code not in wanted:
+            wanted.append(code)
+    if not wanted:
+        return issues
+
+    def skip(code, where):
+        issues.append(
+            Issue(
+                WARNING,
+                "extra_barcode_conflict",
+                f"الباركود {code!r} مستخدم {where} — لم يُضَف كباركود إضافي.",
+                source_key=str(source_key),
+            )
+        )
+
+    held = {
+        entry.barcode: entry
+        for entry in ProductVariantBarcode.objects.filter(barcode__in=wanted).select_related(
+            "variant"
+        )
+    }
+    primaries = {
+        other.barcode: other
+        for other in ProductVariant.objects.filter(barcode__in=wanted)
+        .exclude(pk=variant.pk)
+        .only("id", "product_id", "is_default", "barcode", "is_active")
+    }
+    on_units = set(
+        ProductUnitBarcode.objects.filter(barcode__in=wanted).values_list("barcode", flat=True)
+    )
+    for code in wanted:
+        entry = held.get(code)
+        if entry is not None:
+            if entry.variant_id == variant.pk:
+                continue
+            if entry.variant.product_id != variant.product_id:
+                skip(code, "لصنف آخر")
+                continue
+            # Another variant of this same product: the source says it is ours.
+            entry.variant = variant
+            entry.save(update_fields=["variant", "updated_at"])
+            continue
+        other = primaries.get(code)
+        if other is not None:
+            if other.product_id != variant.product_id or other.is_default:
+                skip(code, "لصنف آخر")
+                continue
+            other.barcode = ""
+            other.is_active = False
+            other.save(update_fields=["barcode", "is_active", "updated_at"])
+        if code in on_units:
+            skip(code, "لوحدة بيع")
+            continue
+        ProductVariantBarcode.objects.create(variant=variant, barcode=code)
+    return issues
 
 
 class UnitLoader(BaseLoader):
@@ -98,6 +171,45 @@ class CategoryLoader(BaseLoader):
         return LoadOutcome(action, instance.pk, issues)
 
 
+def _apply_tracking(product, record, *, created):
+    """Give ``product`` the tracking mode the source holds its stock in.
+
+    Only while that changes nothing on a shelf: a new product has none, and an
+    existing one is switched only when the mode-change guard finds nothing on
+    hand that the new mode would have to explain. A stocked product keeps its
+    mode — the owner set it, or a sale since go-live depends on it — and the
+    run says so instead of re-labelling history.
+    """
+    mode = clean_str(getattr(record, "tracking_mode", ""))
+    if not mode or mode not in Product.TrackingMode.values:
+        return []
+    if product.tracking_mode == mode:
+        product.expiry_required = to_bool(record.expiry_required, default=False)
+        return []
+    if not created:
+        from rest_framework.exceptions import ValidationError
+
+        from apps.catalog.tracking_modes import assert_mode_change_allowed
+
+        try:
+            held = assert_mode_change_allowed(product, mode)
+        except ValidationError:
+            held = True
+        if held:
+            return [
+                Issue(
+                    WARNING,
+                    "tracking_kept_live",
+                    "على الصنف مخزون في دفتر — أُبقيت طريقة تتبّعه كما هي "
+                    "ولم تُغيَّر إلى طريقة النظام السابق.",
+                    source_key=str(record.source_key),
+                )
+            ]
+    product.tracking_mode = mode
+    product.expiry_required = to_bool(record.expiry_required, default=False)
+    return []
+
+
 class ProductLoader(BaseLoader):
     entity_type = PRODUCT
 
@@ -117,6 +229,7 @@ class ProductLoader(BaseLoader):
         instance.is_active = to_bool(record.is_active)
         instance.is_service = to_bool(record.is_service, default=False)
         instance.is_prepared = to_bool(record.is_prepared, default=False)
+        issues.extend(_apply_tracking(instance, record, created=action == CREATED))
         instance.save()
 
         # Categories (resolved by id through the identity map; unresolved warn).
@@ -141,7 +254,8 @@ class ProductLoader(BaseLoader):
         # Product-level pricing (no separate variant table in the source): create
         # the sellable default variant and register it under the VARIANT key with
         # the product's source key, so stock/sales can resolve it.
-        if record.unit_price is not None or record.sku or record.barcode:
+        extra_barcodes = getattr(record, "extra_barcodes", None) or []
+        if record.unit_price is not None or record.sku or record.barcode or extra_barcodes:
             variant = instance.ensure_default_variant(
                 name="",
                 sku=normalize_sku(record.sku),
@@ -151,6 +265,9 @@ class ProductLoader(BaseLoader):
             )
             if variant is not None:
                 resolver.remember(VARIANT, record.source_key, variant)
+                issues.extend(
+                    attach_extra_barcodes(variant, extra_barcodes, source_key=record.source_key)
+                )
 
         return LoadOutcome(action, instance.pk, issues)
 
@@ -208,6 +325,13 @@ class VariantLoader(BaseLoader):
         instance.is_active = to_bool(record.is_active)
         instance.is_default = is_default
         instance.save()
+        issues.extend(
+            attach_extra_barcodes(
+                instance,
+                getattr(record, "extra_barcodes", None) or [],
+                source_key=record.source_key,
+            )
+        )
         resolver.remember(self.entity_type, record.source_key, instance)
         return LoadOutcome(action, instance.pk, issues)
 
@@ -285,15 +409,10 @@ class ProductUnitLoader(BaseLoader):
                 .first()
             )
             if clash_variant is not None:
-                if (
-                    clash_variant.product_id == instance.product_id
-                    and not clash_variant.is_default
-                ):
+                if clash_variant.product_id == instance.product_id and not clash_variant.is_default:
                     clash_variant.barcode = ""
                     clash_variant.is_active = False
-                    clash_variant.save(
-                        update_fields=["barcode", "is_active", "updated_at"]
-                    )
+                    clash_variant.save(update_fields=["barcode", "is_active", "updated_at"])
                 else:
                     issues.append(
                         Issue(
@@ -304,6 +423,23 @@ class ProductUnitLoader(BaseLoader):
                         )
                     )
                     continue
+            extra = (
+                ProductVariantBarcode.objects.filter(barcode=code).select_related("variant").first()
+            )
+            if extra is not None:
+                if extra.variant.product_id != instance.product_id:
+                    issues.append(
+                        Issue(
+                            WARNING,
+                            "unit_barcode_conflict",
+                            f"الباركود {code!r} مستخدم لصنف آخر — لم يُضَف.",
+                            source_key=str(record.source_key),
+                        )
+                    )
+                    continue
+                # The source now files this code under a pack of the same
+                # product: it rings up the pack, not one piece.
+                extra.delete()
             unit_clash = (
                 ProductUnitBarcode.objects.filter(barcode=code)
                 .exclude(product_unit=instance)

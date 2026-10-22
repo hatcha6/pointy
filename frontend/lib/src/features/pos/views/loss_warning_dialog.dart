@@ -82,15 +82,33 @@ class LossWarningDialog extends StatelessWidget {
     if (canSellAtLoss) {
       return l10n.lossSaleWarningMessage;
     }
-    return showAmounts
-        ? l10n.lossSaleBlockedMessage
-        : l10n.lossSaleBlockedAskManagerMessage;
+    return lossSaleBlockedMessage(l10n, showAmounts: showAmounts);
   }
 
-  String _lineText(AppLocalizations l10n, SaleLossLine line) {
-    final amount = showAmounts ? line.lossAmount : null;
-    return amount == null
-        ? l10n.lossSaleBelowCostLine(line.productName)
-        : l10n.lossSaleLine(line.productName, formatMoney(amount));
-  }
+  String _lineText(AppLocalizations l10n, SaleLossLine line) =>
+      lossSaleLineText(l10n, line, showAmounts: showAmounts);
+}
+
+/// Why a sale below cost was refused, said to whoever is at the till: a
+/// cashier who may not see cost is sent to a manager.
+String lossSaleBlockedMessage(
+  AppLocalizations l10n, {
+  required bool showAmounts,
+}) {
+  return showAmounts
+      ? l10n.lossSaleBlockedMessage
+      : l10n.lossSaleBlockedAskManagerMessage;
+}
+
+/// One line sold below cost, priced only when [showAmounts] and the server
+/// sent the figure.
+String lossSaleLineText(
+  AppLocalizations l10n,
+  SaleLossLine line, {
+  required bool showAmounts,
+}) {
+  final amount = showAmounts ? line.lossAmount : null;
+  return amount == null
+      ? l10n.lossSaleBelowCostLine(line.productName)
+      : l10n.lossSaleLine(line.productName, formatMoney(amount));
 }

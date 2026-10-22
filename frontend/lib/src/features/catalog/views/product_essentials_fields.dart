@@ -48,6 +48,7 @@ class ProductEssentialsFields extends StatelessWidget {
     required this.requiredValidator,
     required this.numberValidator,
     this.pricingCurrencyField,
+    this.extraBarcodesField,
     this.pins = const {},
     this.pinScopes = const {},
     this.nameWarning,
@@ -85,6 +86,9 @@ class ProductEssentialsFields extends StatelessWidget {
 
   /// The price-sheet currency picker, when the shop prices in more than one.
   final Widget? pricingCurrencyField;
+
+  /// The variant's further barcodes, under the barcode they sit beside.
+  final Widget? extraBarcodesField;
 
   /// One per carried field once a run of products has begun; empty before.
   final Map<ProductCarryField, FieldPin> pins;
@@ -241,6 +245,10 @@ class ProductEssentialsFields extends StatelessWidget {
               ),
             ],
           ),
+          if (extraBarcodesField != null) ...[
+            const SizedBox(height: 4),
+            extraBarcodesField!,
+          ],
           const SizedBox(height: 12),
         ],
         nameField,

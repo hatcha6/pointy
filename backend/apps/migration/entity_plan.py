@@ -35,6 +35,7 @@ EXPENSE_CATEGORY = "expense_category"
 PRODUCT_UNIT = "product_unit"
 SUPPLIER_PAYMENT = "supplier_payment"
 SALE_RETURN = "sale_return"
+PURCHASE_RETURN = "purchase_return"
 MONEY_ACCOUNT = "money_account"
 PAYROLL_RUN = "payroll_run"
 PARTY_BALANCE = "party_balance"
@@ -70,6 +71,13 @@ ENTITY_PLAN: tuple[EntitySpec, ...] = (
         "Purchase orders",
         canonical.CanonicalPurchaseOrder,
         (SUPPLIER, VARIANT),
+    ),
+    # Returns come off purchase orders, so every order must already exist.
+    EntitySpec(
+        PURCHASE_RETURN,
+        "Purchase returns",
+        canonical.CanonicalPurchaseReturn,
+        (PURCHASE_ORDER,),
     ),
     # What each party owes (or is owed) carried as a balance entry in its own
     # right, rather than as the arithmetic of invoices nobody asked for. Placed
@@ -221,13 +229,9 @@ def resolve_selection(selected, *, available=None) -> Selection:
     requested &= universe
     return Selection(
         entities=tuple(spec.entity_type for spec in ENTITY_PLAN if spec.entity_type in closed),
-        requested=tuple(
-            spec.entity_type for spec in ENTITY_PLAN if spec.entity_type in requested
-        ),
+        requested=tuple(spec.entity_type for spec in ENTITY_PLAN if spec.entity_type in requested),
         added=tuple(
-            spec.entity_type
-            for spec in ENTITY_PLAN
-            if spec.entity_type in closed - requested
+            spec.entity_type for spec in ENTITY_PLAN if spec.entity_type in closed - requested
         ),
         unknown=unknown,
     )

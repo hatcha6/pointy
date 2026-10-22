@@ -315,7 +315,7 @@ func TestCheckOwedSoonCoalescesAndReadsOnlyCoveringSources(t *testing.T) {
 		Notifier: &Ntfy{Server: server.URL, Topics: staticTopic("daftar-alerts-test-topic-xx"), Logger: quiet()},
 		Marks:    &memoryMarks{marks: map[string]time.Time{}, now: time.Unix(1_000_000, 0)},
 		Logger:   quiet(),
-		Sources:  []BalanceSource{source("bnplus_lyd", true), source("serper", false)},
+		Sources:  []BalanceSource{source("bnplus_lyd", true), source("openrouter", false)},
 	}
 	var off *BalanceWatcher
 	off.CheckOwedSoon() // nil is safe
@@ -329,7 +329,7 @@ func TestCheckOwedSoonCoalescesAndReadsOnlyCoveringSources(t *testing.T) {
 	}
 	<-watcher.nudgeChannel()
 	watcher.SweepOwed(context.Background())
-	if reads["bnplus_lyd"] != 1 || reads["serper"] != 0 {
+	if reads["bnplus_lyd"] != 1 || reads["openrouter"] != 0 {
 		t.Fatalf("only the covering source is read: %v", reads)
 	}
 	if got := fake.messages(); len(got) != 1 || !strings.HasPrefix(got[0].Title, "bnplus_lyd short of shop card balances by 50.00 LYD") {
@@ -346,7 +346,7 @@ func TestBalanceWatcherSaysUnreadableAfterRepeatedFailures(t *testing.T) {
 		UnreadableAfter: 2,
 		Logger:          quiet(),
 		Sources: []BalanceSource{{
-			Key: "serper", Name: "Serper", Unit: "credits", Floor: big.NewRat(300, 1),
+			Key: "openrouter", Name: "OpenRouter", Unit: "USD", Floor: big.NewRat(3, 1),
 			Read: func(context.Context) (*big.Rat, error) { return nil, errors.New("401 unauthorized") },
 		}},
 	}
@@ -356,7 +356,7 @@ func TestBalanceWatcherSaysUnreadableAfterRepeatedFailures(t *testing.T) {
 	}
 	watcher.Sweep(context.Background())
 	watcher.Sweep(context.Background())
-	if got := fake.messages(); len(got) != 1 || got[0].Title != "Serper balance unreadable" {
+	if got := fake.messages(); len(got) != 1 || got[0].Title != "OpenRouter balance unreadable" {
 		t.Fatalf("want one unreadable alert, got %+v", got)
 	}
 }
@@ -403,8 +403,6 @@ func TestBalanceWatcherReadsNothingWithoutATopic(t *testing.T) {
 func TestProviderBalanceReaders(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.URL.Path == "/account" && r.Header.Get("X-API-KEY") == "serper-key":
-			_, _ = io.WriteString(w, `{"balance":2088,"rateLimit":5}`)
 		case r.URL.Path == "/api/v1/key" && r.Header.Get("Authorization") == "Bearer or-key":
 			_, _ = io.WriteString(w, `{"data":{"limit":10,"limit_remaining":8.753456588,"usage":1.2}}`)
 		case r.URL.Path == "/api/v1/credits" && r.Header.Get("Authorization") == "Bearer or-mgmt":
@@ -416,10 +414,6 @@ func TestProviderBalanceReaders(t *testing.T) {
 	defer server.Close()
 	ctx := context.Background()
 
-	serper, err := SerperBalance(server.Client(), server.URL+"/images", "serper-key")(ctx)
-	if err != nil || serper.Cmp(big.NewRat(2088, 1)) != 0 {
-		t.Fatalf("serper %v %v", serper, err)
-	}
 	limited, err := OpenRouterBalance(server.Client(), server.URL+"/api/v1", "or-key", "")(ctx)
 	if err != nil || limited.FloatString(2) != "8.75" {
 		t.Fatalf("openrouter key %v %v", limited, err)
@@ -428,7 +422,7 @@ func TestProviderBalanceReaders(t *testing.T) {
 	if err != nil || credits.FloatString(2) != "74.75" {
 		t.Fatalf("openrouter credits %v %v", credits, err)
 	}
-	if _, err := SerperBalance(server.Client(), server.URL+"/images", "wrong")(ctx); err == nil {
+	if _, err := OpenRouterBalance(server.Client(), server.URL+"/api/v1", "wrong", "")(ctx); err == nil {
 		t.Fatal("a refused key must read as an error, not a zero balance")
 	}
 }

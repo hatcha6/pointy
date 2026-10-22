@@ -247,14 +247,14 @@ type HTTPServer struct {
 	AILimitWeekly        ratelimit.Policy
 	AIMaxImagesPerPrompt int
 	AIMaxRequestBytes    int64
-	// Relay-hosted product image search (Serper.dev). The key lives only here so
-	// shops never manage one; gated on the remote-access entitlement
-	// (subscription + relay_enabled) via ValidateAccessToken. Empty key disables
-	// the endpoint.
-	SerperAPIKey              string
-	SerperBaseURL             string
-	SerperImageLanguage       string
-	SerperImageCountry        string
+	// Relay-hosted product image search, run on the company's self-hosted
+	// OpenSERP server so shops never manage a search key; gated on the
+	// remote-access entitlement (subscription + relay_enabled) via
+	// ValidateAccessToken. An empty base URL disables the endpoint.
+	OpenSERPBaseURL           string
+	OpenSERPEngines           string
+	OpenSERPLanguage          string
+	OpenSERPRegion            string
 	ImageSearchRequestTimeout time.Duration
 	ImageSearchHTTPClient     *http.Client
 }

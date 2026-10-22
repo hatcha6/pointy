@@ -152,7 +152,6 @@ class PurchaseRepository {
 
   Future<Result<PurchaseSubmission>> submitDraft(
     List<PurchaseDraftLine> lines, {
-    required bool receiveImmediately,
     required int supplierId,
 
     /// Where the goods will land. Null lets the server use the shop's own
@@ -177,6 +176,10 @@ class PurchaseRepository {
 
     /// Set after the buyer has seen and confirmed the backend's cost warnings.
     bool acknowledgeCostWarnings = false,
+
+    /// Told when the order is recorded and the submit begins, so a progress
+    /// screen can say which of the two calls it is waiting on.
+    void Function()? onCreated,
   }) async {
     if (lines.isEmpty) {
       return Error(Exception('purchase draft is empty'));
@@ -201,38 +204,15 @@ class PurchaseRepository {
         idempotencyKey: _scopedIdempotencyKey(idempotencyKey, 'create'),
         acknowledgeCostWarnings: acknowledgeCostWarnings,
       );
+      onCreated?.call();
       final submittedOrder = await _service.submitPurchaseOrder(
         order.id,
         idempotencyKey: _scopedIdempotencyKey(idempotencyKey, 'submit'),
       );
-      if (!receiveImmediately) {
-        return submittedOrder.toSubmission();
-      }
-      // Handsets and lots are received where they are scanned. Receiving them
-      // here, blind, either fails (serials) or files them under a lot the
-      // server invents (batches); the caller opens the receiving dialog on
-      // this order instead.
-      if (submittedOrder.receiptNeedsIdentifiers) {
-        return submittedOrder.toSubmission(awaitsIdentifiers: true);
-      }
-      final receiveDraft = PurchaseReceiveDraft(
-        lines: [
-          for (final line in submittedOrder.lines)
-            if (line.receivableQuantity > 0)
-              PurchaseReceiveLineDraft(
-                purchaseLineId: line.id,
-                quantityReceived: line.receivableQuantity,
-                quantityDamaged: 0,
-                expiryDate: line.expiryDate,
-              ),
-        ],
-      );
-      final receivedOrder = await _service.receivePurchaseOrder(
-        submittedOrder.id,
-        draft: receiveDraft,
-        idempotencyKey: _scopedIdempotencyKey(idempotencyKey, 'receive'),
-      );
-      return receivedOrder.toSubmission();
+      // Submitting never receives: whether the goods are here is asked of
+      // the buyer in the order's result, where serials and lots can be
+      // scanned off the boxes instead of received blind.
+      return submittedOrder.toSubmission();
     });
   }
 

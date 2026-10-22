@@ -1100,8 +1100,8 @@ POINTY_COMPANION_STREAM_RECONCILE_SECONDS = env.float(
 POINTY_COMPANION_PUBLIC_ORIGIN = env("POINTY_COMPANION_PUBLIC_ORIGIN", default="")
 
 POINTY_PRODUCT_IMAGE_IMPORT_MAX_BYTES = env("POINTY_PRODUCT_IMAGE_IMPORT_MAX_BYTES")
-# Product image search is relay-hosted: the relay holds the Serper.dev key and
-# gates on the shop's remote-access entitlement, so no per-shop search key or
+# Product image search is relay-hosted: the relay runs it on the company's
+# OpenSERP server and gates on the shop's remote-access entitlement, so no per-shop search key or
 # provider config lives here. See apps.attachments.image_search.
 POINTY_IMAGE_FETCH_TIMEOUT_SECONDS = env("POINTY_IMAGE_FETCH_TIMEOUT_SECONDS")
 POINTY_IMAGE_IMPORT_TOKEN_MAX_AGE_SECONDS = env("POINTY_IMAGE_IMPORT_TOKEN_MAX_AGE_SECONDS")

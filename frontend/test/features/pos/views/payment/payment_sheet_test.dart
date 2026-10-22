@@ -97,28 +97,22 @@ void main() {
     expect(confirm.onPressed, isNull);
   });
 
-  testWidgets('receipt toggle updates independently from payment validity', (
+  testWidgets('the sheet takes payment only; receipts are the result\'s', (
     tester,
   ) async {
-    bool? printInvoice;
     PaymentSheetResult? submitted;
 
-    await _pumpPaymentSheet(
-      tester,
-      showPrintInvoiceToggle: true,
-      printInvoiceAfterPayment: false,
-      onPrintInvoiceChanged: (value) => printInvoice = value,
-      onSubmit: (result) => submitted = result,
-    );
+    await _pumpPaymentSheet(tester, onSubmit: (result) => submitted = result);
 
-    await _tapKey(tester, 'payment_receipt_toggle');
-
-    expect(printInvoice, isTrue);
+    // Printing, sharing and the proof slip moved to the sale's result, where
+    // they can say whether they worked.
+    expect(find.byKey(const ValueKey('payment_receipt_toggle')), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('payment_confirm_button')));
     await tester.pump();
 
     expect(submitted?.payments.single.method, PaymentMethod.cash);
+    expect(submitted?.changeDue, 0);
   });
 
   testWidgets('payment method availability selects the first enabled method', (
@@ -1089,9 +1083,6 @@ Future<void> _pumpPaymentSheet(
   bool enableCash = true,
   bool enableCard = true,
   bool enableTransfer = true,
-  bool showPrintInvoiceToggle = false,
-  bool printInvoiceAfterPayment = false,
-  ValueChanged<bool>? onPrintInvoiceChanged,
   ValueChanged<PaymentSheetResult>? onSubmit,
   bool hasCustomer = false,
   bool requireCustomerForCredit = false,
@@ -1151,12 +1142,6 @@ Future<void> _pumpPaymentSheet(
               bankAccounts: bankAccounts,
               accountForTerminal: accountForTerminal,
               clock: clock ?? DateTime.now,
-              showPrintInvoiceToggle: showPrintInvoiceToggle,
-              printInvoiceAfterPayment: printInvoiceAfterPayment,
-              onPrintInvoiceChanged: onPrintInvoiceChanged ?? (_) {},
-              showShareInvoiceToggle: false,
-              shareInvoiceAfterPayment: false,
-              onShareInvoiceChanged: (_) {},
               hasCustomer: hasCustomer,
               requireCustomerForCredit: requireCustomerForCredit,
               enableQuotations: enableQuotations,

@@ -133,9 +133,7 @@ extension PosSessionPersistence on PosViewModel {
       // built in this window has no committed sale to replay against.
       final adopted = _createSaleSession()
         ..selectedCustomer = session.selectedCustomer
-        ..couponCode = session.couponCode
-        ..printInvoiceAfterPayment = session.printInvoiceAfterPayment
-        ..shareInvoiceAfterPayment = session.shareInvoiceAfterPayment;
+        ..couponCode = session.couponCode;
       adopted.cart.addAll(session.cart);
       _saleSessions.add(adopted);
       // Whatever the cashier has in their hands right now is what they are
@@ -218,8 +216,6 @@ extension PosSessionPersistence on PosViewModel {
             'number': session.number,
             'updatedAt': session.updatedAt.toIso8601String(),
             'couponCode': session.couponCode,
-            'printInvoiceAfterPayment': session.printInvoiceAfterPayment,
-            'shareInvoiceAfterPayment': session.shareInvoiceAfterPayment,
             'customer': session.selectedCustomer?.toJson(),
             'cart': [for (final line in session.cart) line.toJson()],
             // Restored with the cart so a checkout the till never saw the
@@ -252,10 +248,6 @@ extension PosSessionPersistence on PosViewModel {
           number: (sessionMap['number'] as num?)?.toInt() ?? 0,
         );
         session.couponCode = sessionMap['couponCode']?.toString() ?? '';
-        session.printInvoiceAfterPayment =
-            sessionMap['printInvoiceAfterPayment'] == true;
-        session.shareInvoiceAfterPayment =
-            sessionMap['shareInvoiceAfterPayment'] == true;
         session.restoreCheckoutAttempts(sessionMap['checkoutAttempts']);
         final updatedAt = DateTime.tryParse(
           sessionMap['updatedAt']?.toString() ?? '',

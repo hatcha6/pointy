@@ -110,6 +110,31 @@ void main() {
       }
     });
 
+    test('an Apple card opens the App Store redemption, on either '
+        'roll', () async {
+      const link = 'https://apps.apple.com/redeem?code=X8K2MQ4TZ7WJ9R3N';
+      final slip = receiptProviderSlip(
+        title: 'آيتونز - 10 دولار',
+        kind: 'voucher',
+        status: 'confirmed',
+        logo: _logo('apple'),
+        providerLogo: _logo('pointy'),
+        printed: const {'code': 'X8K2MQ4TZ7WJ9R3N', 'redeem_url': link},
+      );
+      expect(slip.qrCaption, receiptScanToRedeemApple);
+      for (final (paper, name) in [(576, 'apple-80'), (384, 'apple-58')]) {
+        final raster = await draw(slip, paperDots: paper, name: name);
+        // Read around the code: on the 58 mm slip zxing2 cannot find the
+        // finder patterns of this bigger symbol among the text (zxing-cpp,
+        // closer to a phone's reader, reads the whole slip on both rolls).
+        expect(_readCodeAround(raster), link, reason: name);
+        // A link is a bigger symbol than a dial code (41 modules to 29), so
+        // it gets smaller modules — never below the layout's floor for a
+        // code beside the PIN, still bigger than a usual receipt code's 4.
+        expect(raster.qr!.moduleDots, greaterThanOrEqualTo(5), reason: name);
+      }
+    });
+
     test('the code is whole-dot modules on blank paper', () async {
       final raster = await draw(card(), name: '');
       final qr = raster.qr!;
@@ -398,6 +423,24 @@ String? _readCode(ProviderSlipRaster raster) => readLikeAPhone(
       raster.dot(x, y),
   scale: 2,
 );
+
+/// The slip's code read off the paper around it, a margin of blank slip and
+/// text on every side, rather than off the whole slip.
+String? _readCodeAround(ProviderSlipRaster raster, {int margin = 60}) {
+  final qr = raster.qr!;
+  final left = qr.left - margin;
+  final top = qr.top - margin;
+  final side = qr.side + 2 * margin;
+  return readLikeAPhone(side, side, (x, y) {
+    final rx = left + x;
+    final ry = top + y;
+    return rx >= 0 &&
+        ry >= 0 &&
+        rx < raster.width &&
+        ry < raster.height &&
+        raster.dot(rx, ry);
+  }, scale: 2);
+}
 
 /// A logo as the server sends it (base64 PNG): a real one from
 /// `POINTY_SLIP_LOGOS` when there is one, else a stand-in mark.

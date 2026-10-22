@@ -51,7 +51,12 @@ from apps.core.aggregates import related_count
 from apps.core.permissions import HasPointyPermission
 from apps.catalog.tracked_resolution import resolve as resolve_tracked_scan
 from apps.catalog.tracked_serializers import serialize_tracked_resolution
-from .cache import attach_catalog_version, catalog_etag, catalog_version
+from .cache import (
+    announce_bulk_catalog_write,
+    attach_catalog_version,
+    catalog_etag,
+    catalog_version,
+)
 from .identity import (
     BARCODE_FIELD,
     SKU_FIELD,
@@ -88,7 +93,7 @@ from .serializers import (
     VariantOptionValueSerializer,
 )
 from . import search_text
-from .pricing import set_base_price
+from .pricing import VARIANT_PRICE_FIELDS, BulkPriceWriter, set_base_price
 from .search_filters import (
     CatalogRelevanceFilter,
     VariantRelevanceFilter,
@@ -208,7 +213,9 @@ class ProductVariantFilter(django_filters.FilterSet):
         # product and the client picks the matched unit from the payload.
         codes = scanned_code_readings(value)
         return queryset.filter(
-            Q(barcode__in=codes) | Q(product__units__barcodes__barcode__in=codes)
+            Q(barcode__in=codes)
+            | Q(extra_barcodes__barcode__in=codes)
+            | Q(product__units__barcodes__barcode__in=codes)
         ).distinct()
 
 
@@ -363,6 +370,7 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
             ),
         ),
         image_attachment_prefetch("variants__attachments"),
+        "variants__extra_barcodes",
         Prefetch(
             "variants__option_values",
             queryset=VariantOptionValue.objects.select_related("option"),
@@ -608,9 +616,12 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
         if not barcode:
             return queryset
         codes = scanned_code_readings(barcode)
-        # Unit (carton/box) barcodes resolve to their product too.
+        # A variant's extra barcodes and unit (carton/box) barcodes resolve to
+        # their product too.
         return queryset.filter(
-            Q(variants__barcode__in=codes) | Q(units__barcodes__barcode__in=codes)
+            Q(variants__barcode__in=codes)
+            | Q(variants__extra_barcodes__barcode__in=codes)
+            | Q(units__barcodes__barcode__in=codes)
         ).distinct()
 
     def _filter_by_supplier(self, queryset):
@@ -977,20 +988,23 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
         changed = []
         with transaction.atomic():
             # Reprice the default (sellable) variant of each selected product.
-            variants = ProductVariant.objects.select_for_update().filter(
-                product_id__in=ids,
-                is_default=True,
+            # Through BulkPriceWriter rather than a raw column write, so a
+            # foreign-priced product's frozen price sheet moves with the new
+            # price instead of putting the old one back at the next FX reprice.
+            variants = (
+                ProductVariant.objects.select_for_update(of=("self",))
+                .select_related("product")
+                .filter(product_id__in=ids, is_default=True)
             )
+            writer = BulkPriceWriter()
             for variant in variants:
                 new_price = self._reprice_value(variant.unit_price, mode, value)
                 if new_price != variant.unit_price:
-                    variant.unit_price = new_price
-                    variant.updated_at = now
+                    writer.write(variant, new_price, at=now)
                     changed.append(variant)
             if changed:
-                ProductVariant.objects.bulk_update(
-                    changed, ["unit_price", "updated_at"]
-                )
+                ProductVariant.objects.bulk_update(changed, VARIANT_PRICE_FIELDS)
+                announce_bulk_catalog_write()
         self._clear_catalog_cache()
         return Response({"updated": len(changed)})
 
@@ -1056,6 +1070,10 @@ class ProductViewSet(ConditionalListMixin, viewsets.ModelViewSet):
                 Product.objects.filter(pk__in=ids)
                 .update(updated_at=timezone.now(), **flags)
             )
+            if updated:
+                # ``update`` fires no post_save: a till would keep offering a
+                # product just switched off.
+                announce_bulk_catalog_write()
         self._clear_catalog_cache()
         return Response({"updated": updated})
 

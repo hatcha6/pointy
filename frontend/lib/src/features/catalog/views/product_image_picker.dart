@@ -17,7 +17,9 @@ import '../../../shared/infinite_scroll_grid.dart';
 import '../../../shared/product_image_thumbnail.dart';
 import '../../companion/views/companion_capture_sheet.dart';
 
-const _productImageSearchPageSize = 30;
+// The relay merges every search engine into this one page (the most the server
+// allows) and answers no second page.
+const _productImageSearchPageSize = 50;
 
 sealed class ProductImageSelection {
   const ProductImageSelection();

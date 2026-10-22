@@ -443,6 +443,15 @@
       "port": 8095
     },
     {
+      "name": "bulk-price-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": [
+        "frontend-bulk-price-preview",
+        "WEB_PORT=8097"
+      ],
+      "port": 8097
+    },
+    {
       "name": "app-update-preview",
       "runtimeExecutable": "make",
       "runtimeArgs": [
@@ -474,6 +483,22 @@
       "runtimeExecutable": "make",
       "runtimeArgs": [
         "frontend-moamalat-preview"
+      ],
+      "port": 8080
+    },
+    {
+      "name": "checkout-result-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": [
+        "frontend-checkout-result-preview"
+      ],
+      "port": 8080
+    },
+    {
+      "name": "purchase-result-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": [
+        "frontend-purchase-result-preview"
       ],
       "port": 8080
     }

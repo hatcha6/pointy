@@ -7,7 +7,9 @@
 package artifacts
 
 import (
+	"crypto/ed25519"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -26,12 +28,20 @@ import (
 // ErrNotFound is returned when no artifact exists for a version.
 var ErrNotFound = errors.New("artifact not found")
 
+// ErrInvalidSignature means a release signature is not an Ed25519 signature
+// in base64 (the content of the release's <zip>.sig file).
+var ErrInvalidSignature = errors.New("invalid release signature")
+
 // Meta describes a stored bundle. The bytes live next to it on disk.
 type Meta struct {
 	Version   string    `json:"version"`
 	SHA256    string    `json:"sha256"`
 	Size      int64     `json:"size"`
 	CreatedAt time.Time `json:"created_at"`
+	// Signature is the release key's Ed25519 signature over the SHA256 hex
+	// (base64, as the release workflow writes it to <zip>.sig). The relay only
+	// carries it: it holds no key, and the update agent is what verifies it.
+	Signature string `json:"signature,omitempty"`
 }
 
 // Store keeps one bundle per version under <dir>/<version>/{bundle.zip,meta.json}.
@@ -61,25 +71,83 @@ func New(dir string) (*Store, error) {
 // Put streams content into the store under version, computing its sha256 and size,
 // then atomically publishes it. An existing version is overwritten.
 func (s *Store) Put(version string, content io.Reader) (Meta, error) {
-	return s.put(version, content, "")
+	return s.PutSigned(version, content, "")
 }
 
-// put is Put with an optional expected sha256: on a mismatch nothing is
+// PutSigned is Put with the bundle's release signature (see Meta.Signature);
+// an empty signature publishes the bundle unsigned. Overwriting a version
+// always replaces its signature, because a signature only fits the bytes it
+// was made for.
+func (s *Store) PutSigned(version string, content io.Reader, signature string) (Meta, error) {
+	return s.put(version, content, "", signature)
+}
+
+// put is PutSigned with an optional expected sha256: on a mismatch nothing is
 // published, so a corrupt download never replaces a good bundle.
-func (s *Store) put(version string, content io.Reader, expectedSHA256 string) (Meta, error) {
-	return s.write(version, expectedSHA256, func(tmp *os.File, hasher hash.Hash) (int64, error) {
+func (s *Store) put(version string, content io.Reader, expectedSHA256, signature string) (Meta, error) {
+	return s.write(version, expectedSHA256, signature, func(tmp *os.File, hasher hash.Hash) (int64, error) {
 		return io.Copy(io.MultiWriter(tmp, hasher), content)
 	})
+}
+
+// SetSignature attaches (or, with "", removes) the release signature of a
+// bundle already in the store — for a bundle uploaded before its .sig was at
+// hand.
+func (s *Store) SetSignature(version, signature string) (Meta, error) {
+	clean, err := safeVersion(version)
+	if err != nil {
+		return Meta{}, err
+	}
+	normalized, err := NormalizeSignature(signature)
+	if err != nil {
+		return Meta{}, err
+	}
+	meta, err := s.readMeta(clean)
+	if errors.Is(err, os.ErrNotExist) {
+		return Meta{}, ErrNotFound
+	}
+	if err != nil {
+		return Meta{}, err
+	}
+	meta.Signature = normalized
+	if err := s.writeMeta(clean, meta); err != nil {
+		return Meta{}, err
+	}
+	return meta, nil
+}
+
+// NormalizeSignature checks a release signature is base64 of an Ed25519
+// signature and returns it in canonical form ("" stays ""). It cannot check
+// the signature is RIGHT — that needs the public key, which only shops hold —
+// but it turns a pasted wrong file into an error here instead of a refused
+// update on every shop.
+func NormalizeSignature(signature string) (string, error) {
+	signature = strings.TrimSpace(signature)
+	if signature == "" {
+		return "", nil
+	}
+	raw, err := base64.StdEncoding.DecodeString(signature)
+	if err != nil {
+		return "", fmt.Errorf("%w: not base64", ErrInvalidSignature)
+	}
+	if len(raw) != ed25519.SignatureSize {
+		return "", fmt.Errorf("%w: %d bytes, an Ed25519 signature is %d", ErrInvalidSignature, len(raw), ed25519.SignatureSize)
+	}
+	return base64.StdEncoding.EncodeToString(raw), nil
 }
 
 // write publishes whatever fill streams into the temp file and hasher. fill
 // owns both, so a resumable download can append across connections or start
 // over (truncate + Reset) without the store knowing.
 func (s *Store) write(
-	version, expectedSHA256 string,
+	version, expectedSHA256, signature string,
 	fill func(tmp *os.File, hasher hash.Hash) (int64, error),
 ) (_ Meta, err error) {
 	clean, err := safeVersion(version)
+	if err != nil {
+		return Meta{}, err
+	}
+	signature, err = NormalizeSignature(signature)
 	if err != nil {
 		return Meta{}, err
 	}
@@ -115,6 +183,7 @@ func (s *Store) write(
 		SHA256:    hex.EncodeToString(hasher.Sum(nil)),
 		Size:      size,
 		CreatedAt: time.Now().UTC(),
+		Signature: signature,
 	}
 	if expectedSHA256 != "" && meta.SHA256 != expectedSHA256 {
 		return Meta{}, fmt.Errorf("%w: got %s, want %s", ErrChecksumMismatch, meta.SHA256, expectedSHA256)

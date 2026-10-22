@@ -56,6 +56,7 @@ enum TutorAnchor {
   paymentCreditDueDatePreset,
   paymentCreditDueDateClear,
   paymentConfirmButton,
+  checkoutNewSaleButton,
 
   // --- money in and out, shared by customer debt and supplier payments -----
   collectDebtPickCustomerButton,
@@ -83,7 +84,8 @@ enum TutorAnchor {
   purchaseCatalogSearchField,
   purchaseProductTile,
   purchaseLineCostField,
-  purchaseReceiveImmediatelyToggle,
+  purchaseResultReceiveButton,
+  purchaseResultDoneButton,
   purchaseSettingsButton,
   purchaseSettingsSaveButton,
   purchaseSubmitButton,

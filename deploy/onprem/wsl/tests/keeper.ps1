@@ -286,6 +286,34 @@ Check "run grant keeps protected DACL" (Add-KeeperRunAce "D:P(A;;FA;;;BA)") "D:P
 Check "run grant stays before a SACL" (Add-KeeperRunAce "O:BAG:SYD:(A;;FA;;;BA)S:(AU;FA;;;;WD)") "O:BAG:SYD:(A;;FA;;;BA)(A;;GRGX;;;IU)S:(AU;FA;;;;WD)"
 Check "run grant on no DACL keeps admins" (Add-KeeperRunAce "") "D:(A;;FA;;;BA)(A;;FA;;;SY)(A;;GRGX;;;IU)"
 
+# -Restart finds keepers by command line, not by the heartbeat's PID: a stale
+# heartbeat once left it stopping nothing while the old keeper held the lock.
+$ps = "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
+$task = "`"$ps`" -NoProfile -ExecutionPolicy Bypass -WindowStyle Minimized -File `"C:\ProgramData\Pointy\keep-pointy-running.ps1`" -Distro `"Pointy`" -ApiPort 8000"
+$rows = @(
+    [pscustomobject]@{ ProcessId = 100; SessionId = 1; Name = "powershell.exe"; CommandLine = $task },
+    [pscustomobject]@{ ProcessId = 101; SessionId = 1; Name = "powershell.exe"; CommandLine = "$task -Restart" },
+    [pscustomobject]@{ ProcessId = 102; SessionId = 1; Name = "powershell.exe"; CommandLine = "$task -Install" },
+    [pscustomobject]@{ ProcessId = 103; SessionId = 2; Name = "powershell.exe"; CommandLine = $task },
+    [pscustomobject]@{ ProcessId = 104; SessionId = 1; Name = "powershell.exe"; CommandLine = "`"$ps`" -File C:\ProgramData\Pointy\bootstrap-wsl.ps1 -Boot" },
+    [pscustomobject]@{ ProcessId = 105; SessionId = 1; Name = "conhost.exe"; CommandLine = "conhost.exe $task" },
+    [pscustomobject]@{ ProcessId = 106; SessionId = 1; Name = "pwsh.exe"; CommandLine = "pwsh -File C:\Program Files\Pointy\data\server\keep-pointy-running.ps1" },
+    [pscustomobject]@{ ProcessId = 107; SessionId = 1; Name = "powershell.exe"; CommandLine = "$task -ExportTo:D:\x" },
+    [pscustomobject]@{ ProcessId = 108; SessionId = 1; Name = "powershell.exe"; CommandLine = $null }
+)
+Check "restart finds the task's keeper, a fallen-back -Restart and the till's copy" `
+    ((@(Select-KeeperProcesses -Rows $rows -Self 999 -Session 1) | ForEach-Object { $_.ProcessId }) -join ",") "100,101,106"
+Check "but never itself" `
+    ((@(Select-KeeperProcesses -Rows $rows -Self 101 -Session 1) | ForEach-Object { $_.ProcessId }) -join ",") "100,106"
+Check "nothing running is an empty list" (@(Select-KeeperProcesses -Rows @() -Self 1 -Session 1).Count) 0
+
+# Fast checks while the server is starting, a minute once it answers or after ten minutes.
+$CheckEverySec = 60; $StartupCheckEverySec = 5; $StartupWindowSec = 600
+Check "starting: every 5 s" (Get-CheckWaitSec -Healthy $false -SinceStart 0 -Held $false) 5
+Check "answering: every minute" (Get-CheckWaitSec -Healthy $true -SinceStart 0 -Held $false) 60
+Check "held for maintenance: every minute" (Get-CheckWaitSec -Healthy $false -SinceStart 0 -Held $true) 60
+Check "still down after ten minutes: every minute" (Get-CheckWaitSec -Healthy $false -SinceStart 600 -Held $false) 60
+
 Remove-Item -Recurse -Force $tmp
 Write-Host ("# keeper: {0} passed, {1} failed" -f $pass, $fail)
 if ($fail) { exit 1 }

@@ -645,8 +645,17 @@ applies it, health-checks, and auto-rolls-back on failure (see
 automatically (no config needed); mount a persistent volume there so they survive a
 redeploy, or override with `--artifact-dir` / `POINTY_RELAY_ARTIFACT_DIR`.
 
+Pass the release's `<zip>.sig` with `--signature` (both `--bundle` and `--url`);
+the relay serves it to the agent as `bundle.signature` in the manifest. The relay
+holds no key and only checks the file is an Ed25519 signature; the agent verifies
+it against the release key built into it and refuses an unsigned bundle once it
+has one (`deploy/onprem/SIGNING.md`). Re-uploading a version drops its signature.
+`artifacts sign` attaches one to a bundle already uploaded (`--remove` drops it).
+
 ```sh
-pointy-relay artifacts upload --version 1.4.0 --bundle pointy-update-1.4.0.zip
+pointy-relay artifacts upload --version 1.4.0 --bundle pointy-update-1.4.0.zip \
+  --signature pointy-update-1.4.0.zip.sig
+pointy-relay artifacts sign --version 1.3.0 --signature pointy-update-1.3.0.zip.sig
 pointy-relay fleet set-version 1.4.0 --channel stable --rollout canary --canary inst_1,inst_2
 pointy-relay fleet status                # current → assigned, "downloading 43%", DETAIL on failure
 pointy-relay fleet rollout 50%           # widen the rollout once canaries are healthy
@@ -670,7 +679,8 @@ mid-download drops it — just run the command again.
 
 ```sh
 pointy-relay artifacts upload --version 1.4.0 \
-  --url https://files.example.com/pointy-update-1.4.0.zip --sha256 <hex>
+  --url https://files.example.com/pointy-update-1.4.0.zip --sha256 <hex> \
+  --signature pointy-update-1.4.0.zip.sig
 # private GitHub release: use the asset's API URL plus a token (sent only to
 # GitHub, never stored; dropped when GitHub redirects to its file CDN)
 pointy-relay artifacts upload --version 1.4.0 \
@@ -762,7 +772,7 @@ The relay pushes operational alerts to one [ntfy](https://ntfy.sh) topic the
 company's phones subscribe to (the ntfy app on Android/iOS, or the web):
 
 - **Low balances**, read every 15 minutes: Reloadly (USD), BN Plus dinar
-  wallet (LYD), OpenRouter (USD) and Serper (search credits). Sent once when a
+  wallet (LYD) and OpenRouter (USD). Sent once when a
   balance reaches its floor, again every 12 hours while it stays there, and once
   when it is topped back up. A balance unreadable 4 times running (a revoked
   key) is alerted too.
@@ -816,7 +826,6 @@ Floors and server (environment; an empty floor stops watching that balance):
 | `POINTY_RELAY_ALERT_RELOADLY_FLOOR` | `50` USD |
 | `POINTY_RELAY_ALERT_BNPLUS_FLOOR` | `500` LYD |
 | `POINTY_RELAY_ALERT_OPENROUTER_FLOOR` | `3` USD |
-| `POINTY_RELAY_ALERT_SERPER_FLOOR` | `300` credits |
 | `POINTY_RELAY_OPENROUTER_MANAGEMENT_KEY` | empty: reads what is left under the API key's own limit; set it to read the whole account's credits |
 
 API (admin token): `GET /v1/alerts`, `POST /v1/alerts/topic` (generate or

@@ -18,25 +18,9 @@ import 'service_texts.dart';
 ///
 /// [rows] are the lines that were not performed; [receiptNumber] names the
 /// invoice they belong to, which is where the real state of each is to be
-/// read.
-Future<void> showServiceChargeIssueDialog(
-  BuildContext context,
-  List<IntegrationChargeResult> rows, {
-  String? receiptNumber,
-}) {
-  final unknown = rows.any((row) => row.needsAttention);
-  return showDialog<void>(
-    context: context,
-    // The unknown case is not dismissed by tapping away: it is the one state
-    // where doing nothing about it is a real risk.
-    barrierDismissible: !unknown,
-    builder: (dialogContext) =>
-        ServiceChargeIssueDialog(rows: rows, receiptNumber: receiptNumber),
-  );
-}
-
-class ServiceChargeIssueDialog extends StatelessWidget {
-  const ServiceChargeIssueDialog({
+/// read. Shown inside the sale's result (see `PosCheckoutDialog`).
+class ServiceChargeIssueDetails extends StatelessWidget {
+  const ServiceChargeIssueDetails({
     super.key,
     required this.rows,
     this.receiptNumber,
@@ -117,62 +101,66 @@ class ServiceChargeIssueDialog extends StatelessWidget {
       );
     }
 
-    return AlertDialog(
-      key: const ValueKey('service_issue_dialog'),
-      icon: Icon(
-        hasUnknown ? Icons.help_outline : Icons.error_outline,
-        color: hasUnknown ? colors.warning : colors.danger,
-        size: 40,
-      ),
-      title: Text(title, textAlign: TextAlign.center),
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+    return Column(
+      key: const ValueKey('service_issue_details'),
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Icon(
+              hasUnknown ? Icons.help_outline : Icons.error_outline,
+              color: hasUnknown ? colors.warning : colors.danger,
+              size: 20,
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                title,
+                style: textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              lead,
+              style: textTheme.bodyMedium?.copyWith(
+                color: colors.ink,
+                fontWeight: FontWeight.w700,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 12),
+            for (final row in unknown) line(row, isUnknown: true),
+            if (hasUnknown) ...[
               Text(
-                lead,
-                style: textTheme.bodyMedium?.copyWith(
-                  color: colors.ink,
-                  fontWeight: FontWeight.w700,
+                l10n.posServiceIssueUnknownHint,
+                style: textTheme.bodySmall?.copyWith(
+                  color: colors.mutedInk,
                   height: 1.4,
                 ),
               ),
-              const SizedBox(height: 12),
-              for (final row in unknown) line(row, isUnknown: true),
-              if (hasUnknown) ...[
-                Text(
-                  l10n.posServiceIssueUnknownHint,
-                  style: textTheme.bodySmall?.copyWith(
-                    color: colors.mutedInk,
-                    height: 1.4,
-                  ),
-                ),
-                if ((receiptNumber ?? '').isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Text(
-                      l10n.posServiceIssueReceipt(ltrIsolated(receiptNumber!)),
-                      style: textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+              if ((receiptNumber ?? '').isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    l10n.posServiceIssueReceipt(ltrIsolated(receiptNumber!)),
+                    style: textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
-                if (refused.isNotEmpty) const Divider(height: 24),
-              ],
-              for (final row in refused) line(row, isUnknown: false),
+                ),
+              if (refused.isNotEmpty) const Divider(height: 24),
             ],
-          ),
-        ),
-      ),
-      actionsAlignment: MainAxisAlignment.center,
-      actions: [
-        FilledButton(
-          key: const ValueKey('service_issue_close'),
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(l10n.closeButton),
+            for (final row in refused) line(row, isUnknown: false),
+          ],
         ),
       ],
     );

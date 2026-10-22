@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pointy_frontend/src/data/models/integration_card.dart';
-import 'package:pointy_frontend/src/features/pos/views/direct_services/service_charge_issue_dialog.dart';
+import 'package:pointy_frontend/src/features/pos/views/direct_services/service_charge_issue_details.dart';
 
 import '../../../support/services_testing.dart';
 import '../../../support/test_fonts.dart';
@@ -14,8 +14,6 @@ import '../../../support/test_fonts.dart';
 /// account — and what to do with the customer's money.
 void main() {
   setUpAll(loadAppFonts);
-
-  Finder key(String name) => find.byKey(ValueKey(name));
 
   IntegrationChargeResult row({
     String kind = 'airtime',
@@ -59,23 +57,15 @@ void main() {
     useWindow(tester, size);
     await tester.pumpWidget(
       servicesApp(
-        Builder(
-          builder: (context) => Center(
-            child: FilledButton(
-              key: const ValueKey('open'),
-              onPressed: () => showServiceChargeIssueDialog(
-                context,
-                rows,
-                receiptNumber: receiptNumber,
-              ),
-              child: const Text('open'),
-            ),
+        SingleChildScrollView(
+          child: ServiceChargeIssueDetails(
+            rows: rows,
+            receiptNumber: receiptNumber,
           ),
         ),
         textScale: textScale,
       ),
     );
-    await tester.tap(key('open'));
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
   }
 
@@ -154,8 +144,6 @@ void main() {
 
         expect(find.text(entry.value), findsOneWidget, reason: entry.key);
         expectNoCardWords(tester);
-        await tester.tap(key('service_issue_close'));
-        await tester.pumpAndSettle(const Duration(milliseconds: 100));
       }
     });
 
@@ -215,15 +203,6 @@ void main() {
       ]);
 
       expect(find.text('لم تُنفَّذ الخدمة'), findsOneWidget);
-    });
-
-    testServices('can be dismissed with a tap outside', (tester) async {
-      await open(tester, [row(errorCode: 'unreachable')]);
-
-      await tester.tapAt(const Offset(8, 8));
-      await tester.pumpAndSettle(const Duration(milliseconds: 100));
-
-      expect(key('service_issue_dialog'), findsNothing);
     });
   });
 
@@ -287,19 +266,6 @@ void main() {
       ]);
 
       expect(find.textContaining('0856bb97-05eb-4129-8b14'), findsOneWidget);
-    });
-
-    testServices('is not dismissed by a stray tap', (tester) async {
-      await open(tester, [unknown]);
-
-      await tester.tapAt(const Offset(8, 8));
-      await tester.pumpAndSettle(const Duration(milliseconds: 100));
-
-      expect(key('service_issue_dialog'), findsOneWidget);
-
-      await tester.tap(key('service_issue_close'));
-      await tester.pumpAndSettle(const Duration(milliseconds: 100));
-      expect(key('service_issue_dialog'), findsNothing);
     });
 
     testServices('lists every line it does not know about', (tester) async {

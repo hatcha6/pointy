@@ -10,5 +10,5 @@ cd $HERE
 ./build.sh
 python3 footage.py $CAPTURE_WORK
 node stills.js
-node videos.js v-pos v-ai v-cam v-ops v-phone-dash
+node videos.js v-pos v-vouchers v-ai v-cam v-ops v-phone-dash
 ./encode.sh $CAPTURE_WORK/captures

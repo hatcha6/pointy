@@ -71,7 +71,7 @@ class ProductImageSearchResult:
     source_name: str
     width: int | None = None
     height: int | None = None
-    provider: str = "serper"
+    provider: str = "openserp"
 
     @property
     def import_token(self) -> str:
@@ -114,10 +114,10 @@ def search_product_images(
 ) -> list[ProductImageSearchResult]:
     """Search the web for candidate product images via the relay.
 
-    The relay holds the Serper.dev key centrally and gates on the shop's
-    remote-access entitlement, so a shop never configures or pays for an image
-    search key itself. Unconfigured installations (or an unentitled/failing
-    relay) surface as ``ProductImageSearchUnavailable``.
+    The relay runs the search on the company's self-hosted OpenSERP server and
+    gates on the shop's remote-access entitlement, so a shop never configures
+    or pays for an image search key itself. Unconfigured installations (or an
+    unentitled/failing relay) surface as ``ProductImageSearchUnavailable``.
     """
     installation = RelayInstallation.load()
     if installation is None or not installation.access_token:
@@ -172,7 +172,7 @@ def search_product_images(
                 source_name=str(item.get("source_name") or "").strip(),
                 width=optional_int(item.get("width")),
                 height=optional_int(item.get("height")),
-                provider="serper",
+                provider="openserp",
             )
         )
         seen_urls.add(url_key)

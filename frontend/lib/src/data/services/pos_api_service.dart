@@ -69,6 +69,7 @@ import '../../features/payments/models/payment_record.dart';
 import '../models/relay_installation_status.dart';
 import '../models/relay_pairing.dart';
 import '../models/report_catalog.dart';
+import '../models/bulk_price_preview.dart';
 import '../models/report_run.dart';
 import '../models/sale_order.dart';
 import '../models/sale_order_page.dart';
@@ -110,6 +111,7 @@ import 'api_session.dart';
 import 'companion_api_client.dart';
 import 'ai_api_client.dart';
 import 'analytics_api_client.dart';
+import 'bulk_price_api_client.dart';
 import 'attendance_api_client.dart';
 import 'auth_api_client.dart';
 import 'business_notification_api_client.dart';
@@ -199,6 +201,7 @@ class PosApiService {
     _users = UserApiClient(_session);
     _shopSettings = ShopSettingsApiClient(_session);
     _catalog = CatalogApiClient(_session);
+    _bulkPrices = BulkPriceApiClient(_session);
     _customers = CustomerApiClient(_session);
     _balances = BalanceApiClient(_session);
     _documentTrail = DocumentTrailApiClient(_session);
@@ -297,6 +300,7 @@ class PosApiService {
   late final UserApiClient _users;
   late final ShopSettingsApiClient _shopSettings;
   late final CatalogApiClient _catalog;
+  late final BulkPriceApiClient _bulkPrices;
   late final CustomerApiClient _customers;
   late final BalanceApiClient _balances;
   late final DashboardApiClient _dashboard;
@@ -953,6 +957,32 @@ class PosApiService {
     return _catalog.bulkRepriceProducts(ids: ids, mode: mode, value: value);
   }
 
+  Future<BulkPriceOptions> fetchBulkPriceOptions() =>
+      _bulkPrices.fetchOptions();
+
+  Future<BulkPricePreview> previewBulkPriceChange({
+    required Map<String, Object?> spec,
+    required BulkPricePreviewView view,
+    int offset = 0,
+    int limit = 50,
+  }) => _bulkPrices.preview(
+    spec: spec,
+    view: view,
+    offset: offset,
+    limit: limit,
+  );
+
+  Future<BulkPriceChangeRecord> applyBulkPriceChange({
+    required Map<String, Object?> spec,
+    required String fingerprint,
+  }) => _bulkPrices.apply(spec: spec, fingerprint: fingerprint);
+
+  Future<List<BulkPriceChangeRecord>> fetchBulkPriceChanges() =>
+      _bulkPrices.fetchHistory();
+
+  Future<BulkPriceChangeRecord> revertBulkPriceChange(int id) =>
+      _bulkPrices.revert(id);
+
   Future<Product> setVariantPrices({
     required int productId,
     required Map<int, double> pricesByVariant,
@@ -1153,8 +1183,8 @@ class PosApiService {
     );
   }
 
-  Future<MessagingSendResult> sendInvoiceSms(int saleOrderId) {
-    return _sales.sendInvoiceSms(saleOrderId);
+  Future<MessagingSendResult> sendInvoiceSms(int saleOrderId, {String? phone}) {
+    return _sales.sendInvoiceSms(saleOrderId, phone: phone);
   }
 
   Future<CustomerSalesSummary> fetchCustomerSalesSummary(int customerId) {

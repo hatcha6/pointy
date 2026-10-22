@@ -138,6 +138,7 @@ DOMAINS: tuple[Domain, ...] = (
             "catalog.ProductUnit",
             "catalog.ProductUnitBarcode",
             "catalog.ProductVariant",
+            "catalog.ProductVariantBarcode",
             "catalog.UnitOfMeasure",
         ),
         m2m=("catalog.Product.categories",),

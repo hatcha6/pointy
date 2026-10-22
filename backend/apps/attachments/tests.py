@@ -350,7 +350,7 @@ class AttachmentApiTests(TestCase):
             results = search_product_images(query="قهوة", page=2, page_size=12)
 
         self.assertEqual(len(results), 1)
-        self.assertEqual(results[0].provider, "serper")
+        self.assertEqual(results[0].provider, "openserp")
         self.assertEqual(results[0].image_url, "https://images.example.com/coffee.jpg")
         self.assertEqual(results[0].source_name, "shop.example.com")
         self.assertEqual(results[0].width, 900)
@@ -394,7 +394,7 @@ class AttachmentApiTests(TestCase):
                 "source_url": "https://shop.example.com/coffee",
                 "source_name": "Example Shop",
                 "title": "Coffee bag",
-                "provider": "serper",
+                "provider": "openserp",
             }
         )
 
@@ -593,7 +593,7 @@ class AttachmentApiTests(TestCase):
                 "source_url": "https://shop.example.com/coffee",
                 "source_name": "Example Shop",
                 "title": "Coffee bag",
-                "provider": "serper",
+                "provider": "openserp",
             }
         )
         transport = _FakeImageTransport(
@@ -615,7 +615,7 @@ class AttachmentApiTests(TestCase):
                 "source_url": "https://shop.example.com/coffee",
                 "source_name": "Example Shop",
                 "title": "Coffee bag",
-                "provider": "serper",
+                "provider": "openserp",
             }
         )
 

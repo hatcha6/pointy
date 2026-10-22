@@ -35,6 +35,11 @@
 // `?screen=tracked-switch` is the edit sheet of a phone still counted by
 // quantity with 30 on the shelf: choose «رقم تسلسلي» or «دفعات وصلاحية» and
 // save to see the server's identify-later question, as the real guard asks it.
+//
+// Extra barcodes: `?screen=extra-barcodes` opens the new-product form with a
+// main barcode already scanned in — press «إضافة باركود آخر» under it, then add
+// codes (try "6210000000123" to see another product's code refused).
+// `?screen=variant-extra` edits a milk variant that already has two.
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -174,7 +179,10 @@ class _HomeState extends State<_Home> {
     rejectSaves: widget.rejectSaves,
   );
   late final CatalogViewModel _catalogViewModel = CatalogViewModel(_catalog);
-  var _showVariantSheet = Uri.base.queryParameters['screen'] == 'variant';
+  var _showVariantSheet = const {
+    'variant',
+    'variant-extra',
+  }.contains(Uri.base.queryParameters['screen']);
   final _similarTo = switch (Uri.base.queryParameters['screen']) {
     'similar' => _similarCola,
     'similar-grid' => _similarShirt,
@@ -291,10 +299,19 @@ class _HomeState extends State<_Home> {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 640),
           child: _showVariantSheet
-              ? ProductVariantFormSheet(viewModel: _buildDetailsViewModel())
+              ? ProductVariantFormSheet(
+                  viewModel: _buildDetailsViewModel(),
+                  variant: Uri.base.queryParameters['screen'] == 'variant-extra'
+                      ? _milkWithExtras
+                      : null,
+                )
               : ProductForm(
                   viewModel: _catalogViewModel,
                   similarTo: _similarTo,
+                  initialBarcode:
+                      Uri.base.queryParameters['screen'] == 'extra-barcodes'
+                      ? '6281000000011'
+                      : null,
                   // The harness stands in for a manager, who is who the
                   // opening-stock pair is for.
                   showOpeningStock: true,
@@ -424,6 +441,17 @@ const _previewProduct = Product(
   name: 'شاي أخضر',
   quantityOnHand: 0,
   variants: [ProductVariant(id: 11, productId: 1, sku: 'TEA-1', unitPrice: 5)],
+);
+
+/// `?screen=variant-extra`: a milk carton that arrives under three codes.
+const _milkWithExtras = ProductVariant(
+  id: 12,
+  productId: 1,
+  sku: 'MILK-1',
+  unitPrice: 4.5,
+  barcode: '6281000000011',
+  extraBarcodes: ['6281000000028', '6290000000045'],
+  isDefault: true,
 );
 
 /// `?screen=similar`: a can sold by the piece and by the carton.

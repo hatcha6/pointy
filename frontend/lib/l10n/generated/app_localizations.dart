@@ -6592,6 +6592,66 @@ abstract class AppLocalizations {
   /// **'الباركود مُسجّل بالفعل للوحدة {unit}.'**
   String productUnitBarcodeConflict(String unit);
 
+  /// No description provided for @variantExtraBarcodesAddButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة باركود آخر'**
+  String get variantExtraBarcodesAddButton;
+
+  /// No description provided for @variantExtraBarcodesLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'باركودات إضافية'**
+  String get variantExtraBarcodesLabel;
+
+  /// No description provided for @variantExtraBarcodesHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'للمنتج نفسه إن وصل بأكثر من باركود: يُباع بأيٍّ منها عند المسح، ويبقى الباركود الأساسي هو المطبوع على الملصق.'**
+  String get variantExtraBarcodesHelper;
+
+  /// No description provided for @variantExtraBarcodeInputLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'امسح أو اكتب باركودًا إضافيًا'**
+  String get variantExtraBarcodeInputLabel;
+
+  /// No description provided for @variantExtraBarcodeAddTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة الباركود'**
+  String get variantExtraBarcodeAddTooltip;
+
+  /// No description provided for @variantExtraBarcodeScanTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسح بالكاميرا'**
+  String get variantExtraBarcodeScanTooltip;
+
+  /// No description provided for @variantExtraBarcodeScanTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسح باركود إضافي'**
+  String get variantExtraBarcodeScanTitle;
+
+  /// No description provided for @variantExtraBarcodeRemoveTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف الباركود'**
+  String get variantExtraBarcodeRemoveTooltip;
+
+  /// No description provided for @variantExtraBarcodeIsPrimary.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا هو الباركود الأساسي للمنتج.'**
+  String get variantExtraBarcodeIsPrimary;
+
+  /// No description provided for @variantExtraBarcodeDuplicate.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا الباركود مُضاف بالفعل.'**
+  String get variantExtraBarcodeDuplicate;
+
   /// No description provided for @productDefaultSaleUnitLabel.
   ///
   /// In ar, this message translates to:
@@ -13733,12 +13793,6 @@ abstract class AppLocalizations {
   /// **'تفعيل التتبّع'**
   String get productTrackingIdentifyLaterConfirm;
 
-  /// An order whose serial/lot goods were not received because the receiving dialog was closed or refused.
-  ///
-  /// In ar, this message translates to:
-  /// **'الطلب {number} أُنشئ ولم يُستلم بعد — استلمه من قائمة المشتريات بعد مسح الأرقام.'**
-  String purchaseOrderReceiptDeferred(String number);
-
   /// No description provided for @purchaseLineUnitsAtReceipt.
   ///
   /// In ar, this message translates to:
@@ -17959,12 +18013,6 @@ abstract class AppLocalizations {
   /// **'التكلفة الفعلية {amount}'**
   String purchaseLineEffectiveCostValue(String amount);
 
-  /// No description provided for @receivePurchaseImmediatelyLabel.
-  ///
-  /// In ar, this message translates to:
-  /// **'استلام أمر الشراء فورًا'**
-  String get receivePurchaseImmediatelyLabel;
-
   /// Submit purchase order button label with total amount.
   ///
   /// In ar, this message translates to:
@@ -17976,12 +18024,6 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'جار الإرسال...'**
   String get purchaseSubmitInProgressButton;
-
-  /// Message shown after a purchase order is submitted.
-  ///
-  /// In ar, this message translates to:
-  /// **'تم إرسال أمر الشراء رقم {draftNumber}.'**
-  String purchaseDraftSubmitSuccess(String draftNumber);
 
   /// No description provided for @purchaseDraftSubmitError.
   ///
@@ -18024,12 +18066,6 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'جارٍ الحفظ...'**
   String get purchaseDraftSaveInProgressButton;
-
-  /// Message shown after a draft purchase order's edits are saved.
-  ///
-  /// In ar, this message translates to:
-  /// **'تم حفظ مسودة أمر الشراء رقم {draftNumber}.'**
-  String purchaseDraftSaveSuccess(String draftNumber);
 
   /// Message shown when saving edits to a draft purchase order fails.
   ///
@@ -38662,6 +38698,12 @@ abstract class AppLocalizations {
   /// **'المرتجعات'**
   String get migrationEntitySaleReturn;
 
+  /// Data migration screen: goods sent back to suppliers.
+  ///
+  /// In ar, this message translates to:
+  /// **'مرتجعات المشتريات'**
+  String get migrationEntityPurchaseReturn;
+
   /// Data migration screen.
   ///
   /// In ar, this message translates to:
@@ -47900,6 +47942,1674 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **' ومعها {count} دفعات أخرى.'**
   String notificationMoamalatAmountMismatchMore(int count);
+
+  /// No description provided for @checkoutResultWorkingTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ إتمام البيع…'**
+  String get checkoutResultWorkingTitle;
+
+  /// No description provided for @checkoutResultWorkingQuotationTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ حفظ عرض السعر…'**
+  String get checkoutResultWorkingQuotationTitle;
+
+  /// No description provided for @checkoutResultWorkingHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا تُغلق الشاشة حتى يكتمل البيع.'**
+  String get checkoutResultWorkingHint;
+
+  /// No description provided for @checkoutResultStepRecord.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسجيل الفاتورة'**
+  String get checkoutResultStepRecord;
+
+  /// No description provided for @checkoutResultStepCharge.
+  ///
+  /// In ar, this message translates to:
+  /// **'التنفيذ لدى المزوّد'**
+  String get checkoutResultStepCharge;
+
+  /// No description provided for @checkoutResultStepPrint.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة الإيصال'**
+  String get checkoutResultStepPrint;
+
+  /// No description provided for @checkoutResultStepChargeSlow.
+  ///
+  /// In ar, this message translates to:
+  /// **'ما زلنا ننتظر ردّ المزوّد ({seconds} ث). لا تُعد العملية ولا تُرجع المبلغ للزبون.'**
+  String checkoutResultStepChargeSlow(int seconds);
+
+  /// No description provided for @checkoutResultSaleTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم البيع'**
+  String get checkoutResultSaleTitle;
+
+  /// No description provided for @checkoutResultCreditTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تسجيل البيع الآجل'**
+  String get checkoutResultCreditTitle;
+
+  /// No description provided for @checkoutResultQuotationTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حفظ عرض السعر'**
+  String get checkoutResultQuotationTitle;
+
+  /// No description provided for @checkoutResultAttentionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تسجيل البيع، وبعض الشحن لم يكتمل'**
+  String get checkoutResultAttentionTitle;
+
+  /// No description provided for @checkoutResultReceiptLine.
+  ///
+  /// In ar, this message translates to:
+  /// **'فاتورة رقم {receiptNumber} · {total}'**
+  String checkoutResultReceiptLine(String receiptNumber, String total);
+
+  /// No description provided for @checkoutResultBalanceDue.
+  ///
+  /// In ar, this message translates to:
+  /// **'المتبقي على العميل'**
+  String get checkoutResultBalanceDue;
+
+  /// No description provided for @checkoutResultPrinted.
+  ///
+  /// In ar, this message translates to:
+  /// **'طُبع الإيصال'**
+  String get checkoutResultPrinted;
+
+  /// No description provided for @checkoutResultPrinting.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ الطباعة…'**
+  String get checkoutResultPrinting;
+
+  /// No description provided for @checkoutResultPrintFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّرت طباعة الإيصال'**
+  String get checkoutResultPrintFailed;
+
+  /// No description provided for @checkoutResultNoPrinter.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد طابعة إيصالات على هذا الجهاز'**
+  String get checkoutResultNoPrinter;
+
+  /// No description provided for @checkoutResultNoPrinterHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'عيّنها من إعدادات الجهاز ← الطابعات.'**
+  String get checkoutResultNoPrinterHint;
+
+  /// No description provided for @checkoutResultNotPrinted.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يُطبع إيصال لهذا البيع'**
+  String get checkoutResultNotPrinted;
+
+  /// No description provided for @checkoutResultPrintAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة'**
+  String get checkoutResultPrintAction;
+
+  /// No description provided for @checkoutResultReprintAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة الطباعة'**
+  String get checkoutResultReprintAction;
+
+  /// No description provided for @checkoutResultSmsAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'رسالة نصية'**
+  String get checkoutResultSmsAction;
+
+  /// No description provided for @checkoutResultShareAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'مشاركة PDF'**
+  String get checkoutResultShareAction;
+
+  /// No description provided for @checkoutResultProofAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'سند قبض'**
+  String get checkoutResultProofAction;
+
+  /// No description provided for @checkoutResultProofPrinted.
+  ///
+  /// In ar, this message translates to:
+  /// **'طُبع سند القبض'**
+  String get checkoutResultProofPrinted;
+
+  /// No description provided for @checkoutResultProofFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّرت طباعة سند القبض'**
+  String get checkoutResultProofFailed;
+
+  /// No description provided for @checkoutResultSmsSent.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُرسلت الفاتورة برسالة نصية'**
+  String get checkoutResultSmsSent;
+
+  /// No description provided for @checkoutResultSmsFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر إرسال الرسالة'**
+  String get checkoutResultSmsFailed;
+
+  /// No description provided for @checkoutResultNewSale.
+  ///
+  /// In ar, this message translates to:
+  /// **'بيع جديد'**
+  String get checkoutResultNewSale;
+
+  /// No description provided for @checkoutResultNextScanHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'امسح الصنف التالي لتبدأ بيعًا جديدًا'**
+  String get checkoutResultNextScanHint;
+
+  /// No description provided for @checkoutResultDone.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم'**
+  String get checkoutResultDone;
+
+  /// No description provided for @checkoutResultLinkTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'فاتورة الزبون على الإنترنت'**
+  String get checkoutResultLinkTitle;
+
+  /// No description provided for @checkoutResultLinkBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'يمسح الزبون الرمز ليفتح فاتورته على هاتفه.'**
+  String get checkoutResultLinkBody;
+
+  /// No description provided for @checkoutResultLinkOffTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'رابط الفاتورة غير مفعّل'**
+  String get checkoutResultLinkOffTitle;
+
+  /// No description provided for @checkoutResultLinkOffBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'فعّله ليحصل كل زبون على فاتورته برمز QR ورابط يصله برسالة نصية. تجده في الإعدادات ← الإيصالات.'**
+  String get checkoutResultLinkOffBody;
+
+  /// No description provided for @checkoutResultLinkOffAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'فتح الإعدادات'**
+  String get checkoutResultLinkOffAction;
+
+  /// No description provided for @checkoutResultCardsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأرقام السرية للكروت'**
+  String get checkoutResultCardsTitle;
+
+  /// No description provided for @checkoutResultCardsBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'سلّمها للزبون. هي مطبوعة أيضًا على الإيصال إن طُبع.'**
+  String get checkoutResultCardsBody;
+
+  /// No description provided for @checkoutSmsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرسال الفاتورة برسالة نصية'**
+  String get checkoutSmsTitle;
+
+  /// No description provided for @checkoutSmsBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'تصل الزبونَ رسالة برقم الفاتورة ومبلغها، ورابطها إن كان مفعّلًا.'**
+  String get checkoutSmsBody;
+
+  /// No description provided for @checkoutSmsPhoneLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم الهاتف'**
+  String get checkoutSmsPhoneLabel;
+
+  /// No description provided for @checkoutSmsPhoneRequired.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل رقم هاتف'**
+  String get checkoutSmsPhoneRequired;
+
+  /// No description provided for @checkoutSmsSend.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرسال'**
+  String get checkoutSmsSend;
+
+  /// No description provided for @checkoutResultFailedTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يتم البيع'**
+  String get checkoutResultFailedTitle;
+
+  /// No description provided for @checkoutResultFailedSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يُسجَّل أي مبلغ، والسلة كما هي.'**
+  String get checkoutResultFailedSubtitle;
+
+  /// No description provided for @checkoutResultUnansweredTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يصل ردّ الخادم'**
+  String get checkoutResultUnansweredTitle;
+
+  /// No description provided for @checkoutResultUnansweredSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'قد يكون البيع سُجّل وقد لا يكون. أعد المحاولة لتعرف.'**
+  String get checkoutResultUnansweredSubtitle;
+
+  /// No description provided for @checkoutResultFailedGeneric.
+  ///
+  /// In ar, this message translates to:
+  /// **'رفض الخادم تسجيل هذا البيع.'**
+  String get checkoutResultFailedGeneric;
+
+  /// No description provided for @checkoutResultWhatToDo.
+  ///
+  /// In ar, this message translates to:
+  /// **'ما الذي يمكنك فعله'**
+  String get checkoutResultWhatToDo;
+
+  /// No description provided for @checkoutResultRetrySafe.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة المحاولة آمنة: إن كان البيع قد سُجّل فلن يتكرر.'**
+  String get checkoutResultRetrySafe;
+
+  /// No description provided for @checkoutResultCheckConnection.
+  ///
+  /// In ar, this message translates to:
+  /// **'تأكّد من اتصال الجهاز بالشبكة ثم أعد المحاولة.'**
+  String get checkoutResultCheckConnection;
+
+  /// No description provided for @checkoutResultStockTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكمية المطلوبة غير متوفرة'**
+  String get checkoutResultStockTitle;
+
+  /// No description provided for @checkoutResultStockTip.
+  ///
+  /// In ar, this message translates to:
+  /// **'خفّض الكمية أو احذف الصنف من السلة.'**
+  String get checkoutResultStockTip;
+
+  /// No description provided for @checkoutResultLossTip.
+  ///
+  /// In ar, this message translates to:
+  /// **'عدّل السعر، أو اطلب من المدير إتمام البيع.'**
+  String get checkoutResultLossTip;
+
+  /// No description provided for @checkoutResultCreditTipPayNow.
+  ///
+  /// In ar, this message translates to:
+  /// **'أو غيّر نوع البيع إلى نقدي.'**
+  String get checkoutResultCreditTipPayNow;
+
+  /// No description provided for @checkoutResultSessionTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'جلسة الدرج مغلقة'**
+  String get checkoutResultSessionTitle;
+
+  /// No description provided for @checkoutResultSessionTip.
+  ///
+  /// In ar, this message translates to:
+  /// **'افتح جلسة درج جديدة، ثم ادفع مرة أخرى؛ السلة محفوظة.'**
+  String get checkoutResultSessionTip;
+
+  /// No description provided for @checkoutResultReference.
+  ///
+  /// In ar, this message translates to:
+  /// **'رمز المرجع: {reference}'**
+  String checkoutResultReference(String reference);
+
+  /// No description provided for @checkoutResultEditPayment.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل الدفع'**
+  String get checkoutResultEditPayment;
+
+  /// No description provided for @checkoutCreditNeededLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'ادفع الآن على الأقل'**
+  String get checkoutCreditNeededLabel;
+
+  /// No description provided for @checkoutCreditNeededHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ليبقى دين العميل ضمن سقفه، ويتم البيع الآجل.'**
+  String get checkoutCreditNeededHint;
+
+  /// No description provided for @checkoutCreditOutstanding.
+  ///
+  /// In ar, this message translates to:
+  /// **'عليه الآن'**
+  String get checkoutCreditOutstanding;
+
+  /// No description provided for @checkoutCreditThisInvoice.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذه الفاتورة'**
+  String get checkoutCreditThisInvoice;
+
+  /// No description provided for @checkoutCreditLimitLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'سقف الدين'**
+  String get checkoutCreditLimitLabel;
+
+  /// No description provided for @checkoutCreditTipDownPayment.
+  ///
+  /// In ar, this message translates to:
+  /// **'اضغط «تعديل الدفع» وأضف الدفعة المقدّمة، ثم أكمل البيع.'**
+  String get checkoutCreditTipDownPayment;
+
+  /// No description provided for @checkoutCreditTipRaise.
+  ///
+  /// In ar, this message translates to:
+  /// **'رفع السقف من صفحة العميل، وهو قرار المالك.'**
+  String get checkoutCreditTipRaise;
+
+  /// No description provided for @purchaseResultWorkingTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ إرسال أمر الشراء…'**
+  String get purchaseResultWorkingTitle;
+
+  /// No description provided for @purchaseResultSavingTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ حفظ التعديلات…'**
+  String get purchaseResultSavingTitle;
+
+  /// No description provided for @purchaseResultReceivingTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ استلام البضاعة…'**
+  String get purchaseResultReceivingTitle;
+
+  /// No description provided for @purchaseResultWorkingHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا تُغلق الشاشة حتى يكتمل.'**
+  String get purchaseResultWorkingHint;
+
+  /// No description provided for @purchaseResultStepCreate.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسجيل الأمر'**
+  String get purchaseResultStepCreate;
+
+  /// No description provided for @purchaseResultStepSubmit.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرسال الأمر'**
+  String get purchaseResultStepSubmit;
+
+  /// No description provided for @purchaseResultStepSave.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ التعديلات'**
+  String get purchaseResultStepSave;
+
+  /// No description provided for @purchaseResultStepReceive.
+  ///
+  /// In ar, this message translates to:
+  /// **'إدخال البضاعة إلى المخزون'**
+  String get purchaseResultStepReceive;
+
+  /// No description provided for @purchaseResultOrderNumber.
+  ///
+  /// In ar, this message translates to:
+  /// **'أمر رقم {number}'**
+  String purchaseResultOrderNumber(String number);
+
+  /// No description provided for @purchaseResultSubmittedTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم إرسال أمر الشراء'**
+  String get purchaseResultSubmittedTitle;
+
+  /// No description provided for @purchaseResultSavedTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم حفظ التعديلات'**
+  String get purchaseResultSavedTitle;
+
+  /// No description provided for @purchaseResultReceivedTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم استلام البضاعة'**
+  String get purchaseResultReceivedTitle;
+
+  /// No description provided for @purchaseResultTotalLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إجمالي الأمر'**
+  String get purchaseResultTotalLabel;
+
+  /// No description provided for @purchaseResultAwaitingTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'البضاعة لم تدخل المخزون بعد'**
+  String get purchaseResultAwaitingTitle;
+
+  /// No description provided for @purchaseResultAwaitingBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'إن كانت أمامك فاستلمها الآن. وإن كانت ستصل لاحقًا فاستلمها من صفحة الأمر حين تصل.'**
+  String get purchaseResultAwaitingBody;
+
+  /// No description provided for @purchaseResultDetailsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُدخَل تفاصيل هذه الأصناف عند الاستلام'**
+  String get purchaseResultDetailsTitle;
+
+  /// No description provided for @purchaseResultDraftNote.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأمر ما زال مسودة: أرسله من صفحته حين يكتمل، ثم استلم البضاعة.'**
+  String get purchaseResultDraftNote;
+
+  /// No description provided for @purchaseResultReceiveAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'استلام البضاعة'**
+  String get purchaseResultReceiveAction;
+
+  /// No description provided for @purchaseResultReceiveHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُدخل الأرقام التسلسلية والدفعات في الخطوة التالية.'**
+  String get purchaseResultReceiveHint;
+
+  /// No description provided for @purchaseResultReceiveAdjustAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'استلام بكميات مختلفة'**
+  String get purchaseResultReceiveAdjustAction;
+
+  /// No description provided for @purchaseResultReceiveLater.
+  ///
+  /// In ar, this message translates to:
+  /// **'استلام لاحقًا'**
+  String get purchaseResultReceiveLater;
+
+  /// No description provided for @purchaseResultNewOrder.
+  ///
+  /// In ar, this message translates to:
+  /// **'أمر شراء جديد'**
+  String get purchaseResultNewOrder;
+
+  /// No description provided for @purchaseResultFormSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل ما وصل فعلًا، وسجّل الأرقام والدفعات للأصناف التي تحتاجها.'**
+  String get purchaseResultFormSubtitle;
+
+  /// No description provided for @purchaseResultConfirmReceive.
+  ///
+  /// In ar, this message translates to:
+  /// **'تأكيد الاستلام'**
+  String get purchaseResultConfirmReceive;
+
+  /// No description provided for @purchaseResultBack.
+  ///
+  /// In ar, this message translates to:
+  /// **'رجوع'**
+  String get purchaseResultBack;
+
+  /// No description provided for @purchaseResultReceiveFailedTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم تُستلم البضاعة'**
+  String get purchaseResultReceiveFailedTitle;
+
+  /// No description provided for @purchaseResultReceiveFailedBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأمر محفوظ ومُرسل. أعد المحاولة، أو استلمه لاحقًا من صفحته.'**
+  String get purchaseResultReceiveFailedBody;
+
+  /// No description provided for @purchaseResultReceivedSection.
+  ///
+  /// In ar, this message translates to:
+  /// **'ما دخل المخزون'**
+  String get purchaseResultReceivedSection;
+
+  /// No description provided for @purchaseResultMoreLines.
+  ///
+  /// In ar, this message translates to:
+  /// **'+{count} أصناف أخرى'**
+  String purchaseResultMoreLines(int count);
+
+  /// No description provided for @purchaseResultLabelsBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'اطبع ملصقات الأجهزة والدفعات الآن، والعلب ما زالت مفتوحة.'**
+  String get purchaseResultLabelsBody;
+
+  /// No description provided for @purchaseResultDocumentTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مستند أمر الشراء'**
+  String get purchaseResultDocumentTitle;
+
+  /// No description provided for @purchaseResultPrinted.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُرسل أمر الشراء إلى الطابعة'**
+  String get purchaseResultPrinted;
+
+  /// No description provided for @purchaseResultShared.
+  ///
+  /// In ar, this message translates to:
+  /// **'جُهّز ملف PDF لأمر الشراء'**
+  String get purchaseResultShared;
+
+  /// No description provided for @purchaseResultFailedTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يُرسَل أمر الشراء'**
+  String get purchaseResultFailedTitle;
+
+  /// No description provided for @purchaseResultSaveFailedTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم تُحفظ التعديلات'**
+  String get purchaseResultSaveFailedTitle;
+
+  /// No description provided for @purchaseResultFailedSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المسودة كما هي، ولم يتغير شيء في المخزون.'**
+  String get purchaseResultFailedSubtitle;
+
+  /// No description provided for @purchaseResultUnansweredSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'قد يكون الأمر سُجّل وقد لا يكون. أعد المحاولة لتعرف.'**
+  String get purchaseResultUnansweredSubtitle;
+
+  /// No description provided for @purchaseResultRetrySafe.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة المحاولة آمنة: إن كان الأمر قد سُجّل فلن يتكرر.'**
+  String get purchaseResultRetrySafe;
+
+  /// No description provided for @purchaseResultInvoiceTakenTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم فاتورة المورد مكرر'**
+  String get purchaseResultInvoiceTakenTitle;
+
+  /// No description provided for @purchaseResultEditInvoiceAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل رقم الفاتورة'**
+  String get purchaseResultEditInvoiceAction;
+
+  /// No description provided for @purchaseResultBackToDraft.
+  ///
+  /// In ar, this message translates to:
+  /// **'رجوع إلى المسودة'**
+  String get purchaseResultBackToDraft;
+
+  /// No description provided for @purchaseResultCostTip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إن كانت الفاتورة تعطيك إجمالي السطر فقط، فاكتبه في «إدخال الإجمالي» بدل سعر الوحدة.'**
+  String get purchaseResultCostTip;
+
+  /// No description provided for @purchaseResultStillOpen.
+  ///
+  /// In ar, this message translates to:
+  /// **'بقي جزء من الأمر مفتوحًا. استلمه من صفحة الأمر حين يصل.'**
+  String get purchaseResultStillOpen;
+
+  /// No description provided for @bulkPriceEditorTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل الأسعار بالقواعد'**
+  String get bulkPriceEditorTitle;
+
+  /// No description provided for @bulkPriceEditorMenuAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل الأسعار بالقواعد'**
+  String get bulkPriceEditorMenuAction;
+
+  /// No description provided for @bulkPriceEditorSelectionAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'قواعد الأسعار'**
+  String get bulkPriceEditorSelectionAction;
+
+  /// No description provided for @bulkPriceHistoryAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجل التعديلات'**
+  String get bulkPriceHistoryAction;
+
+  /// No description provided for @bulkPriceRulesTab.
+  ///
+  /// In ar, this message translates to:
+  /// **'القواعد'**
+  String get bulkPriceRulesTab;
+
+  /// No description provided for @bulkPricePreviewTab.
+  ///
+  /// In ar, this message translates to:
+  /// **'المعاينة'**
+  String get bulkPricePreviewTab;
+
+  /// No description provided for @bulkPriceScopeTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المنتجات المشمولة'**
+  String get bulkPriceScopeTitle;
+
+  /// No description provided for @bulkPriceScopeAll.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل المنتجات'**
+  String get bulkPriceScopeAll;
+
+  /// No description provided for @bulkPriceScopeFiltered.
+  ///
+  /// In ar, this message translates to:
+  /// **'حسب شروط'**
+  String get bulkPriceScopeFiltered;
+
+  /// No description provided for @bulkPriceScopeAllHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل المنتجات غير المؤرشفة. المنتجات المؤرشفة ومنتجات النظام لا تتغير أسعارها أبدًا.'**
+  String get bulkPriceScopeAllHint;
+
+  /// No description provided for @bulkPriceGroupMatchLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تنطبق إذا تحقق'**
+  String get bulkPriceGroupMatchLabel;
+
+  /// No description provided for @bulkPriceMatchAll.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل الشروط'**
+  String get bulkPriceMatchAll;
+
+  /// No description provided for @bulkPriceMatchAny.
+  ///
+  /// In ar, this message translates to:
+  /// **'أي شرط'**
+  String get bulkPriceMatchAny;
+
+  /// No description provided for @bulkPriceJoinAnd.
+  ///
+  /// In ar, this message translates to:
+  /// **'و'**
+  String get bulkPriceJoinAnd;
+
+  /// No description provided for @bulkPriceJoinOr.
+  ///
+  /// In ar, this message translates to:
+  /// **'أو'**
+  String get bulkPriceJoinOr;
+
+  /// No description provided for @bulkPriceAddCondition.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة شرط'**
+  String get bulkPriceAddCondition;
+
+  /// No description provided for @bulkPriceAddGroup.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة مجموعة شروط'**
+  String get bulkPriceAddGroup;
+
+  /// No description provided for @bulkPriceRemoveCondition.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف الشرط'**
+  String get bulkPriceRemoveCondition;
+
+  /// No description provided for @bulkPriceRemoveGroup.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف المجموعة'**
+  String get bulkPriceRemoveGroup;
+
+  /// No description provided for @bulkPriceNestedGroupTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'مجموعة شروط'**
+  String get bulkPriceNestedGroupTitle;
+
+  /// No description provided for @bulkPriceFieldName.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم المنتج'**
+  String get bulkPriceFieldName;
+
+  /// No description provided for @bulkPriceFieldSku.
+  ///
+  /// In ar, this message translates to:
+  /// **'رمز المنتج (SKU)'**
+  String get bulkPriceFieldSku;
+
+  /// No description provided for @bulkPriceFieldBarcode.
+  ///
+  /// In ar, this message translates to:
+  /// **'الباركود'**
+  String get bulkPriceFieldBarcode;
+
+  /// No description provided for @bulkPriceFieldCategory.
+  ///
+  /// In ar, this message translates to:
+  /// **'التصنيف'**
+  String get bulkPriceFieldCategory;
+
+  /// No description provided for @bulkPriceFieldSupplier.
+  ///
+  /// In ar, this message translates to:
+  /// **'المورد'**
+  String get bulkPriceFieldSupplier;
+
+  /// No description provided for @bulkPriceFieldProduct.
+  ///
+  /// In ar, this message translates to:
+  /// **'المنتج'**
+  String get bulkPriceFieldProduct;
+
+  /// No description provided for @bulkPriceFieldPrice.
+  ///
+  /// In ar, this message translates to:
+  /// **'سعر البيع'**
+  String get bulkPriceFieldPrice;
+
+  /// No description provided for @bulkPriceFieldCost.
+  ///
+  /// In ar, this message translates to:
+  /// **'التكلفة'**
+  String get bulkPriceFieldCost;
+
+  /// No description provided for @bulkPriceFieldMarkup.
+  ///
+  /// In ar, this message translates to:
+  /// **'نسبة الربح على التكلفة'**
+  String get bulkPriceFieldMarkup;
+
+  /// No description provided for @bulkPriceFieldStock.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكمية المتوفرة'**
+  String get bulkPriceFieldStock;
+
+  /// No description provided for @bulkPriceFieldIsActive.
+  ///
+  /// In ar, this message translates to:
+  /// **'المنتج مفعّل'**
+  String get bulkPriceFieldIsActive;
+
+  /// No description provided for @bulkPriceFieldIsService.
+  ///
+  /// In ar, this message translates to:
+  /// **'خدمة'**
+  String get bulkPriceFieldIsService;
+
+  /// No description provided for @bulkPriceFieldForeignPriced.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسعّر بعملة أجنبية'**
+  String get bulkPriceFieldForeignPriced;
+
+  /// No description provided for @bulkPriceOpContains.
+  ///
+  /// In ar, this message translates to:
+  /// **'يحتوي على'**
+  String get bulkPriceOpContains;
+
+  /// No description provided for @bulkPriceOpNotContains.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يحتوي على'**
+  String get bulkPriceOpNotContains;
+
+  /// No description provided for @bulkPriceOpEquals.
+  ///
+  /// In ar, this message translates to:
+  /// **'يساوي'**
+  String get bulkPriceOpEquals;
+
+  /// No description provided for @bulkPriceOpNotEquals.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يساوي'**
+  String get bulkPriceOpNotEquals;
+
+  /// No description provided for @bulkPriceOpStartsWith.
+  ///
+  /// In ar, this message translates to:
+  /// **'يبدأ بـ'**
+  String get bulkPriceOpStartsWith;
+
+  /// No description provided for @bulkPriceOpEndsWith.
+  ///
+  /// In ar, this message translates to:
+  /// **'ينتهي بـ'**
+  String get bulkPriceOpEndsWith;
+
+  /// No description provided for @bulkPriceOpIsEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير محدد'**
+  String get bulkPriceOpIsEmpty;
+
+  /// No description provided for @bulkPriceOpIsNotEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'محدد'**
+  String get bulkPriceOpIsNotEmpty;
+
+  /// No description provided for @bulkPriceOpGt.
+  ///
+  /// In ar, this message translates to:
+  /// **'أكبر من'**
+  String get bulkPriceOpGt;
+
+  /// No description provided for @bulkPriceOpGte.
+  ///
+  /// In ar, this message translates to:
+  /// **'أكبر من أو يساوي'**
+  String get bulkPriceOpGte;
+
+  /// No description provided for @bulkPriceOpLt.
+  ///
+  /// In ar, this message translates to:
+  /// **'أقل من'**
+  String get bulkPriceOpLt;
+
+  /// No description provided for @bulkPriceOpLte.
+  ///
+  /// In ar, this message translates to:
+  /// **'أقل من أو يساوي'**
+  String get bulkPriceOpLte;
+
+  /// No description provided for @bulkPriceOpBetween.
+  ///
+  /// In ar, this message translates to:
+  /// **'بين'**
+  String get bulkPriceOpBetween;
+
+  /// No description provided for @bulkPriceOpIn.
+  ///
+  /// In ar, this message translates to:
+  /// **'أحد'**
+  String get bulkPriceOpIn;
+
+  /// No description provided for @bulkPriceOpNotIn.
+  ///
+  /// In ar, this message translates to:
+  /// **'ليس أحد'**
+  String get bulkPriceOpNotIn;
+
+  /// No description provided for @bulkPriceOpIsTrue.
+  ///
+  /// In ar, this message translates to:
+  /// **'نعم'**
+  String get bulkPriceOpIsTrue;
+
+  /// No description provided for @bulkPriceOpIsFalse.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا'**
+  String get bulkPriceOpIsFalse;
+
+  /// No description provided for @bulkPriceBetweenAnd.
+  ///
+  /// In ar, this message translates to:
+  /// **'و'**
+  String get bulkPriceBetweenAnd;
+
+  /// No description provided for @bulkPriceValueHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'القيمة'**
+  String get bulkPriceValueHint;
+
+  /// No description provided for @bulkPricePickCategories.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر التصنيفات'**
+  String get bulkPricePickCategories;
+
+  /// No description provided for @bulkPricePickSupplier.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة مورد'**
+  String get bulkPricePickSupplier;
+
+  /// No description provided for @bulkPriceSubcategoriesHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'تشمل التصنيفات الفرعية'**
+  String get bulkPriceSubcategoriesHint;
+
+  /// No description provided for @bulkPriceStepsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'خطوات تعديل السعر'**
+  String get bulkPriceStepsTitle;
+
+  /// No description provided for @bulkPriceStepsHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُطبّق الخطوات بالترتيب، وكل خطوة تبدأ من السعر الذي أنتجته الخطوة التي قبلها.'**
+  String get bulkPriceStepsHint;
+
+  /// No description provided for @bulkPriceAddStep.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة خطوة'**
+  String get bulkPriceAddStep;
+
+  /// No description provided for @bulkPriceStepWhenToggle.
+  ///
+  /// In ar, this message translates to:
+  /// **'بشرط'**
+  String get bulkPriceStepWhenToggle;
+
+  /// No description provided for @bulkPriceStepWhenTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'فقط للمنتجات التي'**
+  String get bulkPriceStepWhenTitle;
+
+  /// No description provided for @bulkPriceStepWhenHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'السعر هنا هو السعر بعد الخطوات السابقة.'**
+  String get bulkPriceStepWhenHint;
+
+  /// No description provided for @bulkPriceStepStop.
+  ///
+  /// In ar, this message translates to:
+  /// **'أوقف بقية الخطوات'**
+  String get bulkPriceStepStop;
+
+  /// No description provided for @bulkPriceStepStopHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ما تنطبق عليه هذه الخطوة لا تمسّه الخطوات بعدها — لصياغة «وإلا».'**
+  String get bulkPriceStepStopHint;
+
+  /// No description provided for @bulkPriceMoveUp.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحريك للأعلى'**
+  String get bulkPriceMoveUp;
+
+  /// No description provided for @bulkPriceMoveDown.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحريك للأسفل'**
+  String get bulkPriceMoveDown;
+
+  /// No description provided for @bulkPriceDuplicateStep.
+  ///
+  /// In ar, this message translates to:
+  /// **'تكرار الخطوة'**
+  String get bulkPriceDuplicateStep;
+
+  /// No description provided for @bulkPriceRemoveStep.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف الخطوة'**
+  String get bulkPriceRemoveStep;
+
+  /// No description provided for @bulkPriceStepMenuTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'خيارات الخطوة'**
+  String get bulkPriceStepMenuTooltip;
+
+  /// No description provided for @bulkPriceActionIncreasePercent.
+  ///
+  /// In ar, this message translates to:
+  /// **'زيادة بنسبة'**
+  String get bulkPriceActionIncreasePercent;
+
+  /// No description provided for @bulkPriceActionDecreasePercent.
+  ///
+  /// In ar, this message translates to:
+  /// **'تخفيض بنسبة'**
+  String get bulkPriceActionDecreasePercent;
+
+  /// No description provided for @bulkPriceActionIncreaseAmount.
+  ///
+  /// In ar, this message translates to:
+  /// **'زيادة بمبلغ'**
+  String get bulkPriceActionIncreaseAmount;
+
+  /// No description provided for @bulkPriceActionDecreaseAmount.
+  ///
+  /// In ar, this message translates to:
+  /// **'تخفيض بمبلغ'**
+  String get bulkPriceActionDecreaseAmount;
+
+  /// No description provided for @bulkPriceActionSet.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعيين السعر إلى'**
+  String get bulkPriceActionSet;
+
+  /// No description provided for @bulkPriceActionCostMarkup.
+  ///
+  /// In ar, this message translates to:
+  /// **'التكلفة + نسبة ربح'**
+  String get bulkPriceActionCostMarkup;
+
+  /// No description provided for @bulkPriceActionCostPlus.
+  ///
+  /// In ar, this message translates to:
+  /// **'التكلفة + مبلغ'**
+  String get bulkPriceActionCostPlus;
+
+  /// No description provided for @bulkPriceActionMinMarkup.
+  ///
+  /// In ar, this message translates to:
+  /// **'ربح لا يقل عن'**
+  String get bulkPriceActionMinMarkup;
+
+  /// No description provided for @bulkPriceActionMinPrice.
+  ///
+  /// In ar, this message translates to:
+  /// **'سعر لا يقل عن'**
+  String get bulkPriceActionMinPrice;
+
+  /// No description provided for @bulkPriceActionMaxPrice.
+  ///
+  /// In ar, this message translates to:
+  /// **'سعر لا يزيد عن'**
+  String get bulkPriceActionMaxPrice;
+
+  /// No description provided for @bulkPriceActionRound.
+  ///
+  /// In ar, this message translates to:
+  /// **'تقريب إلى مضاعفات'**
+  String get bulkPriceActionRound;
+
+  /// No description provided for @bulkPriceActionEnding.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنهاء السعر بـ'**
+  String get bulkPriceActionEnding;
+
+  /// No description provided for @bulkPriceDirectionNearest.
+  ///
+  /// In ar, this message translates to:
+  /// **'للأقرب'**
+  String get bulkPriceDirectionNearest;
+
+  /// No description provided for @bulkPriceDirectionUp.
+  ///
+  /// In ar, this message translates to:
+  /// **'للأعلى'**
+  String get bulkPriceDirectionUp;
+
+  /// No description provided for @bulkPriceDirectionDown.
+  ///
+  /// In ar, this message translates to:
+  /// **'للأسفل'**
+  String get bulkPriceDirectionDown;
+
+  /// No description provided for @bulkPriceActionGroupAdjust.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل السعر'**
+  String get bulkPriceActionGroupAdjust;
+
+  /// No description provided for @bulkPriceActionGroupCost.
+  ///
+  /// In ar, this message translates to:
+  /// **'حسب التكلفة'**
+  String get bulkPriceActionGroupCost;
+
+  /// No description provided for @bulkPriceActionGroupLimits.
+  ///
+  /// In ar, this message translates to:
+  /// **'حدود'**
+  String get bulkPriceActionGroupLimits;
+
+  /// No description provided for @bulkPriceActionGroupRounding.
+  ///
+  /// In ar, this message translates to:
+  /// **'تقريب'**
+  String get bulkPriceActionGroupRounding;
+
+  /// No description provided for @bulkPricePresetsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة سريعة'**
+  String get bulkPricePresetsTitle;
+
+  /// No description provided for @bulkPricePresetIncrease10.
+  ///
+  /// In ar, this message translates to:
+  /// **'زيادة ‎10%‎'**
+  String get bulkPricePresetIncrease10;
+
+  /// No description provided for @bulkPricePresetDecrease10.
+  ///
+  /// In ar, this message translates to:
+  /// **'تخفيض ‎10%‎'**
+  String get bulkPricePresetDecrease10;
+
+  /// No description provided for @bulkPricePresetMarkup25.
+  ///
+  /// In ar, this message translates to:
+  /// **'التكلفة + ‎25%‎'**
+  String get bulkPricePresetMarkup25;
+
+  /// No description provided for @bulkPricePresetRound025.
+  ///
+  /// In ar, this message translates to:
+  /// **'تقريب ‎0.25‎'**
+  String get bulkPricePresetRound025;
+
+  /// No description provided for @bulkPricePresetEnding.
+  ///
+  /// In ar, this message translates to:
+  /// **'ينتهي بـ ‎.99‎'**
+  String get bulkPricePresetEnding;
+
+  /// No description provided for @bulkPriceSafeguardsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الضمانات'**
+  String get bulkPriceSafeguardsTitle;
+
+  /// No description provided for @bulkPriceNeverBelowCost.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا تجعل أي سعر أقل من التكلفة'**
+  String get bulkPriceNeverBelowCost;
+
+  /// No description provided for @bulkPriceNeverBelowCostHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'إن نزل السعر الناتج عن التكلفة يُرفع إليها.'**
+  String get bulkPriceNeverBelowCostHint;
+
+  /// No description provided for @bulkPriceScalePacks.
+  ///
+  /// In ar, this message translates to:
+  /// **'عدّل أسعار العبوات الخاصة بنفس النسبة'**
+  String get bulkPriceScalePacks;
+
+  /// No description provided for @bulkPriceScalePacksHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'للعبوات التي لها سعر خاص (كالكرتونة). العبوات المحسوبة من سعر القطعة تتبعها دائمًا.'**
+  String get bulkPriceScalePacksHint;
+
+  /// No description provided for @bulkPricePreviewNoSteps.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضف خطوة واحدة على الأقل لعرض المعاينة.'**
+  String get bulkPricePreviewNoSteps;
+
+  /// No description provided for @bulkPricePreviewUpdating.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ تحديث المعاينة…'**
+  String get bulkPricePreviewUpdating;
+
+  /// No description provided for @bulkPricePreviewFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل المعاينة.'**
+  String get bulkPricePreviewFailed;
+
+  /// No description provided for @bulkPricePreviewRetry.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة المحاولة'**
+  String get bulkPricePreviewRetry;
+
+  /// No description provided for @bulkPriceSummaryMatched.
+  ///
+  /// In ar, this message translates to:
+  /// **'مشمولة'**
+  String get bulkPriceSummaryMatched;
+
+  /// No description provided for @bulkPriceSummaryChanged.
+  ///
+  /// In ar, this message translates to:
+  /// **'ستتغير'**
+  String get bulkPriceSummaryChanged;
+
+  /// No description provided for @bulkPriceSummaryIncreased.
+  ///
+  /// In ar, this message translates to:
+  /// **'زيادة'**
+  String get bulkPriceSummaryIncreased;
+
+  /// No description provided for @bulkPriceSummaryDecreased.
+  ///
+  /// In ar, this message translates to:
+  /// **'تخفيض'**
+  String get bulkPriceSummaryDecreased;
+
+  /// No description provided for @bulkPriceSummaryAverage.
+  ///
+  /// In ar, this message translates to:
+  /// **'متوسط التغيير'**
+  String get bulkPriceSummaryAverage;
+
+  /// No description provided for @bulkPriceSummaryWarnings.
+  ///
+  /// In ar, this message translates to:
+  /// **'تنبيهات'**
+  String get bulkPriceSummaryWarnings;
+
+  /// No description provided for @bulkPriceViewChanged.
+  ///
+  /// In ar, this message translates to:
+  /// **'ستتغير'**
+  String get bulkPriceViewChanged;
+
+  /// No description provided for @bulkPriceViewIncreased.
+  ///
+  /// In ar, this message translates to:
+  /// **'زيادة'**
+  String get bulkPriceViewIncreased;
+
+  /// No description provided for @bulkPriceViewDecreased.
+  ///
+  /// In ar, this message translates to:
+  /// **'تخفيض'**
+  String get bulkPriceViewDecreased;
+
+  /// No description provided for @bulkPriceViewWarnings.
+  ///
+  /// In ar, this message translates to:
+  /// **'تنبيهات'**
+  String get bulkPriceViewWarnings;
+
+  /// No description provided for @bulkPriceViewUnchanged.
+  ///
+  /// In ar, this message translates to:
+  /// **'بلا تغيير'**
+  String get bulkPriceViewUnchanged;
+
+  /// No description provided for @bulkPriceViewAll.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكل'**
+  String get bulkPriceViewAll;
+
+  /// No description provided for @bulkPricePreviewEmptyView.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد أصناف في هذا القسم.'**
+  String get bulkPricePreviewEmptyView;
+
+  /// No description provided for @bulkPricePreviewNothingChanges.
+  ///
+  /// In ar, this message translates to:
+  /// **'لن يتغير أي سعر بهذه القواعد.'**
+  String get bulkPricePreviewNothingChanges;
+
+  /// No description provided for @bulkPricePreviewNoMatch.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يطابق أي منتج هذه الشروط.'**
+  String get bulkPricePreviewNoMatch;
+
+  /// No description provided for @bulkPriceFlagBelowCost.
+  ///
+  /// In ar, this message translates to:
+  /// **'أقل من التكلفة'**
+  String get bulkPriceFlagBelowCost;
+
+  /// No description provided for @bulkPriceFlagRaisedToCost.
+  ///
+  /// In ar, this message translates to:
+  /// **'رُفع إلى التكلفة'**
+  String get bulkPriceFlagRaisedToCost;
+
+  /// No description provided for @bulkPriceFlagNoCost.
+  ///
+  /// In ar, this message translates to:
+  /// **'تكلفة غير معروفة'**
+  String get bulkPriceFlagNoCost;
+
+  /// No description provided for @bulkPriceFlagZero.
+  ///
+  /// In ar, this message translates to:
+  /// **'صار صفرًا'**
+  String get bulkPriceFlagZero;
+
+  /// No description provided for @bulkPriceFlagBigChange.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيير كبير'**
+  String get bulkPriceFlagBigChange;
+
+  /// No description provided for @bulkPriceFlagForeign.
+  ///
+  /// In ar, this message translates to:
+  /// **'عملة أجنبية'**
+  String get bulkPriceFlagForeign;
+
+  /// No description provided for @bulkPriceLoadMore.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرض المزيد'**
+  String get bulkPriceLoadMore;
+
+  /// No description provided for @bulkPriceUnchangedBadge.
+  ///
+  /// In ar, this message translates to:
+  /// **'بلا تغيير'**
+  String get bulkPriceUnchangedBadge;
+
+  /// No description provided for @bulkPriceApplyWaiting.
+  ///
+  /// In ar, this message translates to:
+  /// **'انتظر تحديث المعاينة'**
+  String get bulkPriceApplyWaiting;
+
+  /// No description provided for @bulkPriceApplyNothing.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا تغيير لتطبيقه'**
+  String get bulkPriceApplyNothing;
+
+  /// No description provided for @bulkPriceApplyIncomplete.
+  ///
+  /// In ar, this message translates to:
+  /// **'أكمل الحقول المعلّمة'**
+  String get bulkPriceApplyIncomplete;
+
+  /// No description provided for @bulkPriceConfirmTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تطبيق تعديل الأسعار؟'**
+  String get bulkPriceConfirmTitle;
+
+  /// No description provided for @bulkPriceConfirmUndo.
+  ///
+  /// In ar, this message translates to:
+  /// **'يمكنك التراجع عن هذا التعديل لاحقًا من «سجل التعديلات».'**
+  String get bulkPriceConfirmUndo;
+
+  /// No description provided for @bulkPriceConfirmAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'تطبيق'**
+  String get bulkPriceConfirmAction;
+
+  /// No description provided for @bulkPriceUndoAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'تراجع'**
+  String get bulkPriceUndoAction;
+
+  /// No description provided for @bulkPriceStaleMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيّرت بعض الأسعار منذ المعاينة، فحدّثناها. راجعها ثم طبّق مرة أخرى.'**
+  String get bulkPriceStaleMessage;
+
+  /// No description provided for @bulkPriceApplyFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تطبيق التعديل. لم يتغير أي سعر.'**
+  String get bulkPriceApplyFailed;
+
+  /// No description provided for @bulkPriceNothingToApplyMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يعد هناك ما يتغير بهذه القواعد.'**
+  String get bulkPriceNothingToApplyMessage;
+
+  /// No description provided for @bulkPriceHistoryTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجل تعديلات الأسعار'**
+  String get bulkPriceHistoryTitle;
+
+  /// No description provided for @bulkPriceHistoryEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يُطبَّق أي تعديل بالقواعد بعد.'**
+  String get bulkPriceHistoryEmpty;
+
+  /// No description provided for @bulkPriceHistoryReverted.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم التراجع'**
+  String get bulkPriceHistoryReverted;
+
+  /// No description provided for @bulkPriceHistoryLoadFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل السجل.'**
+  String get bulkPriceHistoryLoadFailed;
+
+  /// No description provided for @bulkPriceRevertConfirmTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'التراجع عن هذا التعديل؟'**
+  String get bulkPriceRevertConfirmTitle;
+
+  /// No description provided for @bulkPriceRevertConfirmBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعود الأسعار إلى ما كانت عليه قبله. أي سعر عدّله أحد بعد ذلك يبقى كما هو.'**
+  String get bulkPriceRevertConfirmBody;
+
+  /// No description provided for @bulkPriceRevertFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر التراجع.'**
+  String get bulkPriceRevertFailed;
+
+  /// No description provided for @bulkPriceAlreadyReverted.
+  ///
+  /// In ar, this message translates to:
+  /// **'سبق التراجع عن هذا التعديل.'**
+  String get bulkPriceAlreadyReverted;
+
+  /// No description provided for @bulkPriceIssueRequired.
+  ///
+  /// In ar, this message translates to:
+  /// **'مطلوب'**
+  String get bulkPriceIssueRequired;
+
+  /// No description provided for @bulkPriceIssueNotANumber.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم غير صالح'**
+  String get bulkPriceIssueNotANumber;
+
+  /// No description provided for @bulkPriceIssueNegative.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يقبل قيمة سالبة'**
+  String get bulkPriceIssueNegative;
+
+  /// No description provided for @bulkPriceIssueTooManyDecimals.
+  ///
+  /// In ar, this message translates to:
+  /// **'منازل عشرية أكثر من المسموح'**
+  String get bulkPriceIssueTooManyDecimals;
+
+  /// No description provided for @bulkPriceIssueBoundsReversed.
+  ///
+  /// In ar, this message translates to:
+  /// **'أصغر من الحد الأول'**
+  String get bulkPriceIssueBoundsReversed;
+
+  /// No description provided for @bulkPriceIssuePercentOver100.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يتجاوز 100%'**
+  String get bulkPriceIssuePercentOver100;
+
+  /// No description provided for @bulkPriceIssueZeroIncrement.
+  ///
+  /// In ar, this message translates to:
+  /// **'أكبر من صفر'**
+  String get bulkPriceIssueZeroIncrement;
+
+  /// No description provided for @bulkPriceMatchedCount.
+  ///
+  /// In ar, this message translates to:
+  /// **'يطابق {count} صنفًا'**
+  String bulkPriceMatchedCount(int count);
+
+  /// No description provided for @bulkPriceSelectedProducts.
+  ///
+  /// In ar, this message translates to:
+  /// **'المنتجات المحددة ({count})'**
+  String bulkPriceSelectedProducts(int count);
+
+  /// No description provided for @bulkPriceStepHits.
+  ///
+  /// In ar, this message translates to:
+  /// **'طُبّقت على {count}'**
+  String bulkPriceStepHits(int count);
+
+  /// No description provided for @bulkPriceStepExample.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثال: {before} ← {after}'**
+  String bulkPriceStepExample(String before, String after);
+
+  /// No description provided for @bulkPricePreviewIncomplete.
+  ///
+  /// In ar, this message translates to:
+  /// **'أكمل {count} من الحقول المعلّمة لعرض المعاينة.'**
+  String bulkPricePreviewIncomplete(int count);
+
+  /// No description provided for @bulkPriceRowCost.
+  ///
+  /// In ar, this message translates to:
+  /// **'التكلفة {cost}'**
+  String bulkPriceRowCost(String cost);
+
+  /// No description provided for @bulkPriceRowMarkup.
+  ///
+  /// In ar, this message translates to:
+  /// **'الربح {before} ← {after}'**
+  String bulkPriceRowMarkup(String before, String after);
+
+  /// No description provided for @bulkPriceRowSteps.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخطوات {steps}'**
+  String bulkPriceRowSteps(String steps);
+
+  /// No description provided for @bulkPricePacksChanged.
+  ///
+  /// In ar, this message translates to:
+  /// **'و{count} عبوة'**
+  String bulkPricePacksChanged(int count);
+
+  /// No description provided for @bulkPriceApplyButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تطبيق على {count} صنف'**
+  String bulkPriceApplyButton(int count);
+
+  /// No description provided for @bulkPriceConfirmBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيتغير سعر {changed} صنفًا: {increased} بزيادة و{decreased} بتخفيض.'**
+  String bulkPriceConfirmBody(int changed, int increased, int decreased);
+
+  /// No description provided for @bulkPriceConfirmPacks.
+  ///
+  /// In ar, this message translates to:
+  /// **'وسيتغير سعر {count} عبوة بنفس النسبة.'**
+  String bulkPriceConfirmPacks(int count);
+
+  /// No description provided for @bulkPriceConfirmWarnings.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} صنفًا عليها تنبيهات. راجعها في «تنبيهات» قبل التطبيق.'**
+  String bulkPriceConfirmWarnings(int count);
+
+  /// No description provided for @bulkPriceAppliedMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم تعديل {count} سعرًا'**
+  String bulkPriceAppliedMessage(int count);
+
+  /// No description provided for @bulkPriceHistoryEntry.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} سعرًا'**
+  String bulkPriceHistoryEntry(int count);
+
+  /// No description provided for @bulkPriceHistoryBy.
+  ///
+  /// In ar, this message translates to:
+  /// **'بواسطة {name}'**
+  String bulkPriceHistoryBy(String name);
+
+  /// No description provided for @bulkPriceHistoryDetail.
+  ///
+  /// In ar, this message translates to:
+  /// **'{increased} زيادة · {decreased} تخفيض · {steps} خطوات'**
+  String bulkPriceHistoryDetail(int increased, int decreased, int steps);
+
+  /// No description provided for @bulkPriceRevertDone.
+  ///
+  /// In ar, this message translates to:
+  /// **'استُعيد {restored} سعرًا، وتُرك {skipped} لأنه عُدّل بعده.'**
+  String bulkPriceRevertDone(int restored, int skipped);
+
+  /// No description provided for @bulkPriceStepExampleCost.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثال: {before} بتكلفة {cost} ← {after}'**
+  String bulkPriceStepExampleCost(String before, String cost, String after);
 }
 
 class _AppLocalizationsDelegate

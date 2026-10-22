@@ -11,6 +11,9 @@ import 'dart:async';
 //   flutter run -d web-server --web-port 8080 -t lib/dev/pos_preview.dart
 //
 // Screens: pos | purchase | pos-empty | purchase-empty | board
+// `&checkout=credit-limit|offline|refused` makes Pay end in that refusal, and
+// `&links=on` gives each sale a public invoice link (the result's QR).
+// `&printer=on` auto-prints every receipt on a printer that always works.
 // Add `&theme=dark` to check either surface against the dark palette,
 // `&picker=on` for the search-mode picker a device can turn on (code / name),
 // and `&rail=collapsed|expanded` to pin the desktop navigation rail (left
@@ -36,8 +39,11 @@ import 'package:pointy_frontend/src/data/models/product_variant_page.dart';
 import 'package:pointy_frontend/src/data/models/purchase_submission.dart';
 import 'package:pointy_frontend/src/data/models/purchase_suggestion.dart';
 import 'package:pointy_frontend/src/data/models/unit_of_measure.dart';
+import 'package:pointy_frontend/src/data/models/card_terminal.dart';
 import 'package:pointy_frontend/src/data/models/money_position.dart';
 import 'package:pointy_frontend/src/data/models/sale_order.dart';
+import 'package:pointy_frontend/src/data/repositories/treasury_repository.dart';
+import 'package:pointy_frontend/src/features/treasury/view_models/bank_routing.dart';
 import 'package:pointy_frontend/src/data/repositories/catalog_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/contact_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/printing_repository.dart';
@@ -45,6 +51,7 @@ import 'package:pointy_frontend/src/data/repositories/purchase_repository.dart';
 import 'package:pointy_frontend/src/data/models/register_session.dart';
 import 'package:pointy_frontend/src/data/repositories/register_session_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/sale_repository.dart';
+import 'package:pointy_frontend/src/data/models/messaging_gateway.dart';
 import 'package:pointy_frontend/src/data/repositories/shop_settings_repository.dart';
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/features/pos/view_models/pos_view_model.dart';
@@ -68,6 +75,10 @@ import 'package:pointy_frontend/src/shared/order/order.dart';
 import 'package:pointy_frontend/src/shared/responsive/responsive.dart';
 import 'package:pointy_frontend/src/shared/shell/shell.dart';
 
+import 'preview_receipt_printer.dart';
+
+bool get _printerOn => Uri.base.queryParameters['printer'] == 'on';
+
 void main() => runApp(const _PreviewApp());
 
 class _PreviewApp extends StatelessWidget {
@@ -86,20 +97,70 @@ class _PreviewApp extends StatelessWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
       theme: _isDark() ? PointyTheme.dark() : PointyTheme.light(),
-      builder: (context, child) => ProductSearchModeScope(
-        controller: _searchModes,
-        child: PointyNavigationRailScope(
-          isActive: false,
-          controller: _railController,
-          child: child ?? const SizedBox.shrink(),
-        ),
-      ),
+      builder: (context, child) {
+        final app = ProductSearchModeScope(
+          controller: _searchModes,
+          child: PointyNavigationRailScope(
+            isActive: false,
+            controller: _railController,
+            child: child ?? const SizedBox.shrink(),
+          ),
+        );
+        return _banksOn
+            ? BankRoutingScope(routing: _bankRouting, child: app)
+            : app;
+      },
       home: const _Router(),
     );
   }
 }
 
 bool _isDark() => Uri.base.queryParameters['theme'] == 'dark';
+
+// `&banks=on`: the shop has two banks and its card terminal is mapped to one,
+// so card and transfer lines show the account picker and a scanned slip from
+// terminal 0JA8Y13W picks مصرف الأمان by itself.
+bool get _banksOn => Uri.base.queryParameters['banks'] == 'on';
+
+final _bankRouting = BankRouting(_FakeTreasuryRepository())..load();
+
+const _previewBankAccounts = [
+  MoneyAccount(
+    id: 1,
+    name: 'حساب المحل',
+    kind: MoneyAccountKind.bank,
+    bankName: 'مصرف الجمهورية',
+    bankSlug: 'jbank',
+    iban: 'LY83002104000000201050050',
+    isDefault: true,
+  ),
+  MoneyAccount(
+    id: 2,
+    name: 'حساب الأمان',
+    kind: MoneyAccountKind.bank,
+    bankName: 'مصرف الأمان',
+    bankSlug: 'aman',
+    iban: 'LY19002200000000993011447',
+  ),
+];
+
+class _FakeTreasuryRepository extends TreasuryRepository {
+  _FakeTreasuryRepository() : super(PosApiService());
+
+  @override
+  Future<Result<List<MoneyAccount>>> loadAccounts() async =>
+      const Ok(_previewBankAccounts);
+
+  @override
+  Future<Result<List<CardTerminal>>> loadCardTerminals() async => const Ok([
+    CardTerminal(
+      id: 1,
+      terminalId: '0JA8Y13W',
+      label: 'الماكينة الأمامية',
+      moneyAccountId: 2,
+    ),
+  ]);
+}
 
 // One controller for the page's life, so the menu button's toggle sticks.
 // Left alone the window width decides, as in the app; `&rail=collapsed` or
@@ -185,8 +246,12 @@ class _PosSurfaceState extends State<_PosSurface> {
       _FakeCatalogRepository(empty: widget.empty),
       _FakeRegisterSessionRepository(),
       _FakeSaleRepository(),
-      _FakeShopSettingsRepository(),
-      PrintingRepository(PosApiService()),
+      _printerOn
+          ? PreviewAutoPrintSettingsRepository()
+          : _FakeShopSettingsRepository(),
+      _printerOn
+          ? PreviewReceiptPrintingRepository()
+          : PrintingRepository(PosApiService()),
       // Real chimes so the preview exercises the scan sounds end to end.
       scanFeedback: ScanFeedbackSounds.instance.play,
     );
@@ -196,6 +261,10 @@ class _PosSurfaceState extends State<_PosSurface> {
       ),
     );
     _viewModel.loadCatalog();
+    if (_printerOn) {
+      // The app loads these at sign-in; auto-print reads them at checkout.
+      unawaited(_viewModel.loadCheckoutSettings());
+    }
     if (!widget.empty) {
       _viewModel
         ..addVariant(_variantFor(_items[0]), quantity: 2, source: 'seed')
@@ -635,9 +704,6 @@ class _PaymentSurface extends StatefulWidget {
 }
 
 class _PaymentSurfaceState extends State<_PaymentSurface> {
-  bool _print = true;
-  bool _share = false;
-
   @override
   void initState() {
     super.initState();
@@ -675,12 +741,6 @@ class _PaymentSurfaceState extends State<_PaymentSurface> {
           iban: 'LY19002200000000993011447',
         ),
       ],
-      showPrintInvoiceToggle: true,
-      printInvoiceAfterPayment: _print,
-      onPrintInvoiceChanged: (value) => _print = value,
-      showShareInvoiceToggle: true,
-      shareInvoiceAfterPayment: _share,
-      onShareInvoiceChanged: (value) => _share = value,
       hasCustomer: widget.staffAccount,
       requireCustomerForCredit: true,
       isStaffAccount: widget.staffAccount,
@@ -1013,11 +1073,43 @@ class _FakeSaleRepository extends SaleRepository {
   var _receipt = 412;
 
   @override
+  Future<Result<MessagingSendResult>> sendInvoiceSms(
+    int saleOrderId, {
+    String? phone,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+    return const Ok(MessagingSendResult(status: 'queued'));
+  }
+
+  @override
   Future<Result<SaleOrder>> checkout(
     SaleCheckoutDraft draft, {
     String? idempotencyKey,
   }) async {
-    await Future<void>.delayed(const Duration(milliseconds: 280));
+    // Long enough to see the sale's progress before its result.
+    await Future<void>.delayed(const Duration(milliseconds: 1400));
+    switch (Uri.base.queryParameters['checkout']) {
+      case 'credit-limit':
+        return Error(
+          const SaleCheckoutCreditLimitException(
+            limit: 500,
+            outstanding: 450,
+            available: 50,
+            newDebt: 240,
+            projected: 690,
+          ),
+        );
+      case 'offline':
+        return Error(Exception('connection reset'));
+      case 'refused':
+        return Error(
+          const PosApiException(
+            message: 'refused',
+            statusCode: 400,
+            responseBody: '{"detail": "هذا الهاتف ليس له رقم تسلسلي بعد."}',
+          ),
+        );
+    }
     final preview = await previewDiscounts(
       SaleDiscountPreviewDraft(lines: draft.lines),
     );
@@ -1026,19 +1118,39 @@ class _FakeSaleRepository extends SaleRepository {
       _ => const SaleDiscountPreview(subtotal: 0, discountTotal: 0, total: 0),
     };
     final paid = draft.payments.fold<double>(0, (sum, p) => sum + p.amount);
+    final customer = _previewCustomers
+        .where((c) => c.id == draft.customerId)
+        .firstOrNull;
+    final owed = draft.saleType == SaleType.credit
+        ? (totals.total - paid).clamp(0.0, totals.total)
+        : 0.0;
     _receipt++;
     return Ok(
       SaleOrder(
         id: _receipt,
-        status: 'paid',
+        status: switch (draft.saleType) {
+          SaleType.quotation => 'quotation',
+          SaleType.credit when owed > 0 => 'partially_paid',
+          _ => 'paid',
+        },
         lines: const [],
         payments: const [],
         subtotal: totals.subtotal,
         total: totals.total,
         discountTotal: totals.discountTotal,
         amountPaid: paid,
+        balanceDue: owed,
+        saleType: draft.saleType,
+        dueDate: draft.dueDate,
+        validUntil: draft.validUntil,
+        customer: customer?.id,
+        customerName: customer?.fullName,
+        customerPhone: customer?.phone,
         receiptNumber: 'R20261005000$_receipt',
         cashierName: 'سالم',
+        publicInvoiceUrl: Uri.base.queryParameters['links'] == 'on'
+            ? 'https://shop.dftr.ly/i/R$_receipt'
+            : '',
       ),
     );
   }
@@ -1132,6 +1244,28 @@ class _FakeShopSettingsRepository extends ShopSettingsRepository {
 class _FakeContactRepository extends ContactRepository {
   _FakeContactRepository() : super(PosApiService());
 
+  // Named customers for the sale settings picker, so a credit sale or a
+  // quotation can be rung up end to end.
+  @override
+  Future<Result<CustomerPage>> loadCustomers({
+    required ContactQuery query,
+    int page = 1,
+  }) async {
+    final search = query.search.trim();
+    return Ok(
+      CustomerPage(
+        customers: [
+          for (final customer in _previewCustomers)
+            if (search.isEmpty ||
+                customer.fullName.contains(search) ||
+                customer.phone.contains(search))
+              customer,
+        ],
+        hasMore: false,
+      ),
+    );
+  }
+
   // The "on my account" button in the sale settings dialog.
   @override
   Future<Result<Customer>> loadStaffAccount() async {
@@ -1151,6 +1285,32 @@ class _FakeContactRepository extends ContactRepository {
     );
   }
 }
+
+Customer _previewCustomer(int id, String name, String phone, {double? limit}) =>
+    Customer(
+      id: id,
+      customerNumber: 'C2026100500$id',
+      fullName: name,
+      phone: phone,
+      email: '',
+      gender: CustomerGender.unspecified,
+      marketingConsent: true,
+      notes: '',
+      isActive: true,
+      purchaseCount: id * 3,
+      creditLimitPolicy: limit == null
+          ? CreditLimitPolicy.shopDefault
+          : CreditLimitPolicy.custom,
+      creditLimit: limit,
+      effectiveCreditLimit: limit,
+    );
+
+final _previewCustomers = [
+  _previewCustomer(11, 'محمد الورفلي', '0912345678', limit: 1000),
+  _previewCustomer(12, 'فاطمة الزوي', '0923456789', limit: 500),
+  _previewCustomer(13, 'مطعم الريحان', '0918765432', limit: 3000),
+  _previewCustomer(14, 'علي بن سعود', '0945551234'),
+];
 
 /// The supplier the purchasing preview is buying from.
 const SupplierContact _previewSupplier = SupplierContact(

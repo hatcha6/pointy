@@ -68,6 +68,23 @@ def bump_catalog_version() -> None:
             pass
 
 
+def announce_bulk_catalog_write() -> None:
+    """Tell clients the catalog's definitions changed after a signal-less write.
+
+    ``QuerySet.update`` and ``bulk_update`` fire no ``post_save``, so neither
+    this module's version nor the ``catalog_defs`` state counter the tills
+    revalidate on would move: a till would keep selling at the old price until
+    something unrelated bumped them. Call it inside the writing transaction;
+    both bumps wait for the commit.
+    """
+    from django.db import transaction
+
+    from apps.core.state_version import bump
+
+    transaction.on_commit(bump_catalog_version)
+    bump("catalog_defs")
+
+
 def catalog_etag(request, version=None) -> str | None:
     """Weak ETag for catalog list responses, or None to skip conditional GET.
 

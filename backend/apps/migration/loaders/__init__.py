@@ -21,7 +21,12 @@ from .employees import EmployeeLoader, PayrollRunLoader
 from .expenses import ExpenseCategoryLoader, ExpenseLoader
 from .inventory import StockLoader
 from .parties import PartyBalanceLoader
-from .purchasing import PurchaseOrderLoader, SupplierLoader, SupplierPaymentLoader
+from .purchasing import (
+    PurchaseOrderLoader,
+    PurchaseReturnLoader,
+    SupplierLoader,
+    SupplierPaymentLoader,
+)
 from .sales import PaymentLoader, SaleLoader, SaleReturnLoader
 from .treasury import MoneyAccountLoader
 
@@ -41,6 +46,7 @@ _LOADER_CLASSES = (
     # transactional
     PartyBalanceLoader,
     PurchaseOrderLoader,
+    PurchaseReturnLoader,
     SupplierPaymentLoader,
     SaleLoader,
     SaleReturnLoader,

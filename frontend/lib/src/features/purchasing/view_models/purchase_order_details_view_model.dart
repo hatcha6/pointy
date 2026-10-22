@@ -6,7 +6,6 @@ import '../../../core/result.dart';
 import '../../../data/models/analytics_event.dart';
 import '../../../data/models/print_audit_event.dart';
 import '../../../data/models/purchase_submission.dart';
-import '../../../data/models/shop_settings.dart';
 import '../../../data/models/stock_batch.dart';
 import '../../../data/models/stock_unit.dart';
 import '../../../data/repositories/printing_repository.dart';
@@ -16,6 +15,7 @@ import '../../../data/services/api_session.dart';
 import '../../../data/services/order_document_service.dart';
 import '../../../data/services/payment_proof_printer.dart';
 import '../../../shared/payment_labels.dart';
+import 'purchase_order_documents.dart';
 
 enum PurchaseOrderActionError {
   generic,
@@ -49,6 +49,10 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
   /// Who is reading the order — the receiving dialog asks it whether each
   /// scanned article may be priced or given its own warranty here.
   AuthorizationCapabilities get capabilities => _capabilities;
+  late final PurchaseOrderDocuments _documents = PurchaseOrderDocuments(
+    printingRepository: _printingRepository,
+    shopSettingsRepository: _shopSettingsRepository,
+  );
   late final PaymentProofPrinter _paymentProofPrinter = PaymentProofPrinter(
     printingRepository: _printingRepository,
     shopSettingsRepository: _shopSettingsRepository,
@@ -129,16 +133,11 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
     _isPrinting = true;
     notifyListeners();
 
-    final shopSettings = await _loadShopSettings();
-    final result = await _printingRepository.printPurchaseOrder(
-      order: _order,
-      shopSettings: shopSettings,
-      shopLogoBytes: await _loadShopLogoBytes(shopSettings),
-    );
+    final printed = await _documents.print(_order);
 
     _isPrinting = false;
     notifyListeners();
-    return result.isSuccess;
+    return printed;
   }
 
   Future<OrderDocumentActionStatus> shareOrder() async {
@@ -148,12 +147,7 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
     _isSharing = true;
     notifyListeners();
 
-    final shopSettings = await _loadShopSettings();
-    final result = await _printingRepository.sharePurchaseOrder(
-      order: _order,
-      shopSettings: shopSettings,
-      shopLogoBytes: await _loadShopLogoBytes(shopSettings),
-    );
+    final result = await _documents.share(_order);
 
     _isSharing = false;
     notifyListeners();
@@ -474,22 +468,6 @@ class PurchaseOrderDetailsViewModel extends ChangeNotifier {
               value.contains('stock') &&
               (value.contains('not') || value.contains('insufficient')));
     });
-  }
-
-  Future<ShopSettings?> _loadShopSettings() async {
-    final result = await _shopSettingsRepository.loadSettings();
-    return switch (result) {
-      Ok<ShopSettings>(value: final settings) => settings,
-      Error<ShopSettings>() => null,
-    };
-  }
-
-  Future<Uint8List?> _loadShopLogoBytes(ShopSettings? settings) async {
-    final result = await _shopSettingsRepository.loadLogoBytes(settings);
-    return switch (result) {
-      Ok<Uint8List?>(value: final bytes) => bytes,
-      Error<Uint8List?>() => null,
-    };
   }
 
   Iterable<String> _flattenErrorValues(Object? value) sync* {

@@ -1000,11 +1000,20 @@ class _VariantDataTable extends StatelessWidget {
                     DataCell(Text(formatMoney(variant.unitPrice))),
                     DataCell(Text(variant.sku)),
                     DataCell(
-                      Text(
-                        variant.barcode.isEmpty
-                            ? l10n.noBarcode
-                            : variant.barcode,
-                      ),
+                      variant.extraBarcodes.isEmpty
+                          ? Text(
+                              variant.barcode.isEmpty
+                                  ? l10n.noBarcode
+                                  : variant.barcode,
+                            )
+                          // The extra codes, one per line, on hover.
+                          : Tooltip(
+                              message: variant.extraBarcodes.join('\n'),
+                              child: Text(
+                                '${variant.barcode} '
+                                '+${variant.extraBarcodes.length}',
+                              ),
+                            ),
                     ),
                     DataCell(ProductStatusPill(isActive: variant.isSellable)),
                     DataCell(
@@ -1080,6 +1089,7 @@ class _VariantListTile extends StatelessWidget {
             formatQuantity(variant.quantityOnHand),
           ),
           if (variant.barcode.isNotEmpty) variant.barcode,
+          ...variant.extraBarcodes,
         ].join(' / '),
         maxLines: 2,
         overflow: TextOverflow.ellipsis,

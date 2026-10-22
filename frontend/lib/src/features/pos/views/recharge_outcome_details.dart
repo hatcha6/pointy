@@ -18,22 +18,11 @@ import '../../settings/views/integration_presentation.dart';
 /// * **unknown** — the request left and never answered. Do not retry, do not
 ///   refund. Check the card with the provider; reconciliation will settle it
 ///   against their own purchase log.
-Future<void> showRechargeOutcomeDialog(
-  BuildContext context,
-  List<IntegrationChargeResult> rows,
-) {
-  final unresolved = rows.any((row) => row.needsAttention);
-  return showDialog<void>(
-    context: context,
-    // The unknown case is not dismissable by tapping away: it is the one
-    // state where doing nothing about it is a real risk.
-    barrierDismissible: !unresolved,
-    builder: (_) => RechargeOutcomeDialog(rows: rows),
-  );
-}
-
-class RechargeOutcomeDialog extends StatelessWidget {
-  const RechargeOutcomeDialog({super.key, required this.rows});
+///
+/// Shown inside the sale's result (see `PosCheckoutDialog`), which keeps it
+/// on screen until the cashier closes it when any row is unknown.
+class RechargeOutcomeDetails extends StatelessWidget {
+  const RechargeOutcomeDetails({super.key, required this.rows});
 
   final List<IntegrationChargeResult> rows;
 
@@ -49,19 +38,33 @@ class RechargeOutcomeDialog extends StatelessWidget {
       (sum, row) => sum + (row.refundAmount ?? 0),
     );
 
-    return AlertDialog(
-      key: const ValueKey('recharge_outcome_dialog'),
-      icon: Icon(
-        unresolved.isEmpty ? Icons.error_outline : Icons.help_outline,
-        color: unresolved.isEmpty ? colors.danger : colors.warning,
-      ),
-      title: Text(
-        unresolved.isEmpty
-            ? l10n.rechargeRefusedTitle
-            : l10n.rechargeUnknownTitle,
-      ),
-      content: SingleChildScrollView(
-        child: Column(
+    return Column(
+      key: const ValueKey('recharge_outcome_details'),
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(
+              unresolved.isEmpty ? Icons.error_outline : Icons.help_outline,
+              size: 20,
+              color: unresolved.isEmpty ? colors.danger : colors.warning,
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                unresolved.isEmpty
+                    ? l10n.rechargeRefusedTitle
+                    : l10n.rechargeUnknownTitle,
+                style: textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -113,12 +116,6 @@ class RechargeOutcomeDialog extends StatelessWidget {
               ),
             ],
           ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(l10n.closeButton),
         ),
       ],
     );

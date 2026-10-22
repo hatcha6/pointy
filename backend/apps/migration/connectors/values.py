@@ -104,3 +104,9 @@ def parse_datetime(value):
             except ValueError:
                 continue
     return None
+
+
+def parse_date(value):
+    """The calendar date in whatever the source called a date, or None."""
+    parsed = parse_datetime(value)
+    return parsed.date() if parsed is not None else None

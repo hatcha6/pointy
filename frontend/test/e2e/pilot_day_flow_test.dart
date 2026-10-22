@@ -76,8 +76,6 @@ void main() {
       await tester.tap(find.byType(ProductTile).first);
       await tester.pump();
 
-      await tester.tap(find.text('طباعة الفاتورة بعد الدفع'));
-      await tester.pump();
       await tester.tap(find.text('ادفع 7.00 د.ل'));
       await tester.pumpAndSettle(const Duration(seconds: 1));
       await tester.tap(find.text('إضافة دفعة'));
@@ -102,13 +100,18 @@ void main() {
         ),
         [5, 2],
       );
+      // The sale's result names the receipt and prints it on request.
+      expect(find.byKey(const ValueKey('checkout_success')), findsOneWidget);
+      expect(find.textContaining('R-PILOT-1'), findsWidgets);
+      await tester.tap(find.byKey(const ValueKey('checkout_action_print')));
+      await tester.pumpAndSettle(const Duration(seconds: 1));
       expect(apiService.printReports, 1);
       expect(
-        find.text(
-          'تم تسجيل البيع. رقم الإيصال: R-PILOT-1 تم إرسال الفاتورة للطابعة.',
-        ),
+        find.byKey(const ValueKey('checkout_print_status_printed')),
         findsOneWidget,
       );
+      await tester.tap(find.byKey(const ValueKey('checkout_new_sale')));
+      await tester.pumpAndSettle(const Duration(seconds: 1));
 
       // Session controls now live behind the labeled session pill instead of
       // cryptic toolbar icons: open the menu, then choose the cash-out action.
@@ -392,6 +395,11 @@ class _PilotDayApiService extends PosApiService {
     orders.insert(0, order);
     return order;
   }
+
+  /// The result's Print button asks the server for a fresh receipt job.
+  @override
+  Future<PrintJob> requestSaleReprint(int saleOrderId) async =>
+      _printJob(status: PrintJobStatus.claimed);
 
   @override
   Future<PrintJob> reportPrintJob({

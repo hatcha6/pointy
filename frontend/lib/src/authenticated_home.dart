@@ -85,6 +85,7 @@ import 'features/treasury/view_models/money_position_view_model.dart';
 import 'features/treasury/views/money_position_screen.dart';
 import 'features/pos/view_models/pos_view_model.dart';
 import 'features/pos/views/pos_screen.dart';
+import 'features/purchasing/view_models/purchase_order_documents.dart';
 import 'features/purchasing/views/purchase_order_details_screen.dart';
 import 'features/purchasing/views/purchase_order_edit_screen.dart';
 import 'features/purchasing/views/purchase_order_list_screen.dart';
@@ -1504,6 +1505,12 @@ class _AuthenticatedRoutes implements AppNavigation {
     );
   }
 
+  /// Purchase orders as paper, with the shop's own masthead.
+  PurchaseOrderDocuments get purchaseOrderDocuments => PurchaseOrderDocuments(
+    printingRepository: dependencies.printingRepository,
+    shopSettingsRepository: dependencies.shopSettingsRepository,
+  );
+
   Widget createPurchaseOrderRouteBuilder(BuildContext routeContext) {
     return _screen(
       'purchase_create',
@@ -1513,7 +1520,7 @@ class _AuthenticatedRoutes implements AppNavigation {
         capabilities: capabilities,
         navigation: this,
         showBackButton: true,
-        printingRepository: dependencies.printingRepository,
+        documents: purchaseOrderDocuments,
       ),
     );
   }
@@ -1534,6 +1541,7 @@ class _AuthenticatedRoutes implements AppNavigation {
           analyticsEngine: dependencies.analyticsEngine,
           capabilities: capabilities,
           navigation: this,
+          documents: purchaseOrderDocuments,
         ),
       ),
     );

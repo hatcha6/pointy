@@ -13,7 +13,7 @@ import (
 // BalanceSource is one account the company keeps money (or credits) in at a
 // provider, read on an interval and compared with a floor.
 type BalanceSource struct {
-	// Key names the account in alert marks and logs ("reloadly", "serper").
+	// Key names the account in alert marks and logs ("reloadly", "openrouter").
 	Key string
 	// Name is how the alert names it ("Reloadly", "BN Plus (LYD)").
 	Name string

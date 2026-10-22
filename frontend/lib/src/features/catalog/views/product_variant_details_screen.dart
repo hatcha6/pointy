@@ -128,6 +128,13 @@ class ProductVariantDetailsScreen extends StatelessWidget {
                               : product.effectiveBarcode,
                           icon: Icons.qr_code_2,
                         ),
+                        if (product.defaultVariant?.extraBarcodes
+                            case final extras? when extras.isNotEmpty)
+                          PointyMetricGridItem(
+                            label: l10n.variantExtraBarcodesLabel,
+                            value: extras.join(' · '),
+                            icon: Icons.qr_code_2,
+                          ),
                         // Shown only when one is saved: nearly no variant
                         // has a GS1 number, and an empty tile says nothing.
                         if (product.defaultVariant?.gtin case final gtin?

@@ -73,6 +73,7 @@ cat <<DONE
    2. Sign in as   $ADMIN_USERNAME / $ADMIN_PASSWORD
    3. Open   "المساعد الذكي"   from the drawer and start chatting.
 
-   (AI replies need an OpenRouter key, and product image search needs a
-    Serper key — POINTY_RELAY_SERPER_API_KEY — both in relay/.env.)
+   (AI replies need an OpenRouter key — POINTY_RELAY_OPENROUTER_API_KEY — and
+    product image search needs an OpenSERP server — make relay-openserp, then
+    POINTY_RELAY_OPENSERP_BASE_URL=http://127.0.0.1:7000 — both in relay/.env.)
 DONE

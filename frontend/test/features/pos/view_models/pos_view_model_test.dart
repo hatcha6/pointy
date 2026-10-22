@@ -3237,38 +3237,40 @@ void _registerAutoPrintFloorTests() {
       expect(printing.invoiceCalls, 1);
     });
 
-    test('the cashier can still print a sale under the floor', () async {
+    test('a sale under the floor prints from its result', () async {
       final (viewModel, printing, _) = await readyViewModel();
 
       viewModel.addVariant(_coffeeVariant);
       await _settle();
 
-      // The box is back precisely because this sale would not print itself.
-      expect(viewModel.shouldShowPrintInvoiceCheckbox, isTrue);
-      viewModel.updatePrintInvoiceAfterPayment(true);
-
-      await viewModel.checkoutCurrentSale(
+      final outcome = await viewModel.checkoutCurrentSale(
         payments: const [
           SaleCheckoutPaymentDraft(method: PaymentMethod.cash, amount: 3.5),
         ],
       );
       await _settle();
+      expect(printing.invoiceCalls, 0);
+      expect(outcome.printStatus, InvoicePrintStatus.notRequested);
 
+      // The print the box used to promise is the result's Print button.
+      final status = await viewModel.reprintPaidInvoice(outcome.order!);
+
+      expect(status, InvoicePrintStatus.printed);
       expect(printing.invoiceCalls, 1);
     });
 
-    test('the box disappears again once the cart clears the floor', () async {
+    test('a cart that clears the floor prints by itself again', () async {
       final (viewModel, _, _) = await readyViewModel();
 
       viewModel.addVariant(_coffeeVariant);
       await _settle();
-      expect(viewModel.shouldShowPrintInvoiceCheckbox, isTrue);
+      expect(viewModel.cartWouldAutoPrintReceipt(), isFalse);
 
       viewModel.addVariant(_teaVariant);
       viewModel.addVariant(_coffeeBeansVariant);
       await _settle();
 
-      expect(viewModel.shouldShowPrintInvoiceCheckbox, isFalse);
+      expect(viewModel.cartWouldAutoPrintReceipt(), isTrue);
     });
 
     test('an آجل invoice under the floor still prints', () async {

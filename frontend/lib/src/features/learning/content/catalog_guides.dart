@@ -432,7 +432,15 @@ const catalogGuides = <LearningGuide>[
     kind: LearningKind.walkthrough,
     minutes: 3,
     capability: AppCapability.changeProduct,
-    keywords: ['barcode', 'label', 'باركود', 'ملصق', 'طباعة ملصقات'],
+    keywords: [
+      'barcode',
+      'label',
+      'باركود',
+      'ملصق',
+      'طباعة ملصقات',
+      'باركود إضافي',
+      'أكثر من باركود',
+    ],
     related: ['catalog.variants_create', 'devices.labels', 'selling.add_items'],
     sections: [
       LearningSection(
@@ -445,6 +453,31 @@ const catalogGuides = <LearningGuide>[
           LearningParagraph(
             'لا يُقبل باركود مستعمل في مكان آخر؛ يعرض البرنامج الصنف الذي يحمله '
             'حتى تعرف أين التعارض.',
+          ),
+        ],
+      ),
+      LearningSection(
+        title: 'صنف واحد بأكثر من باركود',
+        blocks: [
+          LearningParagraph(
+            'قد يصل الصنف نفسه بباركودين: من موردين مختلفين، أو عبوة قديمة '
+            'وأخرى جديدة. لا تنشئ له منتجًا ثانيًا.',
+          ),
+          LearningSteps([
+            LearningStep(
+              'تحت خانة الباركود اضغط «إضافة باركود آخر».',
+              detail: 'يظهر الزر بعد كتابة الباركود الأساسي.',
+            ),
+            LearningStep(
+              'امسح الباركود الثاني أو اكتبه ثم اضغط Enter.',
+              detail:
+                  'يُفحص فورًا، فإن كان لصنف آخر ظهر اسمه ولم يُضَف. '
+                  'يمكن إضافة أكثر من باركود بالطريقة نفسها.',
+            ),
+          ]),
+          LearningParagraph(
+            'يُباع الصنف بأيّ باركود منها في نقطة البيع والمشتريات والجرد، '
+            'ويبقى الباركود الأساسي هو المطبوع على الملصق.',
           ),
         ],
       ),
