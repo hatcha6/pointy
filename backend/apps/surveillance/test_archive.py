@@ -888,7 +888,10 @@ class FtpApiTests(_FootageRootMixin, TestCase):
         t0 = timezone.now().replace(microsecond=0)
         self.keep_picture(camera, t0, "red")
         self.keep_picture(camera, t0 + timedelta(seconds=1), "blue")
-        with patch.object(playback, "MAX_PICTURE_WAIT_SECONDS", 0.0):
+        # The broker hands a viewer the newest frame. With no gap between the
+        # pictures the second can overwrite the first before the reader takes
+        # it — CI did exactly that — so keep a short, real gap.
+        with patch.object(playback, "MAX_PICTURE_WAIT_SECONDS", 0.3):
             response = self.client.get(
                 reverse("surveillance-camera-playback", args=[camera.pk]),
                 {"start": (t0 - timedelta(seconds=5)).isoformat(), "end": (t0 + timedelta(seconds=5)).isoformat()},
