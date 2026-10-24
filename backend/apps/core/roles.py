@@ -2,6 +2,7 @@ from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.db import IntegrityError, transaction
+from django.db.models import Q
 
 MANAGER_GROUP = "manager"
 CASHIER_GROUP = "cashier"
@@ -90,6 +91,20 @@ INITIAL_SETUP_SHOP_ACTIVITY_MODELS = (
     # installation already belongs to a shop, even before anyone logs in.
     ("migration", "migrationrun"),
 )
+
+#: Rows of an allow-listed model that the installation makes for itself. The
+#: periodic voucher sweep (``integrations.sync_voucher_catalogs``) creates the
+#: always-on «كروت دفتر» account within minutes of first boot, and once linked
+#: mirrors its shelf as system products under a system category — so on a
+#: fresh install the owner got a login screen with no users in it again,
+#: through models that do belong on the list when a person fills them.
+INITIAL_SETUP_MACHINE_MADE_ROWS = {
+    ("catalog", "product"): Q(is_system=True),
+    ("catalog", "productcategory"): ~Q(system_key=""),
+    # apps.integrations.company_account.PROVIDER; not imported, core must not
+    # load integrations at import time.
+    ("integrations", "integrationaccount"): Q(provider="pointy"),
+}
 
 MANAGER_PERMISSION_DOMAINS = (
     "catalog",
@@ -744,7 +759,11 @@ def pointy_domain_data_exists():
         return True
     for label in INITIAL_SETUP_SHOP_ACTIVITY_MODELS:
         try:
-            if apps.get_model(*label)._default_manager.all().exists():
+            rows = apps.get_model(*label)._default_manager.all()
+            machine_made = INITIAL_SETUP_MACHINE_MADE_ROWS.get(label)
+            if machine_made is not None:
+                rows = rows.exclude(machine_made)
+            if rows.exists():
                 return True
         except Exception:
             # A model that has been renamed away, or a table that cannot be

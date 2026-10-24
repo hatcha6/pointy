@@ -33,7 +33,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
-from apps.catalog.models import ProductCategory, ProductVariant
+from apps.catalog.models import Product, ProductCategory, ProductVariant
 from apps.catalog.testing import create_product_with_default_variant
 from apps.attachments.models import Attachment
 from apps.inventory.models import StockItem, StockMovement
@@ -2787,6 +2787,28 @@ class BootstrapAdminTests(TestCase):
         response = APIClient().get(reverse("setup-status"))
 
         self.assertEqual(response.data, {"requires_onboarding": True})
+
+    def test_voucher_sweep_never_closes_the_onboarding_door(self):
+        """The same field failure, through the company's card shelf.
+
+        ``integrations.sync_voucher_catalogs`` makes the always-on «كروت دفتر»
+        account on its first run, minutes after boot, and once linked mirrors
+        the shelf as system products under a system category. All three models
+        are on the allow-list, so a fresh install served a login screen.
+        """
+        from apps.integrations import company_account, vouchers
+        from apps.integrations.models import IntegrationAccount
+
+        vouchers.sync_all()
+        IntegrationAccount.objects.get_or_create(provider=company_account.PROVIDER)
+        ProductCategory.objects.create(name="كروت دفتر", system_key="vouchers:pointy")
+        Product.objects.create(name="بطاقة", is_system=True)
+
+        self.assertTrue(initial_admin_setup_required())
+
+        Product.objects.create(name="شاي")
+
+        self.assertFalse(initial_admin_setup_required())
 
     def test_shop_activity_models_are_empty_on_a_fresh_install(self):
         """Guards the allow-list itself.
