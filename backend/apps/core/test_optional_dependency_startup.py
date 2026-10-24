@@ -11,9 +11,9 @@ power cut. Two places contradicted that:
   (``deploy/onprem/docker-compose.yml``), so a sustained Redis outage marked the
   backend unhealthy, which the watchdog (``deploy/onprem/watchdog.sh``) heals by
   ``docker restart`` — SIGTERMing a backend that was serving every till fine,
-  and doing it again on every cycle until Redis came back. ``celery-worker``,
-  ``celery-beat`` and the relay ``connector`` all wait on ``backend:
-  service_healthy``, so none of them start either.
+  and doing it again on every cycle until Redis came back. ``celery-worker``
+  (which also runs beat) and the relay ``connector`` both wait on ``backend:
+  service_healthy``, so neither of them starts either.
 * The container entrypoint waited for Redis before starting *anything*
   (``backend/docker/wait_for_services.py``) and exited 75 when it did not
   answer inside the startup window. A shop rebooting after an outage onto a

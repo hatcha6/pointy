@@ -47,7 +47,13 @@ dependencies = [
   # cp310-cp314 with no system libraries; apps.companion.decoding degrades to
   # "not found" if it is ever absent.
   "zxing-cpp>=2,<4",
-  "uvicorn[standard]>=0.30,<1",
+  "uvicorn[standard]>=0.36,<1",
+  # The web role: a gunicorn master preloads Django and forks uvicorn workers
+  # from it, so they share the imported code (docker/gunicorn.conf.py).
+  # uvicorn-worker is uvicorn's own successor to the deprecated
+  # uvicorn.workers module, and it is what needs uvicorn 0.36.
+  "gunicorn>=23,<27",
+  "uvicorn-worker>=0.4,<0.5",
 ]
 
 [project.optional-dependencies]

@@ -1,18 +1,23 @@
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import wait_for_services
+# ftp_gate and wait_for_services are imported where they are used: both load
+# psycopg and redis, which the parked `beat` placeholder must not pay for.
+
+GUNICORN_CONFIG = Path(__file__).resolve().parent / "gunicorn.conf.py"
+BEAT_SCHEDULE = "/var/lib/pointy/celerybeat/celerybeat-schedule"
 
 
 def log_phase(name, seconds):
     """Emit a one-line boot-phase timing so the startup window is measurable in
     the container logs (grep 'boot-phase'). The sum of these is the time from
-    container start to uvicorn taking over."""
+    container start to the web server taking over."""
     print(f"[boot-phase] {name}: {seconds:.2f}s", flush=True)
 
 
@@ -37,24 +42,31 @@ def main():
         # Enrollment is best-effort and only matters for first-boot promptness
         # (the periodic core.ensure_relay_enrollment task covers every case
         # afterwards). Kick it off in the BACKGROUND so a slow/unreachable relay
-        # can never stall the till coming online — it races uvicorn instead of
-        # blocking it.
+        # can never stall the till coming online — it races the web server
+        # instead of blocking it.
         start_enrollment_in_background()
-        log_phase("total_before_uvicorn", time.monotonic() - boot_started)
+        log_phase("total_before_web_server", time.monotonic() - boot_started)
         exec_process(web_command(args))
     if command == "worker":
         require_secret("DJANGO_SECRET_KEY")
         wait_for_dependencies()
         exec_process(worker_command(args))
     if command == "beat":
+        if worker_runs_beat():
+            park("the scheduler runs inside the celery-worker container")
         require_secret("DJANGO_SECRET_KEY")
         wait_for_dependencies()
         exec_process(beat_command(args))
     if command == "ftp":
         # The FTP server DVRs upload footage to, and the ingest that keeps only
-        # the invoice moments of it. See SURVEILLANCE_FTP_PLAN.md.
+        # the invoice moments of it. See SURVEILLANCE_FTP_PLAN.md. Most shops
+        # never set one up, so the gate holds the port without Django until
+        # one exists (docker/ftp_gate.py).
         require_secret("DJANGO_SECRET_KEY")
         wait_for_dependencies()
+        import ftp_gate
+
+        ftp_gate.wait_until_needed()
         exec_process(["python", "manage.py", "run_ftp_server", *args])
     if command == "migrate":
         require_secret("DJANGO_SECRET_KEY")
@@ -131,6 +143,8 @@ def require_secret(name):
 
 
 def wait_for_dependencies():
+    import wait_for_services
+
     wait_for_services.main()
 
 
@@ -192,51 +206,24 @@ def collect_static():
 
 
 def web_command(extra_args):
-    command = [
-        "uvicorn",
-        "pointy.asgi:application",
-        "--host",
-        "0.0.0.0",
-        "--port",
-        os.environ.get("POINTY_BACKEND_PORT", "8000"),
-        "--workers",
-        os.environ.get("POINTY_ASGI_WORKERS", os.environ.get("POINTY_WEB_WORKERS", "3")),
-        "--timeout-keep-alive",
-        os.environ.get("POINTY_ASGI_KEEP_ALIVE", "5"),
-        "--timeout-graceful-shutdown",
-        os.environ.get("POINTY_ASGI_GRACEFUL_TIMEOUT", "30"),
-        "--ws",
-        "auto",
-    ]
-    # Worker recycling is OFF by default: with steady POS polling all workers
-    # hit the request limit near-simultaneously (the small jitter cannot
-    # separate them), taking the whole API down for a Django cold start at
-    # fixed wall-clock intervals — observed in the field as the backend
-    # "going down every N minutes". Opt back in explicitly (with a LARGE
-    # jitter) only if a leak ever forces it.
-    max_requests = os.environ.get("POINTY_ASGI_MAX_REQUESTS", "")
-    if max_requests and max_requests != "0":
-        command.extend(["--limit-max-requests", max_requests])
-        jitter = os.environ.get("POINTY_ASGI_MAX_REQUESTS_JITTER", "")
-        if jitter and jitter != "0":
-            command.extend(["--limit-max-requests-jitter", jitter])
-    limit_concurrency = os.environ.get("POINTY_ASGI_LIMIT_CONCURRENCY", "")
-    if limit_concurrency:
-        command.extend(["--limit-concurrency", limit_concurrency])
-    if os.environ.get("POINTY_ASGI_PROXY_HEADERS", "0") == "1":
-        command.extend(
-            [
-                "--proxy-headers",
-                "--forwarded-allow-ips",
-                os.environ.get("POINTY_ASGI_FORWARDED_ALLOW_IPS", "127.0.0.1"),
-            ]
-        )
-    command.extend(extra_args)
-    return command
+    # Every knob (POINTY_ASGI_*) is read by the config file; see its docstring
+    # for why the workers fork from a preloaded master.
+    return ["gunicorn", "-c", str(GUNICORN_CONFIG), "pointy.asgi:application", *extra_args]
+
+
+def worker_runs_beat():
+    """On-prem runs the beat scheduler inside the single Celery worker.
+
+    A separate beat process was a whole Django import (~120 MB) to send a
+    handful of messages a minute. Embedded beat is only safe with exactly one
+    worker — two would each schedule everything — so it is opt-in, and only
+    deploy/onprem's compose (which has one worker) turns it on.
+    """
+    return os.environ.get("POINTY_WORKER_RUNS_BEAT", "0") == "1"
 
 
 def worker_command(extra_args):
-    return [
+    command = [
         "celery",
         "-A",
         "pointy",
@@ -247,8 +234,11 @@ def worker_command(extra_args):
         os.environ.get("CELERY_WORKER_CONCURRENCY", "2"),
         "--hostname",
         "worker@%h",
-        *extra_args,
     ]
+    if worker_runs_beat():
+        command.extend(["--beat", "--schedule", BEAT_SCHEDULE])
+    command.extend(extra_args)
+    return command
 
 
 def beat_command(extra_args):
@@ -260,9 +250,22 @@ def beat_command(extra_args):
         "--loglevel",
         os.environ.get("CELERY_LOG_LEVEL", "info"),
         "--schedule",
-        "/var/lib/pointy/celerybeat/celerybeat-schedule",
+        BEAT_SCHEDULE,
         *extra_args,
     ]
+
+
+def park(reason):
+    """Stay up doing nothing, without importing Django.
+
+    The on-prem `celery-beat` service is kept as a placeholder after beat moved
+    into the worker: an installed updater from before that change recreates
+    `celery-worker celery-beat` by name, and compose refuses the whole command
+    when either name is missing — the worker would never be recreated.
+    """
+    print(f"[beat] idle: {reason}", flush=True)
+    while True:
+        signal.pause()
 
 
 def exec_process(command):

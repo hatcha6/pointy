@@ -98,7 +98,14 @@ ENV PATH="/opt/pointy-venv/bin:${PATH}" \
     POINTY_VERSION=${POINTY_VERSION} \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONSAFEPATH=1
+    PYTHONSAFEPATH=1 \
+    MALLOC_ARENA_MAX=2
+
+# MALLOC_ARENA_MAX: glibc gives every thread that allocates concurrently an
+# arena of its own and rarely hands one back, so a process's memory ratchets up
+# with its busiest moment. Django runs each sync request in a thread, so under
+# a burst of tills every web worker grew ~20 MB and kept it. Two arenas cut
+# that by ~15 MB per worker at peak with no measurable latency cost.
 
 WORKDIR /app
 

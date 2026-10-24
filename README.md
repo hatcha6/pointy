@@ -1041,7 +1041,10 @@ every threshold: `SURVEILLANCE_FTP_PLAN.md`. On a Windows (WSL) server
 `bootstrap-wsl.ps1 -Boot` forwards and firewalls the FTP ports like the tills'
 (private addresses only), proves them every five minutes, and the `ftp` service
 switches to per-username lockouts because every DVR arrives from the Windows
-host's own address (`POINTY_FTP_BEHIND_PROXY`).
+host's own address (`POINTY_FTP_BEHIND_PROXY`). Until a shop adds its first FTP
+setup the `ftp` service does not start Django: a small gate holds the port and
+answers like the server does with no account, and starts the real server within
+seconds of a setup appearing (`POINTY_FTP_MODE=auto|on|off`).
 
 Permissions are three, because shops ask for the distinction: watching live
 (`surveillance.view_live`), reviewing recordings (`surveillance.view_playback`),

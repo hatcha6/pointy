@@ -545,6 +545,9 @@ pu_apply_live() {
   # Everything else can be replaced normally now: none of it holds the LAN port,
   # and the tills are already being served by the new backend.
   pu_log "updating background workers, relay connector and web app…"
+  # Beat runs inside celery-worker now; celery-beat is a parked placeholder.
+  # Both are still named together: compose refuses the whole command when a
+  # name is missing, and an updater from before the move names them both.
   pu_recreate celery-worker celery-beat >/dev/null 2>&1 \
     || pu_warn "background workers did not restart cleanly; check 'compose ps'"
   # The FTP upload server. A DVR retries an upload the restart interrupts, and

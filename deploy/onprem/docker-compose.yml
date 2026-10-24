@@ -87,6 +87,9 @@ x-backend-environment: &backend-environment
   # both the container's setting and the host's ports.
   POINTY_FTP_PUBLIC_PORT: "${POINTY_FTP_PUBLIC_PORT:-21}"
   POINTY_FTP_PASSIVE_PORTS: "${POINTY_FTP_PASSIVE_PORTS:-30000-30019}"
+  # auto = the FTP server starts once the shop has an FTP upload setup (until
+  # then the `ftp` service only holds the port); on = always; off = never.
+  POINTY_FTP_MODE: "${POINTY_FTP_MODE:-auto}"
   # Leave empty: PASV announces the server address the installer was shown in
   # the app. Set it only when DVRs reach this server by an address the tills
   # do not (a second network card, a NAT).
@@ -435,7 +438,13 @@ services:
       <<: *backend-environment
       CELERY_WORKER_CONCURRENCY: "${CELERY_WORKER_CONCURRENCY:-2}"
       CELERY_LOG_LEVEL: "${CELERY_LOG_LEVEL:-info}"
+      # The beat scheduler runs inside this worker (`celery worker --beat`):
+      # a process of its own was a whole Django import to send a few messages a
+      # minute. Safe only because there is exactly one worker; never scale this
+      # service up without turning it off.
+      POINTY_WORKER_RUNS_BEAT: "1"
     volumes:
+      - pointy-celerybeat:/var/lib/pointy/celerybeat
       - pointy-media:/var/lib/pointy/media
       - pointy-backups:/var/lib/pointy/backups
       - pointy-backup-staging:/tmp/pointy-backup-staging
@@ -466,6 +475,14 @@ services:
     stop_grace_period: 60s
     logging: *pointy-logging
 
+  # A placeholder. Beat now runs inside celery-worker (POINTY_WORKER_RUNS_BEAT
+  # there), and with the same variable set here the `beat` role only parks: a
+  # bare Python process, no Django, a few MB. It stays because the updater a
+  # shop already has installed is the one that applies the next update, and it
+  # recreates `celery-worker celery-beat` by name — compose refuses that whole
+  # command if either service is missing, so the worker would never be rebuilt
+  # on the new image. Remove it once every shop's update-lib.sh is past the
+  # release that moved beat.
   celery-beat:
     image: "${POINTY_BACKEND_IMAGE:-pointy-backend:local}"
     command: ["beat"]
@@ -476,42 +493,25 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
-    pids_limit: 128
-    mem_limit: "${POINTY_BEAT_MEM_LIMIT:-256m}"
-    cpus: "${POINTY_BEAT_CPUS:-0.5}"
-    depends_on:
-      backend:
-        condition: service_healthy
+    pids_limit: 16
+    mem_limit: "${POINTY_BEAT_MEM_LIMIT:-64m}"
+    cpus: "${POINTY_BEAT_CPUS:-0.1}"
     environment:
-      <<: *backend-environment
-      CELERY_LOG_LEVEL: "${CELERY_LOG_LEVEL:-info}"
-    volumes:
-      - pointy-celerybeat:/var/lib/pointy/celerybeat
-      - pointy-backups:/var/lib/pointy/backups
-      - pointy-backup-staging:/tmp/pointy-backup-staging
-      - pointy-migration-staging:/var/lib/pointy/migration
-      - pointy-tmp:/var/tmp/pointy
-      - type: bind
-        source: "${POINTY_BACKUP_DRIVE_1_SOURCE:-./external-backups/drive-1}"
-        target: /mnt/pointy-external/drive-1
-      - type: bind
-        source: "${POINTY_BACKUP_DRIVE_2_SOURCE:-./external-backups/drive-2}"
-        target: /mnt/pointy-external/drive-2
-      - type: bind
-        source: "${POINTY_BACKUP_DRIVE_3_SOURCE:-./external-backups/drive-3}"
-        target: /mnt/pointy-external/drive-3
-    tmpfs:
-      - /tmp:rw,noexec,nosuid,nodev,size=64m
-    stop_grace_period: 45s
+      POINTY_WORKER_RUNS_BEAT: "1"
+    stop_grace_period: 5s
     logging: *pointy-logging
 
   # FTP upload setups (SURVEILLANCE_FTP_PLAN.md): DVRs and NVRs upload footage
   # here, and this same process keeps only the invoice moments of it — the
   # service that owns the inbox is the one that empties it, so nothing about it
-  # waits behind a backup holding the Celery worker. It runs whether or not a
-  # setup exists: with no account it accepts no login, and it is what makes
-  # "FTP upload" in the camera settings simply work. The backend image, a
-  # different role; no image of its own in the offline bundle.
+  # waits behind a backup holding the Celery worker. Until a shop adds its
+  # first FTP upload setup the role does not start Django at all: a small gate
+  # (backend/docker/ftp_gate.py) holds the port and answers like the server
+  # does with no account, and swaps the real server in within seconds of a
+  # setup appearing — so "FTP upload" in the camera settings still simply
+  # works, and the shops that never use it stop paying ~110 MB for it.
+  # POINTY_FTP_MODE=on starts the server regardless, off never does. The
+  # backend image, a different role; no image of its own in the offline bundle.
   #
   # 2121 inside (the process is unprivileged), the host's 21 outside. The
   # passive range is published 1:1 because PASV tells the DVR which port to

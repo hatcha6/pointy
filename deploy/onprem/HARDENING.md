@@ -17,7 +17,7 @@ the ASGI app. The connector runtime is `scratch` and contains only the
 
 Compose additionally applies a read-only root filesystem, drops all Linux
 capabilities, blocks privilege escalation, and sets PID limits for the Pointy
-backend, Celery, Beat, and connector containers. Writable paths are limited to
+backend, Celery worker (which also runs beat), FTP, and connector containers. Writable paths are limited to
 named volumes, tmpfs, and explicitly configured backup drive mounts.
 
 The `web` (nginx) container is also read-only with tmpfs-only writable paths,

@@ -51,6 +51,32 @@ curl http://127.0.0.1:8000/readyz/
 `/healthz/` proves the web process is alive. `/readyz/` also verifies database
 and Redis access.
 
+## Processes And Memory
+
+Most of the stack's memory is Django processes, so the layout keeps them few
+and sharing:
+
+- **backend**: a gunicorn master imports Django and the whole URLconf once, then
+  forks `POINTY_ASGI_WORKERS` uvicorn workers from it
+  (`backend/docker/gunicorn.conf.py`); they share those pages copy-on-write.
+- **celery-worker** also runs the beat scheduler (`POINTY_WORKER_RUNS_BEAT=1`).
+  That is only safe with one worker: do not scale the service.
+  **celery-beat** is a parked placeholder (no Django) kept for the updaters
+  already installed in shops, which recreate it by name.
+- **ftp** holds the FTP port without Django until the shop adds its first FTP
+  upload setup, then starts the real server within seconds
+  (`POINTY_FTP_MODE=auto|on|off`, `backend/docker/ftp_gate.py`).
+- Every Django process runs with `MALLOC_ARENA_MAX=2` (backend `Dockerfile`).
+
+Measured under a till-like load (four tills, then eight with no pauses), this
+took the whole stack from ~0.99 GB to ~0.78 GB idle and from ~1.17 GB to
+~0.93 GB at its peak, with no loss of throughput. To see a running shop's own
+numbers:
+
+```sh
+docker stats --no-stream
+```
+
 ## Updates
 
 ### Remote (no site visit)
@@ -202,8 +228,9 @@ Two failure modes to know about, because neither announces itself:
 
 If a drive is mounted at its root, Pointy's backup destination picker will list
 the drive slot and its writable child folders. The same mounts are attached to
-the web, Celery worker, and Celery beat containers so destination listing,
-manual backups, and scheduled backups all see the same paths.
+the web and Celery worker containers (the worker also runs the beat scheduler)
+so destination listing, manual backups, and scheduled backups all see the same
+paths.
 
 For stronger recovery guarantees, pair Pointy's app backup with PostgreSQL
 physical/base backups and WAL archiving.
