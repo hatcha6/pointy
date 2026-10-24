@@ -106,6 +106,9 @@ WIPED_MODELS = (
     # vocabularies are seeded reference data and are kept.
     "catalog.billofmaterials",
     "catalog.bomline",
+    # Applied bulk price changes, kept so they can be undone. Every entry names
+    # variants this reset removes, so its undo would have nothing to restore.
+    "catalog.bulkpricechange",
     "catalog.modifiergroup",
     "catalog.modifieroption",
     "catalog.product",
