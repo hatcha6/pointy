@@ -232,8 +232,13 @@ def sync_account(
     *,
     refresh_limit: int = BRAND_REFRESHES_PER_SWEEP,
     logo_limit: int = voucher_logos.LOGO_FETCHES_PER_SWEEP,
+    fresh_brand: str = "",
 ) -> SyncReport:
-    """Mirror the provider's shelf into the catalog. Never raises on a provider error."""
+    """Mirror the provider's shelf into the catalog. Never raises on a provider error.
+
+    ``fresh_brand`` (the company's shelf only) is a brand a till just opened:
+    the relay re-reads that brand's cards at its suppliers before answering.
+    """
     report = SyncReport(provider=account.provider)
     relay_hosted = is_relay_hosted(account)
     driver = provider_for(account)
@@ -241,6 +246,7 @@ def sync_account(
         # Ask "has it changed?" rather than for the whole shelf — but only of
         # a mirror that still holds the edition it names (see ``_catalog_etag``).
         driver.catalog_etag = _catalog_etag(account)
+        driver.fresh_brand = fresh_brand
     listing = driver.voucher_catalog()
     if not listing.ok:
         report.ok = False
@@ -899,10 +905,16 @@ def refresh_brand(account, brand: IntegrationVoucherBrand, *, with_cost=True) ->
     Never raises. When the provider cannot be asked, the till gets what the
     mirror last knew — the picker is already open on exactly that.
     """
-    if brand.items_inline:
+    if brand.items_inline and is_relay_hosted(account):
+        # The company's shelf: one conditional read of the whole of it, with
+        # this brand's cards re-read at the suppliers first — so per brand.
+        key = f"pointy:integrations:vouchers:fresh:{account.pk}:{brand.code}"
+        compute = lambda: sync_account(  # noqa: E731
+            account, refresh_limit=0, logo_limit=0, fresh_brand=brand.code
+        ).ok
+    elif brand.items_inline:
         key = f"pointy:integrations:vouchers:listing:{account.pk}"
-        # A cashier is waiting on this one: no brand reads, and no pictures
-        # (for the company's shelf, one conditional read of the whole of it).
+        # A cashier is waiting on this one: no brand reads, and no pictures.
         compute = lambda: sync_account(account, refresh_limit=0, logo_limit=0).ok  # noqa: E731
     else:
         key = f"pointy:integrations:vouchers:brand:{account.pk}:{brand.code}"

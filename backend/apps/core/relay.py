@@ -10,7 +10,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime, timezone as datetime_timezone
 from decimal import Decimal, InvalidOperation
 from urllib import error, request
-from urllib.parse import quote, urljoin, urlparse
+from urllib.parse import quote, urlencode, urljoin, urlparse
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
@@ -604,17 +604,22 @@ class RelayControlClient:
         )
 
     # --- the company's voucher shop («كروت دفتر») ----------------------------
-    def get_voucher_catalog(self, *, access_token, etag="", timeout=None):
+    def get_voucher_catalog(self, *, access_token, etag="", timeout=None, fresh_brand=""):
         """The shelf the shop sells from: ``(payload, etag)``, or ``(None, etag)``
         when ``etag`` still names the current edition (the relay's ``304``).
 
         Conditional so the shop can ask every few minutes: an unchanged shelf
         costs one small round trip and is never parsed or written again.
+        ``fresh_brand`` is a brand a till just opened: the relay re-reads its
+        cards at the suppliers first (shared by every shop for a minute).
         """
         headers = {"If-None-Match": etag} if etag else None
+        path = "/v1/vouchers/catalog"
+        if fresh_brand:
+            path += "?" + urlencode({"fresh": fresh_brand})
         answer = self._exchange(
             "GET",
-            "/v1/vouchers/catalog",
+            path,
             relay_token=access_token,
             headers=headers,
             timeout=timeout,

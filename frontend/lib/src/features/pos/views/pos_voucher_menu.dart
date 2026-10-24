@@ -73,6 +73,7 @@ class _PosVoucherMenuPaneState extends State<PosVoucherMenuPane> {
     if (menu == null) {
       return Future.value();
     }
+    final product = brand.product;
     // A background refresh must not reshuffle the till under the sheet.
     return viewModel.duringCriticalInteraction(() async {
       final card = await showPosVoucherBrandSheet(
@@ -80,6 +81,9 @@ class _PosVoucherMenuPaneState extends State<PosVoucherMenuPane> {
         brand: brand,
         menu: menu,
         showsProfit: viewModel.isCostRevealed,
+        checkAvailability: product == null
+            ? null
+            : () => viewModel.loadVoucherAvailability(product),
       );
       if (card != null && context.mounted) {
         // One card, one line: a card never merges into another.

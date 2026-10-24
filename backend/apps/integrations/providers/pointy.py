@@ -202,6 +202,9 @@ class PointyProvider(IntegrationProvider):
         #: (:mod:`apps.integrations.vouchers`) before it asks, so an unchanged
         #: shelf answers ``not_modified`` and nothing is read or written.
         self.catalog_etag = ""
+        #: A brand a till just opened (:func:`apps.integrations.vouchers.refresh_brand`):
+        #: the relay re-reads its cards at the suppliers before answering.
+        self.fresh_brand = ""
 
     # --- the relay link ----------------------------------------------------
     def _link(self):
@@ -270,7 +273,10 @@ class PointyProvider(IntegrationProvider):
             return VoucherCatalogResult(ok=False, error_code=refusal[0], error_detail=refusal[1])
         try:
             payload, version = link.client.get_voucher_catalog(
-                access_token=link.access_token, etag=etag, timeout=CATALOG_TIMEOUT_SECONDS
+                access_token=link.access_token,
+                etag=etag,
+                timeout=CATALOG_TIMEOUT_SECONDS,
+                fresh_brand=(self.fresh_brand or "").strip(),
             )
         except RelayControlError as exc:
             code, detail = _read_refusal(exc)

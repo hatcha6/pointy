@@ -13,6 +13,7 @@ import 'package:pointy_frontend/src/data/models/product_query.dart';
 import 'package:pointy_frontend/src/data/models/product_variant.dart';
 import 'package:pointy_frontend/src/data/models/register_session.dart';
 import 'package:pointy_frontend/src/data/models/sale_order.dart';
+import 'package:pointy_frontend/src/data/models/voucher_availability.dart';
 import 'package:pointy_frontend/src/data/models/voucher_menu.dart';
 import 'package:pointy_frontend/src/data/repositories/catalog_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/contact_repository.dart';
@@ -199,6 +200,31 @@ void main() {
     expect(find.byType(PosVoucherBrandPicker), findsOneWidget);
   });
 
+  testWidgets('a card the supplier sold out of since is greyed on opening', (
+    tester,
+  ) async {
+    _useWideTill(tester);
+    integrations.liveSoldOut = {9101};
+    final viewModel = await _activeSessionViewModel(integrations);
+    addTearDown(viewModel.dispose);
+    await _pumpPos(tester, viewModel, integrations);
+    await tester.tap(find.text('كروت دفتر'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('voucher_brand_itunes')));
+    await tester.pumpAndSettle();
+    expect(integrations.availabilityReads, 1);
+
+    await tester.tap(find.byKey(const ValueKey('voucher_item_card-9101')));
+    await tester.pumpAndSettle();
+    expect(viewModel.cart, isEmpty);
+    expect(find.byType(PosVoucherBrandPicker), findsOneWidget);
+
+    // The rest of the brand still sells.
+    await tester.tap(find.byKey(const ValueKey('voucher_item_card-9103')));
+    await tester.pumpAndSettle();
+    expect(viewModel.cart.single.variant.id, 9103);
+  });
+
   testWidgets('a brand with nothing on sale stays on the menu and opens', (
     tester,
   ) async {
@@ -268,6 +294,7 @@ void main() {
       WidgetTester tester, {
       required bool withCost,
       bool costRevealed = true,
+      Future<VoucherAvailability?> Function()? checkAvailability,
     }) async {
       final picked = <ProductVariant>[];
       final menu = VoucherMenu.fromJson(voucherMenuJson(withCost: withCost));
@@ -279,6 +306,7 @@ void main() {
               countryFor: menu.country,
               balance: menu.balance,
               showsProfit: costRevealed,
+              checkAvailability: checkAvailability,
               onPicked: picked.add,
             ),
           ),
@@ -308,6 +336,20 @@ void main() {
       // revealing cost, as with the cart's own margin line.
       await pumpPicker(tester, withCost: true, costRevealed: false);
       expect(find.textContaining('ربحك'), findsNothing);
+    });
+
+    testWidgets('keeps the menu as read when the live check fails', (
+      tester,
+    ) async {
+      _useWideTill(tester);
+      final picked = await pumpPicker(
+        tester,
+        withCost: false,
+        checkAvailability: () async => null,
+      );
+
+      await tester.tap(find.byKey(const ValueKey('voucher_item_card-9101')));
+      expect(picked.single.id, 9101);
     });
 
     testWidgets('flags a card dearer than the balance, and still sells it', (
@@ -353,6 +395,39 @@ class _FakeIntegrationsRepository extends IntegrationsRepository {
 
   /// Nothing on the shelf can be bought: the company's balance ran dry.
   bool nothingSells = false;
+
+  /// The cards the live check says sold out since the menu was read; null
+  /// when the check cannot be made (offline).
+  Set<int>? liveSoldOut;
+  int availabilityReads = 0;
+
+  @override
+  Future<Result<VoucherAvailability>> loadVoucherAvailability(
+    int productId,
+  ) async {
+    availabilityReads++;
+    final soldOut = liveSoldOut;
+    if (soldOut == null) {
+      return Error(Exception('offline'));
+    }
+    final menu = VoucherMenu.fromJson(voucherMenuJson(withCost: false));
+    final brand = menu.brandForProduct(productId);
+    return Ok(
+      VoucherAvailability(
+        ok: true,
+        productId: productId,
+        cards: [
+          for (final item in brand?.items ?? const <VoucherItem>[])
+            VoucherCard(
+              variantId: item.variantId,
+              label: item.label,
+              price: item.price,
+              isAvailable: item.available && !soldOut.contains(item.variantId),
+            ),
+        ],
+      ),
+    );
+  }
 
   @override
   Future<Result<VoucherMenu>> loadVoucherMenu() async {

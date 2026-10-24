@@ -400,6 +400,7 @@ class _PosCatalogProducts extends StatelessWidget {
             brand: brand,
             menu: menu,
             showsProfit: viewModel.isCostRevealed,
+            checkAvailability: () => viewModel.loadVoucherAvailability(product),
           );
           if (card != null && context.mounted) {
             viewModel.addVariant(card, source: 'voucher_menu');

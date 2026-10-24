@@ -268,6 +268,7 @@ class FakeRelay:
         self.document = document if document is not None else shelf()
         self.catalog_error = None
         self.etags_sent = []
+        self.fresh_brands = []
         self.images = {
             LOGO[7:]: png(),
             PRINT_LOGO[7:]: png(colour=(0, 0, 0)),
@@ -288,8 +289,9 @@ class FakeRelay:
     def etag(self):
         return f'"{self.document.get("version")}"'
 
-    def get_voucher_catalog(self, *, access_token, etag="", timeout=None):
+    def get_voucher_catalog(self, *, access_token, etag="", timeout=None, fresh_brand=""):
         self.etags_sent.append(etag)
+        self.fresh_brands.append(fresh_brand)
         if self.catalog_error is not None:
             raise self.catalog_error
         if etag and etag == self.etag():
@@ -562,6 +564,21 @@ class RelayVoucherClientTests(SimpleTestCase):
         self.assertEqual(etag, '"v1"')
         self.assertEqual(sent[0].get_header("If-none-match"), '"v1"')
         self.assertEqual(sent[0].get_header("X-pointy-relay-token"), "tok")
+
+    def test_a_brand_a_till_opened_is_asked_fresh(self):
+        sent = []
+
+        def urlopen(request, timeout=None, context=None):
+            sent.append(request)
+            raise urllib_error.HTTPError(
+                request.full_url, 304, "Not Modified", {"ETag": '"v1"'}, None
+            )
+
+        with mock.patch("apps.core.relay.relay_urlopen", side_effect=urlopen):
+            relay_client().get_voucher_catalog(access_token="tok", etag='"v1"', fresh_brand="pubg")
+            relay_client().get_voucher_catalog(access_token="tok", etag='"v1"')
+        self.assertTrue(sent[0].full_url.endswith("/v1/vouchers/catalog?fresh=pubg"), sent[0].full_url)
+        self.assertTrue(sent[1].full_url.endswith("/v1/vouchers/catalog"), sent[1].full_url)
 
     def test_a_purchase_is_posted_once_with_its_key_and_ceiling(self):
         sent = []
@@ -1093,6 +1110,22 @@ class PointyMenuTests(PointyMixin, TestCase):
         response = self.client.get("/api/integrations/vouchers/menu/")
         self.assertEqual(response.status_code, 200, getattr(response, "data", None))
         return response.data
+
+    def test_opening_a_card_has_the_relay_re_read_that_brand(self):
+        brands = list(IntegrationVoucherBrand.objects.filter(account=self.account, is_listed=True))
+        self.assertGreaterEqual(len(brands), 2)
+        self.client.force_authenticate(self.cashier)
+        self.relay.fresh_brands.clear()
+        for brand in (brands[0], brands[0], brands[1]):
+            response = self.client.get(f"/api/integrations/vouchers/{brand.product_id}/")
+            self.assertEqual(response.status_code, 200, getattr(response, "data", None))
+            self.assertTrue(response.data["ok"])
+        # The second open of the same brand is served from the first read;
+        # another brand gets its own.
+        self.assertEqual(self.relay.fresh_brands, [brands[0].code, brands[1].code])
+        # The shop's own sweep never asks for a fresh read.
+        self.sync(self.account)
+        self.assertEqual(self.relay.fresh_brands[-1], "")
 
     def test_the_menu_in_the_companys_order(self):
         data = self.menu(self.manager)

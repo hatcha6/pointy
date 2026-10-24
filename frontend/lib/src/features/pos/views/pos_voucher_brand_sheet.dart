@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/product_variant.dart';
+import '../../../data/models/voucher_availability.dart';
 import '../../../data/models/voucher_menu.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
@@ -15,11 +18,16 @@ import 'voucher_country_flag.dart';
 /// the cart line points at — whose name the server wrote as country and
 /// denomination («الولايات المتحدة · 10 دولار»), so the line says exactly
 /// what was sold.
+///
+/// [checkAvailability] asks for the brand's cards as the supplier has them
+/// now; the sheet opens on the menu at once and greys whatever the answer says
+/// sold out since.
 Future<ProductVariant?> showPosVoucherBrandSheet(
   BuildContext context, {
   required VoucherBrand brand,
   required VoucherMenu menu,
   required bool showsProfit,
+  Future<VoucherAvailability?> Function()? checkAvailability,
 }) {
   return showAdaptiveModalBottomSheet<ProductVariant>(
     context: context,
@@ -28,6 +36,7 @@ Future<ProductVariant?> showPosVoucherBrandSheet(
       countryFor: menu.country,
       balance: menu.balance,
       showsProfit: showsProfit,
+      checkAvailability: checkAvailability,
       onPicked: (variant) => Navigator.of(sheetContext).pop(variant),
     ),
   );
@@ -44,6 +53,7 @@ class PosVoucherBrandPicker extends StatefulWidget {
     this.balance,
     this.initialCountry,
     this.showsProfit = true,
+    this.checkAvailability,
   });
 
   final VoucherBrand brand;
@@ -61,12 +71,17 @@ class PosVoucherBrandPicker extends StatefulWidget {
   /// the screen faces customers too.
   final bool showsProfit;
 
+  /// The brand's cards as the supplier has them right now; null asks nobody.
+  final Future<VoucherAvailability?> Function()? checkAvailability;
+
   @override
   State<PosVoucherBrandPicker> createState() => _PosVoucherBrandPickerState();
 }
 
 class _PosVoucherBrandPickerState extends State<PosVoucherBrandPicker> {
   String? _country;
+  VoucherAvailability? _live;
+  bool _checking = false;
 
   @override
   void initState() {
@@ -76,6 +91,33 @@ class _PosVoucherBrandPickerState extends State<PosVoucherBrandPicker> {
     _country = initial != null && codes.contains(initial)
         ? initial
         : codes.firstOrNull;
+    final check = widget.checkAvailability;
+    if (check != null) {
+      _checking = true;
+      unawaited(_check(check));
+    }
+  }
+
+  Future<void> _check(Future<VoucherAvailability?> Function() check) async {
+    VoucherAvailability? live;
+    try {
+      live = await check();
+    } on Object {
+      live = null;
+    }
+    if (!mounted) return;
+    setState(() {
+      _live = (live?.ok ?? false) ? live : null;
+      _checking = false;
+    });
+  }
+
+  /// Whether [item] is on sale: the live answer when one came, otherwise the
+  /// menu as it was read. A card the live answer leaves out is withdrawn.
+  bool _available(VoucherItem item) {
+    final live = _live;
+    if (live == null) return item.available;
+    return live.cardFor(item.variantId)?.isAvailable ?? false;
   }
 
   @override
@@ -124,13 +166,30 @@ class _PosVoucherBrandPickerState extends State<PosVoucherBrandPicker> {
               ),
             ],
             SizedBox(height: spacing.md),
-            _SectionTitle(text: l10n.posVoucherMenuDenominationTitle),
+            Row(
+              children: [
+                Expanded(
+                  child: _SectionTitle(
+                    text: l10n.posVoucherMenuDenominationTitle,
+                  ),
+                ),
+                if (_checking)
+                  Tooltip(
+                    message: l10n.posVoucherChecking,
+                    child: const SizedBox.square(
+                      dimension: 16,
+                      child: PointySpinner(strokeWidth: 2),
+                    ),
+                  ),
+              ],
+            ),
             SizedBox(height: spacing.xs),
             Flexible(
               child: SingleChildScrollView(
                 child: _DenominationGrid(
                   brand: brand,
                   items: items,
+                  isAvailable: _available,
                   showsProfit: widget.showsProfit,
                   onPicked: widget.onPicked,
                 ),
@@ -314,12 +373,14 @@ class _DenominationGrid extends StatelessWidget {
   const _DenominationGrid({
     required this.brand,
     required this.items,
+    required this.isAvailable,
     required this.showsProfit,
     required this.onPicked,
   });
 
   final VoucherBrand brand;
   final List<VoucherItem> items;
+  final bool Function(VoucherItem item) isAvailable;
   final bool showsProfit;
   final ValueChanged<ProductVariant> onPicked;
 
@@ -364,6 +425,7 @@ class _DenominationGrid extends StatelessWidget {
                             ? _DenominationTile(
                                 key: ValueKey('voucher_item_${row[slot].key}'),
                                 item: row[slot],
+                                available: isAvailable(row[slot]),
                                 variant: brand.variantFor(row[slot]),
                                 showsProfit: showsProfit,
                                 onPicked: onPicked,
@@ -386,12 +448,16 @@ class _DenominationTile extends StatelessWidget {
   const _DenominationTile({
     super.key,
     required this.item,
+    required this.available,
     required this.variant,
     required this.showsProfit,
     required this.onPicked,
   });
 
   final VoucherItem item;
+
+  /// On sale right now, as the sheet last learnt it.
+  final bool available;
   final bool showsProfit;
 
   /// Null when the card cannot be sold (withdrawn since the menu was read).
@@ -404,7 +470,7 @@ class _DenominationTile extends StatelessWidget {
     final colors = context.pointyColors;
     final textTheme = Theme.of(context).textTheme;
     final variant = this.variant;
-    final sellable = item.available && variant != null;
+    final sellable = available && variant != null;
     // Warned, not refused: the balance is as old as the last read, and the
     // owner may have moved money in since.
     final beyond = sellable && item.exceedsFloat;
