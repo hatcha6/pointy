@@ -7,6 +7,8 @@ A starter point-of-sale stack with a Django REST Framework backend, Redis-backed
 - `backend/` - Django API for catalog, sales, payments, inventory, Redis cache, and Celery tasks.
 - `frontend/` - Flutter POS client with cashier-first sales, catalog, register-session, printing, and settings screens.
 - `relay/` - Standalone Go relay server and on-prem connector for remote Pointy access.
+- `cards/` - «دفتر كروت», the company's consumer card app (Flutter: Android, iOS, web). See `cards/README.md`.
+- `shared/pointy_brand/` - The Daftar brand package (palette, Arabic type face, payment marks) the Flutter apps share.
 
 ## Backend Quick Start
 
@@ -668,6 +670,18 @@ listener.
 Remote relay access is denied when an installation's relay entitlement is
 disabled, the subscription flag is inactive, or its subscription end time has
 passed. Local LAN access to the on-prem backend is unaffected.
+
+## Card App Quick Start («دفتر كروت»)
+
+The consumer card app lives in `cards/`. The relay serves its sign-in, catalog,
+orders and credit (`relay/README.md`, «Card App Customers»).
+
+```bash
+make relay-run       # local relay; customer OTP test mode is on, codes come back in the response
+make cards-run       # the app against it (CARDS_RELAY_URL, CARDS_CHANNEL=ios|play|apk|web)
+make cards-preview   # preview harness on :8090, ?screen=board|home|my-cards|account|brand
+make cards-check     # analyze + test the app and shared/pointy_brand
+```
 
 ## Integrations (resale providers)
 

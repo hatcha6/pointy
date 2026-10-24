@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <mask id="notch">
+      <rect width="1024" height="1024" fill="#fff"/>
+      <circle cx="212" cy="512" r="42" fill="#000"/>
+      <circle cx="812" cy="512" r="42" fill="#000"/>
+    </mask>
+    <mask id="notchBack">
+      <rect width="1024" height="1024" fill="#fff"/>
+      <circle cx="212" cy="512" r="42" fill="#000"/>
+      <circle cx="812" cy="512" r="42" fill="#000"/>
+    </mask>
+    <filter id="sh" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#06302e" flood-opacity=".28"/></filter>
+  </defs>
+  <rect width="1024" height="1024" rx="230" fill="#0F6E69"/>
+  <g transform="rotate(-8 512 512) translate(36 46)">
+    <rect x="212" y="322" width="600" height="380" rx="52" fill="#A9D6D0" mask="url(#notchBack)"/>
+  </g>
+  <g transform="rotate(-8 512 512)" filter="url(#sh)">
+    <rect x="212" y="322" width="600" height="380" rx="52" fill="#E3F3F0" mask="url(#notch)"/>
+    <line x1="652" y1="362" x2="652" y2="662" stroke="#0F6E69" stroke-opacity=".35" stroke-width="14" stroke-linecap="round" stroke-dasharray="2 34"/>
+    <g transform="translate(436 512) rotate(-40)">
+      <path d="M -150 -32 L 120 -32 A 32 32 0 0 1 120 32 L -150 32 L -214 0 Z" fill="#0C6660" stroke="#0C6660" stroke-width="10" stroke-linejoin="round"/>
+      <rect x="62" y="-37" width="24" height="74" fill="#E9A030"/>
+    </g>
+    <circle cx="732" cy="512" r="30" fill="#E9A030"/>
+  </g>
+</svg>

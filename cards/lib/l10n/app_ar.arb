@@ -1,0 +1,747 @@
+{
+  "@@locale": "ar",
+  "appTitle": "دفتر كروت",
+  "@appTitle": {
+    "description": "The app's name: Daftar Cards."
+  },
+  "tabHome": "الرئيسية",
+  "@tabHome": {
+    "description": "Bottom navigation: the card shelf."
+  },
+  "tabMyCards": "كروتي",
+  "@tabMyCards": {
+    "description": "Bottom navigation: the cards the customer bought."
+  },
+  "tabAccount": "حسابي",
+  "@tabAccount": {
+    "description": "Bottom navigation: the customer's account."
+  },
+  "homeSearchHint": "ابحث عن كرت: ليبيانا، ببجي، آيتونز…",
+  "@homeSearchHint": {
+    "description": "Placeholder of the home search field."
+  },
+  "homeTagline": "كروت الاتصالات والإنترنت والألعاب، تصلك فوراً",
+  "@homeTagline": {
+    "description": "One-line promise under the app name on home."
+  },
+  "myCardsEmptyTitle": "لا كروت بعد",
+  "@myCardsEmptyTitle": {
+    "description": "Empty state title of My cards."
+  },
+  "myCardsEmptyBody": "الكروت التي تشتريها تُحفظ هنا، جاهزة متى احتجتها.",
+  "@myCardsEmptyBody": {
+    "description": "Empty state body of My cards."
+  },
+  "accountSignedOutTitle": "سجّل الدخول برقم هاتفك",
+  "@accountSignedOutTitle": {
+    "description": "Account tab title when signed out."
+  },
+  "accountSignedOutBody": "نرسل لك رمزاً في رسالة نصية، دون كلمة مرور.",
+  "@accountSignedOutBody": {
+    "description": "Account tab body when signed out: sign-in is by SMS code, no password."
+  },
+  "signInAction": "تسجيل الدخول",
+  "@signInAction": {
+    "description": "Button that starts phone sign-in."
+  },
+  "browseAction": "تصفّح الكروت",
+  "@browseAction": {
+    "description": "Button that goes to the card shelf."
+  },
+  "moneyAmount": "{amount} د.ل",
+  "@moneyAmount": {
+    "description": "An amount of Libyan dinars, e.g. 10.00 د.ل.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "errorNetwork": "تعذّر الاتصال. تحقّق من الإنترنت وحاول مجدداً.",
+  "@errorNetwork": {
+    "description": "Generic error when the relay cannot be reached."
+  },
+  "errorGeneric": "حدث خطأ غير متوقع. حاول مجدداً.",
+  "@errorGeneric": {
+    "description": "Generic error for anything else."
+  },
+  "retryAction": "إعادة المحاولة",
+  "@retryAction": {
+    "description": "Button to retry a failed load."
+  },
+  "buyAgainTitle": "اشترِ مجدداً",
+  "@buyAgainTitle": {
+    "description": "Home row of items bought before."
+  },
+  "allCategories": "الكل",
+  "@allCategories": {
+    "description": "Category chip that shows every category."
+  },
+  "fromPrice": "من {price}",
+  "@fromPrice": {
+    "description": "Brand tile: the cheapest price, e.g. من 5.00 د.ل.",
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "unavailableNow": "غير متوفر الآن",
+  "@unavailableNow": {
+    "description": "Badge on a card that cannot be bought right now."
+  },
+  "searchNoResultsTitle": "لا نتائج لـ «{query}»",
+  "@searchNoResultsTitle": {
+    "description": "Search found nothing.",
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "searchNoResultsBody": "جرّب اسماً آخر أو تصفّح الأقسام.",
+  "@searchNoResultsBody": {
+    "description": "Search found nothing: what to do."
+  },
+  "catalogEmptyTitle": "لا كروت متاحة الآن",
+  "@catalogEmptyTitle": {
+    "description": "The shelf is empty."
+  },
+  "catalogEmptyBody": "نعمل على توفير الكروت. عُد بعد قليل.",
+  "@catalogEmptyBody": {
+    "description": "The shelf is empty: reassurance."
+  },
+  "catalogLoadFailedTitle": "تعذّر تحميل الكروت",
+  "@catalogLoadFailedTitle": {
+    "description": "The shelf could not load and none is saved."
+  },
+  "savedShelfNote": "تعرض آخر نسخة محفوظة",
+  "@savedShelfNote": {
+    "description": "Shown when the shelf is the saved copy because the network failed."
+  },
+  "creditChip": "رصيدك {amount}",
+  "@creditChip": {
+    "description": "Home chip showing the customer's credit.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "chooseValue": "اختر الفئة",
+  "@chooseValue": {
+    "description": "Brand page: heading above the denominations."
+  },
+  "chooseCountry": "الدولة",
+  "@chooseCountry": {
+    "description": "Brand page: heading above the country chips."
+  },
+  "howToRedeem": "طريقة الاستخدام",
+  "@howToRedeem": {
+    "description": "Brand page / reveal: how to redeem the card."
+  },
+  "quantityLabel": "الكمية",
+  "@quantityLabel": {
+    "description": "Quantity stepper label."
+  },
+  "buyFor": "اشترِ بـ {amount}",
+  "@buyFor": {
+    "description": "Sticky buy button with the total, e.g. اشترِ بـ 10.00 د.ل.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "increaseQuantity": "زيادة الكمية",
+  "@increaseQuantity": {
+    "description": "Tooltip of the + button."
+  },
+  "decreaseQuantity": "إنقاص الكمية",
+  "@decreaseQuantity": {
+    "description": "Tooltip of the − button."
+  },
+  "signInTitle": "تسجيل الدخول",
+  "@signInTitle": {
+    "description": "Sign-in sheet title."
+  },
+  "signInSubtitle": "أدخل رقم هاتفك لنرسل لك رمز الدخول. لا حاجة لكلمة مرور.",
+  "@signInSubtitle": {
+    "description": "Sign-in sheet: phone step help."
+  },
+  "phoneLabel": "رقم الهاتف",
+  "@phoneLabel": {
+    "description": "Phone field label."
+  },
+  "sendCode": "أرسل الرمز",
+  "@sendCode": {
+    "description": "Button that asks for the SMS code."
+  },
+  "codeTitle": "أدخل الرمز",
+  "@codeTitle": {
+    "description": "Sign-in sheet: code step title."
+  },
+  "codeSentTo": "أرسلنا رمزاً من 6 أرقام إلى",
+  "@codeSentTo": {
+    "description": "Code step: where the code went; the number is shown on its own line below, left to right."
+  },
+  "resendIn": "إعادة الإرسال بعد {seconds} ث",
+  "@resendIn": {
+    "description": "Countdown before another code may be asked.",
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "resendCode": "أعد إرسال الرمز",
+  "@resendCode": {
+    "description": "Button to ask for another code."
+  },
+  "changeNumber": "تعديل الرقم",
+  "@changeNumber": {
+    "description": "Go back to the phone step."
+  },
+  "signInDone": "أهلاً بك! تم تسجيل الدخول",
+  "@signInDone": {
+    "description": "Snackbar after signing in."
+  },
+  "errInvalidPhone": "أدخل رقم هاتف ليبياً صحيحاً يبدأ بـ 09",
+  "@errInvalidPhone": {
+    "description": "Phone is not a Libyan mobile."
+  },
+  "errWrongCode": "{count, plural, =0{الرمز غير صحيح.} =1{الرمز غير صحيح. بقيت محاولة واحدة.} =2{الرمز غير صحيح. بقيت محاولتان.} few{الرمز غير صحيح. بقيت {count} محاولات.} other{الرمز غير صحيح. بقيت {count} محاولة.}}",
+  "@errWrongCode": {
+    "description": "Wrong sign-in code with attempts left.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "errCodeExpired": "انتهت صلاحية الرمز. اطلب رمزاً جديداً.",
+  "@errCodeExpired": {
+    "description": "Code expired."
+  },
+  "errTooManyAttempts": "محاولات كثيرة. اطلب رمزاً جديداً.",
+  "@errTooManyAttempts": {
+    "description": "Too many wrong codes."
+  },
+  "errTooSoon": "انتظر قليلاً قبل طلب رمز جديد.",
+  "@errTooSoon": {
+    "description": "Asked for a code too soon."
+  },
+  "errDailyLimit": "وصلت إلى الحد اليومي للرموز. حاول غداً.",
+  "@errDailyLimit": {
+    "description": "Daily code cap reached."
+  },
+  "errSendFailed": "تعذّر إرسال الرمز. حاول مجدداً.",
+  "@errSendFailed": {
+    "description": "SMS could not be sent."
+  },
+  "errRateLimited": "طلبات كثيرة. حاول بعد قليل.",
+  "@errRateLimited": {
+    "description": "Rate limited."
+  },
+  "errSignInRequired": "سجّل الدخول للمتابعة.",
+  "@errSignInRequired": {
+    "description": "Session gone; sign in again."
+  },
+  "checkoutTitle": "إتمام الشراء",
+  "@checkoutTitle": {
+    "description": "Checkout sheet title."
+  },
+  "payWith": "ادفع عبر",
+  "@payWith": {
+    "description": "Heading above the payment methods."
+  },
+  "bankCards": "البطاقات المصرفية",
+  "@bankCards": {
+    "description": "The bank-card (Moamalat) method."
+  },
+  "useCredit": "استخدم رصيدك ({amount})",
+  "@useCredit": {
+    "description": "Switch to pay from the customer's credit first.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "lineSubtotal": "السعر",
+  "@lineSubtotal": {
+    "description": "Checkout line: the cards' price."
+  },
+  "lineCredit": "من رصيدك",
+  "@lineCredit": {
+    "description": "Checkout line: paid from credit."
+  },
+  "lineFee": "رسوم الدفع",
+  "@lineFee": {
+    "description": "Checkout line: the payment gateway's fee."
+  },
+  "lineTotal": "المطلوب دفعه",
+  "@lineTotal": {
+    "description": "Checkout line: what the payer is charged."
+  },
+  "payAmount": "ادفع {amount}",
+  "@payAmount": {
+    "description": "Pay button, e.g. ادفع 10.21 د.ل.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "payFromCredit": "ادفع من رصيدك",
+  "@payFromCredit": {
+    "description": "Pay button when credit covers everything."
+  },
+  "instantDelivery": "يصلك الرقم السري فوراً بعد الدفع.",
+  "@instantDelivery": {
+    "description": "Checkout reassurance line."
+  },
+  "payerTitle": "الدفع عبر {method}",
+  "@payerTitle": {
+    "description": "Payer dialog title.",
+    "placeholders": {
+      "method": {
+        "type": "String"
+      }
+    }
+  },
+  "payerPhone": "رقم المحفظة",
+  "@payerPhone": {
+    "description": "Payer phone field."
+  },
+  "payerCard": "رقم بطاقة المحفظة",
+  "@payerCard": {
+    "description": "Payer wallet card number field."
+  },
+  "payerBirthYear": "سنة الميلاد",
+  "@payerBirthYear": {
+    "description": "Payer birth year (Sadad)."
+  },
+  "continueAction": "متابعة",
+  "@continueAction": {
+    "description": "Continue button."
+  },
+  "cancelAction": "إلغاء",
+  "@cancelAction": {
+    "description": "Cancel button."
+  },
+  "walletCodeTitle": "رمز تأكيد {method}",
+  "@walletCodeTitle": {
+    "description": "Wallet OTP sheet title.",
+    "placeholders": {
+      "method": {
+        "type": "String"
+      }
+    }
+  },
+  "walletCodeBody": "أرسلت {method} رمزاً إلى هاتفك لتأكيد دفع {amount}. هذا ليس رمز الدخول.",
+  "@walletCodeBody": {
+    "description": "Wallet OTP explanation, distinct from the sign-in code.",
+    "placeholders": {
+      "method": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "confirmPayment": "تأكيد الدفع",
+  "@confirmPayment": {
+    "description": "Confirm the wallet payment."
+  },
+  "errOtpRejected": "{count, plural, =0{رمز الدفع غير صحيح.} =1{رمز الدفع غير صحيح. بقيت محاولة واحدة.} =2{رمز الدفع غير صحيح. بقيت محاولتان.} few{رمز الدفع غير صحيح. بقيت {count} محاولات.} other{رمز الدفع غير صحيح. بقيت {count} محاولة.}}",
+  "@errOtpRejected": {
+    "description": "Wrong wallet code.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "errDeclined": "رفض المصرف أو المحفظة الدفع. لم يُخصم شيء.",
+  "@errDeclined": {
+    "description": "Payment declined."
+  },
+  "errPriceChanged": "تغيّر السعر إلى {amount}. راجعه ثم أكمل.",
+  "@errPriceChanged": {
+    "description": "Price changed before paying.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "errItemUnavailable": "هذا الكرت غير متوفر الآن.",
+  "@errItemUnavailable": {
+    "description": "Card cannot be bought now."
+  },
+  "errPaymentFailed": "تعذّر بدء الدفع. حاول مجدداً أو اختر طريقة أخرى.",
+  "@errPaymentFailed": {
+    "description": "Payment could not start."
+  },
+  "errPaymentsUnavailable": "الدفع غير متاح الآن. حاول بعد قليل.",
+  "@errPaymentsUnavailable": {
+    "description": "Payments not configured / down."
+  },
+  "errInvalidPayer": "تحقّق من بيانات الدفع.",
+  "@errInvalidPayer": {
+    "description": "Payer details refused."
+  },
+  "hostedTitle": "أكمل الدفع في صفحة البطاقة",
+  "@hostedTitle": {
+    "description": "Hosted card page step title."
+  },
+  "hostedBody": "فتحنا صفحة الدفع الآمنة. بعد إتمام الدفع ارجع هنا، وسيظهر كرتك تلقائياً.",
+  "@hostedBody": {
+    "description": "Hosted page explanation."
+  },
+  "openPaymentPage": "افتح صفحة الدفع",
+  "@openPaymentPage": {
+    "description": "Reopen the hosted page."
+  },
+  "cancelOrder": "إلغاء الطلب",
+  "@cancelOrder": {
+    "description": "Cancel an unpaid order."
+  },
+  "preparingTitle": "نجهّز كرتك…",
+  "@preparingTitle": {
+    "description": "Order paid, card on its way."
+  },
+  "preparingBody": "عادةً خلال ثوانٍ. يمكنك إغلاق التطبيق، وسيُحفظ الكرت في «كروتي».",
+  "@preparingBody": {
+    "description": "Order progress reassurance."
+  },
+  "refundedTitle": "لم نتمكن من شراء الكرت",
+  "@refundedTitle": {
+    "description": "Paid but no card: refunded to credit."
+  },
+  "refundedBody": "أعدنا {amount} إلى رصيدك، ويُستخدم في طلبك القادم.",
+  "@refundedBody": {
+    "description": "Refund explanation.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "unpaidTitle": "لم يكتمل الدفع",
+  "@unpaidTitle": {
+    "description": "Order closed without payment."
+  },
+  "unpaidBody": "لم يُخصم أي مبلغ. يمكنك المحاولة مجدداً.",
+  "@unpaidBody": {
+    "description": "Nothing was charged."
+  },
+  "tryAgain": "حاول مجدداً",
+  "@tryAgain": {
+    "description": "Try again."
+  },
+  "backToShop": "العودة إلى الكروت",
+  "@backToShop": {
+    "description": "Back to the shelf."
+  },
+  "revealTitle": "كرتك جاهز",
+  "@revealTitle": {
+    "description": "Reveal page title."
+  },
+  "secretCode": "الرقم السري",
+  "@secretCode": {
+    "description": "The card PIN label."
+  },
+  "serialNumber": "الرقم التسلسلي: {serial}",
+  "@serialNumber": {
+    "description": "Card serial.",
+    "placeholders": {
+      "serial": {
+        "type": "String"
+      }
+    }
+  },
+  "copyAction": "نسخ",
+  "@copyAction": {
+    "description": "Copy button."
+  },
+  "copiedNotice": "تم نسخ الرقم السري",
+  "@copiedNotice": {
+    "description": "Snackbar after copying."
+  },
+  "rechargeNow": "اشحن الآن",
+  "@rechargeNow": {
+    "description": "Open the dialer with the recharge code."
+  },
+  "showQr": "رمز QR",
+  "@showQr": {
+    "description": "Show the code as a QR."
+  },
+  "sendAsGift": "أرسلها هدية",
+  "@sendAsGift": {
+    "description": "Share the card by WhatsApp."
+  },
+  "giftMessage": "هدية لك من دفتر كروت\n{name}\nالرقم السري: {code}",
+  "@giftMessage": {
+    "description": "WhatsApp gift text.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "markUsed": "تحديد كمستخدم",
+  "@markUsed": {
+    "description": "Mark a card used."
+  },
+  "markUnused": "إلغاء تحديد الاستخدام",
+  "@markUnused": {
+    "description": "Unmark a used card."
+  },
+  "usedBadge": "مستخدم",
+  "@usedBadge": {
+    "description": "Used badge."
+  },
+  "doneAction": "تم",
+  "@doneAction": {
+    "description": "Done."
+  },
+  "codesLockedTitle": "رموزك محمية",
+  "@codesLockedTitle": {
+    "description": "Codes hidden until unlock."
+  },
+  "codesLockedBody": "أكّد هويتك لعرض الأرقام السرية.",
+  "@codesLockedBody": {
+    "description": "Unlock explanation."
+  },
+  "unlockAction": "اعرض الرموز",
+  "@unlockAction": {
+    "description": "Unlock button."
+  },
+  "unlockReason": "تأكيد هويتك لعرض رموز كروتك",
+  "@unlockReason": {
+    "description": "OS biometric prompt reason."
+  },
+  "codesPendingTitle": "نقرأ الرمز من المورّد…",
+  "@codesPendingTitle": {
+    "description": "Codes not readable right now."
+  },
+  "codesPendingBody": "الكرت مدفوع ومحفوظ. سيظهر رقمه السري هنا خلال لحظات.",
+  "@codesPendingBody": {
+    "description": "Codes pending explanation."
+  },
+  "filterUnused": "غير مستخدم",
+  "@filterUnused": {
+    "description": "Filter: unused cards."
+  },
+  "filterUsed": "مستخدم",
+  "@filterUsed": {
+    "description": "Filter: used cards."
+  },
+  "statusPreparing": "قيد التجهيز",
+  "@statusPreparing": {
+    "description": "Order status chip."
+  },
+  "statusAwaitingPayment": "بانتظار الدفع",
+  "@statusAwaitingPayment": {
+    "description": "Order status chip."
+  },
+  "statusRefunded": "أُعيد لرصيدك",
+  "@statusRefunded": {
+    "description": "Order status chip."
+  },
+  "statusUnpaid": "لم يكتمل",
+  "@statusUnpaid": {
+    "description": "Order status chip."
+  },
+  "cardCount": "{count, plural, =1{كرت واحد} =2{كرتان} few{{count} كروت} other{{count} كرتاً}}",
+  "@cardCount": {
+    "description": "Number of cards in an order.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "myCardsSignedOutBody": "سجّل الدخول لترى كروتك على أي جهاز.",
+  "@myCardsSignedOutBody": {
+    "description": "My cards when signed out."
+  },
+  "creditTitle": "رصيدك",
+  "@creditTitle": {
+    "description": "Credit card title."
+  },
+  "creditBody": "يُستخدم في طلباتك القادمة.",
+  "@creditBody": {
+    "description": "Credit explanation."
+  },
+  "creditOrder": "دفع طلب",
+  "@creditOrder": {
+    "description": "Credit entry: spent on an order."
+  },
+  "creditRefund": "استرداد طلب",
+  "@creditRefund": {
+    "description": "Credit entry: refund."
+  },
+  "creditRelease": "إعادة رصيد طلب لم يكتمل",
+  "@creditRelease": {
+    "description": "Credit entry: released hold."
+  },
+  "creditLatePayment": "دفعة وصلت بعد إغلاق الطلب",
+  "@creditLatePayment": {
+    "description": "Credit entry: late payment."
+  },
+  "devicesTitle": "الأجهزة المسجّلة",
+  "@devicesTitle": {
+    "description": "Devices section."
+  },
+  "thisDevice": "هذا الجهاز",
+  "@thisDevice": {
+    "description": "Current device badge."
+  },
+  "signOutOthers": "تسجيل الخروج من الأجهزة الأخرى",
+  "@signOutOthers": {
+    "description": "Sign out other devices."
+  },
+  "signOutOthersDone": "تم تسجيل الخروج من الأجهزة الأخرى",
+  "@signOutOthersDone": {
+    "description": "Snackbar."
+  },
+  "signOut": "تسجيل الخروج",
+  "@signOut": {
+    "description": "Sign out."
+  },
+  "deleteAccount": "حذف الحساب",
+  "@deleteAccount": {
+    "description": "Delete account."
+  },
+  "deleteAccountTitle": "حذف حسابك؟",
+  "@deleteAccountTitle": {
+    "description": "Delete confirmation title."
+  },
+  "deleteAccountBody": "سنحذف رقمك وكل جلساتك نهائياً. انسخ الأرقام السرية لكروتك قبل الحذف.",
+  "@deleteAccountBody": {
+    "description": "Delete confirmation body."
+  },
+  "deleteAction": "احذف",
+  "@deleteAction": {
+    "description": "Confirm delete."
+  },
+  "accountDeleted": "تم حذف حسابك",
+  "@accountDeleted": {
+    "description": "Snackbar after deletion."
+  },
+  "deviceBrowser": "متصفح",
+  "@deviceBrowser": {
+    "description": "Devices list: a session signed in from a web browser."
+  },
+  "paymentReviewTitle": "نراجع دفعتك",
+  "@paymentReviewTitle": {
+    "description": "A payment arrived for a different amount than the order; held for review."
+  },
+  "paymentReviewBody": "وصلت دفعة بمبلغ يختلف عن الطلب، فأوقفناها للمراجعة. سنتواصل معك، ولن تخسر شيئاً.",
+  "@paymentReviewBody": {
+    "description": "Payment held for review: reassurance."
+  },
+  "statusReview": "قيد المراجعة",
+  "@statusReview": {
+    "description": "Order status chip: payment held for review."
+  },
+  "homeTitle": "اكتشف الكروت",
+  "@homeTitle": {
+    "description": "Home large title."
+  },
+  "seeAll": "عرض الكل",
+  "@seeAll": {
+    "description": "Shelf header action: show every card of the shelf."
+  },
+  "featuredTitle": "الأكثر طلباً",
+  "@featuredTitle": {
+    "description": "Home: the featured shelf."
+  },
+  "paymentMethodLabel": "طريقة الدفع",
+  "@paymentMethodLabel": {
+    "description": "Checkout row: the payment method."
+  },
+  "changeAction": "تغيير",
+  "@changeAction": {
+    "description": "Change the chosen option."
+  },
+  "choosePaymentMethod": "اختر طريقة الدفع",
+  "@choosePaymentMethod": {
+    "description": "Payment method picker title."
+  },
+  "securePaymentNote": "يتم الدفع عبر بوابة «دفع» الآمنة، ولا نحتفظ ببيانات الدفع.",
+  "@securePaymentNote": {
+    "description": "Checkout footnote about the gateway."
+  },
+  "purchaseSuccess": "تم الشراء بنجاح",
+  "@purchaseSuccess": {
+    "description": "Reveal: purchase succeeded headline."
+  },
+  "cardIndex": "الكرت {index} من {count}",
+  "@cardIndex": {
+    "description": "Reveal: which of several cards is shown.",
+    "placeholders": {
+      "index": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "closeAction": "إغلاق",
+  "@closeAction": {
+    "description": "Close a sheet."
+  },
+  "perCard": "للكرت الواحد",
+  "@perCard": {
+    "description": "Under a unit price: per card."
+  },
+  "creditHistory": "سجل الرصيد",
+  "@creditHistory": {
+    "description": "Account: credit history section."
+  },
+  "accountSection": "الحساب",
+  "@accountSection": {
+    "description": "Account: account actions section."
+  },
+  "inProgressSection": "قيد التجهيز",
+  "@inProgressSection": {
+    "description": "My cards: section of orders on their way."
+  },
+  "myCardsSection": "كروتك",
+  "@myCardsSection": {
+    "description": "My cards: section of delivered cards."
+  },
+  "searchResults": "نتائج البحث",
+  "@searchResults": {
+    "description": "Home: search results heading."
+  },
+  "startingFrom": "تبدأ من",
+  "@startingFrom": {
+    "description": "Label before a starting price."
+  },
+  "buyNow": "اشترِ",
+  "@buyNow": {
+    "description": "Brand page buy button (the total is shown beside it)."
+  },
+  "splashDaftar": "دفتر",
+  "@splashDaftar": {
+    "description": "The first word of the name, shown as the opening starts"
+  },
+  "splashCards": "كروت",
+  "@splashCards": {
+    "description": "The second word of the name, joining the first as the opening ends"
+  },
+  "refundedToCredit": "أُضيف إلى رصيدك",
+  "@refundedToCredit": {
+    "description": "Beside the refunded amount on a refunded order: where the money went"
+  }
+}

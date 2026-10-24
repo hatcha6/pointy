@@ -1,0 +1,283 @@
+import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../../../l10n/generated/app_localizations.dart';
+import '../../data/models/catalog.dart';
+import '../../data/models/order.dart';
+import '../../design/cards_tokens.dart';
+import '../../shared/card_art.dart';
+import '../../shared/cards_scope.dart';
+import '../../shared/haptics.dart';
+import '../../shared/money_text.dart';
+import '../reveal/reveal_page.dart';
+import 'order_outcome_panel.dart';
+import 'order_watcher.dart';
+
+/// An order on its way: it watches the relay and turns into the card the
+/// moment it arrives. The customer may leave; the card waits in «كروتي».
+class OrderProgressPage extends StatefulWidget {
+  const OrderProgressPage({
+    super.key,
+    required this.watcher,
+    this.brand,
+    this.openPaymentPage = true,
+  });
+
+  final OrderWatcher watcher;
+  final CardBrand? brand;
+
+  /// Opens Dafa's card page on arrival for a bank-card order.
+  final bool openPaymentPage;
+
+  static Future<void> open(
+    BuildContext context, {
+    required CardOrder order,
+    CardBrand? brand,
+  }) {
+    final dependencies = CardsScope.of(context);
+    if (order.status == OrderStatus.delivered && order.codes.isNotEmpty) {
+      dependencies.vault.keep(order.id, order.codes);
+      return Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => RevealPage(order: order, brand: brand),
+        ),
+      );
+    }
+    final watcher = OrderWatcher(
+      orders: dependencies.orders,
+      vault: dependencies.vault,
+      order: order,
+    )..start();
+    return Navigator.of(context)
+        .push(
+          MaterialPageRoute(
+            builder: (_) => OrderProgressPage(watcher: watcher, brand: brand),
+          ),
+        )
+        .whenComplete(watcher.dispose);
+  }
+
+  @override
+  State<OrderProgressPage> createState() => _OrderProgressPageState();
+}
+
+class _OrderProgressPageState extends State<OrderProgressPage>
+    with WidgetsBindingObserver {
+  bool _revealed = false;
+
+  /// The screen last shown, so arriving at a new one is felt once. Set when
+  /// the page opens: an order that is already refunded then is not news.
+  late String _lastOutcome;
+
+  /// Dafa's page is open over the app (in-app browser).
+  bool _paymentPageOpen = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _lastOutcome = _outcomeOf(widget.watcher.order);
+    widget.watcher.addListener(_onChange);
+    final order = widget.watcher.order;
+    if (widget.openPaymentPage &&
+        order.status == OrderStatus.awaitingPayment &&
+        order.checkoutUrl.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _openPaymentPage());
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    widget.watcher.removeListener(_onChange);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Back from Dafa's page or the SMS app: ask at once.
+    if (state == AppLifecycleState.resumed) {
+      widget.watcher.poll();
+    }
+  }
+
+  void _onChange() {
+    final order = widget.watcher.order;
+    final outcome = _outcomeOf(order);
+    if (outcome != _lastOutcome) {
+      _lastOutcome = outcome;
+      // The order ended without a card: feel it once, gently. The money is
+      // safe, so it is a warning, never an error.
+      if (const {'refunded', 'review', 'unpaid'}.contains(outcome)) {
+        Haptics.warning();
+      }
+    }
+    if (_paymentPageOpen && order.status != OrderStatus.awaitingPayment) {
+      _closePaymentPage();
+    }
+    if (!_revealed &&
+        order.status == OrderStatus.delivered &&
+        order.codes.isNotEmpty) {
+      _revealed = true;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => RevealPage(order: order, brand: widget.brand),
+        ),
+      );
+    }
+  }
+
+  /// Dafa's bank-card page opens inside the app: Safari's sheet on iOS,
+  /// a Chrome Custom Tab on Android (a real browser, so the bank's 3-D Secure
+  /// step and the address bar work as the payer expects; a web view would
+  /// hide the address and some banks refuse it). A web build has no in-app
+  /// browser and opens a tab.
+  Future<void> _openPaymentPage() async {
+    final url = Uri.tryParse(widget.watcher.order.checkoutUrl);
+    if (url != null) {
+      _paymentPageOpen = await launchUrl(
+        url,
+        mode: LaunchMode.inAppBrowserView,
+      );
+    }
+  }
+
+  /// Dafa only tells the relay, never sends the payer back, so its page
+  /// would stay up over the result. Close it as soon as the payment is
+  /// settled where the platform allows (iOS); an Android tab is closed by
+  /// the payer, and coming back asks the relay at once.
+  Future<void> _closePaymentPage() async {
+    _paymentPageOpen = false;
+    if (await supportsCloseForLaunchMode(LaunchMode.inAppBrowserView)) {
+      await closeInAppWebView();
+    }
+  }
+
+  /// Which screen an order is on: the switcher animates only when this
+  /// changes, not on every poll.
+  static String _outcomeOf(CardOrder order) => switch (order.status) {
+    OrderStatus.awaitingPayment => 'paying',
+    OrderStatus.paid ||
+    OrderStatus.fulfilling ||
+    OrderStatus.delivered => 'preparing',
+    OrderStatus.refunded => 'refunded',
+    _ when order.errorCode == 'payment_mismatch' => 'review',
+    _ => 'unpaid',
+  };
+
+  void _backToShop() =>
+      Navigator.of(context).popUntil((route) => route.isFirst);
+
+  Widget _panel(BuildContext context, CardOrder order) {
+    final l10n = AppLocalizations.of(context);
+    return switch (_outcomeOf(order)) {
+      'paying' => OrderOutcomePanel(
+        brand: widget.brand,
+        busy: true,
+        icon: Icons.credit_card_rounded,
+        title: l10n.hostedTitle,
+        body: l10n.hostedBody,
+        secondaryLabel: order.checkoutUrl.isEmpty ? null : l10n.openPaymentPage,
+        onSecondary: _openPaymentPage,
+      ),
+      'preparing' => OrderOutcomePanel(
+        brand: widget.brand,
+        busy: true,
+        icon: Icons.check_circle_rounded,
+        title: l10n.preparingTitle,
+        body: l10n.preparingBody,
+      ),
+      'refunded' => OrderOutcomePanel(
+        brand: widget.brand,
+        tone: OutcomeTone.safe,
+        icon: Icons.verified_user_rounded,
+        title: l10n.refundedTitle,
+        body: l10n.refundedBody(formatMoney(l10n, order.total)),
+        credited: order.total,
+        primaryLabel: l10n.backToShop,
+        onPrimary: _backToShop,
+      ),
+      'review' => OrderOutcomePanel(
+        brand: widget.brand,
+        tone: OutcomeTone.attention,
+        icon: Icons.manage_search_rounded,
+        title: l10n.paymentReviewTitle,
+        body: l10n.paymentReviewBody,
+        secondaryLabel: l10n.backToShop,
+        onSecondary: _backToShop,
+      ),
+      _ => OrderOutcomePanel(
+        brand: widget.brand,
+        icon: Icons.replay_rounded,
+        title: l10n.unpaidTitle,
+        body: l10n.unpaidBody,
+        primaryLabel: l10n.tryAgain,
+        onPrimary: () => Navigator.of(context).pop(),
+        secondaryLabel: l10n.backToShop,
+        onSecondary: _backToShop,
+      ),
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(backgroundColor: Colors.transparent),
+      body: ListenableBuilder(
+        listenable: widget.watcher,
+        builder: (context, _) {
+          final order = widget.watcher.order;
+          final theme = Theme.of(context);
+          final tint = widget.brand == null
+              ? theme.colorScheme.primary
+              : brandTint(widget.brand!);
+          return DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.center,
+                colors: [
+                  tint.withValues(
+                    alpha: theme.brightness == Brightness.dark ? 0.35 : 0.14,
+                  ),
+                  theme.scaffoldBackgroundColor,
+                ],
+              ),
+            ),
+            child: SafeArea(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(CardsSpace.xl),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 420),
+                    // Each state cross-fades into the next as the relay
+                    // answers, instead of snapping.
+                    child: AnimatedSwitcher(
+                      duration: CardsMotion.standard,
+                      switchInCurve: CardsMotion.curve,
+                      transitionBuilder: (child, animation) => FadeTransition(
+                        opacity: animation,
+                        child: ScaleTransition(
+                          scale: Tween(
+                            begin: 0.97,
+                            end: 1.0,
+                          ).animate(animation),
+                          child: child,
+                        ),
+                      ),
+                      child: KeyedSubtree(
+                        key: ValueKey(_outcomeOf(order)),
+                        child: _panel(context, order),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}

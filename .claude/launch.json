@@ -501,6 +501,30 @@
         "frontend-purchase-result-preview"
       ],
       "port": 8080
+    },
+    {
+      "name": "cards-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": [
+        "cards-preview"
+      ],
+      "port": 8090
+    },
+    {
+      "name": "cards-preview-live",
+      "runtimeExecutable": "make",
+      "runtimeArgs": [
+        "cards-preview-live"
+      ],
+      "port": 8090
+    },
+    {
+      "name": "cards-web",
+      "runtimeExecutable": "make",
+      "runtimeArgs": [
+        "cards-web"
+      ],
+      "port": 8093
     }
   ]
 }

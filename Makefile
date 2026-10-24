@@ -340,6 +340,33 @@ frontend-run: frontend-install ## Run the Flutter app on the default selected de
 frontend-web: frontend-install ## Run the Flutter app as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT)
 
+CARDS_DIR ?= cards
+.PHONY: cards-install cards-check cards-run cards-web cards-preview cards-preview-live cards-splash
+CARDS_WEB_PORT ?= 8090
+CARDS_WEB_APP_PORT ?= 8093
+
+cards-install: ## Fetch the «دفتر كروت» card app's packages.
+	cd "$(CARDS_DIR)" && $(FLUTTER) pub get
+
+cards-check: cards-install ## Analyze and test the card app and the shared brand package.
+	cd shared/pointy_brand && $(FLUTTER) pub get && $(FLUTTER) analyze && $(FLUTTER) test
+	cd "$(CARDS_DIR)" && $(FLUTTER) gen-l10n && $(FLUTTER) analyze && $(FLUTTER) test
+
+cards-run: cards-install ## Run the card app (CARDS_RELAY_URL / CARDS_CHANNEL pick the relay and the build's channel).
+	cd "$(CARDS_DIR)" && $(FLUTTER) run --dart-define=CARDS_RELAY_URL=$(or $(CARDS_RELAY_URL),http://127.0.0.1:8091) --dart-define=CARDS_CHANNEL=$(CARDS_CHANNEL)
+
+cards-web: cards-install ## Run the card app's web build on :8093 against a local relay (make relay-run allows that origin).
+	cd "$(CARDS_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(CARDS_WEB_APP_PORT) --dart-define=CARDS_RELAY_URL=$(or $(CARDS_RELAY_URL),http://127.0.0.1:8091) --dart-define=CARDS_CHANNEL=web
+
+cards-preview: cards-install ## Run the card app's preview harness (?screen=board|home|my-cards|account|brand) as a local web server.
+	cd "$(CARDS_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(CARDS_WEB_PORT) -t lib/dev/cards_preview.dart
+
+cards-preview-live: cards-install ## The preview harness signed in on a local relay's real shelf (make relay-run + a pushed catalog): every screen, no sign-in, nothing paid.
+	cd "$(CARDS_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(CARDS_WEB_PORT) -t lib/dev/cards_preview.dart --dart-define=CARDS_PREVIEW_RELAY=$(or $(CARDS_RELAY_URL),http://127.0.0.1:8091)
+
+cards-splash: cards-install ## Lay out the card app's Android 12 splash icon from the Daftar mark, check the opening's trace against the logo, and regenerate the native splash (Android, iOS, web).
+	cd "$(CARDS_DIR)" && $(FLUTTER) test tool/render_splash_test.dart && $(FLUTTER) pub run flutter_native_splash:create
+
 frontend-preview: frontend-install ## Run the stock-count UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/stock_count_preview.dart
 
@@ -683,6 +710,8 @@ relay-run: ## Run the relay server.
 		POINTY_RELAY_SMS_MAX_VARIABLE_RUNES="$(RELAY_SMS_MAX_VARIABLE_RUNES)" \
 		POINTY_RELAY_SMS_DELIVERY_SYNC_INTERVAL="$(RELAY_SMS_DELIVERY_SYNC_INTERVAL)" \
 		POINTY_RELAY_VOUCHERS_TEST_MODE="$(or $(RELAY_VOUCHERS_TEST_MODE),true)" \
+		POINTY_RELAY_CUSTOMER_OTP_TEST_MODE="$(or $(RELAY_CUSTOMER_OTP_TEST_MODE),true)" \
+		POINTY_RELAY_CUSTOMER_WEB_ORIGINS="$(or $(RELAY_CUSTOMER_WEB_ORIGINS),http://127.0.0.1:$(CARDS_WEB_APP_PORT),http://localhost:$(CARDS_WEB_APP_PORT),http://127.0.0.1:$(CARDS_WEB_PORT),http://localhost:$(CARDS_WEB_PORT))" \
 		POINTY_RELAY_VOUCHER_STOCK_KEY="$(RELAY_VOUCHER_STOCK_KEY)" \
 		POINTY_RELAY_ALLOW_INSECURE_HTTP="$(RELAY_ALLOW_INSECURE_HTTP)" \
 		POINTY_RELAY_ALLOW_INSECURE_CONNECTOR="$(RELAY_ALLOW_INSECURE_CONNECTOR)" \

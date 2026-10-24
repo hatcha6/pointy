@@ -1,0 +1,15 @@
+# The system's splash: the real Daftar mark (assets/branding/daftar_mark.png,
+# 512 px of shared/pointy_brand's logo = 128 dp) on the app's page colour.
+# The opening's first frame is the same picture at the same size in the same
+# place, then turns it into the card app's mark (lib/src/features/splash/).
+# `make cards-splash` lays out Android 12's icon and regenerates all this.
+flutter_native_splash:
+  color: "#F7F6F3"
+  color_dark: "#0B0F14"
+  image: assets/branding/daftar_mark.png
+  android_12:
+    image: assets/branding/splash_logo_android12.png
+    color: "#F7F6F3"
+    color_dark: "#0B0F14"
+  web: true
+  fullscreen: false
