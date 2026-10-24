@@ -15,6 +15,7 @@ from rest_framework.test import APIClient
 from apps.catalog.models import Product, ProductVariant
 from apps.catalog.testing import create_product_with_default_variant
 from apps.core.roles import MANAGER_GROUP, ensure_role_groups
+from apps.core.models import ShopSettings
 from apps.discounts.models import AppliedDiscount, DiscountRedemption, DiscountRule
 from apps.inventory.models import (
     StockBatch,
@@ -1432,12 +1433,50 @@ class PurchaseOrderApiTests(TestCase):
         self.assertEqual(stock_item.quantity_on_hand, 2)
         self.assertEqual(stock_item.quantity_expected, 4)
 
-    def test_editing_a_received_order_is_refused_when_the_goods_are_gone(self):
-        order = self._received_order(quantity=3)
+    def _patch_single_line(self, order, *, quantity, unit_cost="2.50"):
+        return self.client.patch(
+            reverse("purchaseorder-detail", args=[order.pk]),
+            {
+                "lines": [
+                    {
+                        "variant": self.variant.pk,
+                        "quantity": quantity,
+                        "unit_cost": unit_cost,
+                    }
+                ]
+            },
+            format="json",
+        )
+
+    def _sell_from_shelf(self, quantity):
         stock_item = StockItem.objects.get(variant=self.variant)
-        # Two of the three have been sold since.
-        stock_item.quantity_on_hand = Decimal("1")
+        stock_item.quantity_on_hand -= Decimal(quantity)
         stock_item.save(update_fields=["quantity_on_hand"])
+        return stock_item
+
+    def test_editing_a_received_order_after_some_of_it_sold_is_allowed(self):
+        # Two of the three have been sold since. The owner now finds 5 came,
+        # not 3: the shelf ends at 3, which is exactly what is there.
+        order = self._received_order(quantity=3)
+        stock_item = self._sell_from_shelf(2)
+
+        response = self._patch_single_line(order, quantity=5, unit_cost="2.00")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        order.refresh_from_db()
+        self.assertEqual(order.status, PurchaseOrder.Status.RECEIVED)
+        self.assertEqual(order.lines.get().quantity, 5)
+        stock_item.refresh_from_db()
+        self.assertEqual(stock_item.quantity_on_hand, 3)
+        self.assertEqual(stock_item.quantity_expected, 0)
+
+    def test_editing_an_unrelated_line_after_a_sale_keeps_the_sold_line(self):
+        # Annaseem's case: the shelf held less than this delivery (it had been
+        # sold into negative before the goods arrived), and the owner added
+        # a line. The untouched line replays exactly and nothing is refused.
+        order = self._received_order(quantity=10)
+        stock_item = self._sell_from_shelf(12)
+        self.assertEqual(stock_item.quantity_on_hand, -2)
 
         response = self.client.patch(
             reverse("purchaseorder-detail", args=[order.pk]),
@@ -1445,22 +1484,70 @@ class PurchaseOrderApiTests(TestCase):
                 "lines": [
                     {
                         "variant": self.variant.pk,
-                        "quantity": 5,
-                        "unit_cost": "2.00",
-                    }
+                        "quantity": 10,
+                        "unit_cost": "2.50",
+                    },
+                    {
+                        "variant": self.other_variant.pk,
+                        "quantity": 2,
+                        "unit_cost": "1.00",
+                    },
                 ]
             },
             format="json",
         )
 
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        stock_item.refresh_from_db()
+        self.assertEqual(stock_item.quantity_on_hand, -2)
+        self.assertEqual(
+            StockItem.objects.get(variant=self.other_variant).quantity_on_hand, 2
+        )
+        order.refresh_from_db()
+        self.assertEqual(order.status, PurchaseOrder.Status.RECEIVED)
+        self.assertEqual(order.total, Decimal("27.00"))
+
+    def test_editing_a_received_order_below_what_sold_is_refused(self):
+        # Two of three sold, and the owner now says only one arrived: the shop
+        # sold a unit it never received. That needs a return, not an edit.
+        order = self._received_order(quantity=3)
+        stock_item = self._sell_from_shelf(2)
+
+        response = self._patch_single_line(order, quantity=1)
+
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data["code"], "purchase_stock_already_sold")
+        self.assertEqual(Decimal(str(response.data["stock"][0]["requested"])), 2)
+        self.assertEqual(Decimal(str(response.data["stock"][0]["available"])), 1)
         order.refresh_from_db()
         self.assertEqual(order.status, PurchaseOrder.Status.RECEIVED)
         self.assertEqual(order.lines.get().quantity, 3)
         self.assertEqual(PurchaseReceipt.objects.filter(purchase_order=order).count(), 1)
         stock_item.refresh_from_db()
         self.assertEqual(stock_item.quantity_on_hand, 1)
+
+    def test_lowering_a_received_order_within_what_is_left_is_allowed(self):
+        order = self._received_order(quantity=3)
+        stock_item = self._sell_from_shelf(1)
+
+        response = self._patch_single_line(order, quantity=1)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        stock_item.refresh_from_db()
+        self.assertEqual(stock_item.quantity_on_hand, 0)
+
+    def test_lowering_below_what_sold_is_allowed_where_overselling_is(self):
+        settings = ShopSettings.load()
+        settings.allow_overselling = True
+        settings.save()
+        order = self._received_order(quantity=3)
+        stock_item = self._sell_from_shelf(2)
+
+        response = self._patch_single_line(order, quantity=1)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        stock_item.refresh_from_db()
+        self.assertEqual(stock_item.quantity_on_hand, -1)
 
     def test_editing_a_received_order_is_blocked_once_a_payment_exists(self):
         order = self._received_order()

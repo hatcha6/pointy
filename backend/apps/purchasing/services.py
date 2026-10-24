@@ -558,18 +558,43 @@ def _reverse_received_stock(purchase_order, *, snapshots, created_by):
     Only accepted units ever reached ``quantity_on_hand`` — damaged and
     cancelled ones stopped at the expectation — so those are what comes off, at
     whatever the ledger says that stock is worth, exactly as a purchase return
-    leaves. Refuses when the units are no longer there to take back: an order
-    whose goods have already been sold can only be corrected with a return.
+    leaves.
+
+    Selling some of the delivery does not stop the take-back: the balance may
+    dip below zero here and the re-record puts it straight back, all in one
+    transaction. Whether the edit as a whole took away stock that is no longer
+    there is a question about where the balance *ends*, and
+    ``_refuse_edit_that_strands_sold_stock`` answers it once the replay is in.
+    Expiry-tracked stock is the exception: its cohorts are replaced wholesale,
+    so a sold unit would come back as a dated unit on the shelf — that still
+    needs every unit present.
+
+    Returns each received variant's on-hand balance from before the take-back.
     """
     received = [
         (snapshot["line"], snapshot["accepted"])
         for snapshot in snapshots
         if snapshot["accepted"] > 0
     ]
+    on_hand_before = {}
     if received:
-        stock_items = validate_purchase_stock_available(
-            received, warehouse=purchase_order.warehouse_id
+        dated = [
+            (line, quantity)
+            for line, quantity in received
+            if line.variant.product.tracks_expiry
+        ]
+        if dated:
+            validate_purchase_stock_available(
+                dated, warehouse=purchase_order.warehouse_id
+            )
+        stock_items = lock_stock_items(
+            [line.variant for line, _ in received],
+            warehouse=purchase_order.warehouse_id,
         )
+        on_hand_before = {
+            variant_id: stock_item.quantity_on_hand
+            for variant_id, stock_item in stock_items.items()
+        }
         movements = []
         touched = {}
         for line, quantity in received:
@@ -613,6 +638,79 @@ def _reverse_received_stock(purchase_order, *, snapshots, created_by):
     purchase_order.status = PurchaseOrder.Status.SUBMITTED
     purchase_order.received_at = None
     purchase_order.cancelled_total = Decimal("0.00")
+    return on_hand_before
+
+
+def _refuse_edit_that_strands_sold_stock(purchase_order, *, on_hand_before):
+    """Refuse an edit that took away more than the shelf still holds.
+
+    The edit has been fully replayed by now, so each variant's balance says
+    exactly what the corrected order left behind. An edit that leaves the
+    balance where it was, or raises it, is fine however much of the delivery
+    was sold in between — the owner is describing the same goods. One that
+    lowers it below zero says the shop sold units it never received, which only
+    a shop that sells into negative stock may record; anywhere else that needs
+    a return, not an edit. A balance that was already negative and did not
+    drop further is not this edit's doing.
+    """
+    if not on_hand_before:
+        return
+    lines = [
+        line
+        for line in purchase_order.lines.select_related("variant", "variant__product")
+        if line.variant_id in on_hand_before
+    ]
+    variants = {line.variant_id: line.variant for line in lines}
+    removed_variants = set(on_hand_before) - set(variants)
+    if removed_variants:
+        from apps.catalog.models import ProductVariant
+
+        for variant in ProductVariant.objects.select_related("product").filter(
+            pk__in=removed_variants
+        ):
+            variants[variant.pk] = variant
+    stock_items = lock_stock_items(
+        variants.values(), warehouse=purchase_order.warehouse_id
+    )
+    stranded = {
+        variant_id: stock_item
+        for variant_id, stock_item in stock_items.items()
+        if stock_item.quantity_on_hand < Decimal("0")
+        and stock_item.quantity_on_hand < on_hand_before[variant_id]
+    }
+    if not stranded:
+        return
+    from apps.inventory.oversell import may_oversell_document
+
+    if may_oversell_document(
+        purchase_order.warehouse_id,
+        variants=[variants[variant_id] for variant_id in stranded],
+    ):
+        return
+    raise serializers.ValidationError(
+        {
+            "code": "purchase_stock_already_sold",
+            "detail": (
+                "لا يمكن تعديل أمر الشراء لأن الكمية المستلمة بيعت أو لم تعد "
+                "متوفرة في المخزون."
+            ),
+            "stock": [
+                {
+                    "product": variants[variant_id].product_id,
+                    "product_id": variants[variant_id].product_id,
+                    "variant": variant_id,
+                    "variant_id": variant_id,
+                    "product_name": variants[variant_id].product.name,
+                    "variant_name": variants[variant_id].full_name,
+                    "requested": float(
+                        on_hand_before[variant_id] - stock_item.quantity_on_hand
+                    ),
+                    "available": float(max(on_hand_before[variant_id], Decimal("0"))),
+                }
+                for variant_id, stock_item in sorted(stranded.items())
+            ],
+        }
+    )
 
 
 def _replayed_receipt_quantities(snapshot, quantity, *, fully_received):
@@ -833,6 +931,7 @@ def _write_purchase_order_with_lines(
     is_create = purchase_order is None
     rebuild_expected = False
     snapshots = None
+    on_hand_before = {}
     if purchase_order is None:
         # Tag the PO with the special day(s) active on its creation date (the
         # user's "when ordered" choice) — a stable forecasting signal. Defensive:
@@ -880,7 +979,7 @@ def _write_purchase_order_with_lines(
             _release_expected_stock(
                 purchase_order, snapshots=snapshots, created_by=created_by
             )
-            _reverse_received_stock(
+            on_hand_before = _reverse_received_stock(
                 purchase_order, snapshots=snapshots, created_by=created_by
             )
         for field, value in order_fields.items():
@@ -934,6 +1033,9 @@ def _write_purchase_order_with_lines(
     )
     if snapshots:
         _rerecord_receiving(purchase_order, snapshots=snapshots, request=request)
+        _refuse_edit_that_strands_sold_stock(
+            purchase_order, on_hand_before=on_hand_before
+        )
     # Editing a committed order rewrites what the shop actually bought, so the
     # suggestion tables have to be rebuilt from the corrected history too.
     if purchase_order.status != PurchaseOrder.Status.DRAFT:
