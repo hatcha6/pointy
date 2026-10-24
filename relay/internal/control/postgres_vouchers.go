@@ -349,25 +349,7 @@ func (s *PostgresStore) ReplaceVoucherOffers(ctx context.Context, supplier strin
 	}
 	batch := &pgx.Batch{}
 	for _, offer := range offers {
-		batch.Queue(
-			`INSERT INTO relay_voucher_offers (supplier, ref, name, group_name, price, currency, in_stock, synced_at,
-				previous_price, price_changed_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8::timestamptz, $9, $10)
-			ON CONFLICT (supplier, ref) DO UPDATE SET
-				name = EXCLUDED.name, group_name = EXCLUDED.group_name, price = EXCLUDED.price,
-				currency = EXCLUDED.currency, in_stock = EXCLUDED.in_stock, synced_at = EXCLUDED.synced_at,
-				previous_price = EXCLUDED.previous_price, price_changed_at = EXCLUDED.price_changed_at`,
-			supplier,
-			offer.Ref,
-			offer.Name,
-			offer.Group,
-			offer.Price,
-			offer.Currency,
-			offer.InStock,
-			offer.SyncedAt.UTC(),
-			offer.PreviousPrice,
-			offer.PriceChangedAt,
-		)
+		queueVoucherOfferUpsert(batch, supplier, offer)
 	}
 	if batch.Len() > 0 {
 		if err := tx.SendBatch(ctx, batch).Close(); err != nil {
@@ -375,6 +357,72 @@ func (s *PostgresStore) ReplaceVoucherOffers(ctx context.Context, supplier strin
 		}
 	}
 	return tx.Commit(ctx)
+}
+
+func (s *PostgresStore) UpsertVoucherOffers(ctx context.Context, supplier string, offers []VoucherOffer) error {
+	supplier = strings.TrimSpace(supplier)
+	if len(offers) == 0 {
+		return nil
+	}
+	refs := make([]string, 0, len(offers))
+	for _, offer := range offers {
+		refs = append(refs, offer.Ref)
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	byRef := map[string]VoucherOffer{}
+	rows, err := tx.Query(ctx, `SELECT ref, price, previous_price, price_changed_at FROM relay_voucher_offers
+		WHERE supplier = $1 AND ref = ANY($2) FOR UPDATE`, supplier, refs)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var offer VoucherOffer
+		if err := rows.Scan(&offer.Ref, &offer.Price, &offer.PreviousPrice, &offer.PriceChangedAt); err != nil {
+			rows.Close()
+			return err
+		}
+		byRef[offer.Ref] = offer
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	offers = carryVoucherPriceHistory(byRef, offers, s.clock.Now())
+	batch := &pgx.Batch{}
+	for _, offer := range offers {
+		queueVoucherOfferUpsert(batch, supplier, offer)
+	}
+	if err := tx.SendBatch(ctx, batch).Close(); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func queueVoucherOfferUpsert(batch *pgx.Batch, supplier string, offer VoucherOffer) {
+	batch.Queue(
+		`INSERT INTO relay_voucher_offers (supplier, ref, name, group_name, price, currency, in_stock, synced_at,
+			previous_price, price_changed_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8::timestamptz, $9, $10)
+		ON CONFLICT (supplier, ref) DO UPDATE SET
+			name = EXCLUDED.name, group_name = EXCLUDED.group_name, price = EXCLUDED.price,
+			currency = EXCLUDED.currency, in_stock = EXCLUDED.in_stock, synced_at = EXCLUDED.synced_at,
+			previous_price = EXCLUDED.previous_price, price_changed_at = EXCLUDED.price_changed_at`,
+		supplier,
+		offer.Ref,
+		offer.Name,
+		offer.Group,
+		offer.Price,
+		offer.Currency,
+		offer.InStock,
+		offer.SyncedAt.UTC(),
+		offer.PreviousPrice,
+		offer.PriceChangedAt,
+	)
 }
 
 func (s *PostgresStore) ListVoucherOffers(ctx context.Context, supplier string) ([]VoucherOffer, error) {
@@ -687,7 +735,10 @@ func (s *PostgresStore) ListVoucherPurchases(ctx context.Context, filter Voucher
 			AND ($2 = '' OR p.status = $2)
 			AND (NOT $3 OR p.held_since IS NOT NULL)
 			AND ($4 = '' OR p.kind = $4)
-			AND ($6 = '' OR ($6 = 'company') = (p.installation_id IS NULL))
+			AND ($6 = ''
+				OR ($6 = 'shops' AND p.installation_id IS NOT NULL)
+				OR ($6 = 'company' AND p.installation_id IS NULL AND p.purpose <> 'customer')
+				OR ($6 = 'customers' AND p.installation_id IS NULL AND p.purpose = 'customer'))
 		ORDER BY p.created_at DESC, p.id DESC
 		LIMIT $5`,
 		strings.TrimSpace(filter.InstallationID),
@@ -711,7 +762,7 @@ func voucherKeyWhere(installationID string) string {
 
 func voucherBuyerFilter(buyer string) string {
 	switch buyer = strings.TrimSpace(buyer); buyer {
-	case VoucherBuyerCompany, VoucherBuyerShops:
+	case VoucherBuyerCompany, VoucherBuyerShops, VoucherBuyerCustomers:
 		return buyer
 	}
 	return ""

@@ -757,7 +757,10 @@ func refusal(status int, env envelope, orderID int64) error {
 		err.cause = ErrUnauthorized
 	case mentionsAny(message, "balance", "insufficient", "wallet", "رصيد", "المحفظة", "الرصيد"):
 		err.cause = ErrInsufficientBalance
-	case mentionsAny(message, "stock", "not available", "unavailable", "نفد", "نفذ", "غير متوفر", "غير متاح"):
+	case mentionsAny(message, "stock", "not available", "unavailable", "نفد", "نفذ", "غير متوفر", "غير متاح"),
+		// "Order failed or card codes receiving failed.": BN Plus had no code to
+		// hand over, while its card list still said in stock (2026-10-24).
+		mentionsAny(message, "codes receiving failed"):
 		err.cause = ErrOutOfStock
 	case mentionsAny(message, "unauthenticated", "unauthorized", "credentials", "بيانات الدخول"):
 		err.cause = ErrUnauthorized

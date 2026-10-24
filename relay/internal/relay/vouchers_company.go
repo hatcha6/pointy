@@ -159,8 +159,9 @@ func (s HTTPServer) handleCompanyReveal(w http.ResponseWriter, r *http.Request, 
 	case err != nil:
 		s.writeVoucherInternalError(w, "", "voucher purchase read failed", err)
 		return
-	case !purchase.ForCompany():
-		// A shop's codes are the shop's: no operator reads them.
+	case !purchase.ForCompany() || purchase.ForCustomer():
+		// A shop's codes are the shop's, a customer's the customer's: no
+		// operator reads them.
 		writeSMSError(w, http.StatusForbidden, "not_company", "only the company's own purchases can be revealed", nil)
 		return
 	}

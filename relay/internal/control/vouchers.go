@@ -227,6 +227,16 @@ func (p VoucherPurchase) ForCompany() bool {
 	return p.InstallationID == ""
 }
 
+// VoucherPurposeCustomer marks a no-shop purchase made for a «دفتر كروت»
+// customer's order (its note is the order id). It is a sale, not the
+// company's own spending, and only the order flow writes it.
+const VoucherPurposeCustomer = "customer"
+
+// ForCustomer reports whether a card was bought for a customer's order.
+func (p VoucherPurchase) ForCustomer() bool {
+	return p.InstallationID == "" && p.Purpose == VoucherPurposeCustomer
+}
+
 // VoucherPurchaseOutcome is what a supplier call ended with.
 type VoucherPurchaseOutcome struct {
 	// Status is succeeded or failed.
@@ -263,25 +273,29 @@ type VoucherPurchaseFilter struct {
 	Kind string
 	// HeldOnly lists purchases whose outcome is still being found out.
 	HeldOnly bool
-	// Buyer lists only the company's own purchases (VoucherBuyerCompany) or
-	// only shops' (VoucherBuyerShops); empty lists both.
+	// Buyer lists only the company's own purchases (VoucherBuyerCompany),
+	// only shops' (VoucherBuyerShops) or only customers' orders
+	// (VoucherBuyerCustomers); empty lists them all.
 	Buyer string
 	Limit int
 }
 
 // Who a listing of purchases is narrowed to.
 const (
-	VoucherBuyerCompany = "company"
-	VoucherBuyerShops   = "shops"
+	VoucherBuyerCompany   = "company"
+	VoucherBuyerShops     = "shops"
+	VoucherBuyerCustomers = "customers"
 )
 
 // voucherBuyerMatches reports whether a purchase passes a Buyer filter.
 func voucherBuyerMatches(purchase VoucherPurchase, buyer string) bool {
 	switch strings.TrimSpace(buyer) {
 	case VoucherBuyerCompany:
-		return purchase.ForCompany()
+		return purchase.ForCompany() && !purchase.ForCustomer()
 	case VoucherBuyerShops:
 		return !purchase.ForCompany()
+	case VoucherBuyerCustomers:
+		return purchase.ForCustomer()
 	}
 	return true
 }
@@ -321,6 +335,9 @@ type VoucherStore interface {
 
 	// ReplaceVoucherOffers stores a supplier's whole offer list as read now.
 	ReplaceVoucherOffers(ctx context.Context, supplier string, offers []VoucherOffer) error
+	// UpsertVoucherOffers stores a few of a supplier's offers as read now,
+	// leaving its others as they are.
+	UpsertVoucherOffers(ctx context.Context, supplier string, offers []VoucherOffer) error
 	ListVoucherOffers(ctx context.Context, supplier string) ([]VoucherOffer, error)
 
 	// BeginVoucherPurchase claims (installation, idempotency key) and takes
@@ -473,7 +490,7 @@ func prepareVoucherPurchase(purchase VoucherPurchase, now time.Time) (VoucherPur
 	// A purpose is what makes a purchase the company's own: one without an
 	// installation must say why, and a shop's never carries one.
 	switch {
-	case purchase.ForCompany() && !ValidVoucherPurpose(purchase.Purpose):
+	case purchase.ForCompany() && !ValidVoucherPurpose(purchase.Purpose) && purchase.Purpose != VoucherPurposeCustomer:
 		return VoucherPurchase{}, nil, fmt.Errorf("the company's own purchase needs a purpose, got %q", purchase.Purpose)
 	case !purchase.ForCompany() && (purchase.Purpose != "" || purchase.Note != ""):
 		return VoucherPurchase{}, nil, errors.New("a shop's purchase carries no purpose or note")
@@ -987,6 +1004,43 @@ func (s *FileStore) ReplaceVoucherOffers(_ context.Context, supplier string, off
 	return nil
 }
 
+func (s *FileStore) UpsertVoucherOffers(_ context.Context, supplier string, offers []VoucherOffer) error {
+	supplier = strings.TrimSpace(supplier)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	before := map[string]VoucherOffer{}
+	byRef := map[string]VoucherOffer{}
+	for _, offer := range offers {
+		key := voucherOfferKey(supplier, offer.Ref)
+		if old, ok := s.data.VoucherOffers[key]; ok {
+			before[key] = old
+			byRef[offer.Ref] = old
+		}
+	}
+	offers = carryVoucherPriceHistory(byRef, offers, s.clock.Now())
+	if s.data.VoucherOffers == nil {
+		s.data.VoucherOffers = map[string]VoucherOffer{}
+	}
+	for _, offer := range offers {
+		offer.Supplier = supplier
+		offer.SyncedAt = offer.SyncedAt.UTC()
+		s.data.VoucherOffers[voucherOfferKey(supplier, offer.Ref)] = offer
+	}
+	if err := s.saveLocked(); err != nil {
+		for _, offer := range offers {
+			key := voucherOfferKey(supplier, offer.Ref)
+			if old, ok := before[key]; ok {
+				s.data.VoucherOffers[key] = old
+			} else {
+				delete(s.data.VoucherOffers, key)
+			}
+		}
+		return err
+	}
+	return nil
+}
+
 func (s *FileStore) ListVoucherOffers(_ context.Context, supplier string) ([]VoucherOffer, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -1400,6 +1454,14 @@ func (s *CachedInstallationStore) ReplaceVoucherOffers(ctx context.Context, supp
 		return err
 	}
 	return store.ReplaceVoucherOffers(ctx, supplier, offers)
+}
+
+func (s *CachedInstallationStore) UpsertVoucherOffers(ctx context.Context, supplier string, offers []VoucherOffer) error {
+	store, err := s.voucherStore()
+	if err != nil {
+		return err
+	}
+	return store.UpsertVoucherOffers(ctx, supplier, offers)
 }
 
 func (s *CachedInstallationStore) ListVoucherOffers(ctx context.Context, supplier string) ([]VoucherOffer, error) {

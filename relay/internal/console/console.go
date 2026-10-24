@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -31,6 +30,7 @@ import (
 
 	"github.com/go-webauthn/webauthn/webauthn"
 
+	"pointy/relay/internal/clientaddr"
 	"pointy/relay/internal/control"
 	"pointy/relay/internal/ratelimit"
 )
@@ -374,19 +374,7 @@ func (c *Console) clearCookie(w http.ResponseWriter) {
 // clientIP is the caller's address: the load balancer's last
 // X-Forwarded-For hop when trusted, else the TCP peer.
 func (c *Console) clientIP(r *http.Request) string {
-	if c.cfg.TrustForwardedFor {
-		if forwarded := r.Header.Values("X-Forwarded-For"); len(forwarded) > 0 {
-			hops := strings.Split(forwarded[len(forwarded)-1], ",")
-			if last := strings.TrimSpace(hops[len(hops)-1]); net.ParseIP(last) != nil {
-				return last
-			}
-		}
-	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
+	return clientaddr.Of(r, c.cfg.TrustForwardedFor)
 }
 
 // allow spends one attempt from the caller's sign-in budget.

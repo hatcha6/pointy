@@ -28,6 +28,8 @@ var (
 	_ SMSStore               = (*CachedInstallationStore)(nil)
 	_ WalletStore            = (*CachedInstallationStore)(nil)
 	_ VoucherStore           = (*CachedInstallationStore)(nil)
+	_ CustomerStore          = (*CachedInstallationStore)(nil)
+	_ CustomerOrderStore     = (*CachedInstallationStore)(nil)
 )
 
 var (

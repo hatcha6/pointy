@@ -80,6 +80,11 @@ const (
 // and Reloadly's client id and secret live only here, like the Resala and Dafa
 // keys.
 type VoucherConfig struct {
+	// testSupplier stands in for every supplier in test mode; the zero value
+	// hands out TEST codes. A review order's copy hands out plain ones
+	// (customer_review.go).
+	testSupplier vouchers.TestSupplier
+
 	// Suppliers the relay can buy from, by key. BN Plus is here when the
 	// company's credentials are configured, and Reloadly likewise.
 	Suppliers map[string]vouchers.Supplier
@@ -102,6 +107,12 @@ type VoucherConfig struct {
 	// Breaker remembers which suppliers just failed in a way that will repeat, so
 	// they are skipped for a few minutes while another can sell. Nil: never.
 	Breaker *SupplierBreaker
+	// Holds keeps cards a supplier could not deliver off the shelf for a while
+	// (vouchers_freshness.go). Nil: never.
+	Holds *CardHolds
+	// Refreshes lets one read of a brand's cards serve every till opening it at
+	// once. Nil: each open reads on its own.
+	Refreshes *OfferRefreshes
 	// StockSealer seals and opens the company's own stock codes
 	// (POINTY_RELAY_VOUCHER_STOCK_KEY). Nil: the relay neither adds stock nor
 	// sells it.
@@ -260,6 +271,8 @@ type voucherOffers struct {
 	// test mode).
 	stock         map[string]int
 	stockSupplier vouchers.Supplier
+	// holds are the cards a supplier could not deliver, by "supplier/ref".
+	holds map[string]cardHold
 }
 
 func (s HTTPServer) loadVoucherOffers(ctx context.Context, store control.VoucherStore) (voucherOffers, error) {
@@ -281,6 +294,7 @@ func (s HTTPServer) loadVoucherOffers(ctx context.Context, store control.Voucher
 			index.newest[offer.Supplier] = offer.SyncedAt
 		}
 	}
+	index.holds = s.Vouchers.Holds.current(ctx, index.now)
 	return s.withStock(ctx, index)
 }
 
@@ -369,6 +383,13 @@ func (s HTTPServer) handleVoucherCatalog(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	ctx := r.Context()
+	// A till just opened this brand: its cards are re-read at the suppliers
+	// first, unless that was done in the last minute.
+	if brand := strings.TrimSpace(r.URL.Query().Get("fresh")); brand != "" {
+		if loaded, err := s.currentVoucherCatalog(ctx, store); err == nil && !loaded.empty {
+			s.refreshBrandOffers(ctx, store, loaded.document, brand)
+		}
+	}
 	view, err := s.voucherShopView(ctx, store)
 	if err != nil {
 		s.logger().Error("voucher catalog read failed", "installation_id", installation.ID, "error", err)
@@ -658,28 +679,7 @@ func (s HTTPServer) placeCardPurchase(
 
 	// --- past this line the supplier may sell the cards, whatever happens ---
 	detached := context.WithoutCancel(ctx)
-	attempt := s.buyFromSuppliers(detached, store, claim, ranking.Candidates, request.Quantity)
-	claim, buyErr := attempt.Claim, attempt.Err
-	outcome, codes := voucherOutcome(attempt.Bought, buyErr, request.Quantity)
-	outcome = attempt.withAttempts(outcome)
-	finished, applied, err := store.FinishVoucherPurchase(detached, claim.ID, outcome)
-	if err != nil {
-		// The supplier's answer is in hand but could not be written down. The
-		// row stays pending, so the reconciler finds the order again; the
-		// shop gets the codes now either way.
-		s.logger().Error("recording a voucher purchase failed",
-			"installation_id", installation.ID, "purchase_id", claim.ID,
-			"supplier_order_id", outcome.SupplierOrderID, "status", outcome.Status, "error", err)
-		finished = claim
-		if outcome.Status == control.VoucherPurchaseSucceeded {
-			finished.Status = control.VoucherPurchaseSucceeded
-		}
-	} else if !applied {
-		s.logger().Warn("a voucher purchase was settled before its own answer was recorded",
-			"purchase_id", claim.ID, "status", finished.Status)
-	}
-	s.logVoucherPurchase(installation.ID, finished, outcome, buyErr,
-		"suppliers_tried", attempt.summary(), "suppliers_skipped", ranking.skipped())
+	finished, codes := s.buyClaimedCards(detached, store, claim, ranking, request.Quantity)
 	balance := s.voucherBalance(detached, installation.ID)
 	switch {
 	case finished.Status == control.VoucherPurchaseSucceeded && len(codes) > 0:
@@ -690,6 +690,42 @@ func (s HTTPServer) placeCardPurchase(
 		// Bought or not, nobody knows yet: the price stays held.
 		writeJSON(w, http.StatusAccepted, s.voucherPurchaseBody(finished, codes, len(codes) == 0, balance, false))
 	}
+}
+
+// buyClaimedCards runs a claimed purchase through its suppliers, cheapest
+// first, and records how it ended. The codes come back when the supplier
+// handed them over. Past the claim the supplier may sell the cards whatever
+// happens, so ctx must not be the caller's.
+func (s HTTPServer) buyClaimedCards(
+	ctx context.Context,
+	store control.VoucherStore,
+	claim control.VoucherPurchase,
+	ranking supplierRanking,
+	quantity int,
+) (control.VoucherPurchase, []vouchers.Code) {
+	attempt := s.buyFromSuppliers(ctx, store, claim, ranking.Candidates, quantity)
+	claim, buyErr := attempt.Claim, attempt.Err
+	outcome, codes := voucherOutcome(attempt.Bought, buyErr, quantity)
+	outcome = attempt.withAttempts(outcome)
+	finished, applied, err := store.FinishVoucherPurchase(ctx, claim.ID, outcome)
+	if err != nil {
+		// The supplier's answer is in hand but could not be written down. The
+		// row stays pending, so the reconciler finds the order again; the
+		// buyer gets the codes now either way.
+		s.logger().Error("recording a voucher purchase failed",
+			"installation_id", claim.InstallationID, "purchase_id", claim.ID,
+			"supplier_order_id", outcome.SupplierOrderID, "status", outcome.Status, "error", err)
+		finished = claim
+		if outcome.Status == control.VoucherPurchaseSucceeded {
+			finished.Status = control.VoucherPurchaseSucceeded
+		}
+	} else if !applied {
+		s.logger().Warn("a voucher purchase was settled before its own answer was recorded",
+			"purchase_id", claim.ID, "status", finished.Status)
+	}
+	s.logVoucherPurchase(claim.InstallationID, finished, outcome, buyErr,
+		"suppliers_tried", attempt.summary(), "suppliers_skipped", ranking.skipped())
+	return finished, codes
 }
 
 // voucherOutcome turns a supplier's answer into the ledger's outcome, and the

@@ -1390,6 +1390,248 @@ pointy-relay sms config                                    # templates (MISSING 
   (`sms_deliveries_by_outcome`). Per-shop numbers live in the ledger
   (`pointy-relay sms usage`), not in metric labels.
 
+## Card App Customers («دفتر كروت» phone sign-in)
+
+The company's own card app (`DAFTAR_CARDS_APP_PLAN.md`) signs people in with
+their Libyan mobile number. The relay texts a 6-digit code through the same
+Resala account that sends the shops' messages. The company pays for these
+codes; no shop balance is touched. These routes take no installation token.
+
+### API
+
+- `POST /v1/customers/auth/otp` sends a code.
+  - Body: `{phone}`, in any spelling `NormalizeLibyanMobile` reads.
+  - `200`: `{phone, phone_masked, code_length, expires_at, resend_at}`.
+  - `429 too_soon` (30 s between codes) and `429 daily_limit` (6 codes per
+    number per Libyan day) both carry `retry_at` and `Retry-After`.
+  - `429 rate_limited`: the caller's address asked too often.
+  - `502 send_failed`: Resala refused or could not be reached. The send is
+    given back, so the customer may retry at once.
+- `POST /v1/customers/auth/verify` signs in.
+  - Body: `{phone, code, device: {id, name, platform}}`. Arabic-Indic digits
+    and direction marks in the code are fine.
+  - `200`: `{access_token, access_expires_at, refresh_token,
+    refresh_expires_at, session_id, customer, created}`.
+  - `400 wrong_code` carries `attempts_left`. `400 code_expired`.
+    `429 too_many_attempts`: 5 wrong guesses spend the code.
+- `POST /v1/customers/auth/refresh` rotates the tokens.
+  - Body: `{refresh_token}`. Answers a new pair.
+  - Retrying with the previous refresh token inside one minute rotates again,
+    for a client that lost the answer.
+  - The previous token after that minute is treated as a stolen copy: the
+    session ends (`401 invalid_refresh`).
+- These routes need `Authorization: Bearer <access_token>`:
+  - `POST /v1/customers/auth/logout` signs out this device.
+  - `GET /v1/customers/me` returns the customer.
+  - `DELETE /v1/customers/me` deletes the account, which the App Store
+    requires. The phone and every session are forgotten. The id stays for the
+    orders that name it.
+  - `GET /v1/customers/me/sessions` lists the devices.
+  - `DELETE /v1/customers/me/sessions` signs out every other device.
+  - `DELETE /v1/customers/me/sessions/{id}` signs out one device.
+  - An expired access token answers `401 token_expired`. The app refreshes and
+    retries.
+
+Stored data and limits:
+
+- Nothing is stored raw. A code is kept as the hash of phone + code, and a
+  session as the hashes of its tokens.
+- Access tokens (`pca1.`) last an hour.
+- A session lasts 90 days without use, and each refresh renews it.
+- A customer keeps 10 devices; the least recently seen is signed out.
+- The per-number caps are in the database (`relay_customer_otps`, migration
+  33), so they hold across nodes and restarts. The per-address limits use the
+  shared rate limiter and fail open.
+
+### Message template
+
+Register one template in Resala and put its id in
+`POINTY_RELAY_CUSTOMER_OTP_TEMPLATE`. `$1` is the code. `$2` is the Android app's
+SMS Retriever hash, sent only when `POINTY_RELAY_CUSTOMER_ANDROID_APP_HASH` is
+set. The last line is iOS's domain-bound autofill format, so it is literal text
+naming the app's associated domain:
+
+```text
+رمز الدخول إلى دفتر كروت: $1
+لا تشاركه مع أحد.
+$2
+
+@cards.dftr.ly #$1
+```
+
+Use a template without `$2` until the Android app is signed and its hash is
+known.
+
+### Configuration
+
+Customer sign-in is off (`503 customers_unconfigured`) until a template and the
+Resala token are both set. A malformed value stops the relay at startup.
+
+- `POINTY_RELAY_CUSTOMER_OTP_TEMPLATE` — approved Resala template id.
+- `POINTY_RELAY_CUSTOMER_ANDROID_APP_HASH` — the 11-character SMS Retriever hash.
+- `POINTY_RELAY_CUSTOMER_OTP_TTL` (`5m`), `_OTP_RESEND_AFTER` (`30s`),
+  `_OTP_DAILY_LIMIT` (`6`), `_OTP_MAX_ATTEMPTS` (`5`).
+- `POINTY_RELAY_CUSTOMER_ACCESS_TTL` (`1h`), `_SESSION_TTL` (`2160h`, 90 days).
+- `POINTY_RELAY_CUSTOMER_OTP_RATE_LIMIT` (`10/hour`) and `_VERIFY_RATE_LIMIT`
+  (`30/10m`) — per caller address. The address is the last `X-Forwarded-For`
+  hop when `POINTY_RELAY_CONSOLE_TRUST_FORWARDED_FOR` is on (default in the
+  `paas` profile), or when the TCP peer is loopback or private: a self-hosted
+  NGINX in front. Otherwise every customer would share the proxy's address.
+- Only `auth/otp` and `auth/verify` need the SMS settings. Signed-in
+  customers, orders, the catalog and Dafa's webhook keep working without
+  them, and so does the order sweep. A paid order is never stranded by an
+  SMS outage.
+- `POINTY_RELAY_CUSTOMER_REVIEW_PHONE` + `_REVIEW_CODE` — the app store
+  reviewers' account. That number is never texted, signs in with the fixed
+  6-digit code, and has no daily cap. It also **buys for show**
+  (`internal/relay/customer_review.go`):
+  - **Payment:** Dafa is never called.
+    - A wallet (Sadad, Edfali…) asks for its code as usual. The review code
+      is the right one; any other is refused like a wallet's wrong code, with
+      attempts counted.
+    - A bank card is paid at once, since there is no bank page to show.
+  - **Cards:** they come from the built-in test supplier, so nothing is
+    bought. The codes look like ordinary cards (`1234 5678 9012 3456`), not
+    `TEST-…`.
+  - **Books:** the order is test money and stays out of them.
+  - **Hidden from the app:** no flag, and `test_mode` reads false.
+  - **The order remembers it:** a stored `review` flag (migration 36) keeps
+    it simulated even if the review number changes mid-review.
+  - **Still needed:** Dafa's API key must be set, since the checkout only
+    offers methods when payments are configured. Nothing is sent to it.
+  - **Choosing the number:** pick one no real customer owns. Its owner could
+    not sign in by SMS.
+  - **For the store submission:** give reviewers the number and the code;
+    the code is both the sign-in code and the wallet code.
+- `POINTY_RELAY_CUSTOMER_OTP_TEST_MODE` — development only. Nothing is texted
+  and each code is answered as `test_code`. The relay logs a warning at
+  startup. `make relay-run` turns it on unless `RELAY_CUSTOMER_OTP_TEST_MODE=false`.
+  `POINTY_RELAY_SMS_TEST_MODE` instead sends the real template in Resala's
+  test mode.
+
+### Catalog and orders
+
+Customers buy from the shops' card catalog at the **shop retail price**. They
+pay from their in-app credit first, if they choose, and the rest through Dafa
+with the wallet's methods. The card is bought only after Dafa itself says the
+order is paid. It goes through the same supplier path as a shop's purchase, as
+a no-shop purchase row with purpose `customer` and the order id as its note.
+Operators cannot reveal these codes.
+
+Public routes (no sign-in, so people can browse first):
+
+- `GET /v1/customers/catalog?channel=ios|play|apk|web`
+  - The catalog with `price` (retail) and `regular_price` only. It never shows
+    what a shop pays.
+  - Uses an ETag, like the shops' catalog.
+  - `ios` lists only the service categories (`telecom`, `intl_topup`,
+    `internet`). App Store guideline 3.1.1 requires Apple's in-app purchase
+    for game and gift cards; 3.1.3(e) allows Dafa for services used outside
+    the app.
+  - The filter is also enforced when an order is placed.
+- `GET /v1/customers/images/{sha256}` — a brand logo or a flag.
+- `GET /v1/customers/payment-methods` — each Dafa method, what it asks of the
+  payer, and `fee_percent`, so the checkout can show the fee before the
+  customer pays.
+
+Signed-in routes (Bearer):
+
+- `POST /v1/customers/orders` places an order.
+  - Body: `{item, quantity, unit_price, idempotency_key, channel, use_credit,
+    method, user_identifier, birth_year}`.
+  - `unit_price` is the price the customer was shown. A different current
+    price is refused with `409 price_changed`, which carries the new price.
+  - The order carries `fee` and `amount_to_pay` (`amount_due` + `fee`), the
+    figure Dafa charges.
+  - The answer is `201` with the order and its next step:
+    - `next_action: otp` for a mobile wallet.
+    - `next_action: hosted_page` plus `checkout_url` for a bank card.
+    - When the credit covers everything, the order is delivered at once.
+  - The same key replays the same order.
+- `POST /v1/customers/orders/{id}/confirm` takes `{otp}`, the code from the
+  payer's wallet.
+  - `422 otp_rejected` carries `attempts_left`.
+  - A decline fails the order.
+  - When paid, the card is bought and the codes come back in the answer.
+- `POST /v1/customers/orders/{id}/cancel` backs out before paying. It works
+  for wallet methods only; a bank card may be mid-payment on Dafa's page.
+- `GET /v1/customers/orders/{id}` returns the order.
+  - It reads an unproven payment back from Dafa, at most once every few
+    seconds.
+  - It moves a paid order on.
+  - It re-reads a delivered order's codes from the supplier.
+- `GET /v1/customers/orders` lists the customer's orders, without codes.
+- `GET /v1/customers/credit` returns the balance and the newest entries.
+
+`POST /v1/customers/dafa/webhook/{order id}?token=` is Dafa's nudge. The token
+is an HMAC of the order id keyed with the Dafa key. The relay only reads the
+payment back. Dafa is only given an `https` public URL, so set
+`POINTY_RELAY_PUBLIC_URL` in production.
+
+How the customer's money is kept:
+
+- **Credit** is a ledger of signed entries, at most one per (order, kind):
+  - `order`: the credit an order spends, taken when it is placed.
+  - `release`: an unpaid order closed, so its credit comes back.
+  - `refund`: a paid order whose card could not be bought; the whole total
+    comes back.
+  - `late_payment`: Dafa proved a payment after the order was written off.
+- **Statuses:** `awaiting_payment → paid → fulfilling → delivered | refunded`,
+  or `awaiting_payment → cancelled | failed | expired`.
+- **A payment proven for the wrong amount** (or the other Dafa environment) is
+  never served and never credited automatically.
+  - The order records it once: an order still waiting fails with
+    `error_code: payment_mismatch`, and its held credit is released.
+  - An urgent ntfy alert asks the operator to reconcile it.
+  - It is never read from Dafa again.
+  - The app shows «نراجع دفعتك».
+- **A held supplier purchase** (outcome unknown) keeps the order `fulfilling`
+  until the voucher reconciler settles it. The order then follows.
+- **The order sweep** (`CustomerOrderReconciler`, every 30 s on each node):
+  - It writes off orders unpaid after `POINTY_RELAY_CUSTOMER_ORDER_TTL` (30
+    minutes).
+  - It reads back payments the payer engaged with: every round for the first
+    hour, then every 15th round for 24 hours. A written-off order is read
+    only when it was a bank-card payment, since only Dafa's page can still
+    complete one. The relay alone confirms a wallet payment, so a closed
+    wallet order can never be paid.
+  - It finishes paid orders that a crash left behind.
+- **The books:**
+  - Delivered orders are revenue `cards_app` (test-mode orders are left out).
+  - Their supplier cost is a service cost, not the company's own spending.
+  - The gateway fee the customer paid is booked beside the top-up fees: an
+    income, and the same amount as a gateway expense.
+
+**The gateway fee** (`POINTY_RELAY_WALLET_FEE_PERCENT`, the same setting as
+shop top-ups):
+
+- It is added **on top** of the part Dafa collects. Credit never pays it, so an
+  order the credit covers has no fee.
+- It is worked out so Dafa's share of the **whole** payment is covered, and the
+  payment is rounded up to the cent, the finest amount Dafa takes. At 2%, a
+  10.00 card costs 10.21 and two cost 20.41.
+- It is never credit:
+  - A paid order whose card fails refunds its price, not the fee, because Dafa
+    kept that.
+  - A late payment credits only the price part.
+- A payment Dafa reports without the fee does not match the order. It is left
+  for the operator and not served.
+
+Settings:
+
+- `POINTY_RELAY_CUSTOMER_CHANNEL_CATEGORIES` — a JSON object, channel → the
+  categories it may sell. Example: `{"ios":["telecom","internet"]}`. A channel
+  left out sells everything, except `ios`, which defaults to the service
+  categories.
+- `POINTY_RELAY_CUSTOMER_ORDER_TTL` (`30m`).
+- `POINTY_RELAY_CUSTOMER_WEB_ORIGINS` — the card app's web build origins,
+  comma-separated (`https://cards.dftr.ly`).
+  - Browsers on them get CORS answers on `/v1/customers/*`, preflight included.
+    No other origin does.
+  - No credentials are allowed: the app sends a Bearer token, never a cookie.
+  - `make relay-run` allows the local `make cards-web` origin.
+- `POINTY_RELAY_CUSTOMER_ORDER_RATE_LIMIT` (`20/hour` per customer).
+
 ## Shop Wallets (Dafa top-ups)
 
 Every installation has a **wallet**: a prepaid balance with the company that
@@ -1756,6 +1998,17 @@ Error `code`s: `vouchers_unconfigured` (503), `unknown_item` (404),
 is empty — ERROR log), `supplier_unauthorized` (its credentials — ERROR log),
 `supplier_refused`, `supplier_unreachable` (with several suppliers, the code of
 the last one tried; the purchase's detail names each).
+
+Freshness. `GET /v1/vouchers/catalog?fresh=<brand key>` is what the shop sends
+when a till opens a brand's sheet: the relay first re-reads that brand's cards at
+the suppliers that can (BN Plus: one call per company), unless they were read in
+the last minute by any node, waiting at most 4 s; a failed read serves the
+offers as they were. The 30-minute sync still reads everything. A supplier
+that takes a purchase and then has no code to give (`supplier_out_of_stock`;
+BN Plus's "Order failed or card codes receiving failed.", while its own card list
+still says in stock) holds that card off every shop's shelf for 30 minutes (one
+Redis hash shared by the nodes; `catalog show` gives the reason). A fresh read
+does not lift a hold; the next sale of the card after it ends does.
 
 Admin (bearer token), under `/v1/vouchers/admin/`: `config`, `catalog` (GET the
 current one with what shops see and each item's supply; PUT to publish

@@ -114,6 +114,9 @@ type FinanceEntryFilter struct {
 	Limit          int
 }
 
+// FinanceServiceCardsApp is the revenue key of «دفتر كروت» customer orders.
+const FinanceServiceCardsApp = "cards_app"
+
 // FinanceTrackedMonth is one month of what the relay recorded on its own, in
 // dinars unless a map is keyed by currency.
 type FinanceTrackedMonth struct {
@@ -131,7 +134,8 @@ type FinanceTrackedMonth struct {
 	// TopUps is money shops paid into their wallets, by method, as credited:
 	// net of the gateway fee. It is the shops' money, held, not income.
 	TopUps map[string]string `json:"topups"`
-	// TopUpFees is the gateway fee kept out of those top-ups: what Dafa
+	// TopUpFees is the gateway fee kept out of those top-ups, and the one
+	// card-app customers paid on top of their orders: what Dafa
 	// took from the company, and what the company charged the shops for it.
 	TopUpFees string `json:"topup_fees"`
 }
@@ -607,6 +611,19 @@ func (s *FileStore) FinanceTracked(_ context.Context, from, to time.Time) ([]Fin
 			rollup.addSMSCost(FinanceMonth(at), message.Cost)
 		}
 	}
+	if s.data.CustomerOrders != nil {
+		for _, order := range s.data.CustomerOrders.Orders {
+			if order.PaidAt != nil && !order.TestMode && within(*order.PaidAt, from, to) {
+				// The gateway fee the customer paid on top: charged, and
+				// paid to Dafa, like a top-up's.
+				rollup.addTopUpFee(FinanceMonth(*order.PaidAt), order.Fee)
+			}
+			if order.Status != CustomerOrderDelivered || order.TestMode || order.CompletedAt == nil || !within(*order.CompletedAt, from, to) {
+				continue
+			}
+			rollup.addRevenue(FinanceMonth(*order.CompletedAt), FinanceServiceCardsApp, order.Total)
+		}
+	}
 	for _, purchase := range s.data.VoucherPurchases {
 		at := purchase.CreatedAt
 		if purchase.CompletedAt != nil {
@@ -615,7 +632,7 @@ func (s *FileStore) FinanceTracked(_ context.Context, from, to time.Time) ([]Fin
 		if purchase.Status != VoucherPurchaseSucceeded || purchase.TestMode || !within(at, from, to) {
 			continue
 		}
-		if purchase.ForCompany() {
+		if purchase.ForCompany() && !purchase.ForCustomer() {
 			currency, cost := companyPurchaseCost(purchase)
 			rollup.addCompanyCost(FinanceMonth(at), currency, cost)
 			continue
@@ -808,6 +825,14 @@ func (s *PostgresStore) FinanceTracked(ctx context.Context, from, to time.Time) 
 			rollup.addRevenue,
 		},
 		{
+			// «دفتر كروت»: what customers paid for the cards they got.
+			`SELECT ` + financeMonthSQL("completed_at") + `, '` + FinanceServiceCardsApp + `', SUM(total)::text
+			FROM relay_customer_orders
+			WHERE status = 'delivered' AND NOT test_mode AND completed_at >= $1 AND completed_at < $2
+			GROUP BY 1, 2`,
+			rollup.addRevenue,
+		},
+		{
 			`SELECT ` + financeMonthSQL("COALESCE(sent_at, created_at)") + `, '', SUM(cost)::text
 			FROM relay_sms_messages
 			WHERE status IN ('sent', 'delivered', 'undelivered') AND NOT test_mode
@@ -822,7 +847,7 @@ func (s *PostgresStore) FinanceTracked(ctx context.Context, from, to time.Time) 
 			`SELECT ` + financeMonthSQL("COALESCE(completed_at, created_at)") + `, upper(supplier_currency),
 				SUM(CASE WHEN supplier_cost ~ '^\s*[0-9]+(\.[0-9]+)?\s*$' THEN trim(supplier_cost)::numeric ELSE 0 END)::text
 			FROM relay_voucher_purchases
-			WHERE status = 'succeeded' AND NOT test_mode AND installation_id IS NOT NULL
+			WHERE status = 'succeeded' AND NOT test_mode AND (installation_id IS NOT NULL OR purpose = 'customer')
 				AND COALESCE(completed_at, created_at) >= $1 AND COALESCE(completed_at, created_at) < $2
 			GROUP BY 1, 2`,
 			rollup.addSupplierCost,
@@ -835,7 +860,7 @@ func (s *PostgresStore) FinanceTracked(ctx context.Context, from, to time.Time) 
 				SUM(CASE WHEN supplier_cost ~ '^\s*[0-9]+(\.[0-9]+)?\s*$' AND supplier_currency <> ''
 					THEN trim(supplier_cost)::numeric ELSE amount END)::text
 			FROM relay_voucher_purchases
-			WHERE status = 'succeeded' AND NOT test_mode AND installation_id IS NULL
+			WHERE status = 'succeeded' AND NOT test_mode AND installation_id IS NULL AND purpose <> 'customer'
 				AND COALESCE(completed_at, created_at) >= $1 AND COALESCE(completed_at, created_at) < $2
 			GROUP BY 1, 2`,
 			rollup.addCompanyCost,
@@ -853,6 +878,14 @@ func (s *PostgresStore) FinanceTracked(ctx context.Context, from, to time.Time) 
 			`SELECT ` + financeMonthSQL("paid_at") + `, '', SUM(fee)::text
 			FROM relay_wallet_topups
 			WHERE status = 'paid' AND NOT test_mode AND fee > 0 AND paid_at >= $1 AND paid_at < $2
+			GROUP BY 1`,
+			func(month, _, fee string) { rollup.addTopUpFee(month, fee) },
+		},
+		{
+			// The gateway fee «دفتر كروت» customers paid on top of their orders.
+			`SELECT ` + financeMonthSQL("paid_at") + `, '', SUM(fee)::text
+			FROM relay_customer_orders
+			WHERE paid_at IS NOT NULL AND fee > 0 AND NOT test_mode AND paid_at >= $1 AND paid_at < $2
 			GROUP BY 1`,
 			func(month, _, fee string) { rollup.addTopUpFee(month, fee) },
 		},

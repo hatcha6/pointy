@@ -23,11 +23,21 @@ type BNPlusSupplier struct {
 	mu        sync.Mutex
 	balance   *big.Rat
 	balanceAt time.Time
+	// branches is which company (branch) sells each card, and under what
+	// name, as the last full read found them: what lets RefreshOffers re-read
+	// one brand's cards without walking every company.
+	branches map[int64]bnplusBranch
+}
+
+type bnplusBranch struct {
+	ID   int64
+	Name string
 }
 
 var (
-	_ Supplier      = (*BNPlusSupplier)(nil)
-	_ BalanceReader = (*BNPlusSupplier)(nil)
+	_ Supplier       = (*BNPlusSupplier)(nil)
+	_ BalanceReader  = (*BNPlusSupplier)(nil)
+	_ OfferRefresher = (*BNPlusSupplier)(nil)
 )
 
 func (s *BNPlusSupplier) Key() string { return SupplierBNPlus }
@@ -116,24 +126,72 @@ func (s *BNPlusSupplier) Offers(ctx context.Context) ([]Offer, error) {
 	}
 	now := time.Now().UTC()
 	var offers []Offer
+	branches := map[int64]bnplusBranch{}
 	for _, company := range companies {
-		cards, err := s.Client.Cards(ctx, company.BranchID)
+		branch := bnplusBranch{ID: company.BranchID, Name: company.Name}
+		cards, err := s.Client.Cards(ctx, branch.ID)
 		if err != nil {
 			return nil, fmt.Errorf("cards of %s (%d): %w", company.Name, company.BranchID, err)
 		}
 		for _, card := range cards {
-			offers = append(offers, Offer{
-				Ref:      strconv.FormatInt(card.ID, 10),
-				Name:     card.Name,
-				Group:    company.Name,
-				Price:    card.MerchantPrice,
-				Currency: card.Currency,
-				InStock:  card.InStock,
-				SyncedAt: now,
-			})
+			branches[card.ID] = branch
+		}
+		offers = append(offers, bnplusOffers(branch, cards, now)...)
+	}
+	s.mu.Lock()
+	s.branches = branches
+	s.mu.Unlock()
+	return offers, nil
+}
+
+// RefreshOffers re-reads the companies that sell refs: one call per company,
+// and every card of each comes back, not only the ones asked for. A card the
+// last full read did not place is left out (the next sync places it).
+func (s *BNPlusSupplier) RefreshOffers(ctx context.Context, refs []Ref) ([]Offer, error) {
+	s.mu.Lock()
+	wanted := map[int64]bnplusBranch{}
+	for _, ref := range refs {
+		id, err := bnplusCardID(ref)
+		if err != nil {
+			continue
+		}
+		if branch, ok := s.branches[id]; ok {
+			wanted[branch.ID] = branch
 		}
 	}
+	s.mu.Unlock()
+	ids := make([]int64, 0, len(wanted))
+	for id := range wanted {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	now := time.Now().UTC()
+	var offers []Offer
+	for _, id := range ids {
+		branch := wanted[id]
+		cards, err := s.Client.Cards(ctx, branch.ID)
+		if err != nil {
+			return nil, fmt.Errorf("cards of %s (%d): %w", branch.Name, branch.ID, err)
+		}
+		offers = append(offers, bnplusOffers(branch, cards, now)...)
+	}
 	return offers, nil
+}
+
+func bnplusOffers(branch bnplusBranch, cards []bnplus.Card, now time.Time) []Offer {
+	offers := make([]Offer, 0, len(cards))
+	for _, card := range cards {
+		offers = append(offers, Offer{
+			Ref:      strconv.FormatInt(card.ID, 10),
+			Name:     card.Name,
+			Group:    branch.Name,
+			Price:    card.MerchantPrice,
+			Currency: card.Currency,
+			InStock:  card.InStock,
+			SyncedAt: now,
+		})
+	}
+	return offers
 }
 
 // readBalance reads the company's dinar wallet (every BN Plus card is priced in

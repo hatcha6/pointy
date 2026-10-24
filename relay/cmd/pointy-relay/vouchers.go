@@ -107,6 +107,8 @@ func buildVoucherConfig(settings voucherSettings) (relayserver.VoucherConfig, bn
 		RequestTimeout: timeout,
 		SyncInterval:   settings.SyncInterval,
 		Breaker:        relayserver.NewSupplierBreaker(),
+		Holds:          relayserver.NewCardHolds(),
+		Refreshes:      relayserver.NewOfferRefreshes(),
 		StockSealer:    sealer,
 	}, credentials, warnings, nil
 }

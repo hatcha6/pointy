@@ -258,6 +258,30 @@ func voucherCatalogContract(t *testing.T, store VoucherStore) {
 	if err != nil || len(offers) != 1 || offers[0].Ref != "2" || offers[0].Price != "24.20" || !offers[0].InStock {
 		t.Fatalf("a sync replaces the supplier's offers: %+v err=%v", offers, err)
 	}
+
+	// A brand's fresh read touches its own cards and leaves the rest.
+	if err := store.ReplaceVoucherOffers(ctx, "bnplus", []VoucherOffer{
+		{Ref: "2", Name: "iTunes 25 USD", Group: "iTunes", Price: "24.20", Currency: "USD", InStock: true, SyncedAt: at},
+		{Ref: "3", Name: "PUBG 60 UC", Group: "PUBG", Price: "9.59", Currency: "LYD", InStock: true, SyncedAt: at},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	fresh := at.Add(time.Hour)
+	if err := store.UpsertVoucherOffers(ctx, "bnplus", []VoucherOffer{
+		{Ref: "3", Name: "PUBG 60 UC", Group: "PUBG", Price: "9.80", Currency: "LYD", InStock: false, SyncedAt: fresh},
+		{Ref: "4", Name: "PUBG 325 UC", Group: "PUBG", Price: "47.97", Currency: "LYD", InStock: true, SyncedAt: fresh},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	offers, err = store.ListVoucherOffers(ctx, "bnplus")
+	byRef := map[string]VoucherOffer{}
+	for _, offer := range offers {
+		byRef[offer.Ref] = offer
+	}
+	if err != nil || len(offers) != 3 || !byRef["2"].SyncedAt.Equal(at) || byRef["3"].InStock || !byRef["3"].SyncedAt.Equal(fresh) ||
+		byRef["3"].PreviousPrice != "9.59" || byRef["4"].Price != "47.97" {
+		t.Fatalf("an upsert keeps the others and the price history: %+v err=%v", offers, err)
+	}
 }
 
 func TestFileStoreVoucherContract(t *testing.T) {

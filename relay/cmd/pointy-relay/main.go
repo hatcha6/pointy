@@ -476,6 +476,91 @@ func runServer(args []string) error {
 		envDuration("POINTY_RELAY_SMS_DELIVERY_SYNC_INTERVAL", 5*time.Minute),
 		"how often to read Resala's delivery log back into the SMS ledger; 0 disables",
 	)
+	customerOTPTemplate := flags.String(
+		"customer-otp-template",
+		envString("POINTY_RELAY_CUSTOMER_OTP_TEMPLATE", ""),
+		"approved Resala template id the «دفتر كروت» sign-in codes go out with ($1 = the code, $2 = the Android app hash); empty turns customer sign-in off",
+	)
+	customerAndroidAppHash := flags.String(
+		"customer-android-app-hash",
+		envString("POINTY_RELAY_CUSTOMER_ANDROID_APP_HASH", ""),
+		"the card app's 11-character Android SMS Retriever hash, sent as $2 so Android reads the code by itself",
+	)
+	customerOTPTestMode := flags.Bool(
+		"customer-otp-test-mode",
+		envBool("POINTY_RELAY_CUSTOMER_OTP_TEST_MODE", false),
+		"development only: text no sign-in code and answer it in the response",
+	)
+	customerOTPTTL := flags.Duration(
+		"customer-otp-ttl",
+		envDuration("POINTY_RELAY_CUSTOMER_OTP_TTL", 5*time.Minute),
+		"how long a sign-in code is good for",
+	)
+	customerOTPResendAfter := flags.Duration(
+		"customer-otp-resend-after",
+		envDuration("POINTY_RELAY_CUSTOMER_OTP_RESEND_AFTER", 30*time.Second),
+		"shortest gap between two sign-in codes to one phone",
+	)
+	customerOTPDailyLimit := flags.Int(
+		"customer-otp-daily-limit",
+		envInt("POINTY_RELAY_CUSTOMER_OTP_DAILY_LIMIT", 6),
+		"most sign-in codes one phone gets per Libyan day (each is an SMS the company pays for)",
+	)
+	customerOTPMaxAttempts := flags.Int(
+		"customer-otp-max-attempts",
+		envInt("POINTY_RELAY_CUSTOMER_OTP_MAX_ATTEMPTS", 5),
+		"wrong guesses one sign-in code takes before it is spent",
+	)
+	customerAccessTTL := flags.Duration(
+		"customer-access-ttl",
+		envDuration("POINTY_RELAY_CUSTOMER_ACCESS_TTL", time.Hour),
+		"lifetime of a customer access token",
+	)
+	customerSessionTTL := flags.Duration(
+		"customer-session-ttl",
+		envDuration("POINTY_RELAY_CUSTOMER_SESSION_TTL", 90*24*time.Hour),
+		"how long a customer device stays signed in without opening the app; each refresh renews it",
+	)
+	customerOTPRateLimit := flags.String(
+		"customer-otp-rate-limit",
+		envString("POINTY_RELAY_CUSTOMER_OTP_RATE_LIMIT", "10/hour"),
+		"sign-in codes one caller address may ask for, e.g. 10/hour; 0 disables",
+	)
+	customerVerifyRateLimit := flags.String(
+		"customer-verify-rate-limit",
+		envString("POINTY_RELAY_CUSTOMER_VERIFY_RATE_LIMIT", "30/10m"),
+		"sign-in attempts one caller address may make, e.g. 30/10m; 0 disables",
+	)
+	customerReviewPhone := flags.String(
+		"customer-review-phone",
+		envString("POINTY_RELAY_CUSTOMER_REVIEW_PHONE", ""),
+		"app store review account: this number is never texted and signs in with the review code",
+	)
+	customerChannelCategories := flags.String(
+		"customer-channel-categories",
+		envString("POINTY_RELAY_CUSTOMER_CHANNEL_CATEGORIES", ""),
+		`JSON object of card-app channel (ios, play, apk, web) -> the catalog categories it may sell, e.g. {"ios":["telecom","internet"]}; a channel left out sells everything, except ios, which defaults to telecom, intl_topup and internet (App Store rule 3.1.1)`,
+	)
+	customerOrderTTL := flags.Duration(
+		"customer-order-ttl",
+		envDuration("POINTY_RELAY_CUSTOMER_ORDER_TTL", 30*time.Minute),
+		"how long a card-app order waits for its payment before it is written off",
+	)
+	customerOrderRateLimit := flags.String(
+		"customer-order-rate-limit",
+		envString("POINTY_RELAY_CUSTOMER_ORDER_RATE_LIMIT", "20/hour"),
+		"card-app orders one customer may place, e.g. 20/hour; 0 disables",
+	)
+	customerWebOrigins := flags.String(
+		"customer-web-origins",
+		envString("POINTY_RELAY_CUSTOMER_WEB_ORIGINS", ""),
+		"comma-separated origins the card app's web build is served from (https://cards.dftr.ly); browsers on them may call the customer routes",
+	)
+	customerReviewCode := flags.String(
+		"customer-review-code",
+		envString("POINTY_RELAY_CUSTOMER_REVIEW_CODE", ""),
+		"the review account's fixed 6-digit code",
+	)
 	dafaAPIKey := flags.String(
 		"dafa-api-key",
 		envString("POINTY_RELAY_DAFA_API_KEY", ""),
@@ -840,6 +925,29 @@ func runServer(args []string) error {
 	if err != nil {
 		return err
 	}
+	customerConfig, customerWarnings, err := buildCustomerConfig(customerSettings{
+		OTPTemplate:       *customerOTPTemplate,
+		AndroidAppHash:    *customerAndroidAppHash,
+		TestMode:          *customerOTPTestMode,
+		CodeTTL:           *customerOTPTTL,
+		ResendAfter:       *customerOTPResendAfter,
+		DailyLimit:        *customerOTPDailyLimit,
+		MaxAttempts:       *customerOTPMaxAttempts,
+		AccessTTL:         *customerAccessTTL,
+		SessionTTL:        *customerSessionTTL,
+		OTPRateLimit:      *customerOTPRateLimit,
+		VerifyLimit:       *customerVerifyRateLimit,
+		ReviewPhone:       *customerReviewPhone,
+		ReviewCode:        *customerReviewCode,
+		ChannelCategories: *customerChannelCategories,
+		OrderTTL:          *customerOrderTTL,
+		OrderRateLimit:    *customerOrderRateLimit,
+		WebOrigins:        *customerWebOrigins,
+		SMS:               smsConfig,
+	})
+	if err != nil {
+		return err
+	}
 	walletConfig, walletWarnings, err := buildWalletConfig(walletSettings{
 		DafaBaseURL:       *dafaBaseURL,
 		DafaAPIKey:        *dafaAPIKey,
@@ -974,12 +1082,17 @@ func runServer(args []string) error {
 		return err
 	}
 
+	// Read here, after the deployment profile settled it.
+	customerConfig.TrustForwardedFor = *consoleTrustForwardedFor
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	for _, warning := range smsWarnings {
 		logger.Warn("relay sms templates: " + warning)
 	}
 	for _, warning := range walletWarnings {
 		logger.Warn("relay wallet: " + warning)
+	}
+	for _, warning := range customerWarnings {
+		logger.Warn("relay customers: " + warning)
 	}
 	for _, warning := range voucherWarnings {
 		logger.Warn("relay vouchers: " + warning)
@@ -1067,6 +1180,8 @@ func runServer(args []string) error {
 		presence = relayserver.NewRedisConnectorPresence(redisClient, relayRedisKeyPrefix)
 		tickets = control.NewRedisRelayTicketService(redisClient, relayRedisKeyPrefix, control.RealClock{})
 		rateLimiter = ratelimit.NewRedisLimiter(redisClient, relayRedisKeyPrefix)
+		// A card one node found undeliverable is off every node's shelf.
+		voucherConfig.Holds.Share(redisClient, relayRedisKeyPrefix)
 	}
 
 	nodeID := strings.TrimSpace(*nodeIDFlag)
@@ -1395,6 +1510,7 @@ func runServer(args []string) error {
 			WebhookSecret: strings.TrimSpace(*fulusWebhookSecret),
 		},
 		SMS:                  smsConfig,
+		Customers:            customerConfig,
 		Wallet:               walletConfig,
 		Public:               publicAddresses,
 		Alerts:               alertNotifier,
@@ -1638,6 +1754,17 @@ func runServer(args []string) error {
 			Logger:   logger,
 		}
 		go reconciler.Run(ctx)
+		if _, ok := store.(control.CustomerOrderStore); ok {
+			// «دفتر كروت» orders: unpaid ones expire, late payments become
+			// credit, paid ones reach their card. Not tied to the sign-in SMS
+			// settings: orders already paid must finish whatever they say.
+			customerOrders := &relayserver.CustomerOrderReconciler{
+				Server:   baseHTTPHandler,
+				Interval: 30 * time.Second,
+				Logger:   logger,
+			}
+			go customerOrders.Run(ctx)
+		}
 		if len(voucherConfig.Suppliers) > 0 && voucherConfig.SyncInterval > 0 {
 			offerSync := &relayserver.VoucherOfferSync{
 				Config:   voucherConfig,

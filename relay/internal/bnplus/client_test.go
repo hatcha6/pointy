@@ -335,6 +335,8 @@ func TestARefusalIsDefiniteAndRecognised(t *testing.T) {
 	}{
 		{"wallet", http.StatusUnprocessableEntity, `{"success":false,"message":"رصيد المحفظة غير كافٍ"}`, ErrInsufficientBalance},
 		{"stock", http.StatusBadRequest, `{"success":false,"message":"Card is out of stock"}`, ErrOutOfStock},
+		// Live 2026-10-24: an order opened, then no code to hand over.
+		{"no codes", http.StatusUnprocessableEntity, `{"success":false,"message":"Order failed or card codes receiving failed."}`, ErrOutOfStock},
 		{"auth", http.StatusUnauthorized, `{"message":"Unauthenticated."}`, ErrUnauthorized},
 		{"forbidden", http.StatusForbidden, `{"success":false,"message":"no"}`, ErrUnauthorized},
 		{"ok but false", http.StatusOK, `{"success":false,"message":"الرصيد غير كافي"}`, ErrInsufficientBalance},

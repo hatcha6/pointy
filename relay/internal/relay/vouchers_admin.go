@@ -447,8 +447,8 @@ func (s HTTPServer) handleVoucherAdminPurchases(w http.ResponseWriter, r *http.R
 		return
 	}
 	buyer := strings.TrimSpace(query.Get("buyer"))
-	if buyer != "" && buyer != control.VoucherBuyerCompany && buyer != control.VoucherBuyerShops {
-		writeSMSError(w, http.StatusBadRequest, voucherCodeInvalidRequest, "buyer must be company or shops", nil)
+	if buyer != "" && buyer != control.VoucherBuyerCompany && buyer != control.VoucherBuyerShops && buyer != control.VoucherBuyerCustomers {
+		writeSMSError(w, http.StatusBadRequest, voucherCodeInvalidRequest, "buyer must be company, shops or customers", nil)
 		return
 	}
 	limit, _ := strconv.Atoi(query.Get("limit"))

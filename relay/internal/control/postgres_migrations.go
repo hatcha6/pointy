@@ -1020,6 +1020,149 @@ CREATE INDEX IF NOT EXISTS relay_moamalat_links_due_idx
 	ON relay_moamalat_links (next_poke_at) WHERE state = 'alive';
 `,
 	},
+	{
+		version: 33,
+		name:    "daftar cards customers",
+		sql: `
+-- People who sign in to «دفتر كروت» with their phone. phone is '218' + the
+-- national number, NULL once the customer deleted the account (the id stays
+-- for the orders that name it). One live customer per phone.
+CREATE TABLE IF NOT EXISTS relay_customers (
+	id text PRIMARY KEY,
+	phone text,
+	created_at timestamptz NOT NULL,
+	last_sign_in_at timestamptz NOT NULL,
+	deleted_at timestamptz,
+	CONSTRAINT relay_customers_deleted_has_no_phone CHECK ((deleted_at IS NULL) = (phone IS NOT NULL))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS relay_customers_phone_idx
+	ON relay_customers (phone) WHERE phone IS NOT NULL;
+
+-- The waiting sign-in code of each phone, by hash. The row outlives the code
+-- (code_hash = '') so the daily count keeps guarding the number.
+CREATE TABLE IF NOT EXISTS relay_customer_otps (
+	phone text PRIMARY KEY,
+	code_hash text NOT NULL DEFAULT '',
+	attempts integer NOT NULL DEFAULT 0,
+	sent_at timestamptz,
+	expires_at timestamptz,
+	day text NOT NULL,
+	sends integer NOT NULL DEFAULT 0
+);
+
+-- One row per signed-in device. Tokens are stored as hashes only.
+CREATE TABLE IF NOT EXISTS relay_customer_sessions (
+	id text PRIMARY KEY,
+	customer_id text NOT NULL REFERENCES relay_customers (id) ON DELETE CASCADE,
+	access_hash text NOT NULL,
+	refresh_hash text NOT NULL,
+	previous_refresh_hash text NOT NULL DEFAULT '',
+	rotated_at timestamptz,
+	device_id text NOT NULL DEFAULT '',
+	device_name text NOT NULL DEFAULT '',
+	platform text NOT NULL DEFAULT '',
+	created_at timestamptz NOT NULL,
+	last_seen_at timestamptz NOT NULL,
+	access_expires_at timestamptz NOT NULL,
+	expires_at timestamptz NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS relay_customer_sessions_access_idx
+	ON relay_customer_sessions (access_hash);
+CREATE UNIQUE INDEX IF NOT EXISTS relay_customer_sessions_refresh_idx
+	ON relay_customer_sessions (refresh_hash);
+CREATE INDEX IF NOT EXISTS relay_customer_sessions_previous_idx
+	ON relay_customer_sessions (previous_refresh_hash) WHERE previous_refresh_hash <> '';
+CREATE INDEX IF NOT EXISTS relay_customer_sessions_customer_idx
+	ON relay_customer_sessions (customer_id, last_seen_at DESC);
+`,
+	},
+	{
+		version: 34,
+		name:    "daftar cards customer orders and credit",
+		sql: `
+-- One card item a customer buys: paid from their credit and/or through Dafa,
+-- then bought from the suppliers as a no-shop purchase (purchase_id).
+CREATE TABLE IF NOT EXISTS relay_customer_orders (
+	id text PRIMARY KEY,
+	customer_id text NOT NULL REFERENCES relay_customers (id),
+	idempotency_key text NOT NULL,
+	channel text NOT NULL DEFAULT '',
+	item_key text NOT NULL,
+	brand_key text NOT NULL DEFAULT '',
+	item_name text NOT NULL DEFAULT '',
+	quantity integer NOT NULL,
+	unit_price numeric(14, 3) NOT NULL,
+	total numeric(14, 3) NOT NULL,
+	credit_used numeric(14, 3) NOT NULL DEFAULT 0,
+	amount_due numeric(14, 3) NOT NULL,
+	method text NOT NULL DEFAULT '',
+	payer_hint text NOT NULL DEFAULT '',
+	payment_id text NOT NULL DEFAULT '',
+	checkout_url text NOT NULL DEFAULT '',
+	otp_attempts integer NOT NULL DEFAULT 0,
+	status text NOT NULL,
+	error_code text NOT NULL DEFAULT '',
+	error_detail text NOT NULL DEFAULT '',
+	purchase_id text NOT NULL DEFAULT '',
+	late_paid boolean NOT NULL DEFAULT false,
+	test_mode boolean NOT NULL DEFAULT false,
+	created_at timestamptz NOT NULL,
+	updated_at timestamptz NOT NULL,
+	paid_at timestamptz,
+	completed_at timestamptz,
+	CONSTRAINT relay_customer_orders_key UNIQUE (customer_id, idempotency_key),
+	CONSTRAINT relay_customer_orders_status_valid CHECK (status IN (
+		'awaiting_payment', 'paid', 'fulfilling', 'delivered', 'refunded', 'cancelled', 'failed', 'expired')),
+	CONSTRAINT relay_customer_orders_amounts_valid CHECK (
+		quantity > 0 AND credit_used >= 0 AND amount_due >= 0 AND credit_used + amount_due = total)
+);
+CREATE INDEX IF NOT EXISTS relay_customer_orders_customer_idx
+	ON relay_customer_orders (customer_id, created_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS relay_customer_orders_open_idx
+	ON relay_customer_orders (created_at) WHERE status IN ('awaiting_payment', 'paid', 'fulfilling');
+
+-- A customer's credit: signed entries, balance = their sum. One entry per
+-- (order, kind), so no order change can move the money twice.
+CREATE TABLE IF NOT EXISTS relay_customer_credit_entries (
+	id text PRIMARY KEY,
+	customer_id text NOT NULL REFERENCES relay_customers (id),
+	kind text NOT NULL,
+	amount numeric(14, 3) NOT NULL,
+	order_id text NOT NULL DEFAULT '',
+	test_mode boolean NOT NULL DEFAULT false,
+	created_at timestamptz NOT NULL,
+	CONSTRAINT relay_customer_credit_entries_kind_valid CHECK (
+		(kind = 'order' AND amount < 0) OR (kind IN ('release', 'refund', 'late_payment') AND amount > 0))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS relay_customer_credit_entries_order_kind_idx
+	ON relay_customer_credit_entries (order_id, kind) WHERE order_id <> '';
+CREATE INDEX IF NOT EXISTS relay_customer_credit_entries_customer_idx
+	ON relay_customer_credit_entries (customer_id, created_at DESC);
+
+-- A customer's purchase is a no-shop purchase like the company's own, with
+-- the purpose "customer" and the order id as its note.
+`,
+	},
+	{
+		version: 35,
+		name:    "daftar cards order gateway fee",
+		sql: `
+-- The payment gateway's fee, added on top of what an order owes through Dafa:
+-- Dafa collects amount_due + fee. Never part of the credit.
+ALTER TABLE relay_customer_orders ADD COLUMN IF NOT EXISTS fee numeric(14, 3) NOT NULL DEFAULT 0;
+ALTER TABLE relay_customer_orders DROP CONSTRAINT IF EXISTS relay_customer_orders_fee_valid;
+ALTER TABLE relay_customer_orders ADD CONSTRAINT relay_customer_orders_fee_valid CHECK (fee >= 0);
+`,
+	},
+	{
+		version: 36,
+		name:    "daftar cards review orders",
+		sql: `
+-- Orders placed by the app stores' review account: paid and filled by
+-- simulation, never through Dafa or a supplier.
+ALTER TABLE relay_customer_orders ADD COLUMN IF NOT EXISTS review boolean NOT NULL DEFAULT false;
+`,
+	},
 }
 
 // migrationsAdvisoryLockKey serializes concurrent migrators (e.g. autoscaled

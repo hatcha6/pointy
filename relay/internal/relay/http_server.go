@@ -182,6 +182,8 @@ type HTTPServer struct {
 	// approved template ids live only here, and every shop's messages go out
 	// through it, paid by the part from each shop's SMS balance.
 	SMS SMSConfig
+	// Customers of «دفتر كروت»: phone sign-in for the company's own card app.
+	Customers CustomerConfig
 	// Wallet (Dafa). The company's payment gateway account that shops top up
 	// their prepaid balance through; the API key lives only here.
 	Wallet WalletConfig
@@ -610,6 +612,10 @@ func (s HTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// A shop's Moamalat token copy (installation token); the operator's
 		// view of every shop's keepalive (admin).
 		s.handleMoamalatRoutes(w, r)
+	case strings.HasPrefix(r.URL.Path, "/v1/customers/"):
+		// «دفتر كروت» customers: phone sign-in and their sessions (customer
+		// access token; no installation).
+		s.handleCustomerRoutes(w, r)
 	case strings.HasPrefix(r.URL.Path, "/v1/vouchers/"):
 		// The company's card shop: a shop's catalog, images and purchases
 		// (installation token), the operator's catalog and ledger (admin).

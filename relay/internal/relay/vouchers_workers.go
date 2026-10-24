@@ -368,23 +368,7 @@ func syncVoucherOffers(ctx context.Context, config VoucherConfig, store control.
 			result.Failures[key] = err
 			continue
 		}
-		now := time.Now().UTC()
-		rows := make([]control.VoucherOffer, 0, len(offers))
-		for _, offer := range offers {
-			if offer.SyncedAt.IsZero() {
-				offer.SyncedAt = now
-			}
-			rows = append(rows, control.VoucherOffer{
-				Supplier: key,
-				Ref:      offer.Ref,
-				Name:     offer.Name,
-				Group:    offer.Group,
-				Price:    offer.Price,
-				Currency: offer.Currency,
-				InStock:  offer.InStock,
-				SyncedAt: offer.SyncedAt,
-			})
-		}
+		rows := storedVoucherOffers(key, offers, time.Now().UTC())
 		if len(rows) == 0 && !expectEmpty {
 			// An empty answer from a supplier that had many offers a moment ago
 			// is a failure to answer, not a sold-out shelf: replacing them would
@@ -403,4 +387,26 @@ func syncVoucherOffers(ctx context.Context, config VoucherConfig, store control.
 		result.Counts[key] = len(rows)
 	}
 	return result
+}
+
+// storedVoucherOffers is a supplier's answer as the store keeps it; an offer
+// with no time of its own was read at now.
+func storedVoucherOffers(supplier string, offers []vouchers.Offer, now time.Time) []control.VoucherOffer {
+	rows := make([]control.VoucherOffer, 0, len(offers))
+	for _, offer := range offers {
+		if offer.SyncedAt.IsZero() {
+			offer.SyncedAt = now
+		}
+		rows = append(rows, control.VoucherOffer{
+			Supplier: supplier,
+			Ref:      offer.Ref,
+			Name:     offer.Name,
+			Group:    offer.Group,
+			Price:    offer.Price,
+			Currency: offer.Currency,
+			InStock:  offer.InStock,
+			SyncedAt: offer.SyncedAt,
+		})
+	}
+	return rows
 }

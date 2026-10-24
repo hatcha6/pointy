@@ -198,7 +198,7 @@ func (c VoucherConfig) rankSuppliers(located vouchers.Located, offers voucherOff
 			evaluation.Candidate = i == 0
 			evaluation.Reason, evaluation.Attention = "", false
 			if i == 0 {
-				evaluation.Supplier = vouchers.TestSupplier{}
+				evaluation.Supplier = c.testSupplier
 			} else {
 				evaluation.Reason = "test mode buys from nobody"
 			}
@@ -273,6 +273,11 @@ func (c VoucherConfig) evaluateSupplier(index int, ref vouchers.Ref, priceFollow
 	offer, known := offers.offer(ref)
 	if known {
 		evaluation.Offer = &offer
+	}
+	if held := offers.heldReason(ref); held != "" {
+		// Whatever its list says: the list said in stock when it failed.
+		evaluation.Reason, evaluation.Attention = held, true
+		return evaluation
 	}
 	if age, old := offers.stale(ref.Supplier); old {
 		// Offers this old say nothing about today's price and stock: they are no
@@ -583,6 +588,7 @@ func (s HTTPServer) buyFromSuppliers(
 			next = &candidates[i+1]
 		}
 		s.noteSupplierHealth(claim.ID, candidate, err, next)
+		s.noteCardDelivery(ctx, claim.ID, candidate.Ref, err)
 		if !definiteFailure(err) {
 			break
 		}

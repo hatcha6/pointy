@@ -414,6 +414,14 @@ type WantedOffers interface {
 	OffersFor(ctx context.Context, wanted []Ref) ([]Offer, error)
 }
 
+// OfferRefresher is a supplier that can re-read a few cards' offers now, for a
+// till that just opened a brand: cheaper than the whole list Offers reads. The
+// answer may hold more cards than asked for, all as fresh; a ref it cannot place
+// is simply absent. It must never be a way to order anything.
+type OfferRefresher interface {
+	RefreshOffers(ctx context.Context, refs []Ref) ([]Offer, error)
+}
+
 // BalanceReader is a supplier that knows how much the company has left with it,
 // as last read (the offer sync reads it). The relay stops offering a card the
 // account cannot pay for, instead of letting every purchase of it fail there.

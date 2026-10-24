@@ -648,6 +648,8 @@ type fileStoreData struct {
 	VoucherStock                     map[string]VoucherStockCode               `json:"voucher_stock,omitempty"`
 	AlertSettings                    *AlertSettings                            `json:"alert_settings,omitempty"`
 	Console                          *fileConsoleData                          `json:"console,omitempty"`
+	Customers                        *fileCustomerData                         `json:"customers,omitempty"`
+	CustomerOrders                   *fileCustomerOrderData                    `json:"customer_orders,omitempty"`
 	WalletBank                       *fileWalletBankData                       `json:"wallet_bank,omitempty"`
 	FinanceEntries                   map[string]FinanceEntry                   `json:"finance_entries,omitempty"`
 	FinanceRecurring                 map[string]FinanceRecurring               `json:"finance_recurring,omitempty"`
