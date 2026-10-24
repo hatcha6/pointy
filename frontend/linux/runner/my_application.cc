@@ -19,6 +19,41 @@ struct _MyApplication {
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
 
+// Whether the GPU can run Flutter's OpenGL compositor. It blits and binds
+// vertex arrays unconditionally, which need desktop GL 3.0 or GLES 3.0; on
+// older GPUs (Intel Ironlake and earlier: GL 2.1) libepoxy aborts the process
+// before the first frame, with Impeller and Skia alike.
+static gboolean gpu_runs_opengl_compositor(GtkWindow* window) {
+  gtk_widget_realize(GTK_WIDGET(window));
+  g_autoptr(GError) error = nullptr;
+  g_autoptr(GdkGLContext) context = gdk_window_create_gl_context(
+      gtk_widget_get_window(GTK_WIDGET(window)), &error);
+  if (context == nullptr || !gdk_gl_context_realize(context, &error)) {
+    g_warning("No usable OpenGL context: %s",
+              error != nullptr ? error->message : "unknown");
+    return FALSE;
+  }
+  int major = 0, minor = 0;
+  gdk_gl_context_get_version(context, &major, &minor);
+  return major >= 3;
+}
+
+// Picks how Flutter draws. The OpenGL compositor with Impeller is the default
+// on any GPU that can run it; on one that cannot, the CPU draws with Skia
+// (Impeller has no software path) so the till still opens instead of
+// crashing. An explicit FLUTTER_LINUX_RENDERER is respected either way.
+static void choose_renderer(GtkWindow* window, FlDartProject* project) {
+  const gchar* renderer = g_getenv("FLUTTER_LINUX_RENDERER");
+  if (renderer == nullptr && !gpu_runs_opengl_compositor(window)) {
+    g_warning("GPU lacks OpenGL 3.0; drawing in software.");
+    g_setenv("FLUTTER_LINUX_RENDERER", "software", TRUE);
+    renderer = "software";
+  }
+  if (g_strcmp0(renderer, "software") == 0) {
+    fl_dart_project_set_enable_impeller(project, FALSE);
+  }
+}
+
 // Called when first Flutter frame received.
 static void first_frame_cb(MyApplication* self, FlView* view) {
   gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
@@ -76,6 +111,9 @@ static void my_application_activate(GApplication* application) {
   // Impeller renders (the Linux default since Flutter 3.47). Release builds
   // ignore the FLUTTER_ENGINE_SWITCH_* environment, so going back to Skia
   // takes a build with fl_dart_project_set_enable_impeller(project, FALSE).
+  // FLUTTER_LINUX_RENDERER is read by the GTK embedder, not the engine, so it
+  // does work in release.
+  choose_renderer(window, project);
 
   FlView* view = fl_view_new(project);
   GdkRGBA background_color;
