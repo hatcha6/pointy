@@ -1553,8 +1553,10 @@ Signed-in routes (Bearer):
   - `422 otp_rejected` carries `attempts_left`.
   - A decline fails the order.
   - When paid, the card is bought and the codes come back in the answer.
-- `POST /v1/customers/orders/{id}/cancel` backs out before paying. It works
-  for wallet methods only; a bank card may be mid-payment on Dafa's page.
+- `POST /v1/customers/orders/{id}/cancel` backs out before paying. For a
+  bank card it first reads the payment back from Dafa: a paid order is
+  answered as it stands (and moves on), never cancelled. A card payment that
+  lands after the cancel is still found by the sweep and kept as credit.
 - `POST /v1/customers/orders/{id}/card` answers `card_session`: the Moamalat
   checkout Dafa signed for a bank-card order (`mid`, `tid`, `amount` in
   dirhams, `merchant_reference`, `trx_date_time`, `secure_hash`, `test`).

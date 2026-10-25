@@ -816,10 +816,24 @@ func (s HTTPServer) handleCustomerOrderCancel(w http.ResponseWriter, r *http.Req
 	if !ok {
 		return
 	}
-	if method, known := lookupWalletMethod(order.Method); known && method.kind() != walletKindOTP && order.PaymentID != "" {
-		writeCustomerError(w, http.StatusConflict, walletCodeNotOTPMethod, "a card payment cannot be called off from here",
-			map[string]any{"order": customerOrderPayload(order, nil, false)})
-		return
+	// A bank-card payer may have paid on a page the relay does not see:
+	// Dafa is asked first, and a paid order is answered as it now stands,
+	// never cancelled. A payment that lands after the cancel is still found
+	// by the sweep, which reads cancelled bank-card orders back for a day,
+	// and kept as credit.
+	if method, known := lookupWalletMethod(order.Method); known && method.kind() != walletKindOTP &&
+		order.PaymentID != "" && order.Status == control.CustomerOrderAwaitingPayment && !order.Review {
+		verified, err := s.verifyCustomerPayment(r.Context(), orders, order, "cancel")
+		if err != nil {
+			writeCustomerError(w, http.StatusServiceUnavailable, "payment_check_failed",
+				"could not check the card payment; retry", map[string]any{"order": customerOrderPayload(order, nil, false)})
+			return
+		}
+		if verified.Status != control.CustomerOrderAwaitingPayment {
+			s.answerCustomerOrder(w, r, orders, verified, http.StatusOK)
+			return
+		}
+		order = verified
 	}
 	closed, applied, err := orders.CloseCustomerOrder(context.WithoutCancel(r.Context()), order.ID,
 		control.CustomerOrderCancelled, walletCodeCanceled, "the customer backed out before paying")

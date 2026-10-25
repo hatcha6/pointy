@@ -190,3 +190,24 @@ func TestCardReturnTurnsAPostedAnswerIntoTheAddress(t *testing.T) {
 		t.Fatalf("return page: %d", recorder.Code)
 	}
 }
+
+func TestUnpaidCardOrderCanBeCancelled(t *testing.T) {
+	h, _, token, id := newCardFormHarness(t)
+	status, body := h.do(http.MethodPost, "/v1/customers/orders/"+id+"/cancel", token, nil)
+	if status != http.StatusOK || orderOf(t, body)["status"] != "cancelled" {
+		t.Fatalf("cancel: %d %v", status, body)
+	}
+	// Dafa was asked before it was called off.
+	if h.dafa.count("GET /payments/pay-1") == 0 {
+		t.Fatal("the payment was not read back before cancelling")
+	}
+}
+
+func TestCancellingACardOrderThatPaidDeliversItInstead(t *testing.T) {
+	h, _, token, id := newCardFormHarness(t)
+	h.dafa.markPaid("pay-1")
+	status, body := h.do(http.MethodPost, "/v1/customers/orders/"+id+"/cancel", token, nil)
+	if status != http.StatusOK || orderOf(t, body)["status"] != "delivered" {
+		t.Fatalf("cancel after paying: %d %v", status, body)
+	}
+}
