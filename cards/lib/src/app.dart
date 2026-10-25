@@ -8,13 +8,14 @@ import 'features/shell/cards_shell.dart';
 import 'features/splash/splash_overlay.dart';
 import 'shared/cards_scope.dart';
 
-/// «دفتر كروت»: Arabic, right to left, light or dark as the phone is set.
+/// «دفتر كروت»: Arabic and right to left unless the customer picks English
+/// or French, light or dark as they choose or as the phone is set.
 class CardsApp extends StatelessWidget {
   const CardsApp({
     super.key,
     required this.dependencies,
     this.home,
-    this.themeMode = ThemeMode.system,
+    this.themeMode,
     this.splash,
     this.overlay,
   });
@@ -24,8 +25,8 @@ class CardsApp extends StatelessWidget {
   /// Replaces the shell: the preview harness renders single surfaces.
   final Widget? home;
 
-  /// System by default; the preview harness forces one.
-  final ThemeMode themeMode;
+  /// The customer's choice by default; the preview harness forces one.
+  final ThemeMode? themeMode;
 
   /// The opening to play over the app as it starts; none in tests.
   final SplashOpening? splash;
@@ -36,33 +37,37 @@ class CardsApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final settings = dependencies.settings;
     return CardsScope(
       dependencies: dependencies,
-      child: MaterialApp(
-        onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
-        debugShowCheckedModeBanner: false,
-        locale: const Locale('ar'),
-        supportedLocales: AppLocalizations.supportedLocales,
-        localizationsDelegates: const [
-          AppLocalizations.delegate,
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-        ],
-        theme: CardsTheme.light(),
-        darkTheme: CardsTheme.dark(),
-        themeMode: themeMode,
-        builder: (context, child) {
-          var app = child!;
-          if (overlay != null) {
-            app = overlay!(context, app);
-          }
-          if (splash != null) {
-            app = _WithSplash(opening: splash!, child: app);
-          }
-          return app;
-        },
-        home: home ?? const CardsShell(),
+      child: ListenableBuilder(
+        listenable: settings,
+        builder: (context, _) => MaterialApp(
+          onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
+          debugShowCheckedModeBanner: false,
+          locale: settings.locale,
+          supportedLocales: AppLocalizations.supportedLocales,
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          theme: CardsTheme.light(),
+          darkTheme: CardsTheme.dark(),
+          themeMode: themeMode ?? settings.themeMode,
+          builder: (context, child) {
+            var app = child!;
+            if (overlay != null) {
+              app = overlay!(context, app);
+            }
+            if (splash != null) {
+              app = _WithSplash(opening: splash!, child: app);
+            }
+            return app;
+          },
+          home: home ?? const CardsShell(),
+        ),
       ),
     );
   }

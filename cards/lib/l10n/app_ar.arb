@@ -743,5 +743,87 @@
   "refundedToCredit": "أُضيف إلى رصيدك",
   "@refundedToCredit": {
     "description": "Beside the refunded amount on a refunded order: where the money went"
+  },
+  "settingsSection": "الإعدادات",
+  "codeLockTitle": "حماية الرموز",
+  "codeLockBody": "اطلب Face ID أو البصمة قبل عرض الأرقام السرية",
+  "codeLockOffReason": "تأكيد هويتك لإيقاف حماية الرموز",
+  "themeTitle": "المظهر",
+  "themeSystem": "تلقائي",
+  "themeLight": "فاتح",
+  "themeDark": "داكن",
+  "languageTitle": "اللغة",
+  "aboutSection": "حول التطبيق",
+  "aboutTitle": "حول دفتر كروت",
+  "aboutTagline": "كروت الشحن والإنترنت، تصلك فوراً.",
+  "aboutBody": "«دفتر كروت» تطبيق من «دفتر»، نظام المبيعات الذي تعمل به المتاجر في ليبيا. اختر الكرت وادفع بمحفظتك أو بطاقتك، فيصلك رقمه السري خلال ثوانٍ، ويبقى محفوظاً في «كروتي» متى احتجت إليه.",
+  "aboutVersion": "الإصدار {version}",
+  "@aboutVersion": {
+    "description": "About page: the app version.",
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "aboutCopyright": "© 2026 دفتر",
+  "contactWhatsApp": "تواصل معنا عبر واتساب",
+  "websiteTitle": "الموقع الإلكتروني",
+  "privacyPolicy": "سياسة الخصوصية",
+  "termsOfUse": "شروط الاستخدام",
+  "openSourceLicenses": "تراخيص البرامج مفتوحة المصدر",
+  "signInConsent": "بالمتابعة، أنت توافق على {terms} و{privacy}.",
+  "@signInConsent": {
+    "description": "Under the sign-in button; {terms} and {privacy} are links named by termsOfUse and privacyPolicy.",
+    "placeholders": {
+      "terms": {
+        "type": "String"
+      },
+      "privacy": {
+        "type": "String"
+      }
+    }
+  },
+  "cardPayTitle": "الدفع بالبطاقة المصرفية",
+  "cardThroughMoamalat": "عبر بوابة معاملات",
+  "cardNumberLabel": "رقم البطاقة",
+  "cardExpiryLabel": "تاريخ الانتهاء",
+  "cardNumberInvalid": "رقم البطاقة غير صحيح.",
+  "cardExpiryInvalid": "أدخل تاريخ الانتهاء كما على البطاقة: شهر/سنة.",
+  "cardSecureNote": "تذهب بيانات بطاقتك من هاتفك إلى بوابة معاملات مباشرة، فلا تمرّ بخوادمنا ولا نحتفظ بها.",
+  "cardOpening": "نجهّز الدفع الآمن…",
+  "cardCharging": "نتواصل مع بنكك…",
+  "cardConfirming": "تم الدفع، نؤكّد طلبك…",
+  "cardVerifyTitle": "تأكيد من بنكك",
+  "cardVerifyBody": "أرسل بنكك رمزاً إلى هاتفك. أدخله في صفحة البنك أدناه لإتمام الدفع.",
+  "cardVerifyCancel": "إلغاء",
+  "cardErrDeclined": "رفض البنك العملية. تأكّد من بيانات البطاقة ورصيدها، أو جرّب بطاقة أخرى.",
+  "cardErrExpiry": "تاريخ انتهاء البطاقة غير صحيح.",
+  "cardErrNetwork": "تعذّر الوصول إلى بوابة الدفع. تحقّق من الإنترنت وحاول مجدداً.",
+  "cardErrVerification": "لم يكتمل التأكيد من بنكك، ولم يُخصم شيء. حاول مجدداً.",
+  "cardErrExpired": "انتهت مهلة الدفع. حاول مجدداً.",
+  "cardUsePaymentPage": "الدفع من صفحة البوابة بدلاً من ذلك",
+  "cardNameLabel": "اسم حامل البطاقة",
+  "cardNameInvalid": "أدخل الاسم كما هو مكتوب على البطاقة.",
+  "savedCardsTitle": "بطاقاتك المحفوظة",
+  "useAnotherCard": "استخدم بطاقة أخرى",
+  "saveCardTitle": "احفظ البطاقة على هذا الهاتف",
+  "saveCardBody": "لتدفع بها أسرع في المرة القادمة. تبقى مشفّرة على هاتفك وحده، وتُفتح ببصمة الوجه أو رمز الهاتف، ولا تصلنا أبداً.",
+  "savedCardUnlockReason": "تأكيد هويتك للدفع بالبطاقة المحفوظة",
+  "savedCardExpires": "تنتهي {expiry}",
+  "savedCardsSettings": "البطاقات المحفوظة",
+  "savedCardsEmpty": "لا توجد بطاقات محفوظة على هذا الهاتف. يمكنك حفظ بطاقة عند الدفع بها.",
+  "savedCardsNote": "تُحفظ البطاقات على هذا الهاتف وحده، مشفّرة وخلف بصمة الوجه أو رمز الهاتف، ولا تصل إلى خوادمنا. تُحذف عند تسجيل الخروج.",
+  "removeCard": "إزالة",
+  "removeCardTitle": "إزالة البطاقة؟",
+  "removeCardBody": "ستُحذف من هذا الهاتف. يمكنك حفظها مجدداً عند الدفع بها.",
+  "savedCardLocked": "لم يتم التحقق من هويتك، فلم نستخدم البطاقة المحفوظة.",
+  "@savedCardExpires": {
+    "description": "Under a saved card: its expiry, e.g. 01/30.",
+    "placeholders": {
+      "expiry": {
+        "type": "String"
+      }
+    }
   }
 }

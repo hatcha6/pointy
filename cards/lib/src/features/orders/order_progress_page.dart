@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -5,10 +6,11 @@ import '../../../l10n/generated/app_localizations.dart';
 import '../../data/models/catalog.dart';
 import '../../data/models/order.dart';
 import '../../design/cards_tokens.dart';
-import '../../shared/card_art.dart';
+import '../../shared/art_palette.dart';
 import '../../shared/cards_scope.dart';
 import '../../shared/haptics.dart';
 import '../../shared/money_text.dart';
+import '../card_payment/card_payment_page.dart';
 import '../reveal/reveal_page.dart';
 import 'order_outcome_panel.dart';
 import 'order_watcher.dart';
@@ -26,7 +28,8 @@ class OrderProgressPage extends StatefulWidget {
   final OrderWatcher watcher;
   final CardBrand? brand;
 
-  /// Opens Dafa's card page on arrival for a bank-card order.
+  /// Opens the card form (or Dafa's card page) on arrival for a bank-card
+  /// order.
   final bool openPaymentPage;
 
   static Future<void> open(
@@ -82,7 +85,7 @@ class _OrderProgressPageState extends State<OrderProgressPage>
     if (widget.openPaymentPage &&
         order.status == OrderStatus.awaitingPayment &&
         order.checkoutUrl.isNotEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _openPaymentPage());
+      WidgetsBinding.instance.addPostFrameCallback((_) => _pay());
     }
   }
 
@@ -124,6 +127,28 @@ class _OrderProgressPageState extends State<OrderProgressPage>
           builder: (_) => RevealPage(order: order, brand: widget.brand),
         ),
       );
+    }
+  }
+
+  /// A bank-card order is paid in the app's own card form. Dafa's page is
+  /// the way when the form cannot take the order, when the customer asks
+  /// for it, and on the web, which has no view for the bank's confirmation
+  /// step.
+  Future<void> _pay() async {
+    if (kIsWeb) {
+      return _openPaymentPage();
+    }
+    final result = await CardPaymentPage.open(context, widget.watcher.order);
+    if (!mounted) {
+      return;
+    }
+    switch (result) {
+      case CardPaymentResult.usePaymentPage:
+        await _openPaymentPage();
+      case CardPaymentResult.settled:
+        await widget.watcher.poll();
+      case CardPaymentResult.closed:
+        break;
     }
   }
 
@@ -178,7 +203,7 @@ class _OrderProgressPageState extends State<OrderProgressPage>
         title: l10n.hostedTitle,
         body: l10n.hostedBody,
         secondaryLabel: order.checkoutUrl.isEmpty ? null : l10n.openPaymentPage,
-        onSecondary: _openPaymentPage,
+        onSecondary: _pay,
       ),
       'preparing' => OrderOutcomePanel(
         brand: widget.brand,
@@ -229,46 +254,46 @@ class _OrderProgressPageState extends State<OrderProgressPage>
         builder: (context, _) {
           final order = widget.watcher.order;
           final theme = Theme.of(context);
-          final tint = widget.brand == null
-              ? theme.colorScheme.primary
-              : brandTint(widget.brand!);
-          return DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.center,
-                colors: [
-                  tint.withValues(
-                    alpha: theme.brightness == Brightness.dark ? 0.35 : 0.14,
-                  ),
-                  theme.scaffoldBackgroundColor,
-                ],
+          return ArtPaletteBuilder(
+            brand: widget.brand,
+            builder: (context, palette) => DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.center,
+                  colors: [
+                    palette.tint.withValues(
+                      alpha: theme.brightness == Brightness.dark ? 0.35 : 0.14,
+                    ),
+                    theme.scaffoldBackgroundColor,
+                  ],
+                ),
               ),
-            ),
-            child: SafeArea(
-              child: Center(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(CardsSpace.xl),
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 420),
-                    // Each state cross-fades into the next as the relay
-                    // answers, instead of snapping.
-                    child: AnimatedSwitcher(
-                      duration: CardsMotion.standard,
-                      switchInCurve: CardsMotion.curve,
-                      transitionBuilder: (child, animation) => FadeTransition(
-                        opacity: animation,
-                        child: ScaleTransition(
-                          scale: Tween(
-                            begin: 0.97,
-                            end: 1.0,
-                          ).animate(animation),
-                          child: child,
+              child: SafeArea(
+                child: Center(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(CardsSpace.xl),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 420),
+                      // Each state cross-fades into the next as the relay
+                      // answers, instead of snapping.
+                      child: AnimatedSwitcher(
+                        duration: CardsMotion.standard,
+                        switchInCurve: CardsMotion.curve,
+                        transitionBuilder: (child, animation) => FadeTransition(
+                          opacity: animation,
+                          child: ScaleTransition(
+                            scale: Tween(
+                              begin: 0.97,
+                              end: 1.0,
+                            ).animate(animation),
+                            child: child,
+                          ),
                         ),
-                      ),
-                      child: KeyedSubtree(
-                        key: ValueKey(_outcomeOf(order)),
-                        child: _panel(context, order),
+                        child: KeyedSubtree(
+                          key: ValueKey(_outcomeOf(order)),
+                          child: _panel(context, order),
+                        ),
                       ),
                     ),
                   ),

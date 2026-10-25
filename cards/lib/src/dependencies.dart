@@ -6,7 +6,10 @@ import 'data/repositories/auth_repository.dart';
 import 'data/repositories/catalog_repository.dart';
 import 'data/repositories/orders_repository.dart';
 import 'data/session/session_store.dart';
+import 'data/settings/app_settings.dart';
+import 'data/vault/card_vault.dart';
 import 'data/vault/code_vault.dart';
+import 'features/card_payment/moamalat_client.dart';
 
 /// Everything the screens use, built once at launch. Screens get it from
 /// [CardsScope]; tests and the preview harness build it with fakes.
@@ -18,14 +21,20 @@ class CardsDependencies {
     required this.orders,
     required this.vault,
     required this.lock,
+    AppSettings? settings,
+    MoamalatClient? moamalat,
+    CardVault? cards,
     this.preferences,
-  });
+  }) : settings = settings ?? AppSettings(),
+       moamalat = moamalat ?? MoamalatClient(),
+       cards = cards ?? MemoryCardVault();
 
   /// The real thing: the relay over HTTPS, the session in the keychain.
   factory CardsDependencies.live(CardsConfig config) {
     final preferences = SharedPreferencesAsync();
     final sessions = SecureSessionStore();
     final api = RelayApi(baseUrl: config.relayBaseUrl, sessions: sessions);
+    final settings = AppSettings(preferences: preferences);
     return CardsDependencies(
       config: config,
       auth: AuthRepository(
@@ -40,7 +49,9 @@ class CardsDependencies {
       ),
       orders: OrdersRepository(api: api, channel: config.channel),
       vault: SecureCodeVault(),
-      lock: CodeLock(),
+      cards: SecureCardVault(),
+      lock: CodeLock(settings: settings),
+      settings: settings,
       preferences: preferences,
     );
   }
@@ -53,6 +64,15 @@ class CardsDependencies {
   /// Delivered codes on the device, and the biometric lock in front of them.
   final CodeVault vault;
   final CodeLock lock;
+
+  /// Language, light or dark, and the code lock: the customer's choices.
+  final AppSettings settings;
+
+  /// Bank cards: the phone pays Moamalat itself, in the app's own form.
+  final MoamalatClient moamalat;
+
+  /// Bank cards the customer chose to keep on this phone.
+  final CardVault cards;
 
   /// Small per-device choices (the last payment method). Null in tests.
   final SharedPreferencesAsync? preferences;

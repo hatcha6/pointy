@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../shared/cards_scope.dart';
 import '../account/account_page.dart';
 import '../home/home_page.dart';
+import '../home/home_reset.dart';
 import '../my_cards/my_cards_page.dart';
 import '../shelf/shelf_model.dart';
 import 'cards_tab_bar.dart';
@@ -23,6 +24,7 @@ class _CardsShellState extends State<CardsShell> {
   ShelfModel? _shelf;
   ValueNotifier<Object?>? _session;
   ValueNotifier<int>? _orders;
+  final _homeReset = HomeReset();
 
   @override
   void didChangeDependencies() {
@@ -51,10 +53,20 @@ class _CardsShellState extends State<CardsShell> {
       _orders?.removeListener(shelf.refreshCustomer);
       shelf.dispose();
     }
+    _homeReset.dispose();
     super.dispose();
   }
 
   void _go(int tab) => setState(() => _tab = tab);
+
+  /// The tab bar. Home always starts the shelf over (search cleared, all
+  /// categories, the top), visibly when it was already showing.
+  void _select(int tab) {
+    if (tab == 0) {
+      _homeReset.reset(animate: _tab == 0);
+    }
+    _go(tab);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -64,7 +76,7 @@ class _CardsShellState extends State<CardsShell> {
       body: IndexedStack(
         index: _tab,
         children: [
-          HomePage(shelf: _shelf!),
+          HomePage(shelf: _shelf!, reset: _homeReset),
           // Rebuilt on each visit so a card bought a minute ago is there.
           _tab == 1
               ? MyCardsPage(key: UniqueKey(), onBrowse: () => _go(0))
@@ -72,7 +84,7 @@ class _CardsShellState extends State<CardsShell> {
           const AccountPage(),
         ],
       ),
-      bottomNavigationBar: CardsTabBar(current: _tab, onSelect: _go),
+      bottomNavigationBar: CardsTabBar(current: _tab, onSelect: _select),
     );
   }
 }

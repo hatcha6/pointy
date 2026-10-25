@@ -17,15 +17,20 @@ import '../../shared/skeleton.dart';
 import '../brand/brand_page.dart';
 import '../shelf/shelf_model.dart';
 import '../../shared/haptics.dart';
+import 'home_reset.dart';
+import 'shelf_reveal.dart';
 
 /// The shelf, the way the best storefronts lay one out: a large title, search
 /// and the categories pinned under the thumb, the most-wanted cards as a wide
 /// carousel, what the customer bought before, then one horizontal shelf per
 /// category with «عرض الكل». The card art is the hero throughout.
 class HomePage extends StatefulWidget {
-  const HomePage({super.key, required this.shelf});
+  const HomePage({super.key, required this.shelf, this.reset});
 
   final ShelfModel shelf;
+
+  /// The tab bar's home button: search cleared, all categories, the top.
+  final HomeReset? reset;
 
   static int columnsFor(double width) =>
       width < 600 ? 2 : (width < 900 ? 3 : 4);
@@ -34,27 +39,81 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage>
+    with SingleTickerProviderStateMixin {
   late final _search = TextEditingController(text: widget.shelf.query);
   final _scroll = ScrollController();
+  late final _reveal = ShelfReveal(this);
+
+  /// Where the search and the category bar have just pinned under the title.
+  static const double _pinnedAt = 160;
 
   ShelfModel get shelf => widget.shelf;
 
   @override
+  void initState() {
+    super.initState();
+    widget.reset?.addListener(_startOver);
+  }
+
+  @override
+  void didUpdateWidget(HomePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.reset != widget.reset) {
+      oldWidget.reset?.removeListener(_startOver);
+      widget.reset?.addListener(_startOver);
+    }
+  }
+
+  @override
   void dispose() {
+    widget.reset?.removeListener(_startOver);
+    _reveal.dispose();
     _search.dispose();
     _scroll.dispose();
     super.dispose();
   }
 
+  /// The old category's content dips out, the page settles under the pinned
+  /// bar while nothing shows, and the new category's cards rise in.
   void _pickCategory(String? key) {
-    shelf.filter(key);
-    if (_scroll.hasClients && _scroll.offset > 160) {
+    if (key == shelf.category) {
+      return;
+    }
+    _reveal.run(context, () {
+      shelf.filter(key);
+      if (_scroll.hasClients && _scroll.offset > _pinnedAt) {
+        _scroll.jumpTo(_pinnedAt);
+      }
+    });
+  }
+
+  void _startOver() {
+    FocusManager.instance.primaryFocus?.unfocus();
+    final changed = shelf.searching || shelf.category != null;
+    void clear() {
+      _search.clear();
+      shelf.search('');
+      shelf.filter(null);
+    }
+
+    if (!widget.reset!.animate) {
+      clear();
+      if (_scroll.hasClients) {
+        _scroll.jumpTo(0);
+      }
+      return;
+    }
+    // The page glides to the top while the shelf swaps underneath.
+    if (_scroll.hasClients && _scroll.offset > 0) {
       _scroll.animateTo(
-        160,
-        duration: CardsMotion.standard,
+        0,
+        duration: CardsMotion.emphasized,
         curve: CardsMotion.curve,
       );
+    }
+    if (changed) {
+      _reveal.run(context, clear);
     }
   }
 
@@ -109,8 +168,11 @@ class _HomePageState extends State<HomePage> {
         SliverList.separated(
           itemCount: brands.length,
           separatorBuilder: (_, _) => const SizedBox(height: CardsSpace.xs),
-          itemBuilder: (context, index) =>
-              _ResultRow(brand: brands[index], shelf: shelf),
+          itemBuilder: (context, index) => ShelfRise(
+            reveal: _reveal,
+            order: index,
+            child: _ResultRow(brand: brands[index], shelf: shelf),
+          ),
         ),
       ];
     }
@@ -132,8 +194,11 @@ class _HomePageState extends State<HomePage> {
               childAspectRatio: 1.1,
             ),
             itemCount: brands.length,
-            itemBuilder: (context, index) =>
-                _BrandTile(brand: brands[index], heroScope: 'grid'),
+            itemBuilder: (context, index) => ShelfRise(
+              reveal: _reveal,
+              order: index,
+              child: _BrandTile(brand: brands[index], heroScope: 'grid'),
+            ),
           ),
         ),
       ];
@@ -142,25 +207,30 @@ class _HomePageState extends State<HomePage> {
     final names = {for (final c in shelf.shelf.categories) c.key: c.name};
     final categories = [...shelf.shelf.categories]
       ..sort((a, b) => a.rank.compareTo(b.rank));
+    // Each piece rises in its turn, top to bottom.
+    var order = 0;
+    Widget piece(Widget child) => SliverToBoxAdapter(
+      child: ShelfRise(reveal: _reveal, order: order++, child: child),
+    );
     return [
       if (featured.isNotEmpty) ...[
-        SliverToBoxAdapter(child: SectionHeader(title: l10n.featuredTitle)),
-        SliverToBoxAdapter(child: _FeaturedCarousel(brands: featured)),
+        piece(SectionHeader(title: l10n.featuredTitle)),
+        piece(_FeaturedCarousel(brands: featured)),
       ],
       if (shelf.buyAgain.isNotEmpty) ...[
-        SliverToBoxAdapter(child: SectionHeader(title: l10n.buyAgainTitle)),
-        SliverToBoxAdapter(child: _BuyAgainShelf(entries: shelf.buyAgain)),
+        piece(SectionHeader(title: l10n.buyAgainTitle)),
+        piece(_BuyAgainShelf(entries: shelf.buyAgain)),
       ],
       for (final category in categories)
         if (brands.any((b) => b.category == category.key)) ...[
-          SliverToBoxAdapter(
-            child: SectionHeader(
+          piece(
+            SectionHeader(
               title: names[category.key] ?? category.key,
               onSeeAll: () => _pickCategory(category.key),
             ),
           ),
-          SliverToBoxAdapter(
-            child: _BrandShelf(
+          piece(
+            _BrandShelf(
               brands: brands.where((b) => b.category == category.key).toList(),
               scope: category.key,
             ),
@@ -615,6 +685,8 @@ class _BrandTile extends StatelessWidget {
           Stack(
             children: [
               Hero(
+                createRectTween: cardRectTween,
+                transitionOnUserGestures: true,
                 tag: tag,
                 child: CardArt(
                   brand: brand,
@@ -684,6 +756,8 @@ class _ResultRow extends StatelessWidget {
             SizedBox(
               width: 96,
               child: Hero(
+                createRectTween: cardRectTween,
+                transitionOnUserGestures: true,
                 tag: tag,
                 child: CardArt(
                   brand: brand,
@@ -764,6 +838,8 @@ class _BuyAgainShelf extends StatelessWidget {
                   SizedBox(
                     width: 84,
                     child: Hero(
+                      createRectTween: cardRectTween,
+                      transitionOnUserGestures: true,
                       tag: 'brand-${entry.brand.key}-again',
                       child: CardArt(
                         brand: entry.brand,

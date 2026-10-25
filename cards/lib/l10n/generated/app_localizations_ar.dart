@@ -562,4 +562,187 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get refundedToCredit => 'أُضيف إلى رصيدك';
+
+  @override
+  String get settingsSection => 'الإعدادات';
+
+  @override
+  String get codeLockTitle => 'حماية الرموز';
+
+  @override
+  String get codeLockBody => 'اطلب Face ID أو البصمة قبل عرض الأرقام السرية';
+
+  @override
+  String get codeLockOffReason => 'تأكيد هويتك لإيقاف حماية الرموز';
+
+  @override
+  String get themeTitle => 'المظهر';
+
+  @override
+  String get themeSystem => 'تلقائي';
+
+  @override
+  String get themeLight => 'فاتح';
+
+  @override
+  String get themeDark => 'داكن';
+
+  @override
+  String get languageTitle => 'اللغة';
+
+  @override
+  String get aboutSection => 'حول التطبيق';
+
+  @override
+  String get aboutTitle => 'حول دفتر كروت';
+
+  @override
+  String get aboutTagline => 'كروت الشحن والإنترنت، تصلك فوراً.';
+
+  @override
+  String get aboutBody =>
+      '«دفتر كروت» تطبيق من «دفتر»، نظام المبيعات الذي تعمل به المتاجر في ليبيا. اختر الكرت وادفع بمحفظتك أو بطاقتك، فيصلك رقمه السري خلال ثوانٍ، ويبقى محفوظاً في «كروتي» متى احتجت إليه.';
+
+  @override
+  String aboutVersion(String version) {
+    return 'الإصدار $version';
+  }
+
+  @override
+  String get aboutCopyright => '© 2026 دفتر';
+
+  @override
+  String get contactWhatsApp => 'تواصل معنا عبر واتساب';
+
+  @override
+  String get websiteTitle => 'الموقع الإلكتروني';
+
+  @override
+  String get privacyPolicy => 'سياسة الخصوصية';
+
+  @override
+  String get termsOfUse => 'شروط الاستخدام';
+
+  @override
+  String get openSourceLicenses => 'تراخيص البرامج مفتوحة المصدر';
+
+  @override
+  String signInConsent(String terms, String privacy) {
+    return 'بالمتابعة، أنت توافق على $terms و$privacy.';
+  }
+
+  @override
+  String get cardPayTitle => 'الدفع بالبطاقة المصرفية';
+
+  @override
+  String get cardThroughMoamalat => 'عبر بوابة معاملات';
+
+  @override
+  String get cardNumberLabel => 'رقم البطاقة';
+
+  @override
+  String get cardExpiryLabel => 'تاريخ الانتهاء';
+
+  @override
+  String get cardNumberInvalid => 'رقم البطاقة غير صحيح.';
+
+  @override
+  String get cardExpiryInvalid =>
+      'أدخل تاريخ الانتهاء كما على البطاقة: شهر/سنة.';
+
+  @override
+  String get cardSecureNote =>
+      'تذهب بيانات بطاقتك من هاتفك إلى بوابة معاملات مباشرة، فلا تمرّ بخوادمنا ولا نحتفظ بها.';
+
+  @override
+  String get cardOpening => 'نجهّز الدفع الآمن…';
+
+  @override
+  String get cardCharging => 'نتواصل مع بنكك…';
+
+  @override
+  String get cardConfirming => 'تم الدفع، نؤكّد طلبك…';
+
+  @override
+  String get cardVerifyTitle => 'تأكيد من بنكك';
+
+  @override
+  String get cardVerifyBody =>
+      'أرسل بنكك رمزاً إلى هاتفك. أدخله في صفحة البنك أدناه لإتمام الدفع.';
+
+  @override
+  String get cardVerifyCancel => 'إلغاء';
+
+  @override
+  String get cardErrDeclined =>
+      'رفض البنك العملية. تأكّد من بيانات البطاقة ورصيدها، أو جرّب بطاقة أخرى.';
+
+  @override
+  String get cardErrExpiry => 'تاريخ انتهاء البطاقة غير صحيح.';
+
+  @override
+  String get cardErrNetwork =>
+      'تعذّر الوصول إلى بوابة الدفع. تحقّق من الإنترنت وحاول مجدداً.';
+
+  @override
+  String get cardErrVerification =>
+      'لم يكتمل التأكيد من بنكك، ولم يُخصم شيء. حاول مجدداً.';
+
+  @override
+  String get cardErrExpired => 'انتهت مهلة الدفع. حاول مجدداً.';
+
+  @override
+  String get cardUsePaymentPage => 'الدفع من صفحة البوابة بدلاً من ذلك';
+
+  @override
+  String get cardNameLabel => 'اسم حامل البطاقة';
+
+  @override
+  String get cardNameInvalid => 'أدخل الاسم كما هو مكتوب على البطاقة.';
+
+  @override
+  String get savedCardsTitle => 'بطاقاتك المحفوظة';
+
+  @override
+  String get useAnotherCard => 'استخدم بطاقة أخرى';
+
+  @override
+  String get saveCardTitle => 'احفظ البطاقة على هذا الهاتف';
+
+  @override
+  String get saveCardBody =>
+      'لتدفع بها أسرع في المرة القادمة. تبقى مشفّرة على هاتفك وحده، وتُفتح ببصمة الوجه أو رمز الهاتف، ولا تصلنا أبداً.';
+
+  @override
+  String get savedCardUnlockReason => 'تأكيد هويتك للدفع بالبطاقة المحفوظة';
+
+  @override
+  String savedCardExpires(String expiry) {
+    return 'تنتهي $expiry';
+  }
+
+  @override
+  String get savedCardsSettings => 'البطاقات المحفوظة';
+
+  @override
+  String get savedCardsEmpty =>
+      'لا توجد بطاقات محفوظة على هذا الهاتف. يمكنك حفظ بطاقة عند الدفع بها.';
+
+  @override
+  String get savedCardsNote =>
+      'تُحفظ البطاقات على هذا الهاتف وحده، مشفّرة وخلف بصمة الوجه أو رمز الهاتف، ولا تصل إلى خوادمنا. تُحذف عند تسجيل الخروج.';
+
+  @override
+  String get removeCard => 'إزالة';
+
+  @override
+  String get removeCardTitle => 'إزالة البطاقة؟';
+
+  @override
+  String get removeCardBody =>
+      'ستُحذف من هذا الهاتف. يمكنك حفظها مجدداً عند الدفع بها.';
+
+  @override
+  String get savedCardLocked =>
+      'لم يتم التحقق من هويتك، فلم نستخدم البطاقة المحفوظة.';
 }

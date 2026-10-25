@@ -47,24 +47,31 @@ class CardsTabBar extends StatelessWidget {
       (l10n.tabMyCards, Icons.style_outlined, Icons.style_rounded),
       (l10n.tabAccount, Icons.person_outline_rounded, Icons.person_rounded),
     ];
+    // The tabs keep their places in every language: «الرئيسية» on the far
+    // right, as the app was made. English or French pages read left to
+    // right, but a tab bar that swapped ends would send a returning
+    // customer's thumb to the wrong tab.
     if (nativeGlass) {
       return SafeArea(
         top: false,
-        child: CNTabBar(
-          currentIndex: current,
-          onTap: _select,
-          tint: CardsTheme.link(Theme.of(context)),
-          // The same Material icons as everywhere else, drawn into the native
-          // bar, at the size the system's own tab bars use.
-          iconSize: 22,
-          items: [
-            for (final (label, icon, selected) in tabs)
-              CNTabBarItem(
-                label: label,
-                customIcon: icon,
-                activeCustomIcon: selected,
-              ),
-          ],
+        child: Directionality(
+          textDirection: TextDirection.rtl,
+          child: CNTabBar(
+            currentIndex: current,
+            onTap: _select,
+            tint: CardsTheme.link(Theme.of(context)),
+            // The same Material icons as everywhere else, drawn into the native
+            // bar, at the size the system's own tab bars use.
+            iconSize: 22,
+            items: [
+              for (final (label, icon, selected) in tabs)
+                CNTabBarItem(
+                  label: label,
+                  customIcon: icon,
+                  activeCustomIcon: selected,
+                ),
+            ],
+          ),
         ),
       );
     }
@@ -78,17 +85,20 @@ class CardsTabBar extends StatelessWidget {
               top: BorderSide(color: theme.colorScheme.outline, width: 0.8),
             ),
           ),
-          child: NavigationBar(
-            selectedIndex: current,
-            onDestinationSelected: _select,
-            destinations: [
-              for (final (label, icon, selected) in tabs)
-                NavigationDestination(
-                  icon: Icon(icon),
-                  selectedIcon: Icon(selected),
-                  label: label,
-                ),
-            ],
+          child: Directionality(
+            textDirection: TextDirection.rtl,
+            child: NavigationBar(
+              selectedIndex: current,
+              onDestinationSelected: _select,
+              destinations: [
+                for (final (label, icon, selected) in tabs)
+                  NavigationDestination(
+                    icon: Icon(icon),
+                    selectedIcon: Icon(selected),
+                    label: label,
+                  ),
+              ],
+            ),
           ),
         ),
       ),

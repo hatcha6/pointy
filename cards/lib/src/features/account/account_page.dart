@@ -9,13 +9,14 @@ import '../../data/models/order.dart';
 import '../../design/cards_theme.dart';
 import '../../design/cards_tokens.dart';
 import '../../shared/cards_scope.dart';
-import '../../shared/empty_state.dart';
 import '../../shared/grouped.dart';
 import '../../shared/pill.dart';
 import '../../shared/money_text.dart';
 import '../../shared/relay_error_text.dart';
 import '../sign_in/sign_in_sheet.dart';
 import '../../shared/haptics.dart';
+import 'about_section.dart';
+import 'settings_section.dart';
 
 /// The customer: their number, their credit and where it came from, the
 /// devices signed in, signing out, and deleting the account (App Store
@@ -25,21 +26,90 @@ class AccountPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
     final auth = CardsScope.of(context).auth;
     return SafeArea(
       child: ValueListenableBuilder(
         valueListenable: auth.session,
         builder: (context, session, _) => session == null
-            ? EmptyState(
-                icon: Icons.phone_iphone_rounded,
-                title: l10n.accountSignedOutTitle,
-                body: l10n.accountSignedOutBody,
-                actionLabel: l10n.signInAction,
-                onAction: () => ensureSignedIn(context),
-              )
+            ? const _SignedOut()
             : _SignedIn(key: ValueKey(session.sessionId), phone: session.phone),
       ),
+    );
+  }
+}
+
+/// Signed out, the tab is still the phone's settings: the way in, then the
+/// choices that need no account.
+class _SignedOut extends StatelessWidget {
+  const _SignedOut();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    return ListView(
+      padding: EdgeInsets.fromLTRB(
+        CardsSpace.gutter,
+        CardsSpace.xl,
+        CardsSpace.gutter,
+        MediaQuery.paddingOf(context).bottom + 96,
+      ),
+      children: [
+        Text(l10n.tabAccount, style: theme.textTheme.headlineLarge),
+        const SizedBox(height: CardsSpace.lg),
+        Grouped(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(CardsSpace.xl),
+              child: Column(
+                children: [
+                  Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primaryContainer,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.phone_iphone_rounded,
+                      size: 30,
+                      color: theme.colorScheme.onPrimaryContainer,
+                    ),
+                  ),
+                  const SizedBox(height: CardsSpace.lg),
+                  Text(
+                    l10n.accountSignedOutTitle,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: CardsSpace.xs),
+                  Text(
+                    l10n.accountSignedOutBody,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: CardsSpace.lg),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: () => ensureSignedIn(context),
+                      child: Text(l10n.signInAction),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: CardsSpace.xl),
+        const SettingsSection(),
+        const SizedBox(height: CardsSpace.xl),
+        const AboutSection(),
+      ],
     );
   }
 }
@@ -102,6 +172,7 @@ class _SignedInState extends State<_SignedIn> {
     final dependencies = CardsScope.of(context);
     await dependencies.auth.signOut();
     await dependencies.vault.clear();
+    await dependencies.cards.clear();
   }
 
   Future<void> _delete() async {
@@ -136,6 +207,7 @@ class _SignedInState extends State<_SignedIn> {
     final result = await dependencies.auth.deleteAccount();
     if (result is Ok) {
       await dependencies.vault.clear();
+      await dependencies.cards.clear();
       messenger.showSnackBar(SnackBar(content: Text(l10n.accountDeleted)));
     } else {
       messenger.showSnackBar(
@@ -292,6 +364,10 @@ class _SignedInState extends State<_SignedIn> {
                 ),
             ],
           ),
+          const SizedBox(height: CardsSpace.xl),
+          const SettingsSection(),
+          const SizedBox(height: CardsSpace.xl),
+          const AboutSection(),
           const SizedBox(height: CardsSpace.xl),
           Grouped(
             title: l10n.accountSection,

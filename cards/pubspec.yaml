@@ -48,6 +48,9 @@ dependencies:
   local_auth: ^3.0.2
   qr_flutter: ^4.1.0
   cupertino_native_better: ^1.7.0
+  sensors_plus: ^7.1.1
+  package_info_plus: ^10.2.2
+  webview_flutter: ^4.14.1
 
 dev_dependencies:
   flutter_test:
@@ -83,6 +86,9 @@ flutter:
     # The Daftar mark the opening starts from (512 px of
     # shared/pointy_brand/assets/branding/daftar_logo.png).
     - assets/branding/daftar_mark.png
+    # The privacy policy and terms of use, one file per language
+    # (features/legal/legal_document.dart).
+    - assets/legal/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

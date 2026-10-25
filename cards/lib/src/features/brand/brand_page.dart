@@ -17,10 +17,11 @@ import '../../shared/pressable.dart';
 import '../../shared/quantity_stepper.dart';
 import '../checkout/checkout_sheet.dart';
 import '../sign_in/sign_in_sheet.dart';
+import 'brand_light.dart';
 import '../../shared/haptics.dart';
 
 /// One brand, presented the way a premium storefront presents a product: its
-/// art filling the top of the page, what it comes in, and a frosted buy bar
+/// card floating at the top of the page, what it comes in, and a frosted buy bar
 /// that stays under the thumb.
 class BrandPage extends StatefulWidget {
   BrandPage({super.key, required this.brand, this.initialItem, String? heroTag})
@@ -52,6 +53,18 @@ class _BrandPageState extends State<BrandPage> {
   late String? _country = widget.initialItem?.country ?? _countries.firstOrNull;
   late CardItem? _item = widget.initialItem ?? _defaultItem();
   int _quantity = 1;
+
+  /// Whether the card has scrolled under the bar, so the bar names it and
+  /// turns solid.
+  final _cardGone = ValueNotifier(false);
+  final _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _cardGone.dispose();
+    _scroll.dispose();
+    super.dispose();
+  }
 
   List<String> get _countries {
     final seen = <String>{};
@@ -96,11 +109,16 @@ class _BrandPageState extends State<BrandPage> {
     final brand = widget.brand;
     final countries = _countries;
     final item = _item;
-    final top = MediaQuery.paddingOf(context).top;
-    // The art fills the header edge to edge, under the status bar too: a
-    // 16:10 tile at phone width, kept within reason on a tablet.
-    final heroHeight = (MediaQuery.sizeOf(context).width / kCardAspect + top)
-        .clamp(300.0, 440.0);
+    final media = MediaQuery.of(context);
+    final cardWidth = BrandCardStage.cardWidthFor(media);
+    final cardHeight = cardWidth / kCardAspect;
+    // The light reaches a little past the card before it has faded out.
+    final lightHeight =
+        media.padding.top +
+        kToolbarHeight +
+        BrandCardStage.padding.vertical +
+        cardHeight +
+        56;
     final cheapest = brand.items
         .where((i) => i.available)
         .map((i) => i.price)
@@ -110,141 +128,159 @@ class _BrandPageState extends State<BrandPage> {
         );
     return Scaffold(
       extendBody: true,
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            pinned: true,
-            stretch: true,
-            expandedHeight: heroHeight,
-            backgroundColor: theme.scaffoldBackgroundColor,
-            leading: const _CircleBack(),
-            stretchTriggerOffset: 120,
-            flexibleSpace: LayoutBuilder(
-              builder: (context, constraints) {
-                final collapsedHeight = top + kToolbarHeight;
-                final t =
-                    ((heroHeight - constraints.maxHeight) /
-                            (heroHeight - collapsedHeight))
-                        .clamp(0.0, 1.0);
-                return Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    FlexibleSpaceBar(
-                      collapseMode: CollapseMode.parallax,
-                      stretchModes: const [StretchMode.zoomBackground],
-                      background: _ImmersiveArt(
-                        brand: brand,
-                        heroTag: widget.heroTag,
-                      ),
-                    ),
-                    Positioned(
-                      top: top,
-                      left: 64,
-                      right: 64,
-                      height: kToolbarHeight,
-                      child: Opacity(
-                        opacity: ((t - 0.6) / 0.4).clamp(0.0, 1.0),
-                        child: Center(
-                          child: Text(
-                            brand.name,
-                            style: theme.appBarTheme.titleTextStyle,
-                            maxLines: 1,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                );
+      body: SettledLight(
+        builder: (context, light) => Stack(
+          children: [
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: AmbientLight(
+                brand: brand,
+                light: light,
+                scroll: _scroll,
+                height: lightHeight,
+              ),
+            ),
+            NotificationListener<ScrollNotification>(
+              onNotification: (note) {
+                if (note.depth == 0) {
+                  _cardGone.value = note.metrics.pixels > cardHeight * 0.8;
+                }
+                return false;
               },
-            ),
-          ),
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(
-              CardsSpace.gutter,
-              CardsSpace.sm,
-              CardsSpace.gutter,
-              140,
-            ),
-            sliver: SliverList.list(
-              children: [
-                Text(brand.name, style: theme.textTheme.headlineMedium),
-                const SizedBox(height: CardsSpace.xs),
-                Wrap(
-                  spacing: CardsSpace.sm,
-                  runSpacing: CardsSpace.xs,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    if (cheapest != null)
-                      Text(
-                        '${l10n.startingFrom} ${formatMoney(l10n, cheapest)}',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
+              child: CustomScrollView(
+                controller: _scroll,
+                slivers: [
+                  // A plain bar: the back button, and the brand's name once the
+                  // card has scrolled away.
+                  SliverAppBar(
+                    pinned: true,
+                    // Clear over the light; solid once the card has gone under.
+                    backgroundColor: Colors.transparent,
+                    flexibleSpace: ValueListenableBuilder<bool>(
+                      valueListenable: _cardGone,
+                      builder: (context, gone, _) => AnimatedOpacity(
+                        duration: CardsMotion.fast,
+                        opacity: gone ? 1 : 0,
+                        child: ColoredBox(color: theme.scaffoldBackgroundColor),
                       ),
-                    if (brand.badge.isNotEmpty)
-                      Pill(text: brand.badge, tone: PillTone.promo),
-                  ],
-                ),
-                const SizedBox(height: CardsSpace.xl),
-                const Divider(),
-                if (countries.length > 1) ...[
-                  const SizedBox(height: CardsSpace.xl),
-                  Text(l10n.chooseCountry, style: theme.textTheme.titleLarge),
-                  const SizedBox(height: CardsSpace.md),
-                  Wrap(
-                    spacing: CardsSpace.sm,
-                    runSpacing: CardsSpace.sm,
-                    children: [
-                      for (final code in countries)
-                        _CountryChip(
-                          code: code,
-                          selected: _country == code,
-                          onTap: () => setState(() {
-                            _country = code;
-                            _item = _defaultItem();
-                          }),
+                    ),
+                    leading: const _CircleBack(),
+                    title: ValueListenableBuilder<bool>(
+                      valueListenable: _cardGone,
+                      builder: (context, gone, child) => AnimatedOpacity(
+                        duration: CardsMotion.fast,
+                        opacity: gone ? 1 : 0,
+                        child: child,
+                      ),
+                      child: Text(brand.name, maxLines: 1),
+                    ),
+                  ),
+                  SliverToBoxAdapter(
+                    child: BrandCardStage(
+                      brand: brand,
+                      heroTag: widget.heroTag,
+                      width: cardWidth,
+                      light: light,
+                    ),
+                  ),
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(
+                      CardsSpace.gutter,
+                      CardsSpace.sm,
+                      CardsSpace.gutter,
+                      140,
+                    ),
+                    sliver: SliverList.list(
+                      children: [
+                        Text(brand.name, style: theme.textTheme.headlineMedium),
+                        const SizedBox(height: CardsSpace.xs),
+                        Wrap(
+                          spacing: CardsSpace.sm,
+                          runSpacing: CardsSpace.xs,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            if (cheapest != null)
+                              Text(
+                                '${l10n.startingFrom} ${formatMoney(l10n, cheapest)}',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            if (brand.badge.isNotEmpty)
+                              Pill(text: brand.badge, tone: PillTone.promo),
+                          ],
                         ),
-                    ],
+                        if (countries.length > 1) ...[
+                          const SizedBox(height: CardsSpace.xl),
+                          Text(
+                            l10n.chooseCountry,
+                            style: theme.textTheme.titleLarge,
+                          ),
+                          const SizedBox(height: CardsSpace.md),
+                          Wrap(
+                            spacing: CardsSpace.sm,
+                            runSpacing: CardsSpace.sm,
+                            children: [
+                              for (final code in countries)
+                                _CountryChip(
+                                  code: code,
+                                  selected: _country == code,
+                                  onTap: () => setState(() {
+                                    _country = code;
+                                    _item = _defaultItem();
+                                  }),
+                                ),
+                            ],
+                          ),
+                        ],
+                        const SizedBox(height: CardsSpace.xl),
+                        Text(
+                          l10n.chooseValue,
+                          style: theme.textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: CardsSpace.md),
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            final columns = constraints.maxWidth < 360
+                                ? 2
+                                : (constraints.maxWidth < 600 ? 3 : 4);
+                            const gap = CardsSpace.sm;
+                            final tileWidth =
+                                (constraints.maxWidth - gap * (columns - 1)) /
+                                columns;
+                            return Wrap(
+                              spacing: gap,
+                              runSpacing: gap,
+                              children: [
+                                for (final option in _items)
+                                  SizedBox(
+                                    width: tileWidth,
+                                    child: _ValueTile(
+                                      item: option,
+                                      selected: option.key == item?.key,
+                                      onTap: option.available
+                                          ? () => setState(() => _item = option)
+                                          : null,
+                                    ),
+                                  ),
+                              ],
+                            );
+                          },
+                        ),
+                        if (brand.redeemHint.isNotEmpty) ...[
+                          const SizedBox(height: CardsSpace.xl),
+                          _RedeemCard(hint: brand.redeemHint),
+                        ],
+                      ],
+                    ),
                   ),
                 ],
-                const SizedBox(height: CardsSpace.xl),
-                Text(l10n.chooseValue, style: theme.textTheme.titleLarge),
-                const SizedBox(height: CardsSpace.md),
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final columns = constraints.maxWidth < 360
-                        ? 2
-                        : (constraints.maxWidth < 600 ? 3 : 4);
-                    const gap = CardsSpace.sm;
-                    final tileWidth =
-                        (constraints.maxWidth - gap * (columns - 1)) / columns;
-                    return Wrap(
-                      spacing: gap,
-                      runSpacing: gap,
-                      children: [
-                        for (final option in _items)
-                          SizedBox(
-                            width: tileWidth,
-                            child: _ValueTile(
-                              item: option,
-                              selected: option.key == item?.key,
-                              onTap: option.available
-                                  ? () => setState(() => _item = option)
-                                  : null,
-                            ),
-                          ),
-                      ],
-                    );
-                  },
-                ),
-                if (brand.redeemHint.isNotEmpty) ...[
-                  const SizedBox(height: CardsSpace.xl),
-                  _RedeemCard(hint: brand.redeemHint),
-                ],
-              ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
       bottomNavigationBar: item == null
           ? null
@@ -255,92 +291,6 @@ class _BrandPageState extends State<BrandPage> {
               onQuantity: (value) => setState(() => _quantity = value),
               onBuy: _buy,
             ),
-    );
-  }
-}
-
-/// The brand's art edge to edge, melting into the page at its foot. A light
-/// shade at the top keeps the status bar and the back button readable on any
-/// art.
-///
-/// The shade travels with the art: the flight from a shelf tile turns the
-/// tile into this header as it goes (corners straighten, the foot melts in),
-/// so it lands already looking like the header instead of a hard-edged image
-/// over the page that snaps into place.
-class _ImmersiveArt extends StatelessWidget {
-  const _ImmersiveArt({required this.brand, required this.heroTag});
-
-  final CardBrand brand;
-  final String heroTag;
-
-  @override
-  Widget build(BuildContext context) {
-    return Hero(
-      tag: heroTag,
-      flightShuttleBuilder: (_, animation, _, fromContext, toContext) {
-        // The tile's own corners, whichever end of the flight it is on.
-        final tile = [
-          fromContext,
-          toContext,
-        ].map((c) => (c.widget as Hero).child).whereType<CardArt>().firstOrNull;
-        final radius = tile?.radius ?? CardsRadii.art;
-        return AnimatedBuilder(
-          animation: animation,
-          builder: (context, _) => _HeaderArt(
-            brand: brand,
-            // Ease so the shade arrives with the art, not after it.
-            progress: Curves.easeOut.transform(animation.value),
-            tileRadius: radius,
-          ),
-        );
-      },
-      child: _HeaderArt(brand: brand, progress: 1, tileRadius: 0),
-    );
-  }
-}
-
-/// The art and its shade, [progress] of the way from a shelf tile (rounded,
-/// unshaded) to the page header (square, melting into the page).
-class _HeaderArt extends StatelessWidget {
-  const _HeaderArt({
-    required this.brand,
-    required this.progress,
-    required this.tileRadius,
-  });
-
-  final CardBrand brand;
-  final double progress;
-  final double tileRadius;
-
-  @override
-  Widget build(BuildContext context) {
-    final page = Theme.of(context).scaffoldBackgroundColor;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(tileRadius * (1 - progress)),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          CardArtImage(brand: brand),
-          Opacity(
-            opacity: progress.clamp(0.0, 1.0),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  stops: const [0, 0.22, 0.62, 1],
-                  colors: [
-                    Colors.black.withValues(alpha: 0.28),
-                    Colors.transparent,
-                    page.withValues(alpha: 0),
-                    page,
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -475,24 +425,36 @@ class _ValueTile extends StatelessWidget {
           decoration: BoxDecoration(
             color: theme.colorScheme.surface,
             borderRadius: BorderRadius.circular(CardsRadii.tile),
+            border: Border.all(color: theme.colorScheme.outline),
+            boxShadow: selected ? CardsShadows.raised : null,
+          ),
+          // The selection ring is painted over the tile, not into its
+          // border: a border takes room from the label, so a long value
+          // would rewrap the moment it is chosen.
+          foregroundDecoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(CardsRadii.tile),
             border: Border.all(
               color: selected
                   ? theme.colorScheme.onSurface
-                  : theme.colorScheme.outline,
-              width: selected ? 2 : 1,
+                  : Colors.transparent,
+              width: 2,
             ),
-            boxShadow: selected ? CardsShadows.raised : null,
           ),
           child: Opacity(
             opacity: unavailable ? 0.4 : 1,
             child: Column(
               children: [
-                Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
+                // One line in every tile, so a row of values lines up; a
+                // long one shrinks a little instead of wrapping.
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 2),

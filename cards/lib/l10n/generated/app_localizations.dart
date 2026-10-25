@@ -6,6 +6,8 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart' as intl;
 
 import 'app_localizations_ar.dart';
+import 'app_localizations_en.dart';
+import 'app_localizations_fr.dart';
 
 // ignore_for_file: type=lint
 
@@ -92,7 +94,11 @@ abstract class AppLocalizations {
       ];
 
   /// A list of this localizations delegate's supported locales.
-  static const List<Locale> supportedLocales = <Locale>[Locale('ar')];
+  static const List<Locale> supportedLocales = <Locale>[
+    Locale('ar'),
+    Locale('en'),
+    Locale('fr'),
+  ];
 
   /// The app's name: Daftar Cards.
   ///
@@ -1053,6 +1059,336 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'أُضيف إلى رصيدك'**
   String get refundedToCredit;
+
+  /// No description provided for @settingsSection.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإعدادات'**
+  String get settingsSection;
+
+  /// No description provided for @codeLockTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'حماية الرموز'**
+  String get codeLockTitle;
+
+  /// No description provided for @codeLockBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'اطلب Face ID أو البصمة قبل عرض الأرقام السرية'**
+  String get codeLockBody;
+
+  /// No description provided for @codeLockOffReason.
+  ///
+  /// In ar, this message translates to:
+  /// **'تأكيد هويتك لإيقاف حماية الرموز'**
+  String get codeLockOffReason;
+
+  /// No description provided for @themeTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المظهر'**
+  String get themeTitle;
+
+  /// No description provided for @themeSystem.
+  ///
+  /// In ar, this message translates to:
+  /// **'تلقائي'**
+  String get themeSystem;
+
+  /// No description provided for @themeLight.
+  ///
+  /// In ar, this message translates to:
+  /// **'فاتح'**
+  String get themeLight;
+
+  /// No description provided for @themeDark.
+  ///
+  /// In ar, this message translates to:
+  /// **'داكن'**
+  String get themeDark;
+
+  /// No description provided for @languageTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اللغة'**
+  String get languageTitle;
+
+  /// No description provided for @aboutSection.
+  ///
+  /// In ar, this message translates to:
+  /// **'حول التطبيق'**
+  String get aboutSection;
+
+  /// No description provided for @aboutTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'حول دفتر كروت'**
+  String get aboutTitle;
+
+  /// No description provided for @aboutTagline.
+  ///
+  /// In ar, this message translates to:
+  /// **'كروت الشحن والإنترنت، تصلك فوراً.'**
+  String get aboutTagline;
+
+  /// No description provided for @aboutBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'«دفتر كروت» تطبيق من «دفتر»، نظام المبيعات الذي تعمل به المتاجر في ليبيا. اختر الكرت وادفع بمحفظتك أو بطاقتك، فيصلك رقمه السري خلال ثوانٍ، ويبقى محفوظاً في «كروتي» متى احتجت إليه.'**
+  String get aboutBody;
+
+  /// About page: the app version.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإصدار {version}'**
+  String aboutVersion(String version);
+
+  /// No description provided for @aboutCopyright.
+  ///
+  /// In ar, this message translates to:
+  /// **'© 2026 دفتر'**
+  String get aboutCopyright;
+
+  /// No description provided for @contactWhatsApp.
+  ///
+  /// In ar, this message translates to:
+  /// **'تواصل معنا عبر واتساب'**
+  String get contactWhatsApp;
+
+  /// No description provided for @websiteTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الموقع الإلكتروني'**
+  String get websiteTitle;
+
+  /// No description provided for @privacyPolicy.
+  ///
+  /// In ar, this message translates to:
+  /// **'سياسة الخصوصية'**
+  String get privacyPolicy;
+
+  /// No description provided for @termsOfUse.
+  ///
+  /// In ar, this message translates to:
+  /// **'شروط الاستخدام'**
+  String get termsOfUse;
+
+  /// No description provided for @openSourceLicenses.
+  ///
+  /// In ar, this message translates to:
+  /// **'تراخيص البرامج مفتوحة المصدر'**
+  String get openSourceLicenses;
+
+  /// Under the sign-in button; {terms} and {privacy} are links named by termsOfUse and privacyPolicy.
+  ///
+  /// In ar, this message translates to:
+  /// **'بالمتابعة، أنت توافق على {terms} و{privacy}.'**
+  String signInConsent(String terms, String privacy);
+
+  /// No description provided for @cardPayTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدفع بالبطاقة المصرفية'**
+  String get cardPayTitle;
+
+  /// No description provided for @cardThroughMoamalat.
+  ///
+  /// In ar, this message translates to:
+  /// **'عبر بوابة معاملات'**
+  String get cardThroughMoamalat;
+
+  /// No description provided for @cardNumberLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم البطاقة'**
+  String get cardNumberLabel;
+
+  /// No description provided for @cardExpiryLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ الانتهاء'**
+  String get cardExpiryLabel;
+
+  /// No description provided for @cardNumberInvalid.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم البطاقة غير صحيح.'**
+  String get cardNumberInvalid;
+
+  /// No description provided for @cardExpiryInvalid.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل تاريخ الانتهاء كما على البطاقة: شهر/سنة.'**
+  String get cardExpiryInvalid;
+
+  /// No description provided for @cardSecureNote.
+  ///
+  /// In ar, this message translates to:
+  /// **'تذهب بيانات بطاقتك من هاتفك إلى بوابة معاملات مباشرة، فلا تمرّ بخوادمنا ولا نحتفظ بها.'**
+  String get cardSecureNote;
+
+  /// No description provided for @cardOpening.
+  ///
+  /// In ar, this message translates to:
+  /// **'نجهّز الدفع الآمن…'**
+  String get cardOpening;
+
+  /// No description provided for @cardCharging.
+  ///
+  /// In ar, this message translates to:
+  /// **'نتواصل مع بنكك…'**
+  String get cardCharging;
+
+  /// No description provided for @cardConfirming.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم الدفع، نؤكّد طلبك…'**
+  String get cardConfirming;
+
+  /// No description provided for @cardVerifyTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تأكيد من بنكك'**
+  String get cardVerifyTitle;
+
+  /// No description provided for @cardVerifyBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'أرسل بنكك رمزاً إلى هاتفك. أدخله في صفحة البنك أدناه لإتمام الدفع.'**
+  String get cardVerifyBody;
+
+  /// No description provided for @cardVerifyCancel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء'**
+  String get cardVerifyCancel;
+
+  /// No description provided for @cardErrDeclined.
+  ///
+  /// In ar, this message translates to:
+  /// **'رفض البنك العملية. تأكّد من بيانات البطاقة ورصيدها، أو جرّب بطاقة أخرى.'**
+  String get cardErrDeclined;
+
+  /// No description provided for @cardErrExpiry.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ انتهاء البطاقة غير صحيح.'**
+  String get cardErrExpiry;
+
+  /// No description provided for @cardErrNetwork.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر الوصول إلى بوابة الدفع. تحقّق من الإنترنت وحاول مجدداً.'**
+  String get cardErrNetwork;
+
+  /// No description provided for @cardErrVerification.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يكتمل التأكيد من بنكك، ولم يُخصم شيء. حاول مجدداً.'**
+  String get cardErrVerification;
+
+  /// No description provided for @cardErrExpired.
+  ///
+  /// In ar, this message translates to:
+  /// **'انتهت مهلة الدفع. حاول مجدداً.'**
+  String get cardErrExpired;
+
+  /// No description provided for @cardUsePaymentPage.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدفع من صفحة البوابة بدلاً من ذلك'**
+  String get cardUsePaymentPage;
+
+  /// No description provided for @cardNameLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم حامل البطاقة'**
+  String get cardNameLabel;
+
+  /// No description provided for @cardNameInvalid.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل الاسم كما هو مكتوب على البطاقة.'**
+  String get cardNameInvalid;
+
+  /// No description provided for @savedCardsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'بطاقاتك المحفوظة'**
+  String get savedCardsTitle;
+
+  /// No description provided for @useAnotherCard.
+  ///
+  /// In ar, this message translates to:
+  /// **'استخدم بطاقة أخرى'**
+  String get useAnotherCard;
+
+  /// No description provided for @saveCardTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'احفظ البطاقة على هذا الهاتف'**
+  String get saveCardTitle;
+
+  /// No description provided for @saveCardBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'لتدفع بها أسرع في المرة القادمة. تبقى مشفّرة على هاتفك وحده، وتُفتح ببصمة الوجه أو رمز الهاتف، ولا تصلنا أبداً.'**
+  String get saveCardBody;
+
+  /// No description provided for @savedCardUnlockReason.
+  ///
+  /// In ar, this message translates to:
+  /// **'تأكيد هويتك للدفع بالبطاقة المحفوظة'**
+  String get savedCardUnlockReason;
+
+  /// Under a saved card: its expiry, e.g. 01/30.
+  ///
+  /// In ar, this message translates to:
+  /// **'تنتهي {expiry}'**
+  String savedCardExpires(String expiry);
+
+  /// No description provided for @savedCardsSettings.
+  ///
+  /// In ar, this message translates to:
+  /// **'البطاقات المحفوظة'**
+  String get savedCardsSettings;
+
+  /// No description provided for @savedCardsEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد بطاقات محفوظة على هذا الهاتف. يمكنك حفظ بطاقة عند الدفع بها.'**
+  String get savedCardsEmpty;
+
+  /// No description provided for @savedCardsNote.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُحفظ البطاقات على هذا الهاتف وحده، مشفّرة وخلف بصمة الوجه أو رمز الهاتف، ولا تصل إلى خوادمنا. تُحذف عند تسجيل الخروج.'**
+  String get savedCardsNote;
+
+  /// No description provided for @removeCard.
+  ///
+  /// In ar, this message translates to:
+  /// **'إزالة'**
+  String get removeCard;
+
+  /// No description provided for @removeCardTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إزالة البطاقة؟'**
+  String get removeCardTitle;
+
+  /// No description provided for @removeCardBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'ستُحذف من هذا الهاتف. يمكنك حفظها مجدداً عند الدفع بها.'**
+  String get removeCardBody;
+
+  /// No description provided for @savedCardLocked.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يتم التحقق من هويتك، فلم نستخدم البطاقة المحفوظة.'**
+  String get savedCardLocked;
 }
 
 class _AppLocalizationsDelegate
@@ -1066,7 +1402,7 @@ class _AppLocalizationsDelegate
 
   @override
   bool isSupported(Locale locale) =>
-      <String>['ar'].contains(locale.languageCode);
+      <String>['ar', 'en', 'fr'].contains(locale.languageCode);
 
   @override
   bool shouldReload(_AppLocalizationsDelegate old) => false;
@@ -1077,6 +1413,10 @@ AppLocalizations lookupAppLocalizations(Locale locale) {
   switch (locale.languageCode) {
     case 'ar':
       return AppLocalizationsAr();
+    case 'en':
+      return AppLocalizationsEn();
+    case 'fr':
+      return AppLocalizationsFr();
   }
 
   throw FlutterError(

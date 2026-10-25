@@ -148,3 +148,8 @@ class DrawnCard extends StatelessWidget {
     );
   }
 }
+
+/// A card's flight between two places keeps its 16:10 shape: a straight
+/// path, where the default arc bends the card out of shape mid-air.
+RectTween cardRectTween(Rect? begin, Rect? end) =>
+    RectTween(begin: begin, end: end);

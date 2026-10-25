@@ -12,7 +12,9 @@ import '../../core/result.dart';
 import '../../data/models/catalog.dart';
 import '../../data/models/order.dart';
 import '../../design/cards_tokens.dart';
+import '../../shared/art_palette.dart';
 import '../../shared/card_art.dart';
+import '../../shared/tilt_card.dart';
 import '../../shared/cards_scope.dart';
 import '../../shared/pill.dart';
 import '../../shared/haptics.dart';
@@ -107,14 +109,31 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
     });
   }
 
+  /// After Face ID the card turns over to its code, the way a new purchase
+  /// does, once the system's sheet has cleared the screen.
   Future<void> _unlock() async {
     final l10n = AppLocalizations.of(context);
-    if (await CardsScope.of(context).lock.unlock(l10n.unlockReason) &&
-        mounted) {
-      setState(() => _locked = false);
-      _reveal();
+    if (!await CardsScope.of(context).lock.unlock(l10n.unlockReason) ||
+        !mounted) {
+      return;
     }
+    if (MediaQuery.of(context).disableAnimations) {
+      setState(() => _locked = false);
+      _flip.value = 1;
+      return;
+    }
+    _flip.value = 0;
+    await Future<void>.delayed(_sheetClears);
+    if (!mounted) {
+      return;
+    }
+    setState(() => _locked = false);
+    Haptics.tap();
+    await _flip.forward();
   }
+
+  /// How long Face ID's sheet takes to slide away.
+  static const Duration _sheetClears = Duration(milliseconds: 220);
 
   Future<void> _toggleUsed(String code) async {
     final used = !_used.contains(code);
@@ -125,15 +144,29 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
     final brand =
         widget.brand ??
         CardsScope.of(context).catalog.brandOf(widget.order.brandKey);
-    final tint = brand == null ? PointyColors.primary : brandTint(brand);
     final current = _codes.isEmpty
         ? null
         : _codes[_page.clamp(0, _codes.length - 1)];
+    // The page takes the card's own colours, read from its art.
+    return ArtPaletteBuilder(
+      brand: brand,
+      builder: (context, palette) =>
+          _scaffold(context, brand, current, palette),
+    );
+  }
+
+  Widget _scaffold(
+    BuildContext context,
+    CardBrand? brand,
+    CardCode? current,
+    ArtPalette palette,
+  ) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final tint = palette.tint;
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
@@ -190,45 +223,22 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
                     ),
                     const SizedBox(height: CardsSpace.xl),
                   ],
-                  if (brand != null) _cards(context, brand),
+                  if (brand != null) _cards(context, brand, palette),
                   const SizedBox(height: CardsSpace.lg),
-                  if (_loading)
-                    const Center(child: CircularProgressIndicator())
-                  else if (_locked)
-                    _LockedPanel(onUnlock: _unlock)
-                  else if (current == null)
-                    const _PendingCodes()
-                  else ...[
-                    if (current.serial.isNotEmpty)
-                      Text(
-                        l10n.serialNumber(current.serial),
-                        textAlign: TextAlign.center,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    const SizedBox(height: CardsSpace.lg),
-                    _ActionRow(
-                      code: current,
-                      name: widget.order.name,
-                      redeemHint: brand?.redeemHint ?? '',
-                      used: _used.contains(current.code),
-                      onToggleUsed: () => _toggleUsed(current.code),
+                  // Whatever sits under the card rises in when it changes:
+                  // the codes after Face ID, or after they arrive.
+                  AnimatedSwitcher(
+                    duration: CardsMotion.emphasized,
+                    reverseDuration: CardsMotion.fast,
+                    switchInCurve: CardsMotion.curve,
+                    switchOutCurve: Curves.easeIn,
+                    transitionBuilder: _rise,
+                    layoutBuilder: (current, previous) => Stack(
+                      alignment: Alignment.topCenter,
+                      children: [...previous, ?current],
                     ),
-                    if ((brand?.redeemHint ?? '').isNotEmpty) ...[
-                      const SizedBox(height: CardsSpace.xl),
-                      _HowTo(hint: brand!.redeemHint),
-                    ],
-                    if (!widget.fromHistory) ...[
-                      const SizedBox(height: CardsSpace.xl),
-                      FilledButton(
-                        onPressed: () =>
-                            Navigator.of(context)
-                                .popUntil((route) => route.isFirst),
-                        child: Text(l10n.doneAction),
-                      ),
-                    ],
-                  ],
+                    child: _below(context, brand, current),
+                  ),
                 ],
               ),
             ),
@@ -238,20 +248,92 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
     );
   }
 
+  static Widget _rise(Widget child, Animation<double> animation) {
+    return FadeTransition(
+      opacity: animation,
+      child: SlideTransition(
+        position: Tween(
+          begin: const Offset(0, 0.06),
+          end: Offset.zero,
+        ).animate(animation),
+        child: child,
+      ),
+    );
+  }
+
+  /// What sits under the card: loading, locked, waiting, or the code's
+  /// actions. Each state has its own key so the switcher moves between them.
+  Widget _below(BuildContext context, CardBrand? brand, CardCode? current) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    if (_loading) {
+      return const Center(
+        key: ValueKey('loading'),
+        child: CircularProgressIndicator(),
+      );
+    }
+    if (_locked) {
+      return _LockedPanel(key: const ValueKey('locked'), onUnlock: _unlock);
+    }
+    if (current == null) {
+      return const _PendingCodes(key: ValueKey('pending'));
+    }
+    return Column(
+      key: const ValueKey('codes'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (current.serial.isNotEmpty)
+          Text(
+            l10n.serialNumber(current.serial),
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        const SizedBox(height: CardsSpace.lg),
+        _ActionRow(
+          code: current,
+          name: widget.order.name,
+          redeemHint: brand?.redeemHint ?? '',
+          used: _used.contains(current.code),
+          onToggleUsed: () => _toggleUsed(current.code),
+        ),
+        if ((brand?.redeemHint ?? '').isNotEmpty) ...[
+          const SizedBox(height: CardsSpace.xl),
+          _HowTo(hint: brand!.redeemHint),
+        ],
+        if (!widget.fromHistory) ...[
+          const SizedBox(height: CardsSpace.xl),
+          FilledButton(
+            onPressed: () =>
+                Navigator.of(context).popUntil((route) => route.isFirst),
+            child: Text(l10n.doneAction),
+          ),
+        ],
+      ],
+    );
+  }
+
   /// One flipping card, or a pager of them with dots for several.
-  Widget _cards(BuildContext context, CardBrand brand) {
+  Widget _cards(BuildContext context, CardBrand brand, ArtPalette palette) {
     final l10n = AppLocalizations.of(context);
     final codes = _codes.isEmpty || _locked ? const <CardCode?>[null] : _codes;
     final width = math.min(
       MediaQuery.sizeOf(context).width - CardsSpace.gutter * 2,
       440.0,
     );
-    Widget card(CardCode? code) => _FlipCard(
-      animation: _flip,
-      brand: brand,
-      code: code?.code,
-      used: code != null && _used.contains(code.code),
-      onCopy: code == null ? null : () => _copy(context, code.code),
+    // The card answers the phone's tilt once it has turned to its code.
+    Widget card(CardCode? code) => TiltCard(
+      radius: CardsRadii.tile,
+      strength: _flip,
+      child: _FlipCard(
+        animation: _flip,
+        brand: brand,
+        palette: palette,
+        code: code?.code,
+        used: code != null && _used.contains(code.code),
+        onCopy: code == null ? null : () => _copy(context, code.code),
+      ),
     );
     if (codes.length == 1) {
       return card(codes.first);
@@ -353,6 +435,7 @@ class _Seal extends StatelessWidget {
 class _FlipCard extends StatelessWidget {
   const _FlipCard({
     required this.animation,
+    required this.palette,
     required this.brand,
     required this.code,
     required this.used,
@@ -361,6 +444,9 @@ class _FlipCard extends StatelessWidget {
 
   final Animation<double> animation;
   final CardBrand brand;
+
+  /// The back's colours: the art's own.
+  final ArtPalette palette;
   final String? code;
   final bool used;
   final VoidCallback? onCopy;
@@ -403,7 +489,7 @@ class _FlipCard extends StatelessWidget {
   Widget _back(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final (light, dark) = DrawnCard.palette(brand.category);
+    final ArtPalette(:light, :dark) = palette;
     return AspectRatio(
       aspectRatio: kCardAspect,
       child: Material(
@@ -685,7 +771,7 @@ class _HowTo extends StatelessWidget {
 }
 
 class _LockedPanel extends StatelessWidget {
-  const _LockedPanel({required this.onUnlock});
+  const _LockedPanel({super.key, required this.onUnlock});
 
   final VoidCallback onUnlock;
 
@@ -721,7 +807,7 @@ class _LockedPanel extends StatelessWidget {
 }
 
 class _PendingCodes extends StatelessWidget {
-  const _PendingCodes();
+  const _PendingCodes({super.key});
 
   @override
   Widget build(BuildContext context) {

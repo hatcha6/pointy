@@ -9,7 +9,9 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final dependencies = CardsDependencies.live(CardsConfig.fromEnvironment());
   // The system's splash covers all three; none waits on another.
-  final (_, run, art) = await (
+  // The customer's language and theme are known before the first frame.
+  final (_, _, run, art) = await (
+    dependencies.settings.load(),
     dependencies.auth.restore(),
     SplashMemory.next(),
     SplashArt.load(),

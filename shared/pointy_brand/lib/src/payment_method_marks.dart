@@ -2,10 +2,11 @@ import 'package:flutter/widgets.dart';
 
 /// The marks of the Dafa payment methods, as Dafa's own dashboard shows them,
 /// keyed by Dafa's provider id (the `provider` the relay lists with each
-/// method). Bank cards (`moamalat`) have none on purpose: no one brand, so an
-/// app draws a card icon for them.
+/// method). Local bank cards (`moamalat`) show Moamalat's ribbon, the
+/// network every Libyan bank card is paid through (from docs.moamalat.net).
 abstract final class PaymentMethodMarks {
   static const Set<String> _providers = {
+    'moamalat',
     'sadad',
     'edfali',
     'mobicash',

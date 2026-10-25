@@ -3,7 +3,9 @@
 //
 //   make cards-preview, then ?screen=board | home | brand | brand-itunes |
 //   sign-in | sign-in-code | checkout | wallet-code | preparing | refunded |
-//   reveal | my-cards | account | signed-out | splash ; add &theme=dark for dark.
+//   reveal | my-cards | account | signed-out | splash ; add &theme=dark for dark
+//   and &lang=en or &lang=fr for English or French (only while
+//   AppSettings.languageChoice is on).
 //
 //   ?screen=home plays scripted purchases: a chip on top says how the next
 //   one ends (card, refund, review, unpaid, wrong code, declined, offline)
@@ -23,8 +25,12 @@ import '../src/data/models/customer.dart';
 import '../src/data/models/order.dart';
 import '../src/design/cards_theme.dart';
 import '../src/features/brand/brand_page.dart';
+import '../src/features/card_payment/card_payment_page.dart';
 import '../src/features/checkout/checkout_model.dart';
 import '../src/features/checkout/checkout_sheet.dart';
+import '../src/features/legal/about_page.dart';
+import '../src/features/legal/legal_document.dart';
+import '../src/features/legal/legal_page.dart';
 import '../src/features/orders/order_progress_page.dart';
 import '../src/features/orders/order_watcher.dart';
 import '../src/features/reveal/reveal_page.dart';
@@ -47,7 +53,14 @@ void main() {
     signedIn: screen != 'signed-out' && !screen.startsWith('sign-in'),
     shelfRelay: shelfRelay.isEmpty ? null : Uri.parse(shelfRelay),
     scenarios: scenarios,
+    // The card form's Moamalat: `&card=verify` has the bank ask for its
+    // code, `&card=decline` refuses the card.
+    moamalat: FakeMoamalatClient(
+      verify: query['card'] == 'verify',
+      decline: query['card'] == 'decline',
+    ),
   );
+  dependencies.settings.setLanguage(query['lang'] ?? 'ar');
   runApp(
     CardsApp(
       dependencies: dependencies,
@@ -157,6 +170,18 @@ class PreviewSurface extends StatelessWidget {
         brand: _libyana,
       ),
       'splash' => SplashLab(run: Uri.base.queryParameters['run']),
+      'card-pay' => CardPaymentPage(
+        order: CardOrder.fromJson(
+          fixtureOrder(
+            id: 'order-new',
+            status: 'awaiting_payment',
+            nextAction: 'hosted_page',
+          ),
+        ),
+      ),
+      'about' => const AboutPage(),
+      'privacy' => const LegalPage(document: LegalDocument.privacy),
+      'terms' => const LegalPage(document: LegalDocument.terms),
       _ => const CardsShell(),
     };
   }

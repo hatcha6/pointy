@@ -5,8 +5,8 @@ import '../../l10n/generated/app_localizations.dart';
 import '../data/models/order.dart';
 import '../design/cards_tokens.dart';
 
-/// A payment method's mark: its logo on a white chip (a card icon for bank
-/// cards, which are no one brand).
+/// A payment method's mark: its logo on a white chip (Moamalat's for bank
+/// cards; a card icon for a method with no mark).
 class MethodMark extends StatelessWidget {
   const MethodMark({
     super.key,

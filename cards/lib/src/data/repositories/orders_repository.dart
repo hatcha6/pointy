@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../../core/money.dart';
 import '../../core/result.dart';
 import '../api/relay_api.dart';
+import '../../features/card_payment/moamalat_client.dart';
 import '../models/order.dart';
 
 /// What the checkout sends to place an order.
@@ -89,6 +90,43 @@ class OrdersRepository {
       await api.post('/v1/customers/orders/$orderId/cancel', signedIn: true),
     );
   });
+
+  /// The Moamalat checkout Dafa signed for a bank-card order, or none when
+  /// the order is past paying (the order says how it ended). Refused with
+  /// `card_form_unavailable` when the payer should use the payment page.
+  Future<Result<(CardOrder, CardSession?)>> cardSession(String orderId) =>
+      Result.guard(() async {
+        final answer = await api.post(
+          '/v1/customers/orders/$orderId/card',
+          signedIn: true,
+        );
+        final session = answer['card_session'];
+        return (
+          _order(answer),
+          session is Map<String, dynamic> ? CardSession.fromJson(session) : null,
+        );
+      });
+
+  /// Hands Moamalat's receipt to the relay, which passes it to Dafa and
+  /// reads the payment back; the order comes back as it now stands.
+  Future<Result<CardOrder>> completeCard(
+    String orderId,
+    Map<String, String> receipt,
+  ) => Result.guard(() async {
+    final order = _order(
+      await api.post(
+        '/v1/customers/orders/$orderId/card/complete',
+        signedIn: true,
+        body: {'receipt': receipt},
+      ),
+    );
+    changes.value++;
+    return order;
+  });
+
+  /// Where the card's bank sends the payer back after its 3-D Secure step;
+  /// the app's web view stops there and reads the bank's answer.
+  Uri get cardReturnUrl => api.resolve('/v1/customers/card-return');
 
   /// One order; a delivered one comes back with its codes.
   Future<Result<CardOrder>> order(String orderId) => Result.guard(() async {

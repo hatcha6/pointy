@@ -16,6 +16,7 @@ import '../../shared/pin_boxes.dart';
 import '../../shared/relay_error_text.dart';
 import '../../shared/haptics.dart';
 import '../../shared/shake.dart';
+import '../legal/legal_consent.dart';
 
 /// Signs in when needed: true at once for a signed-in customer, otherwise
 /// the sheet decides. Called at the moment it matters (paying, opening
@@ -235,6 +236,8 @@ class _SignInSheetState extends State<SignInSheet> {
           onPressed: _busy ? null : _sendCode,
           child: _busy ? const _ButtonSpinner() : Text(l10n.sendCode),
         ),
+        const SizedBox(height: CardsSpace.md),
+        const LegalConsent(),
       ],
     );
   }

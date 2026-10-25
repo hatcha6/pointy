@@ -12,8 +12,11 @@ import '../src/data/repositories/auth_repository.dart';
 import '../src/data/repositories/catalog_repository.dart';
 import '../src/data/repositories/orders_repository.dart';
 import '../src/data/session/session_store.dart';
+import '../src/data/settings/app_settings.dart';
+import '../src/data/vault/card_vault.dart';
 import '../src/data/vault/code_vault.dart';
 import '../src/dependencies.dart';
+import '../src/features/card_payment/moamalat_client.dart';
 import 'preview_scenarios.dart';
 
 const fixtureSession = CustomerSession(
@@ -364,6 +367,23 @@ http.Client fixtureRelay({
               .toIso8601String(),
         });
     }
+    // Bank cards in the app's own form: the session Dafa signed, then the
+    // receipt passed back.
+    if (request.method == 'POST' && path.endsWith('/card')) {
+      return json({
+        'order': fixtureOrder(
+          id: 'order-new',
+          status: 'awaiting_payment',
+          nextAction: 'hosted_page',
+        ),
+        'card_session': fixtureCardSession,
+      });
+    }
+    if (request.method == 'POST' && path.endsWith('/card/complete')) {
+      return json({
+        'order': fixtureOrder(id: 'order-new', status: confirmStatus),
+      });
+    }
     if (request.method == 'POST' && path.endsWith('/confirm')) {
       return json({
         'order': fixtureOrder(id: 'order-new', status: confirmStatus),
@@ -378,6 +398,61 @@ http.Client fixtureRelay({
   });
 }
 
+/// A checkout as the relay hands it over: Moamalat's published test
+/// merchant, 10.21 LYD.
+const Map<String, Object> fixtureCardSession = {
+  'mid': '10081014649',
+  'tid': '99179395',
+  'amount': 10210,
+  'merchant_reference': 'pay-1-1791849555',
+  'trx_date_time': '202610252130',
+  'secure_hash':
+      'B3E74617629FEB6570E4CAE2395BCD136C8859840108407E5EE2A0AF7DDF955C',
+  'test': true,
+};
+
+/// Moamalat, played on the phone: the checkout opens at once, and a charge
+/// asks for the bank's confirmation when [verify] (then succeeds), is
+/// refused when [decline], and is otherwise paid.
+class FakeMoamalatClient extends MoamalatClient {
+  FakeMoamalatClient({this.verify = false, this.decline = false});
+
+  bool verify;
+  bool decline;
+  final List<CardDetails> charged = [];
+  final List<Map<String, String>?> verifications = [];
+
+  @override
+  Future<MoamalatCheckout> open(CardSession session) async => MoamalatCheckout(
+    session: session,
+    token: 'session-token',
+    merchantName: 'TEST',
+    currency: 434,
+  );
+
+  @override
+  Future<ChargeStep> charge(
+    MoamalatCheckout checkout,
+    CardDetails card, {
+    required Uri returnUrl,
+    Map<String, String>? verification,
+  }) async {
+    charged.add(card);
+    verifications.add(verification);
+    if (decline) {
+      throw const MoamalatException(12, 'Declined');
+    }
+    if (verify && verification == null) {
+      return ChargeNeedsVerification(Uri.parse('https://acs.bank.preview/otp'));
+    }
+    return ChargeDone({
+      'MerchantReference': checkout.session.merchantReference,
+      'Amount': '${checkout.session.amount}',
+      'SecureHash': 'F' * 64,
+    });
+  }
+}
+
 /// The app's dependencies on the fake relay, signed in or not. With
 /// [shelfRelay], the catalog and its art come from that real relay.
 CardsDependencies fixtureDependencies({
@@ -385,6 +460,8 @@ CardsDependencies fixtureDependencies({
   http.Client? client,
   Uri? shelfRelay,
   PreviewScenarios? scenarios,
+  MoamalatClient? moamalat,
+  CardVault? cards,
 }) {
   final sessions = MemorySessionStore(signedIn ? fixtureSession : null);
   final base = shelfRelay ?? Uri.parse('https://relay.preview');
@@ -407,5 +484,8 @@ CardsDependencies fixtureDependencies({
     orders: OrdersRepository(api: api, channel: 'apk'),
     vault: MemoryCodeVault(),
     lock: CodeLock(enabled: false),
+    settings: AppSettings(),
+    moamalat: moamalat ?? FakeMoamalatClient(),
+    cards: cards ?? MemoryCardVault(),
   );
 }

@@ -129,8 +129,34 @@ and every tap answers. The rules live in `src/design/`:
 - **Order progress** (`features/orders`):
   - Watches the relay: every 2 s for a minute, then every 6 s, and at once when
     the app comes back to the front.
-  - Opens Dafa's bank-card page.
+  - Opens the bank-card form (below); Dafa's page only as the fallback.
   - Shows a refund to credit, or an unpaid order.
+- **Bank cards** (`features/card_payment`):
+  - The app's own form: number grouped in fours with its network, the
+    holder's name and MM/YY. Local cards carry no CVV, so none is asked.
+    Luhn and expiry are checked before sending.
+    The fields carry card autofill hints, so the phone's own card store can
+    fill them and offer to save a card after a payment; the app keeps none.
+  - The relay hands over the Moamalat checkout Dafa signed (`/card`); the
+    phone calls Moamalat itself (`moamalat_client.dart`), so the card never
+    passes through the relay, then sends Moamalat's receipt back
+    (`/card/complete`). The relay believes only Dafa's read-back.
+  - When the bank asks for its code (3-D Secure), its page opens inside the
+    form's own page (`three_ds_view.dart`, webview_flutter); returning to
+    `/v1/customers/card-return` carries the bank's answer, and the charge is
+    sent again with it. Closing it goes back to the card.
+  - No session from Dafa, Moamalat unreachable, the web build, or «الدفع من
+    صفحة البوابة بدلاً من ذلك»: Dafa's page, as before.
+  - Saved cards (`data/vault/card_vault.dart`), Stripe-style: an unchecked
+    «احفظ البطاقة على هذا الهاتف» switch under the form; the card is kept
+    only after it has paid. Next time the saved cards are tiles (•••• 0860,
+    holder, expiry) and «ادفع» asks the phone for Face ID or the passcode
+    before the app may read the number: the number sits in the Keychain
+    (passcode-only, this device, `userPresence`) or the Keystore (biometric
+    per read), never synced, never sent anywhere but Moamalat. The list
+    (last four, name, expiry) is kept apart so it shows without a prompt.
+    Removed from «حسابي» ← «البطاقات المحفوظة», and all of them on sign-out
+    or account deletion. Not on the web.
 - **Reveal** (`features/reveal`):
   - A seal springs in, then the card flips from its art to the code, with
     haptics on both. The code is large, one line, left to right, and copies
@@ -144,11 +170,19 @@ and every tap answers. The rules live in `src/design/`:
 - **حسابي** (`features/account`):
   - The number, the credit and its history, the devices, signing out
     elsewhere, signing out, and deleting the account.
+  - «حول التطبيق»: the about page (version, WhatsApp, site, open-source
+    licences), the privacy policy and the terms of use. The sign-in sheet
+    names the last two as links under «أرسل الرمز».
+  - The legal texts live in `assets/legal/<doc>.<lang>.md` (`## ` headings,
+    `- ` items, paragraphs), so they can be changed without touching code.
+    A language without its own file shows the Arabic one. Change the «آخر
+    تحديث» date with any change, and publish the same text on the web for
+    the store listings.
 
 Previews: `make cards-preview`, then `?screen=board`, or any single screen:
 `home`, `brand`, `brand-itunes`, `sign-in`, `sign-in-code`, `checkout`,
 `wallet-code`, `preparing`, `refunded`, `reveal`, `my-cards`, `account`,
-`signed-out`. Add `&theme=dark` for dark.
+`signed-out`, `about`, `privacy`, `terms`, `card-pay` (the bank-card form; `&card=verify` has the bank ask for its code, `&card=decline` refuses the card). Add `&theme=dark` for dark, `&lang=en` or `&lang=fr` for English or French (only while `AppSettings.languageChoice` is on).
 
 `make cards-preview-live` is the same harness on the **real shelf** of a local
 relay (`make relay-run`, then `pointy-relay vouchers catalog push

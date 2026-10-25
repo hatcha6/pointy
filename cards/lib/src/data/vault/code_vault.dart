@@ -6,6 +6,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:local_auth/local_auth.dart';
 
 import '../models/order.dart';
+import '../settings/app_settings.dart';
 
 /// The codes of delivered orders, kept in the keychain so «كروتي» shows them
 /// offline, and which ones the customer marked used. The relay can always read
@@ -118,17 +119,21 @@ class MemoryCodeVault implements CodeVault {
 /// the web) is not locked: the codes are its owner's either way. One unlock
 /// lasts a few minutes, so looking at three cards asks once.
 class CodeLock {
-  CodeLock({LocalAuthentication? auth, this.enabled = true})
+  CodeLock({LocalAuthentication? auth, this.enabled = true, this.settings})
     : _auth = auth ?? LocalAuthentication();
 
   final LocalAuthentication _auth;
   final bool enabled;
+
+  /// The customer's own switch for the lock, in the account settings.
+  final AppSettings? settings;
   DateTime? _unlockedAt;
 
   static const Duration window = Duration(minutes: 5);
 
   bool get isUnlocked =>
       !enabled ||
+      !(settings?.codeLock ?? true) ||
       (_unlockedAt != null && DateTime.now().difference(_unlockedAt!) < window);
 
   /// Asks the device. True when the codes may be shown.
