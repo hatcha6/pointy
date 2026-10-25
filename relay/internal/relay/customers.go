@@ -234,6 +234,8 @@ func (s HTTPServer) handleCustomerRoutes(w http.ResponseWriter, r *http.Request)
 		s.handleCustomerPaymentMethods(w, r)
 	case strings.HasPrefix(path, customerWebhookPrefix) && r.Method == http.MethodPost:
 		s.handleCustomerDafaWebhook(w, r, strings.TrimPrefix(path, customerWebhookPrefix))
+	case path == customerCardReturnPath && (r.Method == http.MethodGet || r.Method == http.MethodPost):
+		handleCustomerCardReturn(w, r)
 	case path == "/v1/customers/orders" && r.Method == http.MethodPost:
 		s.withCustomer(w, r, store, func(customer control.Customer, _ control.CustomerSession) {
 			s.handleCustomerOrderCreate(w, r, customer)
@@ -330,7 +332,7 @@ func (s HTTPServer) handleCustomerRoutes(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-// routeCustomerOrder serves /v1/customers/orders/{id}[/confirm|/cancel].
+// routeCustomerOrder serves /v1/customers/orders/{id}[/confirm|/cancel|/card|/card/complete].
 func (s HTTPServer) routeCustomerOrder(w http.ResponseWriter, r *http.Request, store control.CustomerStore, rest string) {
 	id, action, _ := strings.Cut(rest, "/")
 	if id == "" {
@@ -349,6 +351,14 @@ func (s HTTPServer) routeCustomerOrder(w http.ResponseWriter, r *http.Request, s
 	case action == "cancel" && r.Method == http.MethodPost:
 		s.withCustomer(w, r, store, func(customer control.Customer, _ control.CustomerSession) {
 			s.handleCustomerOrderCancel(w, r, customer, id)
+		})
+	case action == "card" && r.Method == http.MethodPost:
+		s.withCustomer(w, r, store, func(customer control.Customer, _ control.CustomerSession) {
+			s.handleCustomerOrderCard(w, r, customer, id)
+		})
+	case action == "card/complete" && r.Method == http.MethodPost:
+		s.withCustomer(w, r, store, func(customer control.Customer, _ control.CustomerSession) {
+			s.handleCustomerOrderCardComplete(w, r, customer, id)
 		})
 	default:
 		writeNotFound(w)

@@ -1,6 +1,16 @@
 # Moamalat PayForm™ Plus — self-hosted card form (design)
 
-> **Status: reverse-engineered, not yet built.** Goal: replace Moamalat's hosted
+> **Status: Option A (§6a) BUILT for the card app «دفتر كروت» (2026-10-25):**
+> the relay hands the app Dafa's signed session (`relay/internal/dafa/cards.go`,
+> `relay/internal/relay/customer_card_form.go`) and the phone calls Moamalat
+> itself (`cards/lib/src/features/card_payment/`), so no PAN reaches our
+> servers. 3-D Secure runs in a web view inside the app's page, like
+> Moamalat's own iOS SDK (`Numo-iOS-SDK` PayButton: WKWebView on
+> `ThreeDSUrl`, query params of the return URL → JSON → PayByCard again).
+> Not yet run against the live sandbox. The POS's backend-proxied design
+> below is still unbuilt.
+>
+> **Original status: reverse-engineered, not yet built.** Goal: replace Moamalat's hosted
 > LightBox iframe with our own native Flutter card form, so the POS owns the UI,
 > the RTL/Arabic layout, and the error handling instead of embedding PaySky's
 > buggy white-label page. The actual charge is **backend-proxied**: our Django

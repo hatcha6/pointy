@@ -190,3 +190,20 @@ func TestBuildSMSConfigReadsThePrice(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildWalletConfigReadsTheCardGateway(t *testing.T) {
+	settings := validWalletSettings()
+	settings.DafaCardGatewayURL = "https://cards.example.com/moamalat/"
+	config, _, err := buildWalletConfig(settings)
+	if err != nil || config.DafaCardGatewayURL != "https://cards.example.com/moamalat" || config.CardFormOff {
+		t.Fatalf("gateway: %+v %v", config, err)
+	}
+	settings.DafaCardGatewayURL = "OFF"
+	if config, _, err := buildWalletConfig(settings); err != nil || !config.CardFormOff || config.DafaCardGatewayURL != "" {
+		t.Fatalf("off: %+v %v", config, err)
+	}
+	settings.DafaCardGatewayURL = "http://cards.example.com"
+	if _, _, err := buildWalletConfig(settings); err == nil || !strings.Contains(err.Error(), "POINTY_RELAY_DAFA_CARD_GATEWAY_URL") {
+		t.Fatalf("plain http must stop the relay: %v", err)
+	}
+}

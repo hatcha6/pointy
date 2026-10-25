@@ -36,6 +36,7 @@ import (
 	"pointy/relay/internal/bnplus"
 	"pointy/relay/internal/connector"
 	"pointy/relay/internal/control"
+	"pointy/relay/internal/dafa"
 	"pointy/relay/internal/discovery"
 	"pointy/relay/internal/limit"
 	"pointy/relay/internal/moamalat"
@@ -571,6 +572,11 @@ func runServer(args []string) error {
 		envString("POINTY_RELAY_DAFA_BASE_URL", "https://dev.dafa.ly/api/v1"),
 		"Dafa API base URL, as the project's Integration page shows it",
 	)
+	dafaCardGatewayURL := flags.String(
+		"dafa-card-gateway-url",
+		envString("POINTY_RELAY_DAFA_CARD_GATEWAY_URL", dafa.DefaultCardGatewayURL),
+		"where Dafa's card page reads its signed Moamalat sessions; the card app's own card form uses it, and off sends card payers to Dafa's page",
+	)
 	dafaRequestTimeout := flags.Duration(
 		"dafa-request-timeout",
 		envDuration("POINTY_RELAY_DAFA_REQUEST_TIMEOUT", 20*time.Second),
@@ -949,20 +955,21 @@ func runServer(args []string) error {
 		return err
 	}
 	walletConfig, walletWarnings, err := buildWalletConfig(walletSettings{
-		DafaBaseURL:       *dafaBaseURL,
-		DafaAPIKey:        *dafaAPIKey,
-		Methods:           *walletMethods,
-		PublicURL:         *publicURL,
-		MinTopUp:          *walletTopUpMin,
-		MaxTopUp:          *walletTopUpMax,
-		QuickAmounts:      *walletQuickAmounts,
-		FeePercent:        *walletFeePercent,
-		TopUpTTL:          *walletTopUpTTL,
-		TopUpRateLimit:    *walletTopUpRateLimit,
-		RequestTimeout:    *dafaRequestTimeout,
-		RemoteAccessPrice: *remoteAccessPrice,
-		AIPrice:           *aiPrice,
-		PlanDays:          *planDays,
+		DafaBaseURL:        *dafaBaseURL,
+		DafaAPIKey:         *dafaAPIKey,
+		DafaCardGatewayURL: *dafaCardGatewayURL,
+		Methods:            *walletMethods,
+		PublicURL:          *publicURL,
+		MinTopUp:           *walletTopUpMin,
+		MaxTopUp:           *walletTopUpMax,
+		QuickAmounts:       *walletQuickAmounts,
+		FeePercent:         *walletFeePercent,
+		TopUpTTL:           *walletTopUpTTL,
+		TopUpRateLimit:     *walletTopUpRateLimit,
+		RequestTimeout:     *dafaRequestTimeout,
+		RemoteAccessPrice:  *remoteAccessPrice,
+		AIPrice:            *aiPrice,
+		PlanDays:           *planDays,
 		LegacyPlutu: os.Getenv("POINTY_RELAY_PLUTU_API_KEY") != "" ||
 			os.Getenv("POINTY_RELAY_PLUTU_ACCESS_TOKEN") != "" ||
 			os.Getenv("POINTY_RELAY_PLUTU_SECRET_KEY") != "",

@@ -111,6 +111,11 @@ const (
 type WalletConfig struct {
 	DafaBaseURL string
 	DafaAPIKey  string
+	// DafaCardGatewayURL is where Dafa's card page reads its Moamalat
+	// sessions; empty is dafa.DefaultCardGatewayURL. CardFormOff sends card
+	// payers to Dafa's page instead of the app's own form.
+	DafaCardGatewayURL string
+	CardFormOff        bool
 	// TestMode is the key's environment: a dafa_test_ key only ever makes
 	// simulated payments, so every top-up and its credit is marked test money.
 	TestMode bool
@@ -248,6 +253,14 @@ func (c WalletConfig) dafaClient() *dafa.Client {
 	return dafa.New(dafa.Config{
 		BaseURL:    c.DafaBaseURL,
 		APIKey:     c.DafaAPIKey,
+		HTTPClient: c.HTTPClient,
+		Timeout:    c.requestTimeout(),
+	})
+}
+
+func (c WalletConfig) cardGateway() *dafa.CardGateway {
+	return dafa.NewCardGateway(dafa.CardGatewayConfig{
+		BaseURL:    c.DafaCardGatewayURL,
 		HTTPClient: c.HTTPClient,
 		Timeout:    c.requestTimeout(),
 	})

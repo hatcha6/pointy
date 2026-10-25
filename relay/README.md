@@ -1555,6 +1555,31 @@ Signed-in routes (Bearer):
   - When paid, the card is bought and the codes come back in the answer.
 - `POST /v1/customers/orders/{id}/cancel` backs out before paying. It works
   for wallet methods only; a bank card may be mid-payment on Dafa's page.
+- `POST /v1/customers/orders/{id}/card` answers `card_session`: the Moamalat
+  checkout Dafa signed for a bank-card order (`mid`, `tid`, `amount` in
+  dirhams, `merchant_reference`, `trx_date_time`, `secure_hash`, `test`).
+  The phone app takes the card in its own form and pays Moamalat directly,
+  so the card number never reaches the relay
+  (`tools/moamalat-capture/PAYFORM_SELF_HOSTED.md` §6a, Option A).
+  - The session is read from the endpoints behind Dafa's card page
+    (`POINTY_RELAY_DAFA_CARD_GATEWAY_URL`). They are undocumented and take no
+    API key; the relay never sends its key there.
+  - It is offered only when it is signed for the order's charge, on the
+    gateway (test or live) the Dafa key pays on.
+  - `409 not_a_card_order` for a wallet order. `card_form_unavailable`
+    (404 when switched off, 502 when Dafa has no session) tells the app to
+    open Dafa's page instead. An order past paying comes back without a
+    session.
+- `POST /v1/customers/orders/{id}/card/complete` takes `{receipt}`, Moamalat's
+  completeCallback object as Moamalat wrote it.
+  - It must name this order's payment (`400 receipt_mismatch`).
+  - The relay passes it to Dafa's confirm, which checks Moamalat's signature,
+    then reads the payment back with its own key. Only that read-back pays
+    the order; a receipt alone buys nothing.
+- `GET|POST /v1/customers/card-return` is the address the card's bank sends
+  the payer back to after its 3-D Secure step (the code it texts). The app's
+  web view stops there and reads the bank's answer from the query; a posted
+  answer is redirected into the query (303).
 - `GET /v1/customers/orders/{id}` returns the order.
   - It reads an unproven payment back from Dafa, at most once every few
     seconds.
@@ -1652,7 +1677,7 @@ payment method, on one company workspace. The API key lives only in relay env.
 
 | Method key | Dafa provider | The payer gives | Then |
 | --- | --- | --- | --- |
-| `dafa_moamalat` | `moamalat` (local bank cards) | nothing | pays on Dafa's page in the browser |
+| `dafa_moamalat` | `moamalat` (local bank cards) | nothing | shops pay on Dafa's page in the browser; the card app pays in its own form (`/card`) and falls back to the page |
 | `dafa_sadad` | `sadad` | mobile number + birth year | types the code Sadad texts them |
 | `dafa_edfali` | `edfali` | mobile number | types the code |
 | `dafa_mobicash` | `mobicash` | wallet card number | types the code |
@@ -1822,6 +1847,7 @@ Error `code`s: `topups_unconfigured` (503), `invalid_amount` (422, with
 | --- | --- | --- |
 | `POINTY_RELAY_DAFA_API_KEY` | empty | `dafa_test_…` (simulated payments) or `dafa_live_…` (real) — the prefix **is** the mode |
 | `POINTY_RELAY_DAFA_BASE_URL` | `https://dev.dafa.ly/api/v1` | as the project's **Integration** page shows it |
+| `POINTY_RELAY_DAFA_CARD_GATEWAY_URL` | `https://tyrian-ant.sadeem-factory.com/api/v1/payment-gateways/moamalat` | where Dafa's card page reads its signed Moamalat sessions; the card app's own card form uses it. `off` sends every card payer to Dafa's page |
 | `POINTY_RELAY_DAFA_REQUEST_TIMEOUT` | `20s` | one Dafa call |
 | `POINTY_RELAY_WALLET_METHODS` | all seven | methods to offer, in order (`moamalat,sadad,edfali` or `dafa_…` keys) |
 | `POINTY_RELAY_PUBLIC_URL` | derived per request | the relay's public **https** origin, where Dafa's webhook is sent — set it in production. Also advertised to every shop on its status sync as `public_api_url`, which the shop hands phones at pairing |

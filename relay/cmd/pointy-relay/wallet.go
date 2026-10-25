@@ -22,13 +22,16 @@ import (
 // walletSettings is the raw wallet configuration as the server command reads
 // it.
 type walletSettings struct {
-	DafaBaseURL  string
-	DafaAPIKey   string
-	Methods      string
-	PublicURL    string
-	MinTopUp     string
-	MaxTopUp     string
-	QuickAmounts string
+	DafaBaseURL string
+	DafaAPIKey  string
+	// DafaCardGatewayURL is where card sessions are read; "off" sends card
+	// payers to Dafa's page.
+	DafaCardGatewayURL string
+	Methods            string
+	PublicURL          string
+	MinTopUp           string
+	MaxTopUp           string
+	QuickAmounts       string
 	// FeePercent is the share of a Dafa top-up kept out of the credit.
 	FeePercent     string
 	TopUpTTL       time.Duration
@@ -74,6 +77,20 @@ func buildWalletConfig(settings walletSettings) (relayserver.WalletConfig, []str
 			(parsed.Scheme != "https" && !(parsed.Scheme == "http" && loopbackHost(parsed.Hostname()))) {
 			return relayserver.WalletConfig{}, nil, fmt.Errorf(
 				"POINTY_RELAY_DAFA_BASE_URL must be the https API root, e.g. %s, got %q", dafa.DefaultBaseURL, settings.DafaBaseURL)
+		}
+	}
+	cardGateway := strings.TrimRight(strings.TrimSpace(settings.DafaCardGatewayURL), "/")
+	cardFormOff := strings.EqualFold(cardGateway, "off")
+	if cardFormOff {
+		cardGateway = ""
+	}
+	if cardGateway != "" {
+		parsed, err := url.Parse(cardGateway)
+		if err != nil || parsed.Host == "" || parsed.RawQuery != "" ||
+			(parsed.Scheme != "https" && !(parsed.Scheme == "http" && loopbackHost(parsed.Hostname()))) {
+			return relayserver.WalletConfig{}, nil, fmt.Errorf(
+				"POINTY_RELAY_DAFA_CARD_GATEWAY_URL must be an https URL or off, e.g. %s, got %q",
+				dafa.DefaultCardGatewayURL, settings.DafaCardGatewayURL)
 		}
 	}
 	methods, err := relayserver.ParseWalletMethods(settings.Methods)
@@ -149,19 +166,21 @@ func buildWalletConfig(settings walletSettings) (relayserver.WalletConfig, []str
 			"wallet top-ups run on a Dafa TEST key: every payment is simulated (code 111111 pays, 222222 is declined)")
 	}
 	return relayserver.WalletConfig{
-		DafaBaseURL:    baseURL,
-		DafaAPIKey:     apiKey,
-		TestMode:       testMode,
-		Methods:        methods,
-		PublicURL:      publicURL,
-		MinTopUp:       minimum.FloatString(2),
-		MaxTopUp:       maximum.FloatString(2),
-		QuickAmounts:   quickAmounts,
-		FeePercent:     feePercent,
-		TopUpTTL:       settings.TopUpTTL,
-		TopUpRateLimit: rate,
-		RequestTimeout: settings.RequestTimeout,
-		Plans:          plans,
+		DafaBaseURL:        baseURL,
+		DafaAPIKey:         apiKey,
+		DafaCardGatewayURL: cardGateway,
+		CardFormOff:        cardFormOff,
+		TestMode:           testMode,
+		Methods:            methods,
+		PublicURL:          publicURL,
+		MinTopUp:           minimum.FloatString(2),
+		MaxTopUp:           maximum.FloatString(2),
+		QuickAmounts:       quickAmounts,
+		FeePercent:         feePercent,
+		TopUpTTL:           settings.TopUpTTL,
+		TopUpRateLimit:     rate,
+		RequestTimeout:     settings.RequestTimeout,
+		Plans:              plans,
 	}, warnings, nil
 }
 
