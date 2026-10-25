@@ -384,6 +384,12 @@ http.Client fixtureRelay({
         'order': fixtureOrder(id: 'order-new', status: confirmStatus),
       });
     }
+    if (request.method == 'POST' && path.endsWith('/cancel')) {
+      return json({
+        'order': fixtureOrder(id: 'order-new', status: 'cancelled'),
+        'applied': true,
+      });
+    }
     if (request.method == 'POST' && path.endsWith('/confirm')) {
       return json({
         'order': fixtureOrder(id: 'order-new', status: confirmStatus),

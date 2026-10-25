@@ -50,8 +50,8 @@ Paysky_Logo`). It is just a client. The real work is a JSON API on a **different
 origin**:
 
 - **API base — test:** `https://tnpg.moamalat.net:6008/`
-- **API base — prod:** `https://npg.moamalat.net:6008/`  *(confirm prod port on
-  first live merchant)*
+- **API base — prod:** `https://npg.moamalat.net:6016/` (confirmed 2026-10-25 from the live
+  page's `LightBoxBackEndURL`; `:6008` resets the connection on the live host)
 - All calls are `POST https://<base>/api/<Endpoint>`, `Content-Type:
   application/json`, `access-control-allow-origin: *` (so CORS does not block a
   direct call; we proxy anyway, see §5).

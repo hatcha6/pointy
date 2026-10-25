@@ -745,4 +745,17 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get savedCardLocked =>
       'لم يتم التحقق من هويتك، فلم نستخدم البطاقة المحفوظة.';
+
+  @override
+  String get payNotFinishedTitle => 'لم يكتمل الدفع';
+
+  @override
+  String get payNotFinishedBody =>
+      'لم يُخصم شيء بعد. أكمل الدفع بالبطاقة، أو ألغِ الطلب.';
+
+  @override
+  String get finishPaying => 'أكمل الدفع';
+
+  @override
+  String get orderCancelled => 'تم إلغاء الطلب.';
 }

@@ -825,5 +825,9 @@
         "type": "String"
       }
     }
-  }
+  },
+  "payNotFinishedTitle": "لم يكتمل الدفع",
+  "payNotFinishedBody": "لم يُخصم شيء بعد. أكمل الدفع بالبطاقة، أو ألغِ الطلب.",
+  "finishPaying": "أكمل الدفع",
+  "orderCancelled": "تم إلغاء الطلب."
 }

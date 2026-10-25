@@ -214,5 +214,9 @@
   "removeCard": "Retirer",
   "removeCardTitle": "Retirer cette carte ?",
   "removeCardBody": "Elle sera supprimée de ce téléphone. Vous pourrez l’enregistrer à nouveau en payant.",
-  "savedCardLocked": "Votre identité n’a pas été confirmée, la carte enregistrée n’a pas été utilisée."
+  "savedCardLocked": "Votre identité n’a pas été confirmée, la carte enregistrée n’a pas été utilisée.",
+  "payNotFinishedTitle": "Paiement non terminé",
+  "payNotFinishedBody": "Rien n’a encore été débité. Terminez le paiement par carte, ou annulez la commande.",
+  "finishPaying": "Terminer le paiement",
+  "orderCancelled": "Commande annulée."
 }

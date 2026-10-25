@@ -758,4 +758,17 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get savedCardLocked =>
       'Votre identité n’a pas été confirmée, la carte enregistrée n’a pas été utilisée.';
+
+  @override
+  String get payNotFinishedTitle => 'Paiement non terminé';
+
+  @override
+  String get payNotFinishedBody =>
+      'Rien n’a encore été débité. Terminez le paiement par carte, ou annulez la commande.';
+
+  @override
+  String get finishPaying => 'Terminer le paiement';
+
+  @override
+  String get orderCancelled => 'Commande annulée.';
 }

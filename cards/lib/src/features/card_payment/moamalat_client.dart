@@ -122,8 +122,13 @@ class MoamalatClient {
   final http.Client _client;
   final Duration timeout;
 
-  static final Uri _test = Uri.parse('https://tnpg.moamalat.net:6008/api/');
-  static final Uri _live = Uri.parse('https://npg.moamalat.net:6008/api/');
+  /// The checkout API, as each gateway's own LightBox page names it
+  /// (`LightBoxBackEndURL`): the two run on different ports, and the live
+  /// one resets a connection on the test port.
+  @visibleForTesting
+  static final Uri testApi = Uri.parse('https://tnpg.moamalat.net:6008/api/');
+  @visibleForTesting
+  static final Uri liveApi = Uri.parse('https://npg.moamalat.net:6016/api/');
 
   /// Moamalat's `message` codes; 7 is success.
   static const int ok = 7;
@@ -254,7 +259,7 @@ class MoamalatClient {
     Map<String, Object?> body, {
     String? bearer,
   }) async {
-    final url = (session.test ? _test : _live).resolve(endpoint);
+    final url = (session.test ? testApi : liveApi).resolve(endpoint);
     final http.Response response;
     try {
       response = await _client

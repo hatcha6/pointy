@@ -214,5 +214,9 @@
   "removeCard": "Remove",
   "removeCardTitle": "Remove this card?",
   "removeCardBody": "It will be deleted from this phone. You can save it again when you pay with it.",
-  "savedCardLocked": "We could not confirm it’s you, so the saved card was not used."
+  "savedCardLocked": "We could not confirm it’s you, so the saved card was not used.",
+  "payNotFinishedTitle": "Payment not finished",
+  "payNotFinishedBody": "Nothing has been charged yet. Finish paying by card, or cancel the order.",
+  "finishPaying": "Finish paying",
+  "orderCancelled": "Order cancelled."
 }

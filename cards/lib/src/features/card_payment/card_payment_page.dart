@@ -215,11 +215,16 @@ class _CardPaymentPageState extends State<CardPaymentPage> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final verifying = _model.stage == CardPaymentStage.verifying;
+    // While Moamalat charges or the receipt is confirmed, the page stays:
+    // leaving would call off an order that may be paid that very moment.
+    final settling =
+        _model.stage == CardPaymentStage.charging ||
+        _model.stage == CardPaymentStage.confirming;
     return PopScope(
       // Leaving the bank's page goes back to the card, not out of paying.
-      canPop: !verifying,
+      canPop: !verifying && !settling,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) {
+        if (!didPop && verifying) {
           _model.verificationAbandoned();
         }
       },
@@ -229,7 +234,9 @@ class _CardPaymentPageState extends State<CardPaymentPage> {
           leading: IconButton(
             tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
             icon: const Icon(Icons.close_rounded),
-            onPressed: verifying
+            onPressed: settling
+                ? null
+                : verifying
                 ? _model.verificationAbandoned
                 : () => _leave(CardPaymentResult.closed),
           ),
@@ -350,29 +357,78 @@ class _CardPaymentPageState extends State<CardPaymentPage> {
               ),
             ),
           ] else ...[
-            TextField(
-              controller: _number,
-              enabled: !busy,
-              keyboardType: TextInputType.number,
-              textDirection: TextDirection.ltr,
-              textAlign: TextAlign.left,
-              textInputAction: TextInputAction.next,
-              autofillHints: const [AutofillHints.creditCardNumber],
-              inputFormatters: const [CardNumberFormatter()],
-              style: numeric.copyWith(letterSpacing: 1.2),
-              decoration: InputDecoration(
-                labelText: l10n.cardNumberLabel,
-                hintText: '0000 0000 0000 0000',
-                hintTextDirection: TextDirection.ltr,
-                errorText: _numberError,
-                prefixIcon: const Icon(Icons.credit_card_rounded),
-                suffixIcon: _NetworkBadge(network: network),
-              ),
-              onChanged: (_) {
-                if (_numberError != null) {
-                  setState(() => _numberError = null);
-                }
-              },
+            // The number and the expiry share a row, as on the card itself.
+            // Local cards carry no CVV: the number, the expiry and the
+            // holder's name are all Moamalat asks for.
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  // The network's mark only where it leaves the 16 digits
+                  // room: on a narrow phone the number comes first.
+                  child: LayoutBuilder(
+                    builder: (context, box) => TextField(
+                      controller: _number,
+                      enabled: !busy,
+                      keyboardType: TextInputType.number,
+                      textDirection: TextDirection.ltr,
+                      textAlign: TextAlign.left,
+                      textInputAction: TextInputAction.next,
+                      autofillHints: const [AutofillHints.creditCardNumber],
+                      inputFormatters: const [CardNumberFormatter()],
+                      style: numeric,
+                      decoration: InputDecoration(
+                        labelText: l10n.cardNumberLabel,
+                        hintText: '0000 0000 0000 0000',
+                        hintTextDirection: TextDirection.ltr,
+                        errorText: _numberError,
+                        errorMaxLines: 2,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: CardsSpace.md,
+                          vertical: CardsSpace.lg,
+                        ),
+                        suffixIcon: box.maxWidth >= 250
+                            ? _NetworkBadge(network: network)
+                            : null,
+                      ),
+                      onChanged: (_) {
+                        if (_numberError != null) {
+                          setState(() => _numberError = null);
+                        }
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(width: CardsSpace.md),
+                SizedBox(
+                  width: 124,
+                  child: TextField(
+                    controller: _expiry,
+                    enabled: !busy,
+                    keyboardType: TextInputType.number,
+                    textDirection: TextDirection.ltr,
+                    textAlign: TextAlign.left,
+                    textInputAction: TextInputAction.next,
+                    autofillHints: const [
+                      AutofillHints.creditCardExpirationDate,
+                    ],
+                    inputFormatters: const [ExpiryFormatter()],
+                    style: numeric,
+                    decoration: InputDecoration(
+                      labelText: l10n.cardExpiryLabel,
+                      hintText: 'MM/YY',
+                      hintTextDirection: TextDirection.ltr,
+                      errorText: _expiryError,
+                      errorMaxLines: 3,
+                    ),
+                    onChanged: (_) {
+                      if (_expiryError != null) {
+                        setState(() => _expiryError = null);
+                      }
+                    },
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: CardsSpace.lg),
             TextField(
@@ -380,7 +436,7 @@ class _CardPaymentPageState extends State<CardPaymentPage> {
               enabled: !busy,
               keyboardType: TextInputType.name,
               textCapitalization: TextCapitalization.characters,
-              textInputAction: TextInputAction.next,
+              textInputAction: TextInputAction.done,
               autofillHints: const [AutofillHints.creditCardName],
               inputFormatters: [LengthLimitingTextInputFormatter(50)],
               decoration: InputDecoration(
@@ -393,44 +449,9 @@ class _CardPaymentPageState extends State<CardPaymentPage> {
                   setState(() => _nameError = null);
                 }
               },
-            ),
-            const SizedBox(height: CardsSpace.lg),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _expiry,
-                    enabled: !busy,
-                    keyboardType: TextInputType.number,
-                    textDirection: TextDirection.ltr,
-                    textAlign: TextAlign.left,
-                    textInputAction: TextInputAction.done,
-                    autofillHints: const [
-                      AutofillHints.creditCardExpirationDate,
-                    ],
-                    inputFormatters: const [ExpiryFormatter()],
-                    style: numeric,
-                    decoration: InputDecoration(
-                      labelText: l10n.cardExpiryLabel,
-                      hintText: 'MM/YY',
-                      hintTextDirection: TextDirection.ltr,
-                      errorText: _expiryError,
-                      errorMaxLines: 2,
-                    ),
-                    onChanged: (_) {
-                      if (_expiryError != null) {
-                        setState(() => _expiryError = null);
-                      }
-                    },
-                    onSubmitted: (_) => _pay(),
-                  ),
-                ),
-                const SizedBox(width: CardsSpace.md),
-                // Local cards carry no CVV: the number, the holder's name and
-                // the expiry are all Moamalat asks for.
-                const Spacer(),
-              ],
+              // Done only closes the keyboard: the save switch and the pay
+              // button below are the customer's next step, never skipped.
+              onSubmitted: (_) => FocusScope.of(context).unfocus(),
             ),
             if (CardsScope.of(context).cards.available) ...[
               const SizedBox(height: CardsSpace.md),

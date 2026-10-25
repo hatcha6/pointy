@@ -747,4 +747,17 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get savedCardLocked =>
       'We could not confirm it’s you, so the saved card was not used.';
+
+  @override
+  String get payNotFinishedTitle => 'Payment not finished';
+
+  @override
+  String get payNotFinishedBody =>
+      'Nothing has been charged yet. Finish paying by card, or cancel the order.';
+
+  @override
+  String get finishPaying => 'Finish paying';
+
+  @override
+  String get orderCancelled => 'Order cancelled.';
 }

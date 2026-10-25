@@ -1389,6 +1389,30 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'لم يتم التحقق من هويتك، فلم نستخدم البطاقة المحفوظة.'**
   String get savedCardLocked;
+
+  /// No description provided for @payNotFinishedTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يكتمل الدفع'**
+  String get payNotFinishedTitle;
+
+  /// No description provided for @payNotFinishedBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يُخصم شيء بعد. أكمل الدفع بالبطاقة، أو ألغِ الطلب.'**
+  String get payNotFinishedBody;
+
+  /// No description provided for @finishPaying.
+  ///
+  /// In ar, this message translates to:
+  /// **'أكمل الدفع'**
+  String get finishPaying;
+
+  /// No description provided for @orderCancelled.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم إلغاء الطلب.'**
+  String get orderCancelled;
 }
 
 class _AppLocalizationsDelegate

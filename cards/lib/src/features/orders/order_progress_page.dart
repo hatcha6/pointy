@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../l10n/generated/app_localizations.dart';
+import '../../core/result.dart';
+import '../../shared/relay_error_text.dart';
 import '../../data/models/catalog.dart';
 import '../../data/models/order.dart';
 import '../../design/cards_tokens.dart';
@@ -74,6 +76,13 @@ class _OrderProgressPageState extends State<OrderProgressPage>
 
   /// Dafa's page is open over the app (in-app browser).
   bool _paymentPageOpen = false;
+
+  /// Dafa's page was opened for this order: the payer may have paid there,
+  /// out of the app's sight, so the page waits for the relay to say.
+  bool _usedPaymentPage = false;
+
+  /// Calling the order off after the customer closed the card form.
+  bool _cancelling = false;
 
   @override
   void initState() {
@@ -148,7 +157,34 @@ class _OrderProgressPageState extends State<OrderProgressPage>
       case CardPaymentResult.settled:
         await widget.watcher.poll();
       case CardPaymentResult.closed:
-        break;
+        // The customer backed out of the card form: nothing to wait for.
+        await _cancel();
+    }
+  }
+
+  /// Calls the order off and goes back to the card. The relay asks Dafa
+  /// first, so an order that did get paid is shown as paid instead.
+  Future<void> _cancel() async {
+    final l10n = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _cancelling = true);
+    final result = await CardsScope.of(context).orders
+        .cancel(widget.watcher.order.id);
+    if (!mounted) {
+      return;
+    }
+    setState(() => _cancelling = false);
+    switch (result) {
+      case Ok(:final value) when value.status == OrderStatus.cancelled:
+        Haptics.select();
+        messenger.showSnackBar(SnackBar(content: Text(l10n.orderCancelled)));
+        Navigator.of(context).pop();
+      case Ok():
+        await widget.watcher.poll();
+      case Error(:final exception):
+        messenger.showSnackBar(
+          SnackBar(content: Text(relayErrorText(l10n, exception))),
+        );
     }
   }
 
@@ -160,6 +196,7 @@ class _OrderProgressPageState extends State<OrderProgressPage>
   Future<void> _openPaymentPage() async {
     final url = Uri.tryParse(widget.watcher.order.checkoutUrl);
     if (url != null) {
+      setState(() => _usedPaymentPage = true);
       _paymentPageOpen = await launchUrl(
         url,
         mode: LaunchMode.inAppBrowserView,
@@ -196,7 +233,8 @@ class _OrderProgressPageState extends State<OrderProgressPage>
   Widget _panel(BuildContext context, CardOrder order) {
     final l10n = AppLocalizations.of(context);
     return switch (_outcomeOf(order)) {
-      'paying' => OrderOutcomePanel(
+      // Paying on Dafa's page: only the relay can tell when it is done.
+      'paying' when _usedPaymentPage => OrderOutcomePanel(
         brand: widget.brand,
         busy: true,
         icon: Icons.credit_card_rounded,
@@ -204,6 +242,19 @@ class _OrderProgressPageState extends State<OrderProgressPage>
         body: l10n.hostedBody,
         secondaryLabel: order.checkoutUrl.isEmpty ? null : l10n.openPaymentPage,
         onSecondary: _pay,
+      ),
+      // The app's own card form, not finished: nothing is on its way, so
+      // nothing spins. Pay, or call the order off.
+      'paying' => OrderOutcomePanel(
+        brand: widget.brand,
+        busy: _cancelling,
+        icon: Icons.credit_card_rounded,
+        title: l10n.payNotFinishedTitle,
+        body: l10n.payNotFinishedBody,
+        primaryLabel: _cancelling ? null : l10n.finishPaying,
+        onPrimary: _pay,
+        secondaryLabel: _cancelling ? null : l10n.cancelOrder,
+        onSecondary: _cancel,
       ),
       'preparing' => OrderOutcomePanel(
         brand: widget.brand,

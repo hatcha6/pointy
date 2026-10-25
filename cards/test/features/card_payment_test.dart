@@ -12,6 +12,7 @@ import 'package:pointy_cards/src/features/card_payment/card_number.dart';
 import 'package:pointy_cards/src/features/card_payment/card_payment_page.dart';
 import 'package:pointy_cards/src/features/card_payment/moamalat_client.dart';
 import 'package:pointy_cards/src/features/card_payment/three_ds_view.dart';
+import 'package:pointy_cards/src/features/orders/order_progress_page.dart';
 import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 
@@ -187,6 +188,30 @@ void main() {
       expect(receipt['SecureHash'], 'A' * 64);
     });
 
+    test('a live checkout goes to the live gateway on its own port', () async {
+      late Uri sent;
+      final client = MoamalatClient(
+        client: MockClient((request) async {
+          sent = request.url;
+          return http.Response(
+            jsonEncode({
+              'message': 7,
+              'token': 'jwt',
+              'orderDetailsModel': {'merchantName': 'SHOP', 'currency': 434},
+            }),
+            200,
+          );
+        }),
+      );
+      await client.open(
+        CardSession.fromJson({...fixtureCardSession, 'test': false}),
+      );
+      expect(
+        sent.toString(),
+        'https://npg.moamalat.net:6016/api/LightboxHostedCheckout',
+      );
+    });
+
     test('a refusal carries its code', () async {
       final client = MoamalatClient(
         client: MockClient(
@@ -257,8 +282,8 @@ void main() {
     }) async {
       final fields = find.byType(TextField);
       await tester.enterText(fields.at(0), number);
-      await tester.enterText(fields.at(1), 'HATEM ALI');
-      await tester.enterText(fields.at(2), '0130');
+      await tester.enterText(fields.at(1), '0130');
+      await tester.enterText(fields.at(2), 'HATEM ALI');
       await tester.tap(find.textContaining('ادفع'));
       await tester.pumpAndSettle();
     }
@@ -317,6 +342,24 @@ void main() {
       expect(find.textContaining('رفض البنك العملية'), findsOneWidget);
       expect(find.byType(TextField), findsNWidgets(3));
       expect(results, isEmpty);
+    });
+
+    testWidgets("the name's done key closes the keyboard and pays nothing", (
+      tester,
+    ) async {
+      final moamalat = FakeMoamalatClient();
+      final results = await openPage(tester, moamalat);
+      final fields = find.byType(TextField);
+      await tester.enterText(fields.at(0), _testCard);
+      await tester.enterText(fields.at(1), '0130');
+      await tester.enterText(fields.at(2), 'HATEM ALI');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(moamalat.charged, isEmpty);
+      expect(results, isEmpty);
+      expect(tester.testTextInput.isVisible, isFalse);
+      // The save switch is still there to turn on before paying.
+      expect(find.text('احفظ البطاقة على هذا الهاتف'), findsOneWidget);
     });
 
     testWidgets('a mistyped number is caught before anything is sent', (
@@ -410,6 +453,84 @@ void main() {
       await tester.tap(find.text('استخدم بطاقة أخرى'));
       await tester.pumpAndSettle();
       expect(find.byType(TextField), findsNWidgets(3));
+    });
+  });
+
+  group('backing out', () {
+    final order = CardOrder.fromJson({
+      ...fixtureOrder(
+        id: 'order-new',
+        status: 'awaiting_payment',
+        nextAction: 'hosted_page',
+      ),
+      'checkout_url': 'https://localbankcards.dafa.ly/pay-1',
+    });
+
+    Future<void> openOrder(WidgetTester tester, {http.Client? relay}) async {
+      tester.view.physicalSize = const Size(390 * 3, 844 * 3);
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        CardsApp(
+          dependencies: fixtureDependencies(client: relay),
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => Center(
+                child: TextButton(
+                  onPressed: () =>
+                      OrderProgressPage.open(context, order: order),
+                  child: const Text('order'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('order'));
+      await tester.pumpAndSettle();
+      // The card form opens over the order on its own.
+      expect(find.text('الدفع بالبطاقة المصرفية'), findsOneWidget);
+    }
+
+    testWidgets('closing the card form calls the order off and goes back, '
+        'with no wait for a payment', (tester) async {
+      await openOrder(tester);
+      await tester.tap(find.byIcon(Icons.close_rounded));
+      await tester.pump();
+      await tester.pump();
+      // Never the "finish paying on the card page" wait.
+      expect(find.text('أكمل الدفع في صفحة البطاقة'), findsNothing);
+      await tester.pumpAndSettle();
+      expect(find.text('تم إلغاء الطلب.'), findsOneWidget);
+      expect(find.text('order'), findsOneWidget);
+      expect(find.byType(OrderProgressPage), findsNothing);
+    });
+
+    testWidgets('when the cancel cannot reach the relay, the order offers '
+        'to pay or cancel instead of spinning', (tester) async {
+      final relay = fixtureRelay();
+      await openOrder(
+        tester,
+        relay: MockClient((request) async {
+          if (request.url.path.endsWith('/cancel')) {
+            throw http.ClientException('offline');
+          }
+          final copy = http.Request(request.method, request.url)
+            ..headers.addAll(request.headers)
+            ..body = request.body;
+          return relay.send(copy).then(http.Response.fromStream);
+        }),
+      );
+      await tester.tap(find.byIcon(Icons.close_rounded));
+      await tester.pumpAndSettle();
+      expect(find.text('لم يكتمل الدفع'), findsOneWidget);
+      expect(find.text('أكمل الدفع'), findsOneWidget);
+      expect(find.text('إلغاء الطلب'), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      // Leaving the order stops its watch.
+      tester.state<NavigatorState>(find.byType(Navigator).first).pop();
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 10));
     });
   });
 }
