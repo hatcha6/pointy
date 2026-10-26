@@ -1,0 +1,71 @@
+# The card app's web build, published as ghcr.io/<owner>/pointy-cards-web.
+#
+# The relay image copies it in (relay/Dockerfile) and serves it on
+# cards.dftr.ly (POINTY_RELAY_CARDS_WEB_HOSTS). It is built here, only when
+# the app changes, so a relay release takes the latest build in seconds
+# instead of compiling Flutter. A new web build reaches cards.dftr.ly with the
+# next relay image.
+#
+# The package should be PUBLIC (Package settings → Change visibility): it is
+# a public website, and the on-prem bundle and local `docker build` of the
+# relay pull it without a token.
+name: Card app web image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "cards/**"
+      - "shared/pointy_brand/**"
+      - ".github/workflows/cards-web.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: cards-web
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: "3.47.6"
+
+jobs:
+  publish:
+    name: Build and publish (ghcr)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter ${{ env.FLUTTER_VERSION }}
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Build the web app
+        working-directory: cards
+        run: >
+          flutter build web --release
+          --dart-define=CARDS_RELAY_URL=https://my.dftr.ly
+          --dart-define=CARDS_CHANNEL=web
+
+      - name: Resolve image name (ghcr requires lowercase)
+        id: image
+        shell: bash
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: echo "ref=ghcr.io/${OWNER,,}/pointy-cards-web" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to ghcr.io
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build and push the image
+        run: |
+          docker build -f cards/web.Dockerfile \
+            -t "${{ steps.image.outputs.ref }}:${GITHUB_SHA::12}" \
+            -t "${{ steps.image.outputs.ref }}:latest" cards
+          docker push --all-tags "${{ steps.image.outputs.ref }}"

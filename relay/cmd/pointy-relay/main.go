@@ -34,6 +34,7 @@ import (
 	"pointy/relay/internal/alerts"
 	"pointy/relay/internal/artifacts"
 	"pointy/relay/internal/bnplus"
+	"pointy/relay/internal/cardsweb"
 	"pointy/relay/internal/connector"
 	"pointy/relay/internal/control"
 	"pointy/relay/internal/dafa"
@@ -557,6 +558,16 @@ func runServer(args []string) error {
 		envString("POINTY_RELAY_CUSTOMER_WEB_ORIGINS", ""),
 		"comma-separated origins the card app's web build is served from (https://cards.dftr.ly); browsers on them may call the customer routes",
 	)
+	cardsWebHosts := flags.String(
+		"cards-web-hosts",
+		envString("POINTY_RELAY_CARDS_WEB_HOSTS", ""),
+		"comma-separated hosts the card app's web build is served on (cards.dftr.ly); their https origins may call the customer routes. Empty serves no web app",
+	)
+	cardsWebDir := flags.String(
+		"cards-web-dir",
+		envString("POINTY_RELAY_CARDS_WEB_DIR", defaultCardsWebDir),
+		"the card app's web build (index.html at its root); the relay image carries one here",
+	)
 	customerReviewCode := flags.String(
 		"customer-review-code",
 		envString("POINTY_RELAY_CUSTOMER_REVIEW_CODE", ""),
@@ -948,7 +959,7 @@ func runServer(args []string) error {
 		ChannelCategories: *customerChannelCategories,
 		OrderTTL:          *customerOrderTTL,
 		OrderRateLimit:    *customerOrderRateLimit,
-		WebOrigins:        *customerWebOrigins,
+		WebOrigins:        withCardsWebOrigins(*customerWebOrigins, cardsweb.ParseHosts(*cardsWebHosts)),
 		SMS:               smsConfig,
 	})
 	if err != nil {
@@ -1593,6 +1604,11 @@ func runServer(args []string) error {
 		} else {
 			publicHandler = wrapped
 		}
+	}
+	// cards.dftr.ly: the card app's web build, by host.
+	publicHandler, err = buildCardsWeb(publicHandler, cardsweb.ParseHosts(*cardsWebHosts), *cardsWebDir, logger)
+	if err != nil {
+		return err
 	}
 	// Connectors can also reach any node over HTTPS (443) through the
 	// balancer, with their mTLS inside a WebSocket; the TCP listener stays

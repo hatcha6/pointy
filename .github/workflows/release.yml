@@ -607,6 +607,7 @@ jobs:
         run: >
           docker build -f relay/Dockerfile
           --build-arg POINTY_VERSION=${{ needs.version.outputs.version }}
+          --build-arg CARDS_WEB=no-cards-web
           -t "pointy-relay:${{ needs.version.outputs.version }}" .
 
       - name: Build LAN front-door image (nginx + flip config)

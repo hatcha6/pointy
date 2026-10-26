@@ -1,5 +1,16 @@
 # syntax=docker/dockerfile:1
 
+# The card app's web build (cards.dftr.ly), published on its own by
+# .github/workflows/cards-web.yml: the relay copies the latest one in rather
+# than compiling Flutter. The on-prem bundle, which serves no web app, passes
+# CARDS_WEB=no-cards-web.
+ARG CARDS_WEB=ghcr.io/hatcha6/pointy-cards-web:latest
+
+FROM alpine:3.22 AS no-cards-web
+RUN mkdir /cards-web
+
+FROM ${CARDS_WEB} AS cards-web
+
 # The operator console's web app (relay/console-ui), built first so the Go
 # binary embeds it (internal/console/dist).
 FROM node:22.12.0-alpine AS console
@@ -44,6 +55,8 @@ RUN apk add --no-cache ca-certificates tzdata \
     && chown -R 65532:65532 /var/lib/pointy
 
 COPY --from=build /out/pointy-relay /usr/local/bin/pointy-relay
+# Served only on POINTY_RELAY_CARDS_WEB_HOSTS (cards.dftr.ly).
+COPY --from=cards-web /cards-web /srv/cards-web
 
 USER 65532:65532
 WORKDIR /var/lib/pointy

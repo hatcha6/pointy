@@ -1651,6 +1651,22 @@ Settings:
   left out sells everything, except `ios`, which defaults to the service
   categories.
 - `POINTY_RELAY_CUSTOMER_ORDER_TTL` (`30m`).
+- `POINTY_RELAY_CARDS_WEB_HOSTS` — hosts the relay serves the card app's
+  web build on, comma-separated (`cards.dftr.ly`). Empty serves none.
+  - Requests to those hosts get the build; every other host reaches the relay
+    as before. Every app page (`/brand/pubg`, …) is `index.html`, a missing
+    file is a 404, and the two `.well-known` link files (Universal Links, App
+    Links) go out as JSON. Everything is `Cache-Control: no-cache`, so a new
+    build shows at once and an unchanged file costs a 304.
+  - Each host's `https://` origin is added to the customer web origins below.
+  - The build comes from the `pointy-cards-web` image, which
+    `.github/workflows/cards-web.yml` publishes whenever `cards/` changes.
+    `relay/Dockerfile` copies the latest one in, so a new web build goes live
+    with the next relay image. The on-prem bundle builds with
+    `CARDS_WEB=no-cards-web` and carries none.
+  - The relay refuses to start when a host is set and the build has no
+    `index.html`.
+- `POINTY_RELAY_CARDS_WEB_DIR` (`/srv/cards-web`, where the image keeps it).
 - `POINTY_RELAY_CUSTOMER_WEB_ORIGINS` — the card app's web build origins,
   comma-separated (`https://cards.dftr.ly`).
   - Browsers on them get CORS answers on `/v1/customers/*`, preflight included.
