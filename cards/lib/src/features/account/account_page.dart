@@ -27,7 +27,10 @@ class AccountPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final auth = CardsScope.of(context).auth;
+    // Like the other tabs, the page runs under the glass tab bar; its lists
+    // pad their own ends past it.
     return SafeArea(
+      bottom: false,
       child: ValueListenableBuilder(
         valueListenable: auth.session,
         builder: (context, session, _) => session == null
