@@ -10,6 +10,7 @@ import 'data/settings/app_settings.dart';
 import 'data/vault/card_vault.dart';
 import 'data/vault/code_vault.dart';
 import 'features/card_payment/moamalat_client.dart';
+import 'features/links/link_inbox.dart';
 
 /// Everything the screens use, built once at launch. Screens get it from
 /// [CardsScope]; tests and the preview harness build it with fakes.
@@ -24,10 +25,12 @@ class CardsDependencies {
     AppSettings? settings,
     MoamalatClient? moamalat,
     CardVault? cards,
+    LinkInbox? links,
     this.preferences,
   }) : settings = settings ?? AppSettings(),
        moamalat = moamalat ?? MoamalatClient(),
-       cards = cards ?? MemoryCardVault();
+       cards = cards ?? MemoryCardVault(),
+       links = links ?? LinkInbox();
 
   /// The real thing: the relay over HTTPS, the session in the keychain.
   factory CardsDependencies.live(CardsConfig config) {
@@ -73,6 +76,9 @@ class CardsDependencies {
 
   /// Bank cards the customer chose to keep on this phone.
   final CardVault cards;
+
+  /// Links to places in the app (`https://cards.dftr.ly/…`) waiting to open.
+  final LinkInbox links;
 
   /// Small per-device choices (the last payment method). Null in tests.
   final SharedPreferencesAsync? preferences;

@@ -16,6 +16,7 @@ import '../../shared/pill.dart';
 import '../../shared/pressable.dart';
 import '../../shared/quantity_stepper.dart';
 import '../checkout/checkout_sheet.dart';
+import '../links/cards_link.dart';
 import '../sign_in/sign_in_sheet.dart';
 import 'brand_light.dart';
 import '../../shared/haptics.dart';
@@ -40,6 +41,8 @@ class BrandPage extends StatefulWidget {
     String? heroTag,
   }) => Navigator.of(context).push(
     MaterialPageRoute(
+      // Its address (cards.dftr.ly/brand/…), shown in the web build's bar.
+      settings: RouteSettings(name: BrandLink(brand.key).location),
       builder: (_) =>
           BrandPage(brand: brand, initialItem: item, heroTag: heroTag),
     ),

@@ -38,6 +38,9 @@
 	<true/>
 	<key>NSFaceIDUsageDescription</key>
 	<string>لحماية رموز كروتك، نطلب بصمة الوجه قبل إظهارها.</string>
+	<!-- cards.dftr.ly links reach the app as routes: see LinkInbox. -->
+	<key>FlutterDeepLinkingEnabled</key>
+	<true/>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

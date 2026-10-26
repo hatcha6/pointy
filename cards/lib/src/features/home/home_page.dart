@@ -54,6 +54,14 @@ class _HomePageState extends State<HomePage>
   void initState() {
     super.initState();
     widget.reset?.addListener(_startOver);
+    shelf.addListener(_followQuery);
+  }
+
+  /// A link can set the search: the field shows it.
+  void _followQuery() {
+    if (_search.text != shelf.query) {
+      _search.text = shelf.query;
+    }
   }
 
   @override
@@ -63,11 +71,16 @@ class _HomePageState extends State<HomePage>
       oldWidget.reset?.removeListener(_startOver);
       widget.reset?.addListener(_startOver);
     }
+    if (oldWidget.shelf != widget.shelf) {
+      oldWidget.shelf.removeListener(_followQuery);
+      widget.shelf.addListener(_followQuery);
+    }
   }
 
   @override
   void dispose() {
     widget.reset?.removeListener(_startOver);
+    shelf.removeListener(_followQuery);
     _reveal.dispose();
     _search.dispose();
     _scroll.dispose();
@@ -90,11 +103,14 @@ class _HomePageState extends State<HomePage>
 
   void _startOver() {
     FocusManager.instance.primaryFocus?.unfocus();
-    final changed = shelf.searching || shelf.category != null;
+    final target = widget.reset!.target;
+    final query = target?.query ?? '';
+    final category = target?.category;
+    final changed = shelf.query != query || shelf.category != category;
     void clear() {
-      _search.clear();
-      shelf.search('');
-      shelf.filter(null);
+      _search.text = query;
+      shelf.search(query);
+      shelf.filter(category);
     }
 
     if (!widget.reset!.animate) {

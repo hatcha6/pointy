@@ -1,0 +1,13 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["TAA934964D.ly.dftr.cards"],
+        "components": [
+          { "/": "/.well-known/*", "exclude": true, "comment": "These files, not pages." },
+          { "/": "/*", "comment": "Every page of the app." }
+        ]
+      }
+    ]
+  }
+}

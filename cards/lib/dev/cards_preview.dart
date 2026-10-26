@@ -18,6 +18,7 @@
 // Every screen runs its real code against the fixture relay
 // (cards_fixtures.dart). The board lays the main ones out in phone frames.
 import 'package:flutter/material.dart';
+import 'package:flutter_web_plugins/url_strategy.dart';
 
 import '../src/app.dart';
 import '../src/data/models/catalog.dart';
@@ -43,6 +44,9 @@ import 'scenario_chip.dart';
 import 'splash_lab.dart';
 
 void main() {
+  // Plain addresses like the real web build. The path opens like a tapped
+  // cards.dftr.ly link: /category/gaming?screen=home, /brand/pubg?screen=home.
+  usePathUrlStrategy();
   final query = Uri.base.queryParameters;
   final screen = query['screen'] ?? 'board';
   final dark = query['theme'] == 'dark';

@@ -5,6 +5,7 @@ import '../../../l10n/generated/app_localizations.dart';
 import '../../core/support.dart';
 import '../../design/cards_theme.dart';
 import '../../design/cards_tokens.dart';
+import '../links/cards_link.dart';
 import 'legal_document.dart';
 
 /// A legal text, read the way a long page should be: a large title, short
@@ -16,7 +17,15 @@ class LegalPage extends StatefulWidget {
 
   static Future<void> open(BuildContext context, LegalDocument document) =>
       Navigator.of(context).push(
-        MaterialPageRoute<void>(builder: (_) => LegalPage(document: document)),
+        MaterialPageRoute<void>(
+          settings: RouteSettings(
+            name: PageLink(switch (document) {
+              LegalDocument.privacy => LinkedPage.privacy,
+              LegalDocument.terms => LinkedPage.terms,
+            }).location,
+          ),
+          builder: (_) => LegalPage(document: document),
+        ),
       );
 
   static String titleOf(AppLocalizations l10n, LegalDocument document) =>

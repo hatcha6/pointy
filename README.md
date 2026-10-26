@@ -681,6 +681,7 @@ make relay-run       # local relay; customer OTP test mode is on, codes come bac
 make cards-run       # the app against it (CARDS_RELAY_URL, CARDS_CHANNEL=ios|play|apk|web)
 make cards-preview   # preview harness on :8090, ?screen=board|home|my-cards|account|brand
 make cards-check     # analyze + test the app and shared/pointy_brand
+make cards-web-build # the web app for https://cards.dftr.ly (cards/build/web)
 ```
 
 ## Integrations (resale providers)

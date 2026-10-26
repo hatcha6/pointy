@@ -40,6 +40,8 @@ dependencies:
   intl: ^0.20.3
   flutter_localizations:
     sdk: flutter
+  flutter_web_plugins:
+    sdk: flutter
   pointy_brand:
     path: ../shared/pointy_brand
   cached_network_image: ^4.0.5

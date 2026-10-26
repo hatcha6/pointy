@@ -182,7 +182,7 @@ and every tap answers. The rules live in `src/design/`:
 Previews: `make cards-preview`, then `?screen=board`, or any single screen:
 `home`, `brand`, `brand-itunes`, `sign-in`, `sign-in-code`, `checkout`,
 `wallet-code`, `preparing`, `refunded`, `reveal`, `my-cards`, `account`,
-`signed-out`, `about`, `privacy`, `terms`, `card-pay` (the bank-card form; `&card=verify` has the bank ask for its code, `&card=decline` refuses the card). Add `&theme=dark` for dark, `&lang=en` or `&lang=fr` for English or French (only while `AppSettings.languageChoice` is on).
+`signed-out`, `about`, `privacy`, `terms`, `card-pay` (the bank-card form; `&card=verify` has the bank ask for its code, `&card=decline` refuses the card). The address's path opens like a tapped `cards.dftr.ly` link: `/category/gaming?screen=home`, `/brand/pubg?screen=home`. Add `&theme=dark` for dark, `&lang=en` or `&lang=fr` for English or French (only while `AppSettings.languageChoice` is on).
 
 `make cards-preview-live` is the same harness on the **real shelf** of a local
 relay (`make relay-run`, then `pointy-relay vouchers catalog push
@@ -193,12 +193,52 @@ reveal, كروتي, حسابي) on real brands and art without a phone or a paym
 End to end: `make relay-run` (customer OTP test mode, the web origin allowed),
 then `make cards-web` and open `http://127.0.0.1:8093`.
 
+## Links
+
+`https://cards.dftr.ly/…` is the app's one official link, for ads, messages
+and QR codes. On a phone with the app it opens the app (iOS Universal Links,
+Android App Links); everywhere else it opens the web build at the same
+address. `lib/src/features/links/cards_link.dart` lists every address:
+
+| Address | Opens |
+| --- | --- |
+| `/` | the shelf |
+| `/category/<key>` | one category (`telecom`, `internet`, `gaming`, …) |
+| `/search?q=<text>` | the shelf searching |
+| `/brand/<key>` | a brand's page; `?item=<item key>` starts on one card |
+| `/my-cards`, `/account` | the other tabs |
+| `/privacy`, `/terms`, `/about` | the legal pages and about |
+
+An unknown address, a brand no longer sold or a category that is not on the
+channel's shelf opens the shelf. Ad parameters (`utm_*`, …) are ignored. A link
+tapped while the app runs closes what is open first, except a card payment
+in progress. On the web, the address bar follows the tab, the filter and the
+open page, so any page can be copied and shared.
+
+What makes the phone hand the link to the app:
+
+- iOS: `ios/Runner/Runner.entitlements` (`applinks:cards.dftr.ly`) and
+  `web/.well-known/apple-app-site-association` (team `TAA934964D`).
+- Android: the `autoVerify` intent filter in `AndroidManifest.xml` and
+  `web/.well-known/assetlinks.json`. It lists the SHA-256 of the key the APK
+  is signed with; today that is the build Mac's debug key. When the app gets
+  a release key (or Play App Signing), add that key's fingerprint there, or
+  Android opens the links in the browser instead.
+
+Hosting: the relay serves the web build on `cards.dftr.ly`
+(`POINTY_RELAY_CARDS_WEB_HOSTS=cards.dftr.ly`; see `relay/README.md`).
+`.github/workflows/cards-web.yml` publishes the build as the
+`pointy-cards-web` image whenever `cards/` changes, and the relay image
+copies the latest one in, so a new web build goes live with the next relay
+release. `make cards-web-build` makes the same build locally.
+
 ## Commands
 
     make cards-check     # analyze + test this app and shared/pointy_brand
     make cards-run       # run against a local relay (CARDS_RELAY_URL, CARDS_CHANNEL)
     make cards-preview   # preview harness on :8090 (screens listed above)
     make cards-web       # the real web app on :8093 against a local relay
+    make cards-web-build # the web app for https://cards.dftr.ly (build/web), as CI builds it
 
 Run a local relay with `make relay-run`. It turns on the customer OTP test mode,
 so the sign-in code comes back in the response instead of by SMS.

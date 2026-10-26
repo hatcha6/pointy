@@ -7,6 +7,7 @@ import '../../core/support.dart';
 import '../../design/cards_logo.dart';
 import '../../design/cards_tokens.dart';
 import '../../shared/grouped.dart';
+import '../links/cards_link.dart';
 import 'legal_document.dart';
 import 'legal_page.dart';
 
@@ -15,9 +16,12 @@ import 'legal_page.dart';
 class AboutPage extends StatefulWidget {
   const AboutPage({super.key});
 
-  static Future<void> open(BuildContext context) =>
-      Navigator.of(context)
-          .push(MaterialPageRoute<void>(builder: (_) => const AboutPage()));
+  static Future<void> open(BuildContext context) => Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      settings: RouteSettings(name: const PageLink(LinkedPage.about).location),
+      builder: (_) => const AboutPage(),
+    ),
+  );
 
   @override
   State<AboutPage> createState() => _AboutPageState();
