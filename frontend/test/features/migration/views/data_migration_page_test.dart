@@ -263,6 +263,103 @@ void main() {
     viewModel.dispose();
   });
 
+  testWidgets(
+    'a preview with a few bad records imports past them, once confirmed',
+    (tester) async {
+      final repository = FakeMigrationRepository(
+        sources: [source()],
+        runs: const [
+          {
+            'id': 7,
+            'source': 1,
+            'mode': 'dry_run',
+            'status': 'succeeded',
+            'summary': {
+              'product': {
+                'created': 43702,
+                'updated': 0,
+                'skipped': 0,
+                'failed': 4,
+              },
+            },
+          },
+        ],
+      );
+      final viewModel = await pump(tester, repository);
+
+      final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
+      final skipping = find.text(l10n.migrationImportSkippingButton('4'));
+      expect(skipping, findsOneWidget);
+      expect(find.text(l10n.migrationPreviewAgainButton), findsOneWidget);
+
+      await tester.ensureVisible(skipping);
+      await tester.tap(skipping);
+      await tester.pump();
+      expect(
+        find.text(l10n.migrationImportSkippingMessage('4')),
+        findsOneWidget,
+      );
+      await tester.tap(find.text(l10n.cancelButton));
+      await tester.pump();
+      expect(repository.startedRuns, isEmpty);
+
+      await tester.tap(skipping);
+      await tester.pump();
+      await tester.tap(find.text(l10n.migrationImportSkippingConfirm));
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(repository.startedRuns.single['mode'], 'import');
+      viewModel.dispose();
+    },
+  );
+
+  testWidgets('a running preview names its stage in Arabic, with the count', (
+    tester,
+  ) async {
+    final viewModel = await pump(
+      tester,
+      FakeMigrationRepository(
+        sources: [source()],
+        runs: const [
+          {
+            'id': 7,
+            'source': 1,
+            'mode': 'dry_run',
+            'status': 'running',
+            'progress_percent': 50,
+            'progress_message': 'Products: 12500',
+            'stages': [
+              {
+                'key': 'unit',
+                'label': 'Units',
+                'status': 'done',
+                'percent': 100,
+                'detail': '',
+              },
+              {
+                'key': 'product',
+                'label': 'Products',
+                'status': 'running',
+                'percent': 0,
+                'detail': '12,500 سجل',
+              },
+            ],
+          },
+        ],
+      ),
+    );
+
+    final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
+    expect(find.text(l10n.migrationDryRunningTitle), findsOneWidget);
+    expect(
+      find.text('${l10n.migrationEntityProduct}: 12,500 سجل'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Products'), findsNothing);
+    viewModel.dispose();
+  });
+
   testWidgets('finishing says the file was deleted', (tester) async {
     final viewModel = await pump(
       tester,

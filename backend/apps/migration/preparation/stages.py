@@ -63,10 +63,13 @@ class StageTracker:
     — are single Celery tasks, so nothing does.
     """
 
-    def __init__(self, row, stages, *, field="stages", persist=True):
+    def __init__(self, row, stages, *, field="stages", persist=True, publish=None):
         self.row = row
         self.field = field
         self.persist = persist
+        # When the row cannot be written (a dry run's writes are rolled back),
+        # ``publish(stages)`` receives each update instead, on the same throttle.
+        self.publish = publish
         self._stages = [_blank(stage) for stage in stages]
         self._by_key = {stage["key"]: stage for stage in self._stages}
         self._last_write = 0.0
@@ -165,10 +168,14 @@ class StageTracker:
     def _flush(self, *, force=False):
         if not self.persist:
             setattr(self.row, self.field, self.as_list())
-            return
+            if self.publish is None:
+                return
         now = time.monotonic()
         if not force and now - self._last_write < _THROTTLE_SECONDS:
             return
         self._last_write = now
+        if not self.persist:
+            self.publish(self.as_list())
+            return
         setattr(self.row, self.field, self.as_list())
         self.row.save(update_fields=[self.field, "updated_at"])

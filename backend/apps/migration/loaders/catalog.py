@@ -247,7 +247,18 @@ class ProductLoader(BaseLoader):
                 )
             else:
                 category_ids.append(category_pk)
-        instance.categories.set(category_ids)
+        created = action == CREATED
+        if created:
+            # Nothing to diff against: one INSERT instead of set()'s reads.
+            through = Product.categories.through
+            through.objects.bulk_create(
+                [
+                    through(product_id=instance.pk, productcategory_id=category_pk)
+                    for category_pk in dict.fromkeys(category_ids)
+                ]
+            )
+        else:
+            instance.categories.set(category_ids)
 
         resolver.remember(self.entity_type, record.source_key, instance)
 
@@ -256,7 +267,10 @@ class ProductLoader(BaseLoader):
         # the product's source key, so stock/sales can resolve it.
         extra_barcodes = getattr(record, "extra_barcodes", None) or []
         if record.unit_price is not None or record.sku or record.barcode or extra_barcodes:
-            variant = instance.ensure_default_variant(
+            make_variant = (
+                instance.create_default_variant if created else instance.ensure_default_variant
+            )
+            variant = make_variant(
                 name="",
                 sku=normalize_sku(record.sku),
                 barcode=normalize_barcode(record.barcode),
@@ -378,12 +392,12 @@ class ProductUnitLoader(BaseLoader):
             unit_id=unit_pk,
             defaults=defaults,
         )
-        issues = self._sync_barcodes(instance, record)
+        issues = self._sync_barcodes(instance, record, created=created)
         self._apply_default_purchase(instance, record)
         resolver.remember(self.entity_type, record.source_key, instance)
         return LoadOutcome(CREATED if created else UPDATED, instance.pk, issues)
 
-    def _sync_barcodes(self, instance, record) -> list[Issue]:
+    def _sync_barcodes(self, instance, record, *, created=False) -> list[Issue]:
         """Attach the unit's packaging barcodes. A code held by a non-default
         variant of the *same* product migrates onto the unit (the variant is a
         pack pseudo-variant from an earlier import — retired in place, its sale
@@ -395,9 +409,13 @@ class ProductUnitLoader(BaseLoader):
             code = clean_str(code)
             if code and code not in wanted:
                 wanted.append(code)
-        existing = set(
-            ProductUnitBarcode.objects.filter(product_unit=instance).values_list(
-                "barcode", flat=True
+        existing = (
+            set()
+            if created
+            else set(
+                ProductUnitBarcode.objects.filter(product_unit=instance).values_list(
+                    "barcode", flat=True
+                )
             )
         )
         for code in wanted:

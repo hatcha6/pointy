@@ -115,6 +115,28 @@ def next_document_number(key: str) -> int:
         return series.last_value
 
 
+def reserve_document_numbers(key: str, count: int) -> int:
+    """Take ``count`` consecutive numbers in [key] at once; returns the first.
+
+    For a bulk writer that numbers what it has already written, all in one
+    transaction (the migration's renumbering pass): the counter moves once, by
+    exactly the documents that exist, so the series stays gapless. The same
+    transactional rule as :func:`next_document_number` — call it inside the
+    transaction that writes the numbers.
+    """
+    if count <= 0:
+        raise ValueError("count must be positive")
+    with transaction.atomic():
+        series = _locked(key)
+        if series is None:
+            DocumentNumberSeries.objects.get_or_create(pk=key)
+            series = _locked(key)
+        first = series.last_value + 1
+        series.last_value += count
+        series.save(update_fields=["last_value"])
+        return first
+
+
 def _locked(key: str) -> DocumentNumberSeries | None:
     return (
         DocumentNumberSeries.objects.select_for_update().filter(pk=key).first()

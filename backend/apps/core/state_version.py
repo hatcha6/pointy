@@ -34,6 +34,8 @@ there is still exactly one integer per fact in the whole system.
 
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import hashlib
 import logging
 from dataclasses import dataclass
@@ -344,7 +346,38 @@ def bump(name: str, *, user_id: int | None = None) -> None:
             f"state domain {name!r} is owned elsewhere; bump it through its own module"
         )
     key = domain.redis_key(user_id)
+    held = _held_keys.get()
+    if held is not None:
+        held.add(key)
+        return
     transaction.on_commit(lambda: _incr(key))
+
+
+#: Set while a bulk writer holds the bumps back (``held_bumps``).
+_held_keys: contextvars.ContextVar[set | None] = contextvars.ContextVar(
+    "state_bumps_held", default=None
+)
+
+
+@contextlib.contextmanager
+def held_bumps(*, announce: bool = True):
+    """Collect a long bulk write's bumps and send each counter once, at the end.
+
+    A data migration commits thousands of rows; each save queued its own Redis
+    increment, and every till re-read the catalog for a migration that had not
+    finished. Leave this only after the writes have committed — the same rule
+    ``bump`` keeps with ``on_commit``. ``announce=False`` drops them: a dry run's
+    writes are rolled back.
+    """
+    held: set = set()
+    token = _held_keys.set(held)
+    try:
+        yield
+    finally:
+        _held_keys.reset(token)
+        if announce:
+            for key in sorted(held):
+                _incr(key)
 
 
 def _incr(key: str) -> None:

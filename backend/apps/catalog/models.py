@@ -509,13 +509,9 @@ class Product(TimeStampedModel):
             variant = self.variants.order_by("id").first()
         # Resolved against the row being written, so a blank SKU falls back to
         # that row's own code before it falls back to a generated one.
-        defaults = self._default_variant_defaults(variant_data, existing=variant)
         if variant is None:
-            return ProductVariant.objects.create(
-                product=self,
-                is_default=True,
-                **defaults,
-            )
+            return self.create_default_variant(**variant_data)
+        defaults = self._default_variant_defaults(variant_data, existing=variant)
 
         update_fields = []
         if not variant.is_default:
@@ -528,6 +524,19 @@ class Product(TimeStampedModel):
         if update_fields:
             variant.save(update_fields=[*set(update_fields), "updated_at"])
         return variant
+
+    def create_default_variant(self, **variant_data):
+        """The first variant of a product known to have none yet.
+
+        ``ensure_default_variant`` without its two lookups, for a caller that
+        has just created the product (a migration run does this tens of
+        thousands of times).
+        """
+        return ProductVariant.objects.create(
+            product=self,
+            is_default=True,
+            **self._default_variant_defaults(variant_data),
+        )
 
     def _default_variant_defaults(self, data, existing=None):
         sku = normalize_sku(data.get("sku"))
@@ -1694,3 +1703,28 @@ class BulkPriceChange(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"Bulk price change #{self.pk}"
+
+
+class SkuSeriesReservation(TimeStampedModel):
+    """A block of automatic SKUs a bulk writer has claimed but not yet written.
+
+    The series is derived from the catalogue (``sku_series``), which is right
+    for one save at a time and wrong for a data migration numbering thousands
+    of blank-SKU products across parallel workers: each would have to hold the
+    allocation lock until its batch committed, and a till saving a product in
+    between could take a number the import is about to write. So the import
+    claims the whole block up front, here, and the series counts past every
+    live claim until the import releases it.
+
+    ``expires_at`` is the safety net for a worker that dies without releasing:
+    the claim simply stops counting.
+    """
+
+    through = models.BigIntegerField()
+    expires_at = models.DateTimeField()
+
+    class Meta:
+        indexes = [models.Index(fields=["expires_at"], name="sku_reservation_expiry_idx")]
+
+    def __str__(self):
+        return f"SKUs through {self.through}"

@@ -32,6 +32,9 @@ SYSTEM_WRITE_CALLERS = {
     "apps/documents/services.py": "the in-place correction route runs the domain's own rewrite",
     "apps/migration/loaders/purchasing.py": "an import reconstructs and replays historical documents",
     "apps/migration/loaders/sales.py": "an import reconstructs and replays historical documents",
+    "apps/migration/planning.py": (
+        "an import numbers the documents it wrote under placeholders, in file order"
+    ),
     "apps/migration/loaders/legacy_openings.py": (
         "retires the placeholder invoice or order an earlier version of the "
         "importer raised for a balance, once nothing rests on it"

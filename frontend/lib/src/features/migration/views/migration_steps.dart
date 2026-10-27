@@ -1133,7 +1133,27 @@ class _ReviewActions extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (viewModel.canImport)
+        if (viewModel.canImport && viewModel.importSkipsRecords > 0) ...[
+          FilledButton.icon(
+            onPressed: busy
+                ? null
+                : () => unawaited(_confirmSkippingImport(context)),
+            icon: const Icon(Icons.download_done),
+            label: Text(
+              l10n.migrationImportSkippingButton(
+                formatCount(viewModel.importSkipsRecords),
+              ),
+            ),
+          ),
+          SizedBox(height: spacing.xs),
+          OutlinedButton.icon(
+            onPressed: busy || viewModel.selectedEntities.isEmpty
+                ? null
+                : () => unawaited(viewModel.startRun(dryRun: true)),
+            icon: const Icon(Icons.fact_check_outlined),
+            label: Text(l10n.migrationPreviewAgainButton),
+          ),
+        ] else if (viewModel.canImport)
           FilledButton.icon(
             onPressed: busy
                 ? null
@@ -1168,6 +1188,29 @@ class _ReviewActions extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  Future<void> _confirmSkippingImport(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
+    final count = formatCount(viewModel.importSkipsRecords);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.migrationImportSkippingTitle),
+        content: Text(l10n.migrationImportSkippingMessage(count)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(l10n.cancelButton),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(l10n.migrationImportSkippingConfirm),
+          ),
+        ],
+      ),
+    );
+    if (confirmed ?? false) await viewModel.startRun(dryRun: false);
   }
 
   Future<void> _confirmDiscard(BuildContext context) async {
@@ -1214,13 +1257,27 @@ class _RunningStep extends StatelessWidget {
           title: isDryRun
               ? l10n.migrationDryRunningTitle
               : l10n.migrationImportingTitle,
-          description: run?.progressMessage ?? l10n.migrationRunningLabel,
+          description: _headline(l10n, run),
         ),
         SizedBox(height: spacing.md),
         _StageCard(stages: viewModel.stages),
       ],
     );
   }
+}
+
+/// The running stage in Arabic, from its key, with its live count.
+///
+/// The server's own progress line names entities in English; this screen
+/// never shows that when it knows which stage is running.
+String _headline(AppLocalizations l10n, MigrationRun? run) {
+  if (run == null) return l10n.migrationRunningLabel;
+  for (final stage in run.stages) {
+    if (!stage.isRunning) continue;
+    final label = migrationStageLabel(l10n, stage.key, fallback: stage.label);
+    return stage.detail.isEmpty ? label : '$label: ${stage.detail}';
+  }
+  return run.progressMessage;
 }
 
 // --- 6. done ----------------------------------------------------------------

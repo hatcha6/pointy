@@ -284,15 +284,22 @@ class MigrationViewModel extends ChangeNotifier {
     return MigrationStep.review;
   }
 
-  /// A dry run must have passed cleanly before anything is written for real.
+  /// A dry run must have finished before anything is written for real.
+  ///
+  /// It need not be clean: records it could not place are skipped by the
+  /// import exactly as the preview reported, and the owner confirms that
+  /// first ([importSkipsRecords]). Requiring zero left a shop with 4 bad
+  /// records out of 43,702 no way forward but to rerun the same preview.
   bool get canImport {
     final run = _lastRun;
     return run != null &&
         run.isDryRun &&
-        run.isTerminal &&
-        run.totalFailed == 0 &&
+        run.succeeded &&
         (_source?.isReady ?? false);
   }
+
+  /// How many records the import will leave behind, per the last preview.
+  int get importSkipsRecords => canImport ? _lastRun!.totalFailed : 0;
 
   String entityLabel(String entityType) {
     for (final spec in _catalog?.entities ?? const <MigrationEntitySpec>[]) {

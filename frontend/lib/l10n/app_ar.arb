@@ -14259,6 +14259,36 @@
   "@migrationDryRunCleanMessage": {
     "description": "What a clean dry run means."
   },
+  "migrationImportSkippingButton": "النقل وتخطي {count} سجل",
+  "@migrationImportSkippingButton": {
+    "description": "Starts the import after a dry run that found records it cannot place; those records are skipped.",
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "migrationImportSkippingTitle": "النقل مع تخطي سجلات",
+  "@migrationImportSkippingTitle": {
+    "description": "Title of the confirmation before importing past a dry run's failed records."
+  },
+  "migrationImportSkippingMessage": "لن تُنقل {count} سجلات تعذّر فحصها، وتبقى ظاهرة في قائمة المشكلات. يُنقل كل ما عداها كما ظهر في المعاينة. يمكنك بدلًا من ذلك إصلاحها في البرنامج القديم ثم المعاينة من جديد.",
+  "@migrationImportSkippingMessage": {
+    "description": "Explains what importing past a dry run's failed records does.",
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "migrationImportSkippingConfirm": "نقل وتخطيها",
+  "@migrationImportSkippingConfirm": {
+    "description": "Confirm button: import, skipping the failed records."
+  },
+  "migrationPreviewAgainButton": "إعادة المعاينة",
+  "@migrationPreviewAgainButton": {
+    "description": "Runs the dry run again, e.g. after fixing records in the old system."
+  },
   "migrationDryRunIssuesTitle": "وجدنا مشاكل في المعاينة",
   "@migrationDryRunIssuesTitle": {
     "description": "Dry run finished with failures."

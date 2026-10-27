@@ -31,9 +31,12 @@ brings the series straight back down.
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from django.db import connection, transaction
-from django.db.models import BigIntegerField, Case, Max, Q, When
+from django.db.models import BigIntegerField, Max
 from django.db.models.functions import Cast
+from django.utils import timezone
 
 from .models import ProductUnitBarcode, ProductVariant, ProductVariantBarcode
 
@@ -73,44 +76,82 @@ def allocate_variant_sku() -> str:
         return str(_next_number())
 
 
+def reserve_variant_skus(count: int, *, floor: int | None = None, hours: int = 12):
+    """Claim ``count`` consecutive codes for a bulk writer; returns the claim.
+
+    The first number is one past the catalogue's highest code and past
+    ``floor`` — the highest plain-number code in the data about to be written,
+    which the catalogue has not seen yet. Committed on its own, at once, so a
+    till allocating a code a moment later already counts past the block. Hand
+    the claim back with :func:`release_variant_skus` when the writing is done.
+    """
+    from .models import SkuSeriesReservation
+
+    with transaction.atomic():
+        _serialize_allocation()
+        start = _next_number()
+        if floor is not None:
+            start = max(start, floor + 1)
+        return SkuSeriesReservation.objects.create(
+            through=start + count - 1,
+            expires_at=timezone.now() + timedelta(hours=hours),
+        ), start
+
+
+def release_variant_skus(reservation) -> None:
+    reservation.delete()
+
+
 def _next_number() -> int:
     highest = _highest_code()
+    claimed = _highest_claim()
+    if claimed is not None and (highest is None or claimed > highest):
+        highest = claimed
     return SKU_SERIES_START if highest is None else highest + 1
 
 
+def _highest_claim() -> int | None:
+    from .models import SkuSeriesReservation
+
+    return SkuSeriesReservation.objects.filter(expires_at__gt=timezone.now()).aggregate(
+        through=Max("through")
+    )["through"]
+
+
 def _highest_code() -> int | None:
-    # Both variant columns in one scan. The cast sits behind the regex, so it
-    # only ever sees digits.
-    variants = ProductVariant.objects.filter(
-        Q(sku__regex=_SERIES_CODE) | Q(barcode__regex=_SERIES_CODE)
-    ).aggregate(
-        sku=Max(_as_number("sku")),
-        barcode=Max(_as_number("barcode")),
-    )
-    # Packaging barcodes resolve a scan exactly as a variant's own barcode does.
-    units = ProductUnitBarcode.objects.filter(barcode__regex=_SERIES_CODE).aggregate(
-        barcode=Max(Cast("barcode", BigIntegerField()))
-    )
-    extras = ProductVariantBarcode.objects.filter(barcode__regex=_SERIES_CODE).aggregate(
-        barcode=Max(Cast("barcode", BigIntegerField()))
-    )
-    found = [
-        value
-        for value in (
-            variants["sku"],
-            variants["barcode"],
-            units["barcode"],
-            extras["barcode"],
-        )
-        if value is not None
-    ]
+    found = [value for value in _highest_per_column() if value is not None]
     return max(found, default=None)
 
 
-def _as_number(field: str) -> Case:
-    return Case(
-        When(**{f"{field}__regex": _SERIES_CODE}, then=Cast(field, BigIntegerField()))
-    )
+#: Every column the series steps past. Packaging and extra barcodes resolve a
+#: scan exactly as a variant's own barcode does.
+_SERIES_COLUMNS = (
+    (ProductVariant, "sku"),
+    (ProductVariant, "barcode"),
+    (ProductUnitBarcode, "barcode"),
+    (ProductVariantBarcode, "barcode"),
+)
+
+
+def _highest_per_column():
+    if connection.vendor == "postgresql":
+        # One backward step down each catalog 0041 index. The text matches the
+        # indexes' expression and predicate exactly — the planner needs that to
+        # use them — so it is spelled here rather than left to the ORM, whose
+        # bound parameter the planner could not prove matches.
+        with connection.cursor() as cursor:
+            for model, column in _SERIES_COLUMNS:
+                cursor.execute(
+                    f"SELECT max(({column})::bigint) FROM {model._meta.db_table} "
+                    f"WHERE {column} ~ '{_SERIES_CODE}'"
+                )
+                yield cursor.fetchone()[0]
+        return
+    # The cast sits behind the regex, so it only ever sees digits.
+    for model, column in _SERIES_COLUMNS:
+        yield model.objects.filter(**{f"{column}__regex": _SERIES_CODE}).aggregate(
+            highest=Max(Cast(column, BigIntegerField()))
+        )["highest"]
 
 
 def _serialize_allocation() -> None:

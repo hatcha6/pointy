@@ -34126,6 +34126,36 @@ abstract class AppLocalizations {
   /// **'فحصنا كل شيء دون كتابة أي بيانات. يمكنك النقل الآن.'**
   String get migrationDryRunCleanMessage;
 
+  /// Starts the import after a dry run that found records it cannot place; those records are skipped.
+  ///
+  /// In ar, this message translates to:
+  /// **'النقل وتخطي {count} سجل'**
+  String migrationImportSkippingButton(String count);
+
+  /// Title of the confirmation before importing past a dry run's failed records.
+  ///
+  /// In ar, this message translates to:
+  /// **'النقل مع تخطي سجلات'**
+  String get migrationImportSkippingTitle;
+
+  /// Explains what importing past a dry run's failed records does.
+  ///
+  /// In ar, this message translates to:
+  /// **'لن تُنقل {count} سجلات تعذّر فحصها، وتبقى ظاهرة في قائمة المشكلات. يُنقل كل ما عداها كما ظهر في المعاينة. يمكنك بدلًا من ذلك إصلاحها في البرنامج القديم ثم المعاينة من جديد.'**
+  String migrationImportSkippingMessage(String count);
+
+  /// Confirm button: import, skipping the failed records.
+  ///
+  /// In ar, this message translates to:
+  /// **'نقل وتخطيها'**
+  String get migrationImportSkippingConfirm;
+
+  /// Runs the dry run again, e.g. after fixing records in the old system.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة المعاينة'**
+  String get migrationPreviewAgainButton;
+
   /// Dry run finished with failures.
   ///
   /// In ar, this message translates to:

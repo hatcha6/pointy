@@ -579,6 +579,16 @@ POINTY_MIGRATION_CONVERT_TABLE_TIMEOUT_SECONDS = env.int(
     "POINTY_MIGRATION_CONVERT_TABLE_TIMEOUT_SECONDS", default=60 * 60
 )
 
+# Worker threads for a migration import's catalogue entities (products,
+# variants, packaging units, stock), each on its own database connection.
+# Two is where the measurement stopped paying: the import is Python-bound past
+# that, and the shop's own PC runs Postgres and the tills beside it. One under
+# the test runner — a TestCase's rows live in a transaction no other connection
+# can see; the parallel tests opt back in.
+POINTY_MIGRATION_IMPORT_WORKERS = (
+    1 if TESTING else max(env.int("POINTY_MIGRATION_IMPORT_WORKERS", default=2), 1)
+)
+
 POINTY_SMS_DEBT_REMINDERS_ENABLED = env.bool(
     "POINTY_SMS_DEBT_REMINDERS_ENABLED", default=False
 )

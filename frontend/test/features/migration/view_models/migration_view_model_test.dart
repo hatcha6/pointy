@@ -140,19 +140,31 @@ void main() {
     expect(viewModel.lastRun!.totalCreated, 34112);
   });
 
-  test('import is gated on a clean dry run', () async {
+  test('import waits for a finished dry run, failures included', () async {
+    // A preview with a few bad records still unlocks the import; the owner is
+    // told how many it will skip. Only a preview that itself failed does not.
     final dirty = await loaded(
       FakeMigrationRepository(
         sources: [sourceJson()],
-        runs: [runJson(failed: 3, status: 'partial')],
+        runs: [runJson(failed: 3)],
       ),
     );
-    expect(dirty.canImport, isFalse);
+    expect(dirty.canImport, isTrue);
+    expect(dirty.importSkipsRecords, 3);
 
     final clean = await loaded(
       FakeMigrationRepository(sources: [sourceJson()], runs: [runJson()]),
     );
     expect(clean.canImport, isTrue);
+    expect(clean.importSkipsRecords, 0);
+
+    final broken = await loaded(
+      FakeMigrationRepository(
+        sources: [sourceJson()],
+        runs: [runJson(status: 'failed')],
+      ),
+    );
+    expect(broken.canImport, isFalse);
   });
 
   test('an import that has not been previewed cannot be run', () async {

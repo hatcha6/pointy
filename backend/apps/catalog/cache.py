@@ -22,6 +22,8 @@ skip caching entirely. Disabled under tests via POINTY_CATALOG_CACHE_ENABLED
 
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import logging
 
 from django.conf import settings
@@ -30,6 +32,12 @@ from django.core.cache import cache
 logger = logging.getLogger(__name__)
 
 _VERSION_KEY = "pointy:catalog:version"
+
+#: Set while a bulk writer holds the bumps back (``deferred_catalog_bumps``):
+#: a list that records whether anything asked for one.
+_deferred: contextvars.ContextVar[list | None] = contextvars.ContextVar(
+    "catalog_bumps_deferred", default=None
+)
 
 
 def catalog_cache_enabled() -> bool:
@@ -54,6 +62,11 @@ def catalog_version() -> int | None:
 def bump_catalog_version() -> None:
     from apps.core.state_version import state_versions_enabled
 
+    pending = _deferred.get()
+    if pending is not None:
+        pending.append(True)
+        return
+
     # This counter has two consumers: the cache below and the state vector
     # clients revalidate on. Either one being switched on has to keep it
     # moving, or a client would trust a frozen number and never re-fetch.
@@ -66,6 +79,25 @@ def bump_catalog_version() -> None:
             cache.set(_VERSION_KEY, (catalog_version() or 0) + 1, None)
         except Exception:  # noqa: BLE001
             pass
+
+
+@contextlib.contextmanager
+def deferred_catalog_bumps(*, announce: bool = True):
+    """Hold back the per-save version bumps of a long bulk write; bump once at the end.
+
+    A data migration saves tens of thousands of catalog rows, and each save
+    was its own Redis round trip — a tenth of the run, telling tills about a
+    catalog that is not finished yet. ``announce=False`` drops them instead:
+    for a dry run, whose writes are all rolled back.
+    """
+    pending: list = []
+    token = _deferred.set(pending)
+    try:
+        yield
+    finally:
+        _deferred.reset(token)
+        if announce and pending:
+            bump_catalog_version()
 
 
 def announce_bulk_catalog_write() -> None:

@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from . import scopes
+from . import live_progress, scopes
 from .connectors import list_connectors
 from .entity_plan import ENTITY_PLAN, ENTITY_PLAN_BY_TYPE
 from .models import MigrationIssue, MigrationRun, MigrationSource
@@ -186,6 +186,10 @@ class MigrationRunSerializer(serializers.ModelSerializer):
             "completed_at",
         ]
         read_only_fields = fields
+
+    def to_representation(self, run):
+        # A running preview cannot write its own row (``live_progress``).
+        return live_progress.overlay(run, super().to_representation(run))
 
     def get_issue_count(self, run):
         # Prefer an annotation if the viewset provided one.

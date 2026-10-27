@@ -10,6 +10,10 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from importlib import import_module
+from unittest import skipUnless
+
+from django.db import connection
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
@@ -18,6 +22,7 @@ from rest_framework.test import APIClient
 from apps.core.roles import MANAGER_GROUP, ensure_role_groups
 
 from .models import Product, ProductUnit, ProductUnitBarcode, ProductVariant, UnitOfMeasure
+from . import sku_series
 from .sku_series import allocate_variant_sku, next_variant_sku
 from .testing import create_product_with_default_variant
 
@@ -100,6 +105,32 @@ class SkuSeriesTests(TestCase):
             sorted(product.variants.values_list("sku", flat=True)),
             ["1000", "1001", "1002"],
         )
+
+
+@skipUnless(connection.vendor == "postgresql", "the series indexes are Postgres-only")
+class SkuSeriesIndexTests(TestCase):
+    """The next number is one index step per column, never a catalogue scan.
+
+    Unindexed, every variant saved without a SKU scanned the whole catalogue —
+    a data migration from a system with no codes slowed down with every
+    product it added. The lookup's text has to match the 0041 indexes' exactly
+    for the planner to use them; this fails the moment the two drift apart.
+    """
+
+    def test_every_column_is_answered_from_its_index(self):
+        indexes = import_module("apps.catalog.migrations.0041_sku_series_indexes").INDEXES
+        with connection.cursor() as cursor:
+            for (index, table, column), (model, series_column) in zip(
+                indexes, sku_series._SERIES_COLUMNS, strict=True
+            ):
+                self.assertEqual((table, column), (model._meta.db_table, series_column))
+                cursor.execute("SET LOCAL enable_seqscan = off")
+                cursor.execute(
+                    f"EXPLAIN SELECT max(({column})::bigint) FROM {table} "
+                    f"WHERE {column} ~ '{sku_series._SERIES_CODE}'"
+                )
+                plan = "\n".join(row[0] for row in cursor.fetchall())
+                self.assertIn(index, plan)
 
 
 class NextSkuEndpointTests(TestCase):

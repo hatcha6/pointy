@@ -30,7 +30,7 @@ from apps.customers.models import Customer
 from apps.inventory.models import StockItem
 from apps.purchasing.models import Supplier
 
-from . import canonical, services, storage, uploads
+from . import canonical, live_progress, services, storage, uploads
 from .connectors import get_connector
 from .connectors.reference_sqlite import build_sample_database
 from .identity import IdentityResolver
@@ -44,14 +44,22 @@ from .models import (
     MigrationRun,
     MigrationSource,
 )
+from .serializers import MigrationRunSerializer
 from .transports import build_transport
 
 DRY_RUN = MigrationRun.Mode.DRY_RUN
 IMPORT = MigrationRun.Mode.IMPORT
 
 
-class MigrationTestBase(TestCase):
+class MigrationFixtures:
+    """The staging area, fixture file and run helpers every migration test uses.
+
+    A mixin so the parallel-import tests can put it on a TransactionTestCase:
+    worker threads have connections of their own, and see only committed rows.
+    """
+
     def setUp(self):
+        super().setUp()
         self._tmpdir = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmpdir.cleanup)
         self.staging = Path(self._tmpdir.name) / "staging"
@@ -120,6 +128,10 @@ class MigrationTestBase(TestCase):
         services.run_migration(run.pk)
         run.refresh_from_db()
         return run
+
+
+class MigrationTestBase(MigrationFixtures, TestCase):
+    pass
 
 
 class CompatibilityTests(MigrationTestBase):
@@ -2334,6 +2346,120 @@ class RunStageTests(MigrationTestBase):
             {stage["key"] for stage in run.stages if stage["status"] == "done"} >= {"product"},
             True,
         )
+
+
+_LOCMEM = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
+
+
+@override_settings(CACHES=_LOCMEM)
+class DryRunLiveProgressTests(MigrationTestBase):
+    """A preview's progress is visible while it runs, though its row is not.
+
+    Arjuwan Pharmacy's 44,000-record preview sat on 5% for seventeen minutes
+    because everything it wrote was inside the transaction it rolls back.
+    """
+
+    def test_the_run_endpoint_shows_the_running_stage(self):
+        build_sample_database(self.db_path)
+        source = self.make_source()
+        seen = []
+        publish = live_progress.publish
+
+        def spy(run, **kwargs):
+            publish(run, **kwargs)
+            # What a poll would serve at this moment, from a fresh read.
+            data = MigrationRunSerializer(MigrationRun.objects.get(pk=run.pk)).data
+            seen.append(data)
+
+        with mock.patch.object(live_progress, "publish", side_effect=spy):
+            run = self.run_sync(source, DRY_RUN)
+
+        running = [
+            data
+            for data in seen
+            if any(s["key"] == "product" and s["status"] == "running" for s in data["stages"])
+        ]
+        self.assertTrue(running)
+        percents = [data["progress_percent"] for data in seen]
+        self.assertEqual(percents, sorted(percents))
+        self.assertGreater(percents[-1], 5)
+        # Finished: the row's own report, not a leftover live view.
+        final = MigrationRunSerializer(run).data
+        self.assertEqual(final["progress_percent"], 100)
+        self.assertEqual(final["stages"], run.stages)
+
+    def test_an_import_is_never_overlaid(self):
+        source = self.make_source()
+        run = MigrationRun.objects.create(
+            source=source, mode=IMPORT, status=MigrationRun.Status.RUNNING
+        )
+        self.addCleanup(live_progress.clear, run)
+        live_progress.publish(run, percent=50, message="x", stages=[])
+
+        self.assertEqual(MigrationRunSerializer(run).data["progress_message"], "")
+
+
+class ImportBatchingTests(MigrationTestBase):
+    """Records commit in batches; a bad one still fails alone, and only itself."""
+
+    def _aboghris(self):
+        build_aboghris_sample(self.db_path)
+        # Item 402's SKU is taken: its product row is written, then its default
+        # variant is refused — a failure *after* an insert the resolver saw.
+        other = Product.objects.create(name="Shop's own")
+        ProductVariant.objects.create(
+            product=other, sku="ABG-402", is_default=True, unit_price=Decimal("1")
+        )
+        return self.make_source(name="AboGhris", system_key="aboghris")
+
+    def test_a_failed_product_leaves_its_batch_and_its_children_clean(self):
+        source = self._aboghris()
+
+        run = self.run_sync(source, IMPORT, entities=["unit", "category", "product", "product_unit"])
+
+        self.assertEqual(run.summary["product"]["failed"], 1)
+        self.assertEqual(run.summary["product"]["created"], 3)
+        self.assertFalse(Product.objects.filter(name="Item 402").exists())
+        # Its box unit fails as "unknown product" — not as a foreign key into a
+        # rolled-back row that would have taken the whole batch down.
+        codes = set(
+            MigrationIssue.objects.filter(run=run, entity_type="product_unit").values_list(
+                "code", flat=True
+            )
+        )
+        self.assertIn("unresolved_product", codes)
+        self.assertNotIn("extract_failed", codes)
+        self.assertEqual(run.summary["product_unit"]["created"], 1)
+        # Every committed row has its mapping, and the failed one has none.
+        mapped = set(
+            MigrationIdentityMap.objects.filter(source=source, entity_type="product").values_list(
+                "source_key", flat=True
+            )
+        )
+        self.assertEqual(mapped, {"401", "404", "500"})
+
+    def test_the_preview_counts_what_the_import_will_do(self):
+        entities = ["unit", "category", "product", "product_unit"]
+        source = self._aboghris()
+
+        preview = self.run_sync(source, DRY_RUN, entities=entities)
+        imported = self.run_sync(source, IMPORT, entities=entities)
+
+        self.assertEqual(preview.summary, imported.summary)
+
+    @override_settings(CACHES=_LOCMEM, POINTY_CATALOG_CACHE_ENABLED=True)
+    def test_the_catalog_version_moves_once_per_import_and_never_for_a_preview(self):
+        from apps.catalog.cache import catalog_version
+
+        build_aboghris_sample(self.db_path)
+        source = self.make_source(name="AboGhris", system_key="aboghris")
+        before = catalog_version()
+
+        self.run_sync(source, DRY_RUN, entities=["unit", "category", "product"])
+        self.assertEqual(catalog_version(), before)
+
+        self.run_sync(source, IMPORT, entities=["unit", "category", "product"])
+        self.assertEqual(catalog_version(), before + 1)
 
 
 class AccessConversionTests(MigrationTestBase):

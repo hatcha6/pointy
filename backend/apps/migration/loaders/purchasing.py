@@ -44,6 +44,12 @@ _MONEY = Decimal("0.01")
 _FALLBACK_SUPPLIER_NAME = "مورّد غير محدد"
 
 
+def fallback_supplier():
+    """The stand-in supplier for an order whose own is unknown."""
+    supplier, _created = Supplier.objects.get_or_create(name=_FALLBACK_SUPPLIER_NAME)
+    return supplier
+
+
 class SupplierLoader(BaseLoader):
     entity_type = SUPPLIER
 
@@ -100,8 +106,7 @@ class PurchaseOrderLoader(BaseLoader):
 
         supplier_pk = resolver.resolve(SUPPLIER, record.supplier_source_key)
         if supplier_pk is None:
-            supplier, _created = Supplier.objects.get_or_create(name=_FALLBACK_SUPPLIER_NAME)
-            supplier_pk = supplier.pk
+            supplier_pk = fallback_supplier().pk
 
         order = resolver.existing(PurchaseOrder, self.entity_type, record.source_key)
         action = UPDATED if order is not None else CREATED
@@ -143,6 +148,9 @@ class PurchaseOrderLoader(BaseLoader):
         issues,
     ):
         order.supplier_id = supplier_pk
+        if not order.order_number:
+            # Numbered after the run, in file order (``planning``).
+            order.order_number = getattr(record, "planned_number", "")
         order.status = PurchaseOrder.Status.RECEIVED
         order.supplier_invoice_number = clean_str(record.supplier_invoice_number)[:120]
         if record.occurred_at is not None:
