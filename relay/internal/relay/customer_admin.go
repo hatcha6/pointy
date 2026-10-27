@@ -29,6 +29,8 @@ import (
 //	GET    /v1/customers/admin/orders/{id}
 //	GET    /v1/customers/admin/notifications?customer=&limit=
 //	POST   /v1/customers/admin/notifications            {audience, customer_id, title, body, link, campaign}
+//	GET    /v1/customers/admin/shelf
+//	PUT    /v1/customers/admin/shelf                    {ios_gift_cards}
 
 // CustomerPusher sends a notification to a topic or to one device (fcm).
 type CustomerPusher interface {
@@ -78,6 +80,12 @@ func (s HTTPServer) handleCustomerAdminRoutes(w http.ResponseWriter, r *http.Req
 		s.handleCustomerAdminOrder(w, r, store, parts[1])
 	case route == "notifications" && r.Method == http.MethodGet:
 		s.handleCustomerAdminNotifications(w, r, store)
+	case route == "shelf" && r.Method == http.MethodGet:
+		s.handleCustomerAdminShelf(w, r)
+		return
+	case route == "shelf" && r.Method == http.MethodPut:
+		s.handleCustomerAdminSetShelf(w, r)
+		return
 	case route == "notifications" && r.Method == http.MethodPost:
 		s.handleCustomerAdminNotify(w, r, store)
 	default:
@@ -194,12 +202,13 @@ func (s HTTPServer) handleCustomerAdminCredit(w http.ResponseWriter, r *http.Req
 		Amount string `json:"amount"`
 		Note   string `json:"note"`
 		Key    string `json:"key"`
+		Actor  string `json:"actor"` // the console names its operator in every write
 	}
 	if !decodeCustomerBody(w, r, &request) {
 		return
 	}
 	entry, balance, created, err := store.AdjustCustomerCredit(r.Context(), control.CustomerCreditChange{
-		CustomerID: id, Amount: request.Amount, Note: request.Note, Actor: adminActor(r, ""), Reference: request.Key,
+		CustomerID: id, Amount: request.Amount, Note: request.Note, Actor: adminActor(r, request.Actor), Reference: request.Key,
 	})
 	switch {
 	case errors.Is(err, control.ErrCustomerNotFound):
@@ -224,6 +233,7 @@ func (s HTTPServer) handleCustomerAdminBlock(w http.ResponseWriter, r *http.Requ
 	var request struct {
 		Blocked bool   `json:"blocked"`
 		Reason  string `json:"reason"`
+		Actor   string `json:"actor"`
 	}
 	if !decodeCustomerBody(w, r, &request) {
 		return
@@ -242,7 +252,7 @@ func (s HTTPServer) handleCustomerAdminBlock(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	s.logger().Info("operator changed a customer's access",
-		"customer_id", id, "blocked", request.Blocked, "actor", adminActor(r, ""))
+		"customer_id", id, "blocked", request.Blocked, "actor", adminActor(r, request.Actor))
 	writeJSON(w, http.StatusOK, map[string]any{"customer": customer})
 }
 
@@ -360,6 +370,7 @@ func (s HTTPServer) handleCustomerAdminNotify(w http.ResponseWriter, r *http.Req
 		Body       string `json:"body"`
 		Link       string `json:"link"`
 		Campaign   string `json:"campaign"`
+		Actor      string `json:"actor"`
 	}
 	if !decodeCustomerBody(w, r, &request) {
 		return
@@ -377,7 +388,7 @@ func (s HTTPServer) handleCustomerAdminNotify(w http.ResponseWriter, r *http.Req
 	message := fcm.Message{Title: request.Title, Body: request.Body, Link: link, Campaign: strings.TrimSpace(request.Campaign)}
 	record := control.CustomerNotification{
 		Audience: request.Audience, Title: message.Title, Body: message.Body, Link: link,
-		Campaign: message.Campaign, SentBy: adminActor(r, ""),
+		Campaign: message.Campaign, SentBy: adminActor(r, request.Actor),
 	}
 	ctx := r.Context()
 	switch {
@@ -487,4 +498,57 @@ func (s HTTPServer) handleCustomerPushToken(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s HTTPServer) customerShelfStore(w http.ResponseWriter) (control.CustomerShelfStore, bool) {
+	store, ok := s.Store.(control.CustomerShelfStore)
+	if !ok {
+		writeCustomerError(w, http.StatusServiceUnavailable, "customers_unconfigured", "this relay keeps no customers", nil)
+	}
+	return store, ok
+}
+
+func (s HTTPServer) handleCustomerAdminShelf(w http.ResponseWriter, r *http.Request) {
+	store, ok := s.customerShelfStore(w)
+	if !ok {
+		return
+	}
+	settings, err := store.CustomerShelfSettings(r.Context())
+	if err != nil {
+		s.customerInternalError(w, "customer shelf read failed", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"shelf": settings})
+}
+
+// handleCustomerAdminSetShelf changes what the iPhone app does with the cards
+// Apple reserves for in-app purchase. Every shelf read after it sees the new
+// choice: the catalog's version names it, so the app's cached shelf is stale.
+func (s HTTPServer) handleCustomerAdminSetShelf(w http.ResponseWriter, r *http.Request) {
+	store, ok := s.customerShelfStore(w)
+	if !ok {
+		return
+	}
+	var request struct {
+		IOSGiftCards string `json:"ios_gift_cards"`
+		Actor        string `json:"actor"`
+	}
+	if !decodeCustomerBody(w, r, &request) {
+		return
+	}
+	settings, err := store.SetCustomerShelfSettings(r.Context(), control.CustomerShelfSettings{
+		IOSGiftCards: request.IOSGiftCards, Actor: adminActor(r, request.Actor),
+	})
+	if errors.Is(err, control.ErrInvalidCustomerShelf) {
+		writeCustomerError(w, http.StatusBadRequest, "invalid_shelf",
+			"ios_gift_cards must be hidden, web_only or sell", nil)
+		return
+	}
+	if err != nil {
+		s.customerInternalError(w, "customer shelf write failed", err)
+		return
+	}
+	s.logger().Warn("operator changed the iPhone shelf's gift cards",
+		"ios_gift_cards", settings.IOSGiftCards, "actor", settings.Actor)
+	writeJSON(w, http.StatusOK, map[string]any{"shelf": settings})
 }

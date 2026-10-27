@@ -1,6 +1,7 @@
 package relay
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -101,6 +102,40 @@ func (c CustomerConfig) channelSells(channel, category string) bool {
 	return false
 }
 
+// shelf is whether a channel shows a category, and whether it sells it. A
+// category the channel may not sell is listed as bought on the website, except
+// on iOS, where the operator's choice ([control.CustomerShelfSettings]) can
+// also hide it or sell it after all.
+func (c CustomerConfig) shelf(channel, category, iosGiftCards string) (show, sell bool) {
+	if c.channelSells(channel, category) {
+		return true, true
+	}
+	if channel == CustomerChannelIOS {
+		switch iosGiftCards {
+		case control.IOSGiftCardsHidden:
+			return false, false
+		case control.IOSGiftCardsSell:
+			return true, true
+		}
+	}
+	return true, false
+}
+
+// iosGiftCards is the operator's choice for the iPhone shelf. A store that
+// cannot say keeps the default: listed, bought on the website.
+func (s HTTPServer) iosGiftCards(ctx context.Context) string {
+	store, ok := s.Store.(control.CustomerShelfStore)
+	if !ok {
+		return control.IOSGiftCardsWebOnly
+	}
+	settings, err := store.CustomerShelfSettings(ctx)
+	if err != nil {
+		s.logger().Warn("customer shelf setting read failed", "error", err)
+		return control.IOSGiftCardsWebOnly
+	}
+	return settings.IOSGiftCards
+}
+
 // CustomerCatalogView is the catalog as the app reads it.
 type CustomerCatalogView struct {
 	Version     string                  `json:"version"`
@@ -114,16 +149,20 @@ type CustomerCatalogView struct {
 }
 
 type customerBrand struct {
-	Key        string         `json:"key"`
-	Name       string         `json:"name"`
-	Aliases    []string       `json:"aliases"`
-	Category   string         `json:"category"`
-	Rank       int            `json:"rank"`
-	Featured   bool           `json:"featured"`
-	Badge      string         `json:"badge"`
-	RedeemHint string         `json:"redeem_hint"`
-	Logo       string         `json:"logo"`
-	Items      []customerItem `json:"items"`
+	Key        string   `json:"key"`
+	Name       string   `json:"name"`
+	Aliases    []string `json:"aliases"`
+	Category   string   `json:"category"`
+	Rank       int      `json:"rank"`
+	Featured   bool     `json:"featured"`
+	Badge      string   `json:"badge"`
+	RedeemHint string   `json:"redeem_hint"`
+	Logo       string   `json:"logo"`
+	// WebOnly is a brand this channel may show but not sell (the App Store
+	// build and gift cards): the app lists it with its prices and says it is
+	// bought on the website, and an order for it is still refused.
+	WebOnly bool           `json:"web_only"`
+	Items   []customerItem `json:"items"`
 }
 
 type customerItem struct {
@@ -142,7 +181,8 @@ type customerItem struct {
 }
 
 // customerCatalog narrows the shops' view to a channel and to retail prices.
-func (c CustomerConfig) customerCatalog(view vouchers.ShopView, channel string) CustomerCatalogView {
+// What the channel may not sell stays on the shelf, marked web only.
+func (c CustomerConfig) customerCatalog(view vouchers.ShopView, channel, iosGiftCards string) CustomerCatalogView {
 	out := CustomerCatalogView{
 		Channel:     channel,
 		Currency:    view.Currency,
@@ -155,9 +195,11 @@ func (c CustomerConfig) customerCatalog(view vouchers.ShopView, channel string) 
 	usedCategories := map[string]bool{}
 	usedCountries := map[string]bool{}
 	for _, brand := range view.Brands {
-		if !c.channelSells(channel, brand.Category) {
+		show, sell := c.shelf(channel, brand.Category, iosGiftCards)
+		if !show {
 			continue
 		}
+		webOnly := !sell
 		items := []customerItem{}
 		for _, item := range brand.Items {
 			items = append(items, customerItem{
@@ -184,7 +226,8 @@ func (c CustomerConfig) customerCatalog(view vouchers.ShopView, channel string) 
 		}
 		out.Brands = append(out.Brands, customerBrand{
 			Key: brand.Key, Name: brand.Name, Aliases: aliases, Category: brand.Category, Rank: brand.Rank,
-			Featured: brand.Featured, Badge: brand.Badge, RedeemHint: brand.RedeemHint, Logo: brand.Logo, Items: items,
+			Featured: brand.Featured, Badge: brand.Badge, RedeemHint: brand.RedeemHint, Logo: brand.Logo,
+			WebOnly: webOnly, Items: items,
 		})
 	}
 	for _, category := range view.Categories {
@@ -199,7 +242,9 @@ func (c CustomerConfig) customerCatalog(view vouchers.ShopView, channel string) 
 	}
 	allowed := append([]string(nil), c.channelCategories(channel)...)
 	sort.Strings(allowed)
-	sum := sha256.Sum256([]byte(view.Version + "|" + channel + "|" + strings.Join(allowed, ",")))
+	// The iPhone choice changes what every channel's shelf version means only
+	// on iOS, but naming it always is simpler and costs one 200 elsewhere.
+	sum := sha256.Sum256([]byte(view.Version + "|" + channel + "|" + strings.Join(allowed, ",") + "|ios:" + iosGiftCards))
 	out.Version = hex.EncodeToString(sum[:16])
 	return out
 }
@@ -222,7 +267,7 @@ func (s HTTPServer) handleCustomerCatalog(w http.ResponseWriter, r *http.Request
 		s.customerInternalError(w, "customer catalog read failed", err)
 		return
 	}
-	catalog := s.Customers.customerCatalog(view, channel)
+	catalog := s.Customers.customerCatalog(view, channel, s.iosGiftCards(r.Context()))
 	etag := `"` + catalog.Version + `"`
 	w.Header().Set("ETag", etag)
 	w.Header().Set("Cache-Control", "public, no-cache")

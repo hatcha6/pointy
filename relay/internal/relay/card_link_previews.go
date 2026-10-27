@@ -25,7 +25,7 @@ func (s HTTPServer) PreviewCatalog(ctx context.Context) (cardsweb.PreviewCatalog
 	if err != nil {
 		return out, err
 	}
-	catalog := s.Customers.customerCatalog(view, CustomerChannelWeb)
+	catalog := s.Customers.customerCatalog(view, CustomerChannelWeb, "")
 	for _, brand := range catalog.Brands {
 		out.Brands[brand.Key] = cardsweb.PreviewBrand{Name: brand.Name, Category: brand.Category, Art: brand.Logo}
 	}

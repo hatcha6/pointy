@@ -856,4 +856,14 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get filterIncomplete => 'لم تكتمل';
+
+  @override
+  String get webOnlyBadge => 'على الموقع';
+
+  @override
+  String get webOnlyTitle => 'متوفرة على الموقع';
+
+  @override
+  String get webOnlyBody =>
+      'هذه البطاقة لا تُشترى من تطبيق الآيفون. تجدها على موقعنا cards.dftr.ly';
 }

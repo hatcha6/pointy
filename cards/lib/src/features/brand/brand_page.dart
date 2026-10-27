@@ -113,7 +113,7 @@ class _BrandPageState extends State<BrandPage> {
 
   Future<void> _buy() async {
     final item = _item;
-    if (item == null || !item.available) {
+    if (item == null || !item.available || widget.brand.webOnly) {
       return;
     }
     Haptics.tap();
@@ -168,6 +168,7 @@ class _BrandPageState extends State<BrandPage> {
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
+          if (brand.webOnly) const WebOnlyPill(onArt: false),
           if (brand.badge.isNotEmpty)
             Pill(text: brand.badge, tone: PillTone.promo),
         ],
@@ -233,6 +234,7 @@ class _BrandPageState extends State<BrandPage> {
             total: item.price * _quantity,
             quantity: _quantity,
             enabled: item.available,
+            webOnly: brand.webOnly,
             onQuantity: (value) => setState(() => _quantity = value),
             onBuy: _buy,
           );
@@ -408,6 +410,7 @@ class _BrandPageState extends State<BrandPage> {
                                 total: item.price * _quantity,
                                 quantity: _quantity,
                                 enabled: item.available,
+                                webOnly: widget.brand.webOnly,
                                 onQuantity: (value) =>
                                     setState(() => _quantity = value),
                                 onBuy: _buy,
@@ -696,12 +699,16 @@ class _BuyBar extends StatelessWidget {
     required this.enabled,
     required this.onQuantity,
     required this.onBuy,
+    this.webOnly = false,
     this.floating = false,
   });
 
   final Money total;
   final int quantity;
   final bool enabled;
+
+  /// Bought on the website only: the bar says so, with no way to pay.
+  final bool webOnly;
   final ValueChanged<int> onQuantity;
   final VoidCallback onBuy;
 
@@ -713,41 +720,45 @@ class _BuyBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final row = Row(
-      children: [
-        Expanded(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+    final row = webOnly
+        ? const _WebOnlyNote()
+        : Row(
             children: [
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: AlignmentDirectional.centerStart,
-                child: Text(
-                  formatMoney(l10n, total),
-                  style: PointyTypography.numeric(theme.textTheme.titleLarge!),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: AlignmentDirectional.centerStart,
+                      child: Text(
+                        formatMoney(l10n, total),
+                        style: PointyTypography.numeric(
+                          theme.textTheme.titleLarge!,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      l10n.cardCount(quantity),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              Text(
-                l10n.cardCount(quantity),
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+              QuantityStepper(value: quantity, onChanged: onQuantity),
+              const SizedBox(width: CardsSpace.sm),
+              SizedBox(
+                width: 112,
+                child: FilledButton(
+                  onPressed: enabled ? onBuy : null,
+                  child: Text(l10n.buyNow),
                 ),
               ),
             ],
-          ),
-        ),
-        QuantityStepper(value: quantity, onChanged: onQuantity),
-        const SizedBox(width: CardsSpace.sm),
-        SizedBox(
-          width: 112,
-          child: FilledButton(
-            onPressed: enabled ? onBuy : null,
-            child: Text(l10n.buyNow),
-          ),
-        ),
-      ],
-    );
+          );
     final glass = theme.colorScheme.surface.withValues(alpha: 0.86);
     if (floating) {
       final radius = BorderRadius.circular(CardsRadii.sheet);
@@ -813,6 +824,66 @@ class _BuyBar extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// In place of the buy button on a card bought on the website only: where
+/// to find it, and nothing to tap.
+class _WebOnlyNote extends StatelessWidget {
+  const _WebOnlyNote();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(CardsSpace.md),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(CardsRadii.tile),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.language_rounded,
+              size: 20,
+              color: theme.colorScheme.onPrimaryContainer,
+            ),
+          ),
+          const SizedBox(width: CardsSpace.md),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.webOnlyTitle,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: theme.colorScheme.onPrimaryContainer,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  l10n.webOnlyBody,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onPrimaryContainer,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

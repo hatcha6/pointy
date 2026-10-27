@@ -47,7 +47,9 @@ class TenderLineEditor extends StatelessWidget {
   final String methodLabel;
   final String removeTooltip;
   final TextEditingController amountController;
-  final PaymentMethod method;
+
+  /// Null while the cashier has not picked one yet.
+  final PaymentMethod? method;
   final List<PaymentMethod> enabledMethods;
   final bool canRemove;
   final bool isSelected;
@@ -118,6 +120,7 @@ class TenderLineEditor extends StatelessWidget {
               final methodField = DropdownButtonFormField<PaymentMethod>(
                 key: ValueKey('payment_tender_method_$index'),
                 initialValue: method,
+                hint: Text(l10n.paymentMethodChooseHint),
                 decoration: InputDecoration(labelText: methodLabel),
                 items: [
                   // Each method in its own colour, as on the method tiles,

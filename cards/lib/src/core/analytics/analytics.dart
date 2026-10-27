@@ -40,6 +40,13 @@ abstract class Analytics {
   /// Notifies when feature flags (re)load, for a screen that waits on one.
   Listenable get flags;
 
+  /// The arm of experiment [key] this customer is in ("control", "test", or
+  /// the experiment's own variant names); null until the flags have loaded,
+  /// for a customer outside the experiment, and in a build without
+  /// analytics. Asking counts the customer as exposed, so ask only where the
+  /// arms part ways.
+  Future<String?> variant(String key);
+
   /// The whole app, under session replay's camera where there is one.
   Widget wrap(Widget app);
 
@@ -99,6 +106,9 @@ class NoAnalytics implements Analytics {
 
   @override
   Future<bool> isEnabled(String key) async => false;
+
+  @override
+  Future<String?> variant(String key) async => null;
 
   @override
   Widget wrap(Widget app) => app;
@@ -204,6 +214,19 @@ class PostHogAnalytics implements Analytics {
       return await Posthog().isFeatureEnabled(key);
     } catch (_) {
       return false;
+    }
+  }
+
+  @override
+  Future<String?> variant(String key) async {
+    if (!_started) {
+      return null;
+    }
+    try {
+      final value = await Posthog().getFeatureFlag(key);
+      return value is String ? value : null;
+    } catch (_) {
+      return null;
     }
   }
 

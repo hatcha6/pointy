@@ -39,6 +39,7 @@ const System = lazy(() => import("./pages/System").then((m) => ({ default: m.Sys
 const CardCustomers = lazy(() => import("./pages/cards/Customers").then((m) => ({ default: m.Customers })));
 const CardCustomerDetail = lazy(() => import("./pages/cards/CustomerDetail").then((m) => ({ default: m.CustomerDetail })));
 const CardOrders = lazy(() => import("./pages/cards/CustomerOrders").then((m) => ({ default: m.CustomerOrders })));
+const CardShelf = lazy(() => import("./pages/cards/Shelf").then((m) => ({ default: m.Shelf })));
 const CardNotifications = lazy(() => import("./pages/cards/Notifications").then((m) => ({ default: m.Notifications })));
 const Ledger = lazy(() => import("./pages/Ledger").then((m) => ({ default: m.Ledger })));
 
@@ -111,6 +112,8 @@ function Page({ path }: { path: string }) {
       return <CardOrders />;
     case "/cards/notifications":
       return <CardNotifications />;
+    case "/cards/shelf":
+      return <CardShelf />;
     default:
       return (
         <Card>

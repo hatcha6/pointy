@@ -374,17 +374,20 @@ class _PaymentSheetState extends State<PaymentSheet> {
       _dueDate = widget.proposedDueDate;
       return;
     }
-    final methods = _enabledMethods;
-    if (methods.isNotEmpty) {
-      _tenders.add(
-        _TenderLineInput(
-          method: methods.first,
-          amount: widget.total.toStringAsFixed(2),
-          moneyAccountId: _defaultBankAccountId,
-        ),
-      );
+    if (_enabledMethods.isNotEmpty) {
+      _tenders.add(_unchosenFullPaymentTender());
     }
   }
+
+  /// The paid-in-full line a standard sale starts on, with NO method: cash
+  /// used to be preselected, and Enter booked card and transfer sales as cash
+  /// because nobody looked. The cashier must pick one before confirming —
+  /// unless the shop takes only one method, when there is nothing to pick.
+  _TenderLineInput _unchosenFullPaymentTender() => _TenderLineInput(
+    method: _enabledMethods.length == 1 ? _enabledMethods.single : null,
+    amount: widget.total.toStringAsFixed(2),
+    moneyAccountId: _defaultBankAccountId,
+  );
 
   /// The account a new tender starts on. Null whenever the control would not
   /// be shown, so a shop that has configured nothing sends nothing.
@@ -652,13 +655,7 @@ class _PaymentSheetState extends State<PaymentSheet> {
       _tenders.removeLast().dispose();
     }
     if (_tenders.isEmpty) {
-      _tenders.add(
-        _TenderLineInput(
-          method: methods.first,
-          amount: widget.total.toStringAsFixed(2),
-          moneyAccountId: _defaultBankAccountId,
-        ),
-      );
+      _tenders.add(_unchosenFullPaymentTender());
     } else {
       _setTenderAmount(0, widget.total.toStringAsFixed(2), rebalance: false);
     }
@@ -1041,6 +1038,9 @@ class _PaymentSheetState extends State<PaymentSheet> {
     }
     if (_enabledMethods.isEmpty) {
       return l10n.noEnabledPaymentMethods;
+    }
+    if (_hasUnchosenMethod) {
+      return l10n.paymentMethodRequiredError;
     }
     if (_hasMissingRequiredCardReceipt) {
       return l10n.cardReceiptRequiredError;
@@ -1687,17 +1687,23 @@ class _PaymentSheetState extends State<PaymentSheet> {
     ];
   }
 
+  /// Lines still waiting for a method count for nothing until one is picked,
+  /// so the summary shows the total as still owed.
   List<SplitTenderInput> get _tenderInputs {
     return [
       for (final tender in _tenders)
-        SplitTenderInput(
-          method: tender.method,
-          amount: _calculator.parseAmount(tender.amountController.text),
-          cardReceipt: tender.cardReceipt,
-          moneyAccountId: tender.moneyAccountId,
-        ),
+        if (tender.method case final method?)
+          SplitTenderInput(
+            method: method,
+            amount: _calculator.parseAmount(tender.amountController.text),
+            cardReceipt: tender.cardReceipt,
+            moneyAccountId: tender.moneyAccountId,
+          ),
     ];
   }
+
+  bool get _hasUnchosenMethod =>
+      !_isQuotation && _tenders.any((tender) => tender.method == null);
 
   SplitTenderPaymentSummary get _summary {
     return _calculator.summary(total: widget.total, tenders: _tenderInputs);
@@ -1725,6 +1731,7 @@ class _PaymentSheetState extends State<PaymentSheet> {
       return true;
     }
     return _enabledMethods.isNotEmpty &&
+        !_hasUnchosenMethod &&
         _appliedPayments != null &&
         !_hasMissingRequiredCardReceipt;
   }
@@ -1819,7 +1826,8 @@ class _TenderLineInput {
     this.moneyAccountId,
   }) : amountController = TextEditingController(text: amount);
 
-  PaymentMethod method;
+  /// Null until the cashier picks one; such a line blocks confirming.
+  PaymentMethod? method;
   final TextEditingController amountController;
   CardPaymentReceipt? cardReceipt;
 
@@ -1855,7 +1863,7 @@ class _TenderLineInput {
 }
 
 typedef _TenderSnapshot = ({
-  PaymentMethod method,
+  PaymentMethod? method,
   String amount,
   int? moneyAccountId,
   CardPaymentReceipt? cardReceipt,

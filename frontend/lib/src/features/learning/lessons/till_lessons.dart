@@ -57,6 +57,14 @@ const posCashSaleLesson = TutorLesson(
       hint: 'يمكنك أيضًا الضغط على Ctrl+Enter.',
     ),
     TutorStep(
+      say: 'اختر «نقد» — طريقة الدفع لا تُختار وحدها.',
+      anchor: TutorAnchor.paymentMethodSegment,
+      anchorId: 'cash',
+      act: TutorAct.tap(),
+      expect: TutorExpect.visible(TutorAnchor.paymentMethodChosen, id: 'cash'),
+      hint: 'أزرار وسائل الدفع أعلى النافذة، أو Ctrl+1.',
+    ),
+    TutorStep(
       say: 'اضغط «تأكيد الدفع» لإتمام البيع نقدًا.',
       anchor: TutorAnchor.paymentConfirmButton,
       act: TutorAct.tap(),
@@ -119,6 +127,14 @@ const posMultiItemSaleLesson = TutorLesson(
       hint: 'المجموع الآن 16.25 د.ل.',
     ),
     TutorStep(
+      say: 'اختر «نقد» — طريقة الدفع لا تُختار وحدها.',
+      anchor: TutorAnchor.paymentMethodSegment,
+      anchorId: 'cash',
+      act: TutorAct.tap(),
+      expect: TutorExpect.visible(TutorAnchor.paymentMethodChosen, id: 'cash'),
+      hint: 'أزرار وسائل الدفع أعلى النافذة، أو Ctrl+1.',
+    ),
+    TutorStep(
       say: 'اضغط «تأكيد الدفع».',
       anchor: TutorAnchor.paymentConfirmButton,
       act: TutorAct.tap(),
@@ -162,6 +178,14 @@ const posSplitTenderLesson = TutorLesson(
       act: TutorAct.tap(),
       expect: TutorExpect.visible(TutorAnchor.paymentSheet),
       hint: 'أو Ctrl+Enter.',
+    ),
+    TutorStep(
+      say: 'اختر «نقد» — طريقة الدفع لا تُختار وحدها.',
+      anchor: TutorAnchor.paymentMethodSegment,
+      anchorId: 'cash',
+      act: TutorAct.tap(),
+      expect: TutorExpect.visible(TutorAnchor.paymentMethodChosen, id: 'cash'),
+      hint: 'أزرار وسائل الدفع أعلى النافذة، أو Ctrl+1.',
     ),
     TutorStep(
       say: 'الزبون دفع 10 نقدًا فقط: اكتب 10 في خانة المبلغ.',

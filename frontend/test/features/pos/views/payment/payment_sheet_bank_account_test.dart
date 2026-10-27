@@ -75,6 +75,7 @@ void main() {
         onSubmit: (result) => submitted = result,
       );
 
+      await _tapMethodChip(tester, 'cash');
       await tester.tap(find.byKey(const ValueKey('payment_confirm_button')));
       await tester.pump();
 

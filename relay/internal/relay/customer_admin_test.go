@@ -197,3 +197,87 @@ func TestNotificationsReachEveryoneOrOneCustomer(t *testing.T) {
 		t.Fatalf("customer's log = %v", mine)
 	}
 }
+
+// The console names its operator in every write it forwards (withActor in
+// internal/console): the routes must take that field, and keep the name.
+func TestConsoleWritesCarryTheOperator(t *testing.T) {
+	h := newOrderHarness(t)
+	h.server.CustomerPush = &fakePusher{}
+	token := h.customer("0911111111")
+	id := customerIDOf(t, h, token)
+
+	if status, body := h.do(http.MethodPost, "/v1/customers/admin/customers/"+id+"/credit", "admin-token",
+		map[string]any{"amount": "2", "note": "هدية", "key": "k-1", "actor": "Omar"}); status != http.StatusOK {
+		t.Fatalf("credit: %d %v", status, body)
+	}
+	if status, body := h.do(http.MethodPost, "/v1/customers/admin/notifications", "admin-token",
+		map[string]any{"audience": "all", "title": "t", "body": "b", "actor": "Omar"}); status != http.StatusOK ||
+		body["notification"].(map[string]any)["sent_by"] != "Omar" {
+		t.Fatalf("notify: %d %v", status, body)
+	}
+	if status, body := h.do(http.MethodPost, "/v1/customers/admin/customers/"+id+"/block", "admin-token",
+		map[string]any{"blocked": true, "reason": "احتيال", "actor": "Omar"}); status != http.StatusOK {
+		t.Fatalf("block: %d %v", status, body)
+	}
+	_, detail := h.do(http.MethodGet, "/v1/customers/admin/customers/"+id, "admin-token", nil)
+	entries := detail["credit"].(map[string]any)["entries"].([]any)
+	if len(entries) == 0 || entries[0].(map[string]any)["actor"] != "Omar" {
+		t.Fatalf("credit entries = %v", entries)
+	}
+}
+
+func TestTheConsoleChoosesWhatTheIPhoneDoesWithGiftCards(t *testing.T) {
+	h := newOrderHarness(t)
+	token := h.customer("0911111111")
+	iosShelf := func() (map[string]any, map[string]bool) {
+		_, catalog := h.do(http.MethodGet, "/v1/customers/catalog?channel=ios", "", nil)
+		webOnly := map[string]bool{}
+		for _, raw := range catalog["brands"].([]any) {
+			brand := raw.(map[string]any)
+			webOnly[brand["key"].(string)] = brand["web_only"].(bool)
+		}
+		return catalog, webOnly
+	}
+	iosOrder := func(key string) (int, map[string]any) {
+		order := sadadOrder("itunes-us-10", "60.00", key, 1)
+		order["channel"] = "ios"
+		return h.do(http.MethodPost, "/v1/customers/orders", token, order)
+	}
+
+	if _, body := h.do(http.MethodGet, "/v1/customers/admin/shelf", "admin-token", nil); body["shelf"].(map[string]any)["ios_gift_cards"] != "web_only" {
+		t.Fatalf("default: %v", body)
+	}
+	listed, shelf := iosShelf()
+	if !shelf["itunes"] || shelf["libyana"] {
+		t.Fatalf("web only: %v", shelf)
+	}
+
+	if status, body := h.do(http.MethodPut, "/v1/customers/admin/shelf", "admin-token",
+		map[string]any{"ios_gift_cards": "sell", "actor": "Omar"}); status != http.StatusOK ||
+		body["shelf"].(map[string]any)["actor"] != "Omar" {
+		t.Fatalf("sell: %d %v", status, body)
+	}
+	sold, shelf := iosShelf()
+	if shelf["itunes"] || sold["version"] == listed["version"] {
+		t.Fatalf("sold: %v (version %v)", shelf, sold["version"])
+	}
+	if status, body := iosOrder("ios-sell"); status != http.StatusCreated {
+		t.Fatalf("a gift card the iPhone now sells: %d %v", status, body)
+	}
+
+	h.do(http.MethodPut, "/v1/customers/admin/shelf", "admin-token", map[string]any{"ios_gift_cards": "hidden"})
+	if _, shelf := iosShelf(); len(shelf) != 1 || shelf["libyana"] {
+		t.Fatalf("hidden: %v", shelf)
+	}
+	if status, _ := iosOrder("ios-hidden"); status != http.StatusNotFound {
+		t.Fatalf("a hidden gift card sold: %d", status)
+	}
+	// Android never follows the iPhone's choice.
+	if _, apk := h.do(http.MethodGet, "/v1/customers/catalog?channel=apk", "", nil); len(apk["brands"].([]any)) != 2 {
+		t.Fatalf("apk: %v", apk)
+	}
+	if status, _ := h.do(http.MethodPut, "/v1/customers/admin/shelf", "admin-token",
+		map[string]any{"ios_gift_cards": "everything"}); status != http.StatusBadRequest {
+		t.Fatalf("unknown mode: %d", status)
+	}
+}

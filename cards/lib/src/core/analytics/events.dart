@@ -39,6 +39,11 @@ extension CardsEvents on Analytics {
   void paymentMethodSelected(String method) =>
       capture('payment_method_selected', {'method': method});
 
+  /// A bank-card order's payment opened: `native` (the app's card form) or
+  /// `hosted` (Dafa's page). The payment-form experiment's funnel starts here.
+  void paymentFormShown(String form) =>
+      capture('payment_form_shown', {'form': form});
+
   void orderPlaced(CardOrder order) => capture('order_placed', _order(order));
 
   void orderPlaceFailed(String errorCode, {required String method}) => capture(

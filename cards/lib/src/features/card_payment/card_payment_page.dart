@@ -281,6 +281,9 @@ class _CardPaymentPageState extends State<CardPaymentPage> {
   Widget _verification(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
+    // While the keyboard is up, the bank's page gets all the room left: the
+    // code field and its buttons matter, the words around them do not.
+    final typing = MediaQuery.viewInsetsOf(context).bottom > 0;
     return Padding(
       key: const ValueKey('verifying'),
       padding: const EdgeInsets.fromLTRB(
@@ -291,23 +294,34 @@ class _CardPaymentPageState extends State<CardPaymentPage> {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
+        // The same three children always: adding or dropping one would move
+        // the bank's page in the list, and Flutter would build it a new web
+        // view, which loads the page afresh (the field the payer just tapped
+        // reloading under them). The words fold away instead.
         children: [
-          Row(
-            children: [
-              Icon(Icons.sms_rounded, color: theme.colorScheme.primary),
-              const SizedBox(width: CardsSpace.md),
-              Expanded(
-                child: Text(
-                  l10n.cardVerifyBody,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+          _Folding(
+            open: !typing,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: CardsSpace.md),
+              child: Row(
+                children: [
+                  Icon(Icons.sms_rounded, color: theme.colorScheme.primary),
+                  const SizedBox(width: CardsSpace.md),
+                  Expanded(
+                    child: Text(
+                      l10n.cardVerifyBody,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
-            ],
+            ),
           ),
-          const SizedBox(height: CardsSpace.md),
-          Expanded(
+          // Loose: the view is as tall as the bank's page, and the note
+          // sits right under it rather than at the screen's foot.
+          Flexible(
             child: DecoratedBox(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(CardsRadii.tile),
@@ -320,8 +334,13 @@ class _CardPaymentPageState extends State<CardPaymentPage> {
               ),
             ),
           ),
-          const SizedBox(height: CardsSpace.sm),
-          _SecureNote(text: l10n.cardSecureNote),
+          _Folding(
+            open: !typing,
+            child: Padding(
+              padding: const EdgeInsets.only(top: CardsSpace.sm),
+              child: _SecureNote(text: l10n.cardSecureNote),
+            ),
+          ),
         ],
       ),
     );
@@ -670,6 +689,25 @@ class _Problem extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// [child] while [open], folded to nothing otherwise; it keeps its place
+/// among its siblings either way.
+class _Folding extends StatelessWidget {
+  const _Folding({required this.open, required this.child});
+
+  final bool open;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSize(
+      duration: CardsMotion.standard,
+      curve: CardsMotion.curve,
+      alignment: AlignmentDirectional.topStart,
+      child: open ? child : const SizedBox(width: double.infinity),
     );
   }
 }

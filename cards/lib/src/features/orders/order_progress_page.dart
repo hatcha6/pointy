@@ -18,6 +18,8 @@ import '../../shared/side_back.dart';
 import 'order_outcome_panel.dart';
 import 'order_watcher.dart';
 import '../../core/analytics/analytics.dart';
+import '../../core/analytics/events.dart';
+import '../../core/analytics/experiments.dart';
 
 /// An order on its way: it watches the relay and turns into the card the
 /// moment it arrives. The customer may leave; the card waits in «كروتي».
@@ -146,13 +148,26 @@ class _OrderProgressPageState extends State<OrderProgressPage>
 
   /// A bank-card order is paid in the app's own card form. Dafa's page is
   /// the way when the form cannot take the order, when the customer asks
-  /// for it, and on the web, which has no view for the bank's confirmation
-  /// step.
+  /// for it, on the web, which has no view for the bank's confirmation
+  /// step, and for customers in the experiment's arm that pays there
+  /// ([Experiments.cardPaymentForm]).
   Future<void> _pay() async {
     if (kIsWeb) {
       return _openPaymentPage();
     }
-    final result = await CardPaymentPage.open(context, widget.watcher.order);
+    final analytics = CardsScope.of(context).analytics;
+    final order = widget.watcher.order;
+    if (order.checkoutUrl.isNotEmpty &&
+        await analytics.variant(Experiments.cardPaymentForm) ==
+            Experiments.hostedPaymentPage) {
+      analytics.paymentFormShown('hosted');
+      return _openPaymentPage();
+    }
+    if (!mounted) {
+      return;
+    }
+    analytics.paymentFormShown('native');
+    final result = await CardPaymentPage.open(context, order);
     if (!mounted) {
       return;
     }

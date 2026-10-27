@@ -337,6 +337,39 @@ void main() {
     },
   );
 
+  testWidgets('a web-only brand says where to buy it, with nothing to pay', (
+    tester,
+  ) async {
+    await phone(tester);
+    final json = Map<String, dynamic>.of(
+      (fixtureCatalog['brands'] as List)[0] as Map<String, dynamic>,
+    )..['web_only'] = true;
+    await tester.pumpWidget(
+      CardsApp(
+        dependencies: fixtureDependencies(),
+        home: BrandPage(brand: CardBrand.fromJson(json)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('على الموقع'), findsOneWidget);
+    expect(find.text('متوفرة على الموقع'), findsOneWidget);
+    expect(find.textContaining('cards.dftr.ly'), findsOneWidget);
+    expect(find.text('اشترِ'), findsNothing);
+    expect(find.byTooltip('زيادة الكمية'), findsNothing);
+    // The values and their prices are still there to read.
+    expect(find.text('5.00 د.ل'), findsOneWidget);
+    // The note sits in the bar, not over the page.
+    expect(
+      tester.getSize(find.text('متوفرة على الموقع').first).height,
+      lessThan(60),
+    );
+    expect(
+      tester.getTopLeft(find.text('متوفرة على الموقع')).dy,
+      greaterThan(600),
+    );
+  });
+
   testWidgets(
     'buying: payer details after pay, the wallet code, then the card',
     (tester) async {

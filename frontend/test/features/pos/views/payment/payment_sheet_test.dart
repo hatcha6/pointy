@@ -28,6 +28,7 @@ void main() {
       onSubmit: (result) => submitted = result,
     );
 
+    await _tapKey(tester, 'payment_method_cash');
     await _tapKey(tester, 'payment_keypad_clear');
     await _tapKey(tester, 'payment_keypad_digit_1');
     await _tapKey(tester, 'payment_keypad_digit_2');
@@ -65,6 +66,7 @@ void main() {
       onSubmit: (result) => submitted = result,
     );
 
+    await _tapKey(tester, 'payment_method_cash');
     await _tapKey(tester, 'payment_quick_amount_round_up_0');
 
     expect(_amountText(tester, 0), '10.00');
@@ -108,6 +110,7 @@ void main() {
     // they can say whether they worked.
     expect(find.byKey(const ValueKey('payment_receipt_toggle')), findsNothing);
 
+    await _tapKey(tester, 'payment_method_cash');
     await tester.tap(find.byKey(const ValueKey('payment_confirm_button')));
     await tester.pump();
 
@@ -115,7 +118,7 @@ void main() {
     expect(submitted?.changeDue, 0);
   });
 
-  testWidgets('payment method availability selects the first enabled method', (
+  testWidgets('a shop that takes one method has it chosen already', (
     tester,
   ) async {
     PaymentSheetResult? submitted;
@@ -141,6 +144,62 @@ void main() {
     expect(submitted?.payments.single.method, PaymentMethod.card);
   });
 
+  group('nothing is preselected', () {
+    // Cash used to be preselected, and Enter booked card and transfer sales
+    // as cash because nobody looked at the method.
+    FilledButton confirm(WidgetTester tester) => tester.widget<FilledButton>(
+      find.byKey(const ValueKey('payment_confirm_button')),
+    );
+
+    testWidgets('confirm waits until a method is picked', (tester) async {
+      PaymentSheetResult? submitted;
+      await _pumpPaymentSheet(
+        tester,
+        total: 7,
+        onSubmit: (result) => submitted = result,
+      );
+
+      expect(_tenderMethod(tester, 0), isNull);
+      expect(confirm(tester).onPressed, isNull);
+      expect(
+        find.text('اختر طريقة الدفع: نقدًا أو بطاقة أو تحويل.'),
+        findsOneWidget,
+      );
+
+      await _tapKey(tester, 'payment_method_transfer');
+      expect(confirm(tester).onPressed, isNotNull);
+      await tester.tap(find.byKey(const ValueKey('payment_confirm_button')));
+      await tester.pump();
+
+      expect(submitted?.payments.single.method, PaymentMethod.transfer);
+      expect(submitted?.payments.single.amount, 7);
+    });
+
+    testWidgets('no tile is filled until one is picked', (tester) async {
+      await _pumpPaymentSheet(tester, width: 1366, height: 768);
+      const palette = PointySemanticColors.light();
+      for (final method in ['cash', 'card', 'transfer']) {
+        expect(
+          tester
+              .widget<Material>(
+                find.byKey(ValueKey('payment_method_tile_$method')),
+              )
+              .color,
+          palette.surface,
+        );
+      }
+    });
+
+    testWidgets('leaving credit for a normal sale asks again', (tester) async {
+      await _pumpPaymentSheet(tester, width: 1366, height: 768);
+      await _tapKey(tester, 'sale_type_credit');
+      await _tapKey(tester, 'sale_type_standard');
+
+      expect(_tenderMethod(tester, 0), isNull);
+      expect(confirm(tester).onPressed, isNull);
+    });
+  });
+
   group('the method a sale is recorded under is hard to miss', () {
     // Cashiers confirmed card and transfer sales on the preselected cash:
     // every method looked the same, and so did the button that recorded it.
@@ -161,6 +220,9 @@ void main() {
       tester,
     ) async {
       await _pumpPaymentSheet(tester, width: 1366, height: 768);
+      expect(confirmLabel(tester), 'تأكيد الدفع');
+
+      await _tapKey(tester, 'payment_method_cash');
       expect(confirmLabel(tester), 'تأكيد الدفع نقدًا');
 
       await _tapKey(tester, 'payment_method_card');
@@ -176,6 +238,7 @@ void main() {
       await _pumpPaymentSheet(tester, width: 1366, height: 768);
 
       // The second line takes the next method, so the sale is cash + card.
+      await _tapKey(tester, 'payment_method_cash');
       await _tapKey(tester, 'payment_add_tender');
       expect(_tenderMethod(tester, 1), PaymentMethod.card);
       expect(confirmLabel(tester), 'تأكيد الدفع');
@@ -189,6 +252,7 @@ void main() {
     ) async {
       await _pumpPaymentSheet(tester, width: 1366, height: 768);
       const palette = PointySemanticColors.light();
+      await _tapKey(tester, 'payment_method_cash');
       expect(tileColor(tester, 'cash'), palette.paymentCash);
       expect(tileColor(tester, 'card'), palette.surface);
 
@@ -223,6 +287,7 @@ void main() {
       onSubmit: (result) => submitted = result,
     );
 
+    await _tapKey(tester, 'payment_method_cash');
     await _tapKey(tester, 'payment_add_tender');
     await tester.enterText(
       find.byKey(const ValueKey('payment_tender_amount_0')),
@@ -254,6 +319,7 @@ void main() {
         findsNothing,
       );
 
+      await _tapKey(tester, 'payment_method_cash');
       await _tapKey(tester, 'payment_add_tender');
 
       expect(
@@ -437,6 +503,7 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('sale_type_standard')));
     await tester.pump();
+    await _tapKey(tester, 'payment_method_cash');
     await tester.tap(find.byKey(const ValueKey('payment_confirm_button')));
     await tester.pump();
 
@@ -934,10 +1001,16 @@ void main() {
 
     expect(
       _tenderMethod(tester, 0),
-      PaymentMethod.cash,
+      isNull,
       reason: 'the scan must not pick a payment method',
     );
     expect(submitted, isNull, reason: 'the scan must not confirm the sale');
+
+    // Nor does a deliberate Enter before any method is picked.
+    now = now.add(const Duration(seconds: 1));
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(submitted, isNull, reason: 'no method has been picked yet');
 
     // The cashier reaching for the method key, at human pace, still works.
     now = now.add(const Duration(seconds: 1));
@@ -980,8 +1053,8 @@ void main() {
 
     expect(
       _tenderMethod(tester, 0),
-      PaymentMethod.cash,
-      reason: 'digits typed into an amount must not change the method',
+      isNull,
+      reason: 'digits typed into an amount must not pick a method',
     );
 
     expect(submitted, isNull, reason: 'typing must not confirm the sale');
@@ -1023,7 +1096,9 @@ void main() {
     expect(submitted?.dueDate, proposed);
   });
 
-  testWidgets('a staff member paying cash is one tap away', (tester) async {
+  testWidgets('a staff member paying cash switches to a normal sale', (
+    tester,
+  ) async {
     PaymentSheetResult? submitted;
     await _pumpPaymentSheet(
       tester,
@@ -1039,10 +1114,12 @@ void main() {
       find.byKey(const ValueKey('staff_purchase_payroll_hint')),
       findsNothing,
     );
+    await _tapKey(tester, 'payment_method_cash');
     await tester.tap(find.byKey(const ValueKey('payment_confirm_button')));
     await tester.pump();
 
     expect(submitted?.saleType, SaleType.standard);
+    expect(submitted?.payments.single.method, PaymentMethod.cash);
     expect(submitted?.payments.single.amount, 45);
   });
 
@@ -1167,12 +1244,12 @@ void _scanIntoSheet(WidgetTester tester, String value) {
       .onBarcodeScanned(value);
 }
 
-PaymentMethod _tenderMethod(WidgetTester tester, int index) {
+PaymentMethod? _tenderMethod(WidgetTester tester, int index) {
   return tester
       .widget<DropdownButtonFormField<PaymentMethod>>(
         find.byKey(ValueKey('payment_tender_method_$index')),
       )
-      .initialValue!;
+      .initialValue;
 }
 
 String _amountText(WidgetTester tester, int index) {

@@ -647,6 +647,7 @@ type fileStoreData struct {
 	VoucherPurchases                 map[string]VoucherPurchase                `json:"voucher_purchases,omitempty"`
 	VoucherStock                     map[string]VoucherStockCode               `json:"voucher_stock,omitempty"`
 	AlertSettings                    *AlertSettings                            `json:"alert_settings,omitempty"`
+	CustomerShelf                    *CustomerShelfSettings                    `json:"customer_shelf,omitempty"`
 	Console                          *fileConsoleData                          `json:"console,omitempty"`
 	Customers                        *fileCustomerData                         `json:"customers,omitempty"`
 	CustomerOrders                   *fileCustomerOrderData                    `json:"customer_orders,omitempty"`

@@ -6,6 +6,7 @@ import '../../data/models/catalog.dart';
 import '../../design/cards_tokens.dart';
 import '../../shared/card_art.dart';
 import '../../shared/money_text.dart';
+import '../../shared/pill.dart';
 import '../../shared/pressable.dart';
 import '../brand/brand_page.dart';
 import '../shelf/shelf_model.dart';
@@ -72,6 +73,10 @@ class SearchResultRow extends StatelessWidget {
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
+                  if (brand.webOnly) ...[
+                    const SizedBox(height: CardsSpace.xs),
+                    const WebOnlyPill(onArt: false),
+                  ],
                 ],
               ),
             ),

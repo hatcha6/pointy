@@ -1213,6 +1213,21 @@ CREATE INDEX IF NOT EXISTS relay_customer_notifications_customer_idx
 	ON relay_customer_notifications (customer_id, created_at DESC) WHERE customer_id <> '';
 `,
 	},
+	{
+		version: 38,
+		name:    "daftar cards: the iPhone shelf's gift cards",
+		sql: `
+-- How the App Store build shows the cards Apple reserves for in-app purchase:
+-- hidden, listed as bought on the website, or sold. One row, an operator's
+-- choice; no row is the default (web only).
+CREATE TABLE IF NOT EXISTS relay_customer_shelf_settings (
+	id integer PRIMARY KEY CHECK (id = 1),
+	ios_gift_cards text NOT NULL CHECK (ios_gift_cards IN ('hidden', 'web_only', 'sell')),
+	actor text NOT NULL DEFAULT '',
+	updated_at timestamptz NOT NULL
+);
+`,
+	},
 }
 
 // migrationsAdvisoryLockKey serializes concurrent migrators (e.g. autoscaled

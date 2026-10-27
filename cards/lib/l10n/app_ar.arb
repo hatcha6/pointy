@@ -885,5 +885,17 @@
   "filterIncomplete": "لم تكتمل",
   "@filterIncomplete": {
     "description": "My cards filter: purchases that did not go through (failed, expired, refunded)."
+  },
+  "webOnlyBadge": "على الموقع",
+  "@webOnlyBadge": {
+    "description": "Badge on a card the iPhone app lists but cannot sell: it is bought on the website."
+  },
+  "webOnlyTitle": "متوفرة على الموقع",
+  "@webOnlyTitle": {
+    "description": "Brand page, in place of the buy button, on a card bought on the website only."
+  },
+  "webOnlyBody": "هذه البطاقة لا تُشترى من تطبيق الآيفون. تجدها على موقعنا cards.dftr.ly",
+  "@webOnlyBody": {
+    "description": "Brand page: where a website-only card is bought."
   }
 }

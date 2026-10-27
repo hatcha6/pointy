@@ -653,13 +653,17 @@ class _CategoryBarState extends State<_CategoryBar> {
   }
 }
 
-/// The badge a brand wears: unavailable, its own, or a running promotion's.
+/// The badge a brand wears: unavailable, bought on the website, its own, or
+/// a running promotion's.
 Widget? _badge(BuildContext context, CardBrand brand) {
   if (!brand.anyAvailable) {
     return Pill(
       text: AppLocalizations.of(context).unavailableNow,
       tone: PillTone.muted,
     );
+  }
+  if (brand.webOnly) {
+    return const WebOnlyPill();
   }
   final text = brand.badge.isNotEmpty
       ? brand.badge

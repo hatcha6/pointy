@@ -618,6 +618,8 @@ void main() {
         await tester.tap(find.textContaining('ادفع').first);
         await tester.pump(const Duration(milliseconds: 200));
         await tester.pump(const Duration(milliseconds: 200));
+        await tester.tap(key('payment_method_tile_cash'));
+        await tester.pump();
         await tester.tap(key('payment_confirm_button'));
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 100));

@@ -1,11 +1,13 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:pointy_cards/dev/cards_fixtures.dart';
 import 'package:pointy_cards/src/app.dart';
+import 'package:pointy_cards/src/core/analytics/analytics.dart';
 import 'package:pointy_cards/src/data/models/order.dart';
 import 'package:pointy_cards/src/data/vault/card_vault.dart';
 import 'package:pointy_cards/src/features/card_payment/card_number.dart';
@@ -322,6 +324,38 @@ void main() {
       expect(results, [CardPaymentResult.settled]);
     });
 
+    testWidgets('the keyboard opening keeps the bank page, not a reload', (
+      tester,
+    ) async {
+      final results = await openPage(tester, FakeMoamalatClient(verify: true));
+      await typeCard(tester);
+      final before = tester.state(find.byType(ThreeDSView));
+      tester.view.viewInsets = const FakeViewPadding(bottom: 900);
+      addTearDown(tester.view.resetViewInsets);
+      await tester.pumpAndSettle();
+      expect(identical(tester.state(find.byType(ThreeDSView)), before), isTrue);
+      expect(find.textContaining('أرسل بنكك رمزاً'), findsNothing);
+      tester.view.resetViewInsets();
+      await tester.pumpAndSettle();
+      expect(identical(tester.state(find.byType(ThreeDSView)), before), isTrue);
+      expect(results, isEmpty);
+    });
+
+    testWidgets('a refusal after the bank step is the bank declining, not '
+        'an unfinished step', (tester) async {
+      final moamalat = FakeMoamalatClient(verify: true);
+      final results = await openPage(tester, moamalat);
+      await typeCard(tester);
+      moamalat.decline = true;
+      tester.widget<ThreeDSView>(find.byType(ThreeDSView)).onAnswer({
+        'Status': 'Y',
+      });
+      await tester.pumpAndSettle();
+      expect(find.textContaining('رفض البنك العملية'), findsOneWidget);
+      expect(find.textContaining('لم يكتمل التأكيد'), findsNothing);
+      expect(results, isEmpty);
+    });
+
     testWidgets('closing the bank step goes back to the card, not out', (
       tester,
     ) async {
@@ -466,13 +500,21 @@ void main() {
       'checkout_url': 'https://localbankcards.dafa.ly/pay-1',
     });
 
-    Future<void> openOrder(WidgetTester tester, {http.Client? relay}) async {
+    Future<void> openOrder(
+      WidgetTester tester, {
+      http.Client? relay,
+      Analytics? analytics,
+      bool expectForm = true,
+    }) async {
       tester.view.physicalSize = const Size(390 * 3, 844 * 3);
       tester.view.devicePixelRatio = 3;
       addTearDown(tester.view.reset);
       await tester.pumpWidget(
         CardsApp(
-          dependencies: fixtureDependencies(client: relay),
+          dependencies: fixtureDependencies(
+            client: relay,
+            analytics: analytics,
+          ),
           home: Scaffold(
             body: Builder(
               builder: (context) => Center(
@@ -488,9 +530,49 @@ void main() {
       );
       await tester.tap(find.text('order'));
       await tester.pumpAndSettle();
-      // The card form opens over the order on its own.
-      expect(find.text('الدفع بالبطاقة المصرفية'), findsOneWidget);
+      if (expectForm) {
+        // The card form opens over the order on its own.
+        expect(find.text('الدفع بالبطاقة المصرفية'), findsOneWidget);
+      }
     }
+
+    testWidgets("the experiment's hosted arm pays on Dafa's page, never the "
+        "app's form", (tester) async {
+      final opened = <String>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        const MethodChannel('plugins.flutter.io/url_launcher'),
+        (call) async {
+          opened.add('${call.method} ${(call.arguments as Map)['url']}');
+          return true;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          const MethodChannel('plugins.flutter.io/url_launcher'),
+          null,
+        ),
+      );
+      final analytics = _ArmAnalytics('hosted');
+      await openOrder(tester, analytics: analytics, expectForm: false);
+
+      // Dafa's page opened, the app's form never did (the test relay then
+      // settles the order, so the card is shown).
+      expect(find.text('الدفع بالبطاقة المصرفية'), findsNothing);
+      expect(find.byType(CardPaymentPage), findsNothing);
+      expect(opened.single, endsWith('https://localbankcards.dafa.ly/pay-1'));
+      expect(analytics.asked, ['card-payment-form']);
+      expect(analytics.forms, ['hosted']);
+    });
+
+    testWidgets("the control arm keeps the app's own card form", (
+      tester,
+    ) async {
+      final analytics = _ArmAnalytics('control');
+      await openOrder(tester, analytics: analytics);
+      expect(analytics.forms, ['native']);
+      await tester.tap(find.byIcon(Icons.close_rounded));
+      await tester.pumpAndSettle();
+    });
 
     testWidgets('closing the card form calls the order off and goes back, '
         'with no wait for a payment', (tester) async {
@@ -533,4 +615,27 @@ void main() {
       await tester.pump(const Duration(seconds: 10));
     });
   });
+}
+
+/// Puts the customer in one arm of every experiment, and writes down what
+/// the app sends.
+class _ArmAnalytics extends NoAnalytics {
+  _ArmAnalytics(this.arm);
+
+  final String arm;
+  final asked = <String>[];
+  final forms = <Object?>[];
+
+  @override
+  Future<String?> variant(String key) async {
+    asked.add(key);
+    return arm;
+  }
+
+  @override
+  void capture(String event, [Map<String, Object> properties = const {}]) {
+    if (event == 'payment_form_shown') {
+      forms.add(properties['form']);
+    }
+  }
 }

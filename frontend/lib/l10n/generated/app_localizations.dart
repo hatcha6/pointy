@@ -19627,6 +19627,18 @@ abstract class AppLocalizations {
   /// **'يجب أن يغطي مجموع الدفعات إجمالي البيع.'**
   String get paymentTotalTooLowError;
 
+  /// Till payment sheet: shown until the cashier picks a payment method; nothing is preselected.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر طريقة الدفع: نقدًا أو بطاقة أو تحويل.'**
+  String get paymentMethodRequiredError;
+
+  /// No description provided for @paymentMethodChooseHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر'**
+  String get paymentMethodChooseHint;
+
   /// No description provided for @confirmPaymentButton.
   ///
   /// In ar, this message translates to:

@@ -248,5 +248,8 @@
   "licensesIntro": "Daftar Cartes repose sur des logiciels libres, avec nos remerciements à leurs auteurs. Voici leurs licences, telles que publiées.",
   "searchTitle": "Recherche",
   "searchBrowseCategories": "Parcourir les catégories",
-  "filterIncomplete": "Inachevées"
+  "filterIncomplete": "Inachevées",
+  "webOnlyBadge": "Sur le site",
+  "webOnlyTitle": "Disponible sur le site",
+  "webOnlyBody": "Cette carte ne s'achète pas dans l'app iPhone. Retrouvez-la sur cards.dftr.ly"
 }

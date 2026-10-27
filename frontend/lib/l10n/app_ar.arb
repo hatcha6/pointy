@@ -7425,6 +7425,11 @@
   "remainingAmountLabel": "المتبقي",
   "changeDueLabel": "الباقي للعميل",
   "paymentTotalTooLowError": "يجب أن يغطي مجموع الدفعات إجمالي البيع.",
+  "paymentMethodRequiredError": "اختر طريقة الدفع: نقدًا أو بطاقة أو تحويل.",
+  "@paymentMethodRequiredError": {
+    "description": "Till payment sheet: shown until the cashier picks a payment method; nothing is preselected."
+  },
+  "paymentMethodChooseHint": "اختر",
   "confirmPaymentButton": "تأكيد الدفع",
   "confirmPaymentCashButton": "تأكيد الدفع نقدًا",
   "@confirmPaymentCashButton": {

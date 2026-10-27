@@ -30,7 +30,7 @@ void main() {
     // The coach narrates the first step...
     expect(find.text(posCashSaleLesson.title), findsOneWidget);
     expect(find.text(posCashSaleLesson.steps.first.say), findsOneWidget);
-    expect(find.text('الخطوة 1 من 5'), findsOneWidget);
+    expect(find.text('الخطوة 1 من 6'), findsOneWidget);
 
     // ...over the real register-session gate, served by the sandbox.
     expect(find.text('نقدية الافتتاح'), findsWidgets);
@@ -51,7 +51,7 @@ void main() {
     }
 
     // Still on step 1 after doing nothing.
-    expect(find.text('الخطوة 1 من 5'), findsOneWidget);
+    expect(find.text('الخطوة 1 من 6'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField).first, '50');
     for (var i = 0; i < 8; i++) {
@@ -63,7 +63,7 @@ void main() {
     }
 
     // Two steps done: the field, then the button that opened the session.
-    expect(find.text('الخطوة 3 من 5'), findsOneWidget);
+    expect(find.text('الخطوة 3 من 6'), findsOneWidget);
     expect(find.text(posCashSaleLesson.steps[2].say), findsOneWidget);
   });
 
@@ -111,18 +111,18 @@ void main() {
     await _settle(tester);
     await tester.tap(find.text('بدء الجلسة'));
     await _settle(tester);
-    expect(find.text('الخطوة 3 من 5'), findsOneWidget);
+    expect(find.text('الخطوة 3 من 6'), findsOneWidget);
 
     // The wrong product: it lands in the cart, but the step must not move.
     await tester.tap(find.text('حليب طازج ١ لتر').first);
     await _settle(tester);
-    expect(find.text('الخطوة 3 من 5'), findsOneWidget);
+    expect(find.text('الخطوة 3 من 6'), findsOneWidget);
     expect(find.text(posCashSaleLesson.steps[2].say), findsOneWidget);
 
     // The named one does.
     await tester.tap(find.text('خبز').first);
     await _settle(tester);
-    expect(find.text('الخطوة 4 من 5'), findsOneWidget);
+    expect(find.text('الخطوة 4 من 6'), findsOneWidget);
   });
 }
 

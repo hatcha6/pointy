@@ -50,6 +50,9 @@ enum TutorAnchor {
   paymentSheet,
   paymentSaleTypeSegment,
   paymentMethodSegment,
+  // The tile the cashier picked: nothing is preselected, so a lesson has to
+  // see the choice made before it moves on to confirm.
+  paymentMethodChosen,
   paymentTenderAmountField,
   paymentAddTenderButton,
   paymentCardReceiptButton,

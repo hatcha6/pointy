@@ -1593,6 +1593,24 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'لم تكتمل'**
   String get filterIncomplete;
+
+  /// Badge on a card the iPhone app lists but cannot sell: it is bought on the website.
+  ///
+  /// In ar, this message translates to:
+  /// **'على الموقع'**
+  String get webOnlyBadge;
+
+  /// Brand page, in place of the buy button, on a card bought on the website only.
+  ///
+  /// In ar, this message translates to:
+  /// **'متوفرة على الموقع'**
+  String get webOnlyTitle;
+
+  /// Brand page: where a website-only card is bought.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذه البطاقة لا تُشترى من تطبيق الآيفون. تجدها على موقعنا cards.dftr.ly'**
+  String get webOnlyBody;
 }
 
 class _AppLocalizationsDelegate

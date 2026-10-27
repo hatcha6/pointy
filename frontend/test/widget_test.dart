@@ -670,6 +670,7 @@ void main() {
 
     await tester.tap(find.text('ادفع 7.00 د.ل'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
+    await _pickPaymentMethod(tester, 'cash');
     await tester.tap(find.text('إضافة دفعة'));
     await tester.pumpAndSettle();
     await tester.enterText(
@@ -677,7 +678,7 @@ void main() {
       '5.00',
     );
     await tester.pump();
-    await _confirmPayment(tester);
+    await _confirmPayment(tester, pickCash: false);
 
     expect(checkoutBody?['payments'], [
       {'method': 'cash', 'amount': '5.00'},
@@ -772,6 +773,7 @@ void main() {
 
     await tester.tap(find.text('ادفع 7.00 د.ل'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
+    await _pickPaymentMethod(tester, 'cash');
     await tester.tap(find.text('إضافة دفعة'));
     await tester.pumpAndSettle();
     await tester.enterText(
@@ -781,7 +783,7 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('payment_tender_remove_0')));
     await tester.pumpAndSettle();
-    await _confirmPayment(tester);
+    await _confirmPayment(tester, pickCash: false);
 
     expect(checkoutBody?['payments'], [
       {'method': 'card', 'amount': '7.00'},
@@ -5266,11 +5268,24 @@ void _expectSaleRecorded(String receiptNumber) {
   expect(find.textContaining(receiptNumber), findsWidgets);
 }
 
-Future<void> _confirmPayment(WidgetTester tester) async {
+/// Nothing is preselected, so a single-line sale picks cash first. A split
+/// picked its methods already: tapping a tile would collapse it to one line.
+Future<void> _confirmPayment(
+  WidgetTester tester, {
+  bool pickCash = true,
+}) async {
   expect(find.text('إتمام الدفع'), findsOneWidget);
+  if (pickCash) {
+    await _pickPaymentMethod(tester, 'cash');
+  }
   // By key: the button names the method it is about to record.
   await tester.tap(find.byKey(const ValueKey('payment_confirm_button')));
   await tester.pumpAndSettle(const Duration(seconds: 1));
+}
+
+Future<void> _pickPaymentMethod(WidgetTester tester, String method) async {
+  await tester.tap(find.byKey(ValueKey('payment_method_tile_$method')));
+  await tester.pumpAndSettle();
 }
 
 Future<void> _scanBarcode(WidgetTester tester, String barcode) async {

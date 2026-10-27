@@ -133,9 +133,19 @@ func TestCustomerCatalogIsPublicRetailAndNarrowedForIOS(t *testing.T) {
 	}
 
 	_, ios := h.do(http.MethodGet, "/v1/customers/catalog?channel=ios", "", nil)
+	// iOS sells the telecom shelf only; the rest is listed, marked web only.
 	brands := ios["brands"].([]any)
-	if len(brands) != 1 || brands[0].(map[string]any)["key"] != "libyana" || len(ios["categories"].([]any)) != 1 {
-		t.Fatalf("ios must see the telecom shelf only: %v", ios)
+	if len(brands) != 2 || len(ios["categories"].([]any)) != 2 {
+		t.Fatalf("ios lists the whole shelf: %v", ios)
+	}
+	for _, raw := range brands {
+		brand := raw.(map[string]any)
+		if brand["web_only"] != (brand["key"] != "libyana") {
+			t.Fatalf("ios web_only: %v", brand)
+		}
+	}
+	if apk["brands"].([]any)[0].(map[string]any)["web_only"] != false {
+		t.Fatal("apk sells everything")
 	}
 	if ios["version"] == apk["version"] {
 		t.Fatal("two channels share a version")

@@ -873,4 +873,14 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get filterIncomplete => 'Inachevées';
+
+  @override
+  String get webOnlyBadge => 'Sur le site';
+
+  @override
+  String get webOnlyTitle => 'Disponible sur le site';
+
+  @override
+  String get webOnlyBody =>
+      'Cette carte ne s\'achète pas dans l\'app iPhone. Retrouvez-la sur cards.dftr.ly';
 }

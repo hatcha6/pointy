@@ -103,6 +103,7 @@ class CardBrand {
     required this.redeemHint,
     required this.logo,
     required this.items,
+    this.webOnly = false,
   });
 
   factory CardBrand.fromJson(Map<String, dynamic> json) => CardBrand(
@@ -119,6 +120,7 @@ class CardBrand {
     redeemHint: readString(json, 'redeem_hint'),
     logo: readString(json, 'logo'),
     items: [for (final i in readList(json, 'items')) CardItem.fromJson(i)],
+    webOnly: readBool(json, 'web_only'),
   );
 
   final String key;
@@ -133,6 +135,11 @@ class CardBrand {
   /// The card art reference, or empty when the brand has none.
   final String logo;
   final List<CardItem> items;
+
+  /// Shown in this build but bought on the website only: the App Store
+  /// build may not sell gift cards (guideline 3.1.1), so it lists them with
+  /// their prices and no way to pay.
+  final bool webOnly;
 
   bool get anyAvailable => items.any((item) => item.available);
 

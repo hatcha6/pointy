@@ -860,4 +860,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get filterIncomplete => 'Incomplete';
+
+  @override
+  String get webOnlyBadge => 'Web only';
+
+  @override
+  String get webOnlyTitle => 'Available on the website';
+
+  @override
+  String get webOnlyBody =>
+      'This card can\'t be bought in the iPhone app. Find it on cards.dftr.ly';
 }

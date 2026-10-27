@@ -124,6 +124,14 @@ const registerCloseLesson = TutorLesson(
       hint: 'أو Ctrl+Enter.',
     ),
     TutorStep(
+      say: 'اختر «نقد» — طريقة الدفع لا تُختار وحدها.',
+      anchor: TutorAnchor.paymentMethodSegment,
+      anchorId: 'cash',
+      act: TutorAct.tap(),
+      expect: TutorExpect.visible(TutorAnchor.paymentMethodChosen, id: 'cash'),
+      hint: 'أزرار وسائل الدفع أعلى النافذة، أو Ctrl+1.',
+    ),
+    TutorStep(
       say: 'أكِّد الدفع نقدًا.',
       anchor: TutorAnchor.paymentConfirmButton,
       act: TutorAct.tap(),

@@ -16,7 +16,8 @@ import '../../../../shared/tutor/tutor_target.dart';
 /// ([paymentMethodColor]), and the chosen one filled solid. It used to be a
 /// grey segmented button with a faint tint on the selection, and cashiers
 /// confirmed card and transfer sales on the preselected cash without ever
-/// seeing it: the choice has to be impossible to miss at a glance.
+/// seeing it: the choice has to be impossible to miss at a glance. Nothing is
+/// preselected any more either, so [selectedMethod] starts null.
 class PaymentMethodSegmentedControl extends StatelessWidget {
   const PaymentMethodSegmentedControl({
     super.key,
@@ -109,11 +110,22 @@ class _PaymentMethodTile extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    selected ? Icons.check_circle : paymentMethodIcon(method),
-                    color: foreground,
-                    size: 22,
-                  ),
+                  if (selected)
+                    TutorTarget(
+                      anchor: TutorAnchor.paymentMethodChosen,
+                      id: method.apiValue,
+                      child: Icon(
+                        Icons.check_circle,
+                        color: foreground,
+                        size: 22,
+                      ),
+                    )
+                  else
+                    Icon(
+                      paymentMethodIcon(method),
+                      color: foreground,
+                      size: 22,
+                    ),
                   const SizedBox(width: 8),
                   Flexible(
                     child: TutorTarget(

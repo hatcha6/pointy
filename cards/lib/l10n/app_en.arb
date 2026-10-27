@@ -248,5 +248,8 @@
   "licensesIntro": "Daftar Cards is built on open-source software, with thanks to its authors. Here are their licenses, as published.",
   "searchTitle": "Search",
   "searchBrowseCategories": "Browse categories",
-  "filterIncomplete": "Incomplete"
+  "filterIncomplete": "Incomplete",
+  "webOnlyBadge": "Web only",
+  "webOnlyTitle": "Available on the website",
+  "webOnlyBody": "This card can't be bought in the iPhone app. Find it on cards.dftr.ly"
 }

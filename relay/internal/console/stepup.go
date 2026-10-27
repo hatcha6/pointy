@@ -76,10 +76,11 @@ var stepUpRules = []stepUpRule{
 	rule(http.MethodPost, "/v1/installations"),
 	rule(http.MethodPost, "/v1/enrollment/tokens"),
 	// «دفتر كروت» customers: credit that pays for cards, an account stopped
-	// or erased.
+	// or erased, and the iPhone shelf selling what Apple reserves for IAP.
 	rule(http.MethodPost, "/v1/customers/admin/customers/*/credit"),
 	rule(http.MethodPost, "/v1/customers/admin/customers/*/block"),
 	rule(http.MethodDelete, "/v1/customers/admin/customers/*"),
+	rule(http.MethodPut, "/v1/customers/admin/shelf"),
 	// Who can get in.
 	rule(http.MethodPost, "/operators/invite"),
 	rule(http.MethodPost, "/operators/*/disable"),

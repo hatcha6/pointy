@@ -203,7 +203,9 @@ class CardPaymentModel extends ChangeNotifier {
         -1 => CardPaymentProblem.network,
         MoamalatClient.invalidExpiry => CardPaymentProblem.expiry,
         MoamalatClient.orderExpired => CardPaymentProblem.expired,
-        _ when verification != null => CardPaymentProblem.verification,
+        // A refusal after the bank's own page is the bank's call (a wrong
+        // code, no balance), not an unfinished step: closing that page is
+        // what verificationAbandoned reports.
         _ => CardPaymentProblem.declined,
       });
     }

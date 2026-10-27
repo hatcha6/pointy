@@ -137,7 +137,7 @@ func (s HTTPServer) handleCustomerOrderCreate(w http.ResponseWriter, r *http.Req
 		writeCustomerError(w, status, failure, "this card cannot be bought right now", nil)
 		return
 	}
-	if !s.Customers.channelSells(request.Channel, located.Brand.Category) {
+	if _, sell := s.Customers.shelf(request.Channel, located.Brand.Category, s.iosGiftCards(ctx)); !sell {
 		writeCustomerError(w, http.StatusNotFound, "unknown_item", "this card is not sold in this app", nil)
 		return
 	}

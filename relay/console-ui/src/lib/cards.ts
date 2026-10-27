@@ -119,6 +119,7 @@ const BASE = "/v1/customers/admin";
 export const cardKeys = {
   all: ["cards"],
   summary: ["cards", "summary"],
+  shelf: ["cards", "shelf"],
   customers: (filter: Record<string, string>) => ["cards", "customers", filter],
   customer: (id: string) => ["cards", "customer", id],
   orders: (filter: Record<string, string>) => ["cards", "orders", filter],
@@ -162,6 +163,18 @@ export function useCardNotifications(filter: Record<string, string>) {
     queryKey: cardKeys.notifications(filter),
     queryFn: () =>
       api.get<{ notifications: CardNotification[]; push_configured: boolean }>(`${BASE}/notifications${qs(filter)}`),
+  });
+}
+
+/** What the iPhone app does with the cards Apple reserves for in-app purchase. */
+export type CardIOSGiftCards = "hidden" | "web_only" | "sell";
+
+export type CardShelf = { ios_gift_cards: CardIOSGiftCards; actor?: string; updated_at?: string };
+
+export function useCardShelf() {
+  return useQuery({
+    queryKey: cardKeys.shelf,
+    queryFn: () => api.get<{ shelf: CardShelf }>(`${BASE}/shelf`),
   });
 }
 

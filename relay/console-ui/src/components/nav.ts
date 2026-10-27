@@ -63,6 +63,7 @@ export const navGroups: NavGroup[] = [
       { to: "/cards/customers", label: "الزبائن", icon: UserRound, hint: "من دخل التطبيق وما اشتراه ورصيده وأجهزته" },
       { to: "/cards/orders", label: "طلبات التطبيق", icon: ReceiptText, hint: "كل ما اشتراه الزبائن، وحالة كل طلب" },
       { to: "/cards/notifications", label: "الإشعارات", icon: BellRing, hint: "رسالة لكل المستخدمين أو لتطبيق واحد" },
+      { to: "/cards/shelf", label: "رف الآيفون", icon: Smartphone, hint: "الألعاب وبطاقات الهدايا في تطبيق الآيفون" },
     ],
   },
   {

@@ -78,6 +78,9 @@ void main() {
 
       await tester.tap(find.text('ادفع 7.00 د.ل'));
       await tester.pumpAndSettle(const Duration(seconds: 1));
+      // Nothing is preselected: the cashier picks cash, then splits.
+      await tester.tap(find.byKey(const ValueKey('payment_method_tile_cash')));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('إضافة دفعة'));
       await tester.pumpAndSettle();
       await tester.enterText(
