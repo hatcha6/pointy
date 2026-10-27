@@ -44,12 +44,24 @@ jobs:
           channel: stable
           cache: true
 
+      # WebAssembly (skwasm) where the browser runs it, Chrome and Edge: a
+      # smaller download than CanvasKit and no JavaScript to parse. The same
+      # build carries the JavaScript one, which Safari and Firefox get.
       - name: Build the web app
         working-directory: cards
         run: >
-          flutter build web --release
+          flutter build web --wasm --release
           --dart-define=CARDS_RELAY_URL=https://my.dftr.ly
           --dart-define=CARDS_CHANNEL=web
+
+      # Fingerprinted names, early hints and Brotli/gzip copies: what the
+      # relay serves to keep the first load small (cards/tool/web_postbuild.sh).
+      - name: Ready the build for slow networks
+        working-directory: cards
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq brotli
+          pip install --quiet fonttools
+          tool/web_postbuild.sh
 
       - name: Resolve image name (ghcr requires lowercase)
         id: image

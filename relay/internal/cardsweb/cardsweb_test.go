@@ -103,3 +103,80 @@ func TestABuildWithoutIndexIsRefused(t *testing.T) {
 		t.Fatal("a URL was accepted as a host")
 	}
 }
+
+func compressedBuild() fstest.MapFS {
+	files := build()
+	files["main.0123456789abcdef.dart.js"] = &fstest.MapFile{Data: []byte("main();")}
+	files["main.0123456789abcdef.dart.js.br"] = &fstest.MapFile{Data: []byte("br-main")}
+	files["main.0123456789abcdef.dart.js.gz"] = &fstest.MapFile{Data: []byte("gz-main")}
+	files["index.html.gz"] = &fstest.MapFile{Data: []byte("gz-index")}
+	files["canvaskit/skia.wasm"] = &fstest.MapFile{Data: []byte("wasm")}
+	files["canvaskit/skia.wasm.br"] = &fstest.MapFile{Data: []byte("br-wasm")}
+	return files
+}
+
+func getAccepting(h http.Handler, target, encoding string) *httptest.ResponseRecorder {
+	request := httptest.NewRequest(http.MethodGet, "http://cards.dftr.ly"+target, nil)
+	if encoding != "" {
+		request.Header.Set("Accept-Encoding", encoding)
+	}
+	recorder := httptest.NewRecorder()
+	h.ServeHTTP(recorder, request)
+	return recorder
+}
+
+func TestTheSmallestCopyTheBrowserTakesIsSent(t *testing.T) {
+	relay := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+	h, err := Wrap(relay, Config{Hosts: []string{"cards.dftr.ly"}, Files: compressedBuild()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const js = "/main.0123456789abcdef.dart.js"
+	cases := []struct{ target, accept, body, encoding string }{
+		{js, "gzip, deflate, br, zstd", "br-main", "br"},
+		{js, "gzip", "gz-main", "gzip"},
+		{js, "br;q=0, gzip;q=0.8", "gz-main", "gzip"},
+		{js, "", "main();", ""},
+		{js, "identity", "main();", ""},
+		// A page is index.html, compressed too.
+		{"/brand/pubg", "br, gzip", "gz-index", "gzip"},
+		{"/canvaskit/skia.wasm", "br", "br-wasm", "br"},
+	}
+	for _, c := range cases {
+		got := getAccepting(h, c.target, c.accept)
+		if got.Code != http.StatusOK || got.Body.String() != c.body ||
+			got.Header().Get("Content-Encoding") != c.encoding {
+			t.Fatalf("%s %q: %d %q encoding %q", c.target, c.accept, got.Code,
+				got.Body.String(), got.Header().Get("Content-Encoding"))
+		}
+		if got.Header().Get("Vary") != "Accept-Encoding" {
+			t.Fatalf("%s: vary %q", c.target, got.Header().Get("Vary"))
+		}
+	}
+	// The compressed copy keeps the original's type.
+	if kind := getAccepting(h, js, "br").Header().Get("Content-Type"); !strings.Contains(kind, "javascript") {
+		t.Fatalf("js type %q", kind)
+	}
+	if kind := getAccepting(h, "/canvaskit/skia.wasm", "br").Header().Get("Content-Type"); kind != "application/wasm" {
+		t.Fatalf("wasm type %q", kind)
+	}
+	if kind := getAccepting(h, "/", "gzip").Header().Get("Content-Type"); !strings.HasPrefix(kind, "text/html") {
+		t.Fatalf("page type %q", kind)
+	}
+}
+
+func TestAFingerprintedFileIsKeptForGood(t *testing.T) {
+	relay := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+	h, err := Wrap(relay, Config{Hosts: []string{"cards.dftr.ly"}, Files: compressedBuild()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := getAccepting(h, "/main.0123456789abcdef.dart.js", "br").Header().Get("Cache-Control"); got != "public, max-age=31536000, immutable" {
+		t.Fatalf("fingerprinted cache %q", got)
+	}
+	for _, target := range []string{"/", "/main.dart.js", "/assets/fonts/x.otf"} {
+		if got := getAccepting(h, target, "br").Header().Get("Cache-Control"); got != "no-cache" {
+			t.Fatalf("%s cache %q", target, got)
+		}
+	}
+}

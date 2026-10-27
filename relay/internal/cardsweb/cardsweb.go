@@ -5,16 +5,26 @@
 // is index.html: Flutter reads the address itself. The two .well-known files
 // are what let phones open the same addresses in the installed app (iOS
 // Universal Links, Android App Links), so they go out as JSON, unredirected.
+//
+// The build is large (the app's code alone is megabytes) and its customers
+// are on Libyan mobile networks, so each file goes out as small as it can:
+// the build ships each compressible file already compressed beside it
+// (main.dart.js.br, main.dart.js.gz), and the one the browser accepts is
+// sent. A fingerprinted file (main.3f9a2c1b7d.dart.js) never changes, so a
+// browser keeps it for good; every other file is checked again each visit.
 package cardsweb
 
 import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"mime"
 	"net"
 	"net/http"
 	"os"
 	"path"
+	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -85,18 +95,22 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	header := w.Header()
 	header.Set("X-Content-Type-Options", "nosniff")
 	header.Set("Referrer-Policy", "strict-origin-when-cross-origin")
-	// Flutter's files keep their names from build to build (main.dart.js),
-	// so every one is checked again: a new build reaches people at once,
-	// an unchanged one costs a 304.
-	header.Set("Cache-Control", "no-cache")
-
 	name := strings.TrimPrefix(path.Clean("/"+r.URL.Path), "/")
+	if fingerprinted.MatchString(path.Base(name)) {
+		// Its name changes whenever its content does.
+		header.Set("Cache-Control", "public, max-age=31536000, immutable")
+	} else {
+		// The rest keep their names from build to build (index.html, the
+		// fonts), so every one is checked again: a new build reaches people
+		// at once, an unchanged one costs a 304.
+		header.Set("Cache-Control", "no-cache")
+	}
 	if name == ".well-known/apple-app-site-association" {
 		// Apple reads it only as JSON, and the file has no extension.
 		header.Set("Content-Type", "application/json")
 	}
 	if name != "" && h.isFile(name) {
-		http.ServeFileFS(w, r, h.files, name)
+		h.serve(w, r, name)
 		return
 	}
 	// A missing file is a 404; any other address is a page of the app.
@@ -104,7 +118,57 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	http.ServeFileFS(w, r, h.files, "index.html")
+	h.serve(w, r, "index.html")
+}
+
+// fingerprinted is a file name carrying a hash of its content.
+var fingerprinted = regexp.MustCompile(`\.[0-9a-f]{10,}\.`)
+
+// encodings are the compressed copies a build may carry, best first.
+var encodings = []struct{ name, suffix string }{
+	{"br", ".br"},
+	{"gzip", ".gz"},
+}
+
+// serve sends name, compressed when the build has it so and the browser
+// takes it.
+func (h *Handler) serve(w http.ResponseWriter, r *http.Request, name string) {
+	header := w.Header()
+	header.Add("Vary", "Accept-Encoding")
+	for _, encoding := range encodings {
+		if !accepts(r.Header.Get("Accept-Encoding"), encoding.name) ||
+			!h.isFile(name+encoding.suffix) {
+			continue
+		}
+		if header.Get("Content-Type") == "" {
+			kind := mime.TypeByExtension(path.Ext(name))
+			if kind == "" {
+				kind = "application/octet-stream"
+			}
+			header.Set("Content-Type", kind)
+		}
+		header.Set("Content-Encoding", encoding.name)
+		http.ServeFileFS(w, r, h.files, name+encoding.suffix)
+		return
+	}
+	http.ServeFileFS(w, r, h.files, name)
+}
+
+// accepts reports whether an Accept-Encoding header takes coding, at a
+// quality above zero.
+func accepts(header, coding string) bool {
+	for _, part := range strings.Split(header, ",") {
+		token, params, _ := strings.Cut(strings.TrimSpace(part), ";")
+		if !strings.EqualFold(strings.TrimSpace(token), coding) {
+			continue
+		}
+		if q, ok := strings.CutPrefix(strings.TrimSpace(params), "q="); ok {
+			value, err := strconv.ParseFloat(q, 64)
+			return err == nil && value > 0
+		}
+		return true
+	}
+	return false
 }
 
 func (h *Handler) isFile(name string) bool {

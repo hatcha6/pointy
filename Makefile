@@ -358,8 +358,9 @@ cards-run: cards-install ## Run the card app (CARDS_RELAY_URL / CARDS_CHANNEL pi
 cards-web: cards-install ## Run the card app's web build on :8093 against a local relay (make relay-run allows that origin).
 	cd "$(CARDS_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(CARDS_WEB_APP_PORT) --dart-define=CARDS_RELAY_URL=$(or $(CARDS_RELAY_URL),http://127.0.0.1:8091) --dart-define=CARDS_CHANNEL=web
 
-cards-web-build: cards-install ## Build the web app for cards.dftr.ly (cards/build/web), as the cards-web image does.
-	cd "$(CARDS_DIR)" && $(FLUTTER) build web --release --dart-define=CARDS_RELAY_URL=$(or $(CARDS_RELAY_URL),https://my.dftr.ly) --dart-define=CARDS_CHANNEL=web
+cards-web-build: cards-install ## Build the web app for cards.dftr.ly (cards/build/web), as the cards-web image does: fingerprinted, preloaded, precompressed (needs brotli).
+	cd "$(CARDS_DIR)" && $(FLUTTER) build web --wasm --release --dart-define=CARDS_RELAY_URL=$(or $(CARDS_RELAY_URL),https://my.dftr.ly) --dart-define=CARDS_CHANNEL=web
+	cd "$(CARDS_DIR)" && tool/web_postbuild.sh
 
 cards-preview: cards-install ## Run the card app's preview harness (?screen=board|home|my-cards|account|brand) as a local web server.
 	cd "$(CARDS_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(CARDS_WEB_PORT) -t lib/dev/cards_preview.dart
