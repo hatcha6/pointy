@@ -6,10 +6,12 @@ import '../../core/support.dart';
 import '../../design/cards_theme.dart';
 import '../../design/cards_tokens.dart';
 import '../links/cards_link.dart';
+import '../../shared/reading_page.dart';
 import 'legal_document.dart';
+import '../../core/analytics/analytics.dart';
 
-/// A legal text, read the way a long page should be: a large title, short
-/// headed sections, comfortable lines.
+/// A legal text, read the way a long page should be: a centred title, short
+/// headed sections, comfortable lines in one column.
 class LegalPage extends StatefulWidget {
   const LegalPage({super.key, required this.document});
 
@@ -23,6 +25,7 @@ class LegalPage extends StatefulWidget {
               LegalDocument.privacy => LinkedPage.privacy,
               LegalDocument.terms => LinkedPage.terms,
             }).location,
+            arguments: ScreenName(document.name),
           ),
           builder: (_) => LegalPage(document: document),
         ),
@@ -53,30 +56,16 @@ class _LegalPageState extends State<LegalPage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Scaffold(
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar.large(
-            title: Text(LegalPage.titleOf(l10n, widget.document)),
-          ),
-          FutureBuilder(
-            future: _blocks,
-            builder: (context, snapshot) => SliverPadding(
-              padding: EdgeInsets.fromLTRB(
-                CardsSpace.gutter,
-                0,
-                CardsSpace.gutter,
-                MediaQuery.paddingOf(context).bottom + CardsSpace.huge,
-              ),
-              sliver: SliverList.list(
-                children: [
-                  for (final block in snapshot.data ?? const <LegalBlock>[])
-                    _Block(block: block),
-                ],
-              ),
-            ),
-          ),
-        ],
+    return ReadingPage(
+      title: LegalPage.titleOf(l10n, widget.document),
+      body: FutureBuilder(
+        future: _blocks,
+        builder: (context, snapshot) => SliverList.list(
+          children: [
+            for (final block in snapshot.data ?? const <LegalBlock>[])
+              _Block(block: block),
+          ],
+        ),
       ),
     );
   }

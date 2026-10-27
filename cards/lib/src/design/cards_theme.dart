@@ -1,4 +1,5 @@
-import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
+import 'package:flutter/cupertino.dart'
+    show CupertinoPageTransitionsBuilder, CupertinoThemeData;
 import 'package:flutter/material.dart';
 import 'package:pointy_brand/pointy_brand.dart';
 
@@ -61,6 +62,10 @@ abstract final class CardsTheme {
       useMaterial3: true,
       colorScheme: scheme,
       brightness: brightness,
+      // The native views (Liquid Glass bars and buttons) take their light or
+      // dark from here: without it they follow the phone's setting, and a
+      // light app on a dark phone gets dark glass.
+      cupertinoOverrideTheme: CupertinoThemeData(brightness: brightness),
     );
     final text = _ramp(PointyTypography.textTheme(base.textTheme))
         .apply(bodyColor: ink, displayColor: ink);
@@ -180,6 +185,8 @@ abstract final class CardsTheme {
         ),
       ),
       bottomSheetTheme: BottomSheetThemeData(
+        // On a wide screen a sheet is a centred card, not a screen-wide slab.
+        constraints: const BoxConstraints(maxWidth: 560),
         backgroundColor: surface,
         surfaceTintColor: Colors.transparent,
         showDragHandle: true,

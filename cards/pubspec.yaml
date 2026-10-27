@@ -53,6 +53,8 @@ dependencies:
   sensors_plus: ^7.1.1
   package_info_plus: ^10.2.2
   webview_flutter: ^4.14.1
+  screen_brightness: ^2.1.11
+  posthog_flutter: ^5.57.1
 
 dev_dependencies:
   flutter_test:

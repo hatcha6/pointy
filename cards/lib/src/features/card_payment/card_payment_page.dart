@@ -11,10 +11,12 @@ import '../../shared/cards_scope.dart';
 import '../../shared/haptics.dart';
 import '../../shared/money_text.dart';
 import '../../data/vault/card_vault.dart';
+import '../../shared/side_back.dart';
 import 'card_number.dart';
 import 'card_payment_model.dart';
 import 'moamalat_client.dart';
 import 'three_ds_view.dart';
+import '../../core/analytics/analytics.dart';
 
 /// How the card page ended.
 enum CardPaymentResult {
@@ -41,8 +43,11 @@ class CardPaymentPage extends StatefulWidget {
   ) async {
     final result = await Navigator.of(context).push<CardPaymentResult>(
       MaterialPageRoute(
+        settings: screenSettings('card_payment'),
         fullscreenDialog: true,
-        builder: (_) => CardPaymentPage(order: order),
+        // The bank card's number, date and the bank's own page: none of it
+        // in a session replay.
+        builder: (_) => Sensitive(child: CardPaymentPage(order: order)),
       ),
     );
     return result ?? CardPaymentResult.closed;
@@ -228,33 +233,45 @@ class _CardPaymentPageState extends State<CardPaymentPage> {
           _model.verificationAbandoned();
         }
       },
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(verifying ? l10n.cardVerifyTitle : l10n.cardPayTitle),
-          leading: IconButton(
-            tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
-            icon: const Icon(Icons.close_rounded),
-            onPressed: settling
+      child: SideBack(
+        close: true,
+        onPressed: settling
+            ? () {}
+            : verifying
+            ? _model.verificationAbandoned
+            : () => _leave(CardPaymentResult.closed),
+        child: Scaffold(
+          appBar: AppBar(
+            title: Text(verifying ? l10n.cardVerifyTitle : l10n.cardPayTitle),
+            automaticallyImplyLeading: false,
+            leading: SideBack.active(context)
                 ? null
-                : verifying
-                ? _model.verificationAbandoned
-                : () => _leave(CardPaymentResult.closed),
+                : IconButton(
+                    tooltip: MaterialLocalizations.of(context)
+                        .closeButtonTooltip,
+                    icon: const Icon(Icons.close_rounded),
+                    onPressed: settling
+                        ? null
+                        : verifying
+                        ? _model.verificationAbandoned
+                        : () => _leave(CardPaymentResult.closed),
+                  ),
           ),
-        ),
-        body: SafeArea(
-          top: false,
-          child: AnimatedSwitcher(
-            duration: CardsMotion.standard,
-            child: switch (_model.stage) {
-              CardPaymentStage.opening ||
-              CardPaymentStage.done ||
-              CardPaymentStage.fallback => _Waiting(
-                key: const ValueKey('opening'),
-                text: l10n.cardOpening,
-              ),
-              CardPaymentStage.verifying => _verification(context),
-              _ => _form(context),
-            },
+          body: SafeArea(
+            top: false,
+            child: AnimatedSwitcher(
+              duration: CardsMotion.standard,
+              child: switch (_model.stage) {
+                CardPaymentStage.opening ||
+                CardPaymentStage.done ||
+                CardPaymentStage.fallback => _Waiting(
+                  key: const ValueKey('opening'),
+                  text: l10n.cardOpening,
+                ),
+                CardPaymentStage.verifying => _verification(context),
+                _ => _form(context),
+              },
+            ),
           ),
         ),
       ),

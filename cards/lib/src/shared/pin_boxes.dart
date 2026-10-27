@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:pointy_brand/pointy_brand.dart';
 
 import '../design/cards_tokens.dart';
+import '../core/analytics/analytics.dart';
 
 /// A code shown as six boxes, typed into one invisible field underneath, so
 /// the OS's code autofill and paste keep working. The box being filled is
@@ -50,51 +51,54 @@ class _PinBoxesState extends State<PinBoxes> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final text = widget.controller.text;
-    return GestureDetector(
-      onTap: () => _focus.requestFocus(),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Opacity(
-            opacity: 0,
-            child: TextField(
-              controller: widget.controller,
-              focusNode: _focus,
-              autofocus: true,
-              enabled: widget.enabled,
-              keyboardType: TextInputType.number,
-              autofillHints: const [AutofillHints.oneTimeCode],
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-                LengthLimitingTextInputFormatter(widget.length),
-              ],
-              showCursor: false,
-              enableInteractiveSelection: false,
-              onChanged: widget.onChanged,
-            ),
-          ),
-          Directionality(
-            textDirection: TextDirection.ltr,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                for (var i = 0; i < widget.length; i++) ...[
-                  if (i > 0)
-                    SizedBox(
-                      width: i == widget.length ~/ 2
-                          ? CardsSpace.md
-                          : CardsSpace.sm,
-                    ),
-                  _box(
-                    theme,
-                    i < text.length ? text[i] : '',
-                    i == text.length && _focus.hasFocus,
-                  ),
+    // A code typed here never shows in a session replay.
+    return Sensitive(
+      child: GestureDetector(
+        onTap: () => _focus.requestFocus(),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Opacity(
+              opacity: 0,
+              child: TextField(
+                controller: widget.controller,
+                focusNode: _focus,
+                autofocus: true,
+                enabled: widget.enabled,
+                keyboardType: TextInputType.number,
+                autofillHints: const [AutofillHints.oneTimeCode],
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(widget.length),
                 ],
-              ],
+                showCursor: false,
+                enableInteractiveSelection: false,
+                onChanged: widget.onChanged,
+              ),
             ),
-          ),
-        ],
+            Directionality(
+              textDirection: TextDirection.ltr,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  for (var i = 0; i < widget.length; i++) ...[
+                    if (i > 0)
+                      SizedBox(
+                        width: i == widget.length ~/ 2
+                            ? CardsSpace.md
+                            : CardsSpace.sm,
+                      ),
+                    _box(
+                      theme,
+                      i < text.length ? text[i] : '',
+                      i == text.length && _focus.hasFocus,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

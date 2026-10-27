@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../shared/cards_scope.dart';
+import '../../shared/side_back.dart';
 import '../account/account_page.dart';
 import '../brand/brand_page.dart';
 import '../home/home_page.dart';
@@ -13,7 +14,9 @@ import '../legal/legal_page.dart';
 import '../links/cards_link.dart';
 import '../links/link_inbox.dart';
 import '../my_cards/my_cards_page.dart';
+import '../search/search_page.dart';
 import '../shelf/shelf_model.dart';
+import 'cards_sidebar.dart';
 import 'cards_tab_bar.dart';
 
 /// The app's three places: the shelf, the customer's cards, their account.
@@ -66,6 +69,7 @@ class _CardsShellState extends State<CardsShell> {
         _shelf!.addListener(_showLocation);
       }
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        _screen(_tab);
         _openLink();
         _shown = true;
       });
@@ -86,9 +90,20 @@ class _CardsShellState extends State<CardsShell> {
   }
 
   void _go(int tab) {
+    if (tab != _tab) {
+      _screen(tab);
+    }
     setState(() => _tab = tab);
     _showLocation();
   }
+
+  /// The tabs are not routes, so the navigator cannot name them.
+  void _screen(int tab) =>
+      CardsScope.of(context).analytics.screen(switch (CardsTab.values[tab]) {
+        CardsTab.shelf => 'shelf',
+        CardsTab.myCards => 'my_cards',
+        CardsTab.account => 'account',
+      });
 
   /// Opens the waiting link, once the shelf has the catalog it may name.
   void _openLink() {
@@ -197,23 +212,101 @@ class _CardsShellState extends State<CardsShell> {
     _go(tab);
   }
 
+  /// The search page, from the tab bar's search button. A category picked
+  /// there is shown at once, under the page, which then slides away onto it.
+  void _openSearch() => SearchPage.open(
+    context,
+    shelf: _shelf!,
+    onCategory: (key) {
+      _homeReset.reset(animate: false, to: ShelfLink(category: key));
+      _go(CardsTab.shelf.index);
+    },
+  );
+
   @override
   Widget build(BuildContext context) {
+    final padding = MediaQuery.paddingOf(context);
+    final side = CardsTabBar.side(padding);
+    final pages = IndexedStack(
+      index: _tab,
+      children: [
+        HomePage(shelf: _shelf!, reset: _homeReset),
+        // Rebuilt on each visit so a card bought a minute ago is there.
+        _tab == 1
+            ? MyCardsPage(key: UniqueKey(), onBrowse: () => _go(0))
+            : const SizedBox.shrink(),
+        const AccountPage(),
+      ],
+    );
+    if (sidebarFits(context)) {
+      final media = MediaQuery.of(context);
+      return Scaffold(
+        body: Row(
+          children: [
+            SizedBox(
+              width: CardsSidebar.width,
+              child: CardsSidebar(
+                current: _tab,
+                onSelect: _select,
+                shelf: _shelf!,
+                onCategory: (key) {
+                  _homeReset.reset(
+                    animate: _tab == CardsTab.shelf.index,
+                    to: ShelfLink(category: key),
+                  );
+                  _go(CardsTab.shelf.index);
+                },
+              ),
+            ),
+            // The pages measure the room the sidebar leaves them, so their
+            // rows and columns fit it.
+            Expanded(
+              child: MediaQuery(
+                data: media.copyWith(
+                  size: Size(
+                    media.size.width - CardsSidebar.width,
+                    media.size.height,
+                  ),
+                ),
+                child: CardsSidebarScope(child: pages),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    if (side != null) {
+      // At the foot of the system's side column, on the status items' own
+      // centre line, as far from the bottom as Apple's own tab bars there.
+      const inset = SideBack.statusCentre - CardsSideTabBar.width / 2;
+      return Scaffold(
+        body: Stack(
+          children: [
+            pages,
+            Positioned(
+              left: side == AxisDirection.left ? inset : null,
+              right: side == AxisDirection.right ? inset : null,
+              width: CardsSideTabBar.width,
+              bottom: CardsSideTabBar.bottom,
+              child: CardsSideTabBar(
+                current: _tab,
+                onSelect: _select,
+                onSearch: _openSearch,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     return Scaffold(
       // Content scrolls under the tab bar, glass or frosted.
       extendBody: true,
-      body: IndexedStack(
-        index: _tab,
-        children: [
-          HomePage(shelf: _shelf!, reset: _homeReset),
-          // Rebuilt on each visit so a card bought a minute ago is there.
-          _tab == 1
-              ? MyCardsPage(key: UniqueKey(), onBrowse: () => _go(0))
-              : const SizedBox.shrink(),
-          const AccountPage(),
-        ],
+      body: pages,
+      bottomNavigationBar: CardsTabBar(
+        current: _tab,
+        onSelect: _select,
+        onSearch: _openSearch,
       ),
-      bottomNavigationBar: CardsTabBar(current: _tab, onSelect: _select),
     );
   }
 }

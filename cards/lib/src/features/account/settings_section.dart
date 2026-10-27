@@ -61,6 +61,18 @@ class SettingsSection extends StatelessWidget {
               value: settings.codeLock,
               onChanged: (on) => _setLock(context, on),
             ),
+          SwitchListTile.adaptive(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: CardsSpace.lg,
+            ),
+            secondary: const Icon(Icons.insights_rounded),
+            title: Text(
+              l10n.shareUsageTitle,
+              style: theme.textTheme.titleSmall,
+            ),
+            value: settings.shareUsage,
+            onChanged: settings.setShareUsage,
+          ),
           // Cards are kept only on a phone.
           if (CardsScope.of(context).cards.available)
             ListTile(

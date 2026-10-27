@@ -182,7 +182,7 @@ and every tap answers. The rules live in `src/design/`:
 Previews: `make cards-preview`, then `?screen=board`, or any single screen:
 `home`, `brand`, `brand-itunes`, `sign-in`, `sign-in-code`, `checkout`,
 `wallet-code`, `preparing`, `refunded`, `reveal`, `my-cards`, `account`,
-`signed-out`, `about`, `privacy`, `terms`, `card-pay` (the bank-card form; `&card=verify` has the bank ask for its code, `&card=decline` refuses the card). The address's path opens like a tapped `cards.dftr.ly` link: `/category/gaming?screen=home`, `/brand/pubg?screen=home`. Add `&theme=dark` for dark, `&lang=en` or `&lang=fr` for English or French (only while `AppSettings.languageChoice` is on).
+`signed-out`, `onboarding`, `about`, `privacy`, `terms`, `card-pay` (the bank-card form; `&card=verify` has the bank ask for its code, `&card=decline` refuses the card). The address's path opens like a tapped `cards.dftr.ly` link: `/category/gaming?screen=home`, `/brand/pubg?screen=home`. Add `&theme=dark` for dark, `&lang=en` or `&lang=fr` for English or French (only while `AppSettings.languageChoice` is on).
 
 `make cards-preview-live` is the same harness on the **real shelf** of a local
 relay (`make relay-run`, then `pointy-relay vouchers catalog push
@@ -231,6 +231,40 @@ Hosting: the relay serves the web build on `cards.dftr.ly`
 `pointy-cards-web` image whenever `cards/` changes, and the relay image
 copies the latest one in, so a new web build goes live with the next relay
 release. `make cards-web-build` makes the same build locally.
+
+The first load is kept small for slow mobile networks (about 2.4 MB on
+Chrome, from 6.3 MB):
+
+- **WebAssembly** (`--wasm`, the skwasm renderer) where the browser runs it,
+  Chrome and Edge; Safari and Firefox get the JavaScript build in the same
+  output.
+- **`tool/web_postbuild.sh`** (part of `make cards-web-build` and CI; needs
+  `brotli`, and `pyftsubset` from fonttools): fingerprints the code files so
+  the relay caches them for good, adds preconnects and preloads for exactly
+  what this browser will fetch, trims the web copy of the Arabic font
+  (hinting and unused scripts; shaping checked identical), and writes Brotli
+  and gzip copies beside each file. `relay/internal/cardsweb` sends them.
+- **No Flutter opening on the web**: the page's own splash covers the
+  download, and the app shows itself the moment it can.
+
+## Analytics and feature flags
+
+PostHog (EU cloud), spoken to only through `lib/src/core/analytics/`: the
+rest of the app sees an `Analytics` with `capture`, `screen`, `identify`,
+`reset`, `isEnabled(flag)` and a `flags` listenable.
+
+- **Release builds only.** A debug `flutter run` sends nothing. The project
+  token is public and baked in (`CardsConfig`); `--dart-define=CARDS_POSTHOG_TOKEN=`
+  (empty) builds an app that sends nothing, `CARDS_POSTHOG_HOST` moves it.
+- **Who.** Customers are their customer id once signed in, never their
+  phone; a sign-out starts over. Every event carries `channel`.
+- **Screens.** Name a page with `settings: screenSettings('name')` (sheets:
+  `routeSettings:`). Not `RouteSettings(name:)`: that becomes the web
+  build's address. The shell's tabs report themselves.
+- **Never recorded.** Session replay and web autocapture stay off: a card's
+  code is on screen.
+- **Web.** `web/index.html` holds posthog-js's loader stub; the app calls
+  `posthog.init` itself, so the library is fetched only with a token.
 
 ## Commands
 

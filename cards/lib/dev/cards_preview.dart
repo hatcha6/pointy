@@ -32,6 +32,7 @@ import '../src/features/checkout/checkout_sheet.dart';
 import '../src/features/legal/about_page.dart';
 import '../src/features/legal/legal_document.dart';
 import '../src/features/legal/legal_page.dart';
+import '../src/features/onboarding/onboarding_page.dart';
 import '../src/features/orders/order_progress_page.dart';
 import '../src/features/orders/order_watcher.dart';
 import '../src/features/reveal/reveal_page.dart';
@@ -184,6 +185,7 @@ class PreviewSurface extends StatelessWidget {
         ),
       ),
       'about' => const AboutPage(),
+      'onboarding' => OnboardingPage(onDone: () {}),
       'privacy' => const LegalPage(document: LegalDocument.privacy),
       'terms' => const LegalPage(document: LegalDocument.terms),
       _ => const CardsShell(),

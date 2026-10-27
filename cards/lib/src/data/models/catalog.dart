@@ -135,6 +135,17 @@ class CardBrand {
   final List<CardItem> items;
 
   bool get anyAvailable => items.any((item) => item.available);
+
+  /// The cheapest price among the sellable cards (all, when none is).
+  Money? get fromPrice {
+    final available = items.where((item) => item.available).toList();
+    return (available.isEmpty ? items : available)
+        .map((item) => item.price)
+        .fold<Money?>(
+          null,
+          (min, price) => min == null || price.compareTo(min) < 0 ? price : min,
+        );
+  }
 }
 
 class CardItem {

@@ -88,13 +88,18 @@ class ShelfModel extends ChangeNotifier {
 
   /// The brands to show: the category's (or all), matching the search, the
   /// featured first, then by the catalog's own order.
-  List<CardBrand> get brands {
+  List<CardBrand> get brands =>
+      find(query, category: searching ? null : category);
+
+  /// The brands matching [text] (all when it is empty), in [category] when
+  /// one is given, the featured first, then by the catalog's own order.
+  List<CardBrand> find(String text, {String? category}) {
     final names = {for (final c in shelf.categories) c.key: c.name};
     final list = shelf.brands.where((brand) {
-      if (!searching && category != null && brand.category != category) {
+      if (category != null && brand.category != category) {
         return false;
       }
-      return matchesSearch(query, [
+      return matchesSearch(text, [
         brand.name,
         ...brand.aliases,
         names[brand.category] ?? '',

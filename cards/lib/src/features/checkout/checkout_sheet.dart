@@ -20,6 +20,7 @@ import 'checkout_model.dart';
 import 'payer_dialog.dart';
 import '../../shared/haptics.dart';
 import '../../shared/shake.dart';
+import '../../core/analytics/analytics.dart';
 
 /// Checkout in one sheet, laid out like a wallet's pay sheet: what is bought,
 /// how it is paid (one row, «تغيير» to pick another), what it costs line by
@@ -41,6 +42,7 @@ Future<void> showCheckout(
   )..load();
   final order = await showModalBottomSheet<CardOrder>(
     context: context,
+    routeSettings: screenSettings('checkout'),
     isScrollControlled: true,
     useSafeArea: true,
     builder: (_) => CheckoutSheet(model: model),
@@ -81,6 +83,7 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
     }
     final chosen = await showModalBottomSheet<PaymentMethod>(
       context: context,
+      routeSettings: screenSettings('payment_method'),
       useSafeArea: true,
       isScrollControlled: true,
       builder: (context) =>

@@ -106,7 +106,7 @@ void main() {
     tester,
   ) async {
     final (settings, lock) = await openAccount(tester);
-    final toggle = find.byType(Switch);
+    final toggle = find.byType(Switch).first;
     await tester.ensureVisible(toggle);
     await tester.pumpAndSettle();
 
@@ -131,13 +131,30 @@ void main() {
     expect(settings.codeLock, isTrue);
   });
 
+  testWidgets('usage sharing is on until the customer turns it off', (
+    tester,
+  ) async {
+    final (settings, _) = await openAccount(tester);
+    expect(settings.shareUsage, isTrue);
+    final toggle = find.widgetWithText(
+      SwitchListTile,
+      'مشاركة بيانات الاستخدام',
+    );
+    await tester.ensureVisible(toggle);
+    await tester.pumpAndSettle();
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+    expect(settings.shareUsage, isFalse);
+  });
+
   test('the choices outlive the app', () async {
     final first = AppSettings(preferences: SharedPreferencesAsync());
     await first.load();
     first
       ..setLanguage('fr')
       ..setThemeMode(ThemeMode.dark)
-      ..setCodeLock(false);
+      ..setCodeLock(false)
+      ..setShareUsage(false);
     await Future<void>.delayed(Duration.zero);
 
     final next = AppSettings(preferences: SharedPreferencesAsync());
@@ -145,5 +162,6 @@ void main() {
     expect(next.language, 'fr');
     expect(next.themeMode, ThemeMode.dark);
     expect(next.codeLock, isFalse);
+    expect(next.shareUsage, isFalse);
   });
 }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import 'logo_geometry.dart';
 import 'logo_morph_painter.dart';
+import 'splash_handoff.dart';
 
 /// The tile's size: the native splash draws the same tile at the same size
 /// in the same place (`tool/render_splash_test.dart`), so the hand-over from
@@ -100,18 +102,22 @@ abstract final class SplashMemory {
 /// The opening over the app: the Daftar tile from the system's splash turns
 /// into the card app's, the name follows, then the tile swells a touch and
 /// everything fades into the app, which has been building underneath all
-/// along. A tap skips it; reduced motion skips straight to the end.
+/// along. When a screen underneath takes the tile ([SplashHandoff], the
+/// onboarding's first step), the tile flies to it instead while the rest
+/// fades. A tap skips it; reduced motion skips straight to the end.
 class SplashOverlay extends StatefulWidget {
   const SplashOverlay({
     super.key,
     required this.run,
     this.art = const SplashArt(),
     this.onDone,
+    this.handoff,
   });
 
   final SplashRun run;
   final SplashArt art;
   final VoidCallback? onDone;
+  final SplashHandoff? handoff;
 
   @override
   State<SplashOverlay> createState() => _SplashOverlayState();
@@ -157,12 +163,48 @@ class _SplashOverlayState extends State<SplashOverlay>
     await _leave();
   }
 
+  /// Where the tile lands, in this overlay's own space, when a screen
+  /// underneath has taken it.
+  Rect? _landing;
+  CustomPainter? _landingPicture;
+
   Future<void> _leave() async {
     if (!mounted || _exit.isAnimating || _exit.isCompleted) {
       return;
     }
+    final landing = _landingRect();
+    final picture = widget.handoff?.painter?.call();
+    if (landing != null &&
+        picture != null &&
+        !MediaQuery.of(context).disableAnimations) {
+      _exit.duration = const Duration(milliseconds: 760);
+      setState(() {
+        _landing = landing;
+        _landingPicture = picture;
+      });
+    }
     await _exit.forward().orCancel.catchError((_) {});
     widget.onDone?.call();
+  }
+
+  Rect? _landingRect() {
+    final target = widget.handoff?.target?.currentContext?.findRenderObject();
+    final self = context.findRenderObject();
+    if (target is! RenderBox ||
+        !target.hasSize ||
+        self is! RenderBox ||
+        !self.hasSize) {
+      return null;
+    }
+    final side = math.min(target.size.width, target.size.height);
+    if (side <= 0) {
+      return null;
+    }
+    final corner = Offset(
+      (target.size.width - side) / 2,
+      (target.size.height - side) / 2,
+    );
+    return self.globalToLocal(target.localToGlobal(corner)) & Size.square(side);
   }
 
   void _skip() {
@@ -179,6 +221,9 @@ class _SplashOverlayState extends State<SplashOverlay>
 
   @override
   Widget build(BuildContext context) {
+    if (_landing != null) {
+      return _flight(context);
+    }
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     final fade = CurvedAnimation(parent: _exit, curve: Curves.easeIn);
@@ -227,6 +272,99 @@ class _SplashOverlayState extends State<SplashOverlay>
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+extension on _SplashOverlayState {
+  /// The tile flying to where the screen underneath shows it, growing as it
+  /// goes, while the backdrop and the name fade. It turns into the landing
+  /// spot's own picture early, small, so it grows sharp and lands exact.
+  Widget _flight(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    final nameStyle = theme.textTheme.headlineSmall?.copyWith(
+      fontWeight: FontWeight.w700,
+    );
+    return IgnorePointer(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final start = Rect.fromCenter(
+            center: constraints.biggest.center(Offset.zero),
+            width: kSplashTileSize,
+            height: kSplashTileSize,
+          );
+          return AnimatedBuilder(
+            animation: _exit,
+            builder: (context, _) {
+              final e = _exit.value;
+              final rect = Rect.lerp(
+                start,
+                _landing,
+                Curves.easeInOutCubic.transform(e),
+              )!;
+              final backdrop = const Interval(
+                0.15,
+                0.8,
+                curve: Curves.easeOut,
+              ).transform(e);
+              final picture = const Interval(0, 0.2).transform(e);
+              return Stack(
+                children: [
+                  Positioned.fill(
+                    child: ColoredBox(
+                      color: theme.scaffoldBackgroundColor.withValues(
+                        alpha: 1 - backdrop,
+                      ),
+                    ),
+                  ),
+                  if (_full)
+                    Align(
+                      alignment: Alignment.center,
+                      child: Padding(
+                        padding: const EdgeInsets.only(
+                          top: kSplashTileSize + 84,
+                        ),
+                        child: Opacity(
+                          opacity: 1 - const Interval(0, 0.3).transform(e),
+                          child: _Name(
+                            story: _story,
+                            daftar: l10n.splashDaftar,
+                            cards: l10n.splashCards,
+                            style: nameStyle,
+                          ),
+                        ),
+                      ),
+                    ),
+                  Positioned.fromRect(
+                    rect: rect,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        if (picture < 1)
+                          Opacity(
+                            opacity: 1 - picture,
+                            child: CustomPaint(
+                              painter: LogoMorphPainter(
+                                progress: _mark,
+                                daftar: widget.art.daftar,
+                                cards: widget.art.cards,
+                              ),
+                            ),
+                          ),
+                        Opacity(
+                          opacity: picture,
+                          child: CustomPaint(painter: _landingPicture),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
+        },
       ),
     );
   }

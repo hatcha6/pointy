@@ -369,6 +369,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get showQr => 'Code QR';
 
   @override
+  String get qrScanHint =>
+      'Scannez-le avec un appareil photo pour lire le code secret';
+
+  @override
   String get sendAsGift => 'Offrir';
 
   @override
@@ -586,6 +590,9 @@ class AppLocalizationsFr extends AppLocalizations {
       'Confirmez votre identité pour désactiver la protection des codes';
 
   @override
+  String get shareUsageTitle => 'Partager les données d\'utilisation';
+
+  @override
   String get themeTitle => 'Apparence';
 
   @override
@@ -771,4 +778,55 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get orderCancelled => 'Commande annulée.';
+
+  @override
+  String get onboardingSkip => 'Passer';
+
+  @override
+  String get onboardingNext => 'Suivant';
+
+  @override
+  String get onboardingStart => 'Commencer';
+
+  @override
+  String onboardingStep(int current, int total) {
+    return 'Étape $current sur $total';
+  }
+
+  @override
+  String get onboardingShelfTitle => 'Toutes vos cartes au même endroit';
+
+  @override
+  String get onboardingShelfBody =>
+      'Crédit Libyana et Almadar, forfaits internet et plus, choisis en quelques secondes à des prix clairs.';
+
+  @override
+  String get onboardingInstantTitle => 'Payez, le code arrive aussitôt';
+
+  @override
+  String get onboardingInstantBody =>
+      'Payez avec votre portefeuille ou votre carte bancaire : le code de votre carte s\'affiche en quelques secondes.';
+
+  @override
+  String get onboardingVaultTitle => 'Vos cartes en sécurité';
+
+  @override
+  String get onboardingVaultBody =>
+      'Chaque carte achetée reste dans Mes cartes, protégée par le verrou de votre téléphone, prête quand vous en avez besoin.';
+
+  @override
+  String get onboardingReplay => 'Faire la visite';
+
+  @override
+  String get licensesIntro =>
+      'Daftar Cartes repose sur des logiciels libres, avec nos remerciements à leurs auteurs. Voici leurs licences, telles que publiées.';
+
+  @override
+  String get searchTitle => 'Recherche';
+
+  @override
+  String get searchBrowseCategories => 'Parcourir les catégories';
+
+  @override
+  String get filterIncomplete => 'Inachevées';
 }

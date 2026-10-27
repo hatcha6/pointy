@@ -1,6 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'config.dart';
+import 'core/analytics/analytics.dart';
 import 'data/api/relay_api.dart';
 import 'data/repositories/auth_repository.dart';
 import 'data/repositories/catalog_repository.dart';
@@ -26,8 +27,10 @@ class CardsDependencies {
     MoamalatClient? moamalat,
     CardVault? cards,
     LinkInbox? links,
+    Analytics? analytics,
     this.preferences,
   }) : settings = settings ?? AppSettings(),
+       analytics = analytics ?? NoAnalytics(),
        moamalat = moamalat ?? MoamalatClient(),
        cards = cards ?? MemoryCardVault(),
        links = links ?? LinkInbox();
@@ -55,6 +58,7 @@ class CardsDependencies {
       cards: SecureCardVault(),
       lock: CodeLock(settings: settings),
       settings: settings,
+      analytics: PostHogAnalytics.forConfig(config),
       preferences: preferences,
     );
   }
@@ -79,6 +83,9 @@ class CardsDependencies {
 
   /// Links to places in the app (`https://cards.dftr.ly/…`) waiting to open.
   final LinkInbox links;
+
+  /// Product analytics and feature flags (PostHog), or nothing.
+  final Analytics analytics;
 
   /// Small per-device choices (the last payment method). Null in tests.
   final SharedPreferencesAsync? preferences;

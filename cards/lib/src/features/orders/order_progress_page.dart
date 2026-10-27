@@ -14,8 +14,10 @@ import '../../shared/haptics.dart';
 import '../../shared/money_text.dart';
 import '../card_payment/card_payment_page.dart';
 import '../reveal/reveal_page.dart';
+import '../../shared/side_back.dart';
 import 'order_outcome_panel.dart';
 import 'order_watcher.dart';
+import '../../core/analytics/analytics.dart';
 
 /// An order on its way: it watches the relay and turns into the card the
 /// moment it arrives. The customer may leave; the card waits in «كروتي».
@@ -44,6 +46,7 @@ class OrderProgressPage extends StatefulWidget {
       dependencies.vault.keep(order.id, order.codes);
       return Navigator.of(context).push(
         MaterialPageRoute(
+          settings: screenSettings('reveal'),
           builder: (_) => RevealPage(order: order, brand: brand),
         ),
       );
@@ -56,6 +59,7 @@ class OrderProgressPage extends StatefulWidget {
     return Navigator.of(context)
         .push(
           MaterialPageRoute(
+            settings: screenSettings('order_progress'),
             builder: (_) => OrderProgressPage(watcher: watcher, brand: brand),
           ),
         )
@@ -133,6 +137,7 @@ class _OrderProgressPageState extends State<OrderProgressPage>
       _revealed = true;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
+          settings: screenSettings('reveal'),
           builder: (_) => RevealPage(order: order, brand: widget.brand),
         ),
       );
@@ -297,62 +302,71 @@ class _OrderProgressPageState extends State<OrderProgressPage>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(backgroundColor: Colors.transparent),
-      body: ListenableBuilder(
-        listenable: widget.watcher,
-        builder: (context, _) {
-          final order = widget.watcher.order;
-          final theme = Theme.of(context);
-          return ArtPaletteBuilder(
-            brand: widget.brand,
-            builder: (context, palette) => DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.center,
-                  colors: [
-                    palette.tint.withValues(
-                      alpha: theme.brightness == Brightness.dark ? 0.35 : 0.14,
-                    ),
-                    theme.scaffoldBackgroundColor,
-                  ],
+    return SideBack(
+      edgeToEdge: true,
+      child: Scaffold(
+        extendBodyBehindAppBar: true,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          automaticallyImplyLeading: !SideBack.active(context),
+        ),
+        body: ListenableBuilder(
+          listenable: widget.watcher,
+          builder: (context, _) {
+            final order = widget.watcher.order;
+            final theme = Theme.of(context);
+            return ArtPaletteBuilder(
+              brand: widget.brand,
+              builder: (context, palette) => DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.center,
+                    colors: [
+                      palette.tint.withValues(
+                        alpha: theme.brightness == Brightness.dark
+                            ? 0.35
+                            : 0.14,
+                      ),
+                      theme.scaffoldBackgroundColor,
+                    ],
+                  ),
                 ),
-              ),
-              child: SafeArea(
-                child: Center(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(CardsSpace.xl),
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 420),
-                      // Each state cross-fades into the next as the relay
-                      // answers, instead of snapping.
-                      child: AnimatedSwitcher(
-                        duration: CardsMotion.standard,
-                        switchInCurve: CardsMotion.curve,
-                        transitionBuilder: (child, animation) => FadeTransition(
-                          opacity: animation,
-                          child: ScaleTransition(
-                            scale: Tween(
-                              begin: 0.97,
-                              end: 1.0,
-                            ).animate(animation),
-                            child: child,
+                child: SafeArea(
+                  child: Center(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(CardsSpace.xl),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 420),
+                        // Each state cross-fades into the next as the relay
+                        // answers, instead of snapping.
+                        child: AnimatedSwitcher(
+                          duration: CardsMotion.standard,
+                          switchInCurve: CardsMotion.curve,
+                          transitionBuilder: (child, animation) =>
+                              FadeTransition(
+                                opacity: animation,
+                                child: ScaleTransition(
+                                  scale: Tween(
+                                    begin: 0.97,
+                                    end: 1.0,
+                                  ).animate(animation),
+                                  child: child,
+                                ),
+                              ),
+                          child: KeyedSubtree(
+                            key: ValueKey(_outcomeOf(order)),
+                            child: _panel(context, order),
                           ),
-                        ),
-                        child: KeyedSubtree(
-                          key: ValueKey(_outcomeOf(order)),
-                          child: _panel(context, order),
                         ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }

@@ -103,7 +103,9 @@ class OrdersRepository {
         final session = answer['card_session'];
         return (
           _order(answer),
-          session is Map<String, dynamic> ? CardSession.fromJson(session) : null,
+          session is Map<String, dynamic>
+              ? CardSession.fromJson(session)
+              : null,
         );
       });
 

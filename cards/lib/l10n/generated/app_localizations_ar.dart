@@ -363,6 +363,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get showQr => 'رمز QR';
 
   @override
+  String get qrScanHint => 'امسحه بالكاميرا لقراءة الرقم السري';
+
+  @override
   String get sendAsGift => 'أرسلها هدية';
 
   @override
@@ -576,6 +579,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get codeLockOffReason => 'تأكيد هويتك لإيقاف حماية الرموز';
 
   @override
+  String get shareUsageTitle => 'مشاركة بيانات الاستخدام';
+
+  @override
   String get themeTitle => 'المظهر';
 
   @override
@@ -758,4 +764,55 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get orderCancelled => 'تم إلغاء الطلب.';
+
+  @override
+  String get onboardingSkip => 'تخطَّ';
+
+  @override
+  String get onboardingNext => 'التالي';
+
+  @override
+  String get onboardingStart => 'ابدأ الآن';
+
+  @override
+  String onboardingStep(int current, int total) {
+    return 'الخطوة $current من $total';
+  }
+
+  @override
+  String get onboardingShelfTitle => 'كل كروتك في مكان واحد';
+
+  @override
+  String get onboardingShelfBody =>
+      'رصيد ليبيانا والمدار وباقات الإنترنت وغيرها، تختارها في ثوانٍ وبأسعار واضحة.';
+
+  @override
+  String get onboardingInstantTitle => 'ادفع، ويصلك الرقم فوراً';
+
+  @override
+  String get onboardingInstantBody =>
+      'ادفع بمحفظتك أو ببطاقتك المصرفية، فيظهر الرقم السري لكرتك خلال ثوانٍ.';
+
+  @override
+  String get onboardingVaultTitle => 'كروتك محفوظة بأمان';
+
+  @override
+  String get onboardingVaultBody =>
+      'كل كرت تشتريه يبقى في «كروتي» محمياً بقفل هاتفك، جاهزاً متى احتجته.';
+
+  @override
+  String get onboardingReplay => 'جولة في التطبيق';
+
+  @override
+  String get licensesIntro =>
+      'يقوم «دفتر كروت» على برامج مفتوحة المصدر، والشكر لأصحابها. هذه تراخيصها كما نُشرت، بلغتها الأصلية.';
+
+  @override
+  String get searchTitle => 'البحث';
+
+  @override
+  String get searchBrowseCategories => 'تصفّح الأقسام';
+
+  @override
+  String get filterIncomplete => 'لم تكتمل';
 }

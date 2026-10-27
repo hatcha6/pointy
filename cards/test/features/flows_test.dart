@@ -524,12 +524,18 @@ void main() {
     await tester.pumpAndSettle();
     // The section title and the order's pill.
     expect(find.text('قيد التجهيز'), findsWidgets);
-    expect(find.text('أُعيد لرصيدك'), findsOneWidget);
+    // A purchase that did not go through stays out of «الكل»…
+    expect(find.text('أُعيد لرصيدك'), findsNothing);
     // Open orders first.
     expect(
       tester.getTopLeft(find.text('ببجي موبايل · 60 شدة')).dy,
       lessThan(tester.getTopLeft(find.text('ليبيانا · 10 دينار')).dy),
     );
+    // …and waits under its own filter, without the delivered cards.
+    await tester.tap(find.text('لم تكتمل'));
+    await tester.pumpAndSettle();
+    expect(find.text('أُعيد لرصيدك'), findsOneWidget);
+    expect(find.text('ليبيانا · 10 دينار'), findsNothing);
 
     await tester.tap(find.text('حسابي'));
     await tester.pumpAndSettle();

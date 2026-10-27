@@ -5,11 +5,15 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../core/support.dart';
 import '../../design/cards_logo.dart';
+import '../../design/cards_layout.dart';
 import '../../design/cards_tokens.dart';
 import '../../shared/grouped.dart';
 import '../links/cards_link.dart';
+import '../../shared/side_back.dart';
 import 'legal_document.dart';
 import 'legal_page.dart';
+import 'licenses_page.dart';
+import '../../core/analytics/analytics.dart';
 
 /// Who makes the app and how to reach them, its version, and the legal
 /// texts in one place.
@@ -18,7 +22,10 @@ class AboutPage extends StatefulWidget {
 
   static Future<void> open(BuildContext context) => Navigator.of(context).push(
     MaterialPageRoute<void>(
-      settings: RouteSettings(name: const PageLink(LinkedPage.about).location),
+      settings: RouteSettings(
+        name: const PageLink(LinkedPage.about).location,
+        arguments: const ScreenName('about'),
+      ),
       builder: (_) => const AboutPage(),
     ),
   );
@@ -53,118 +60,120 @@ class _AboutPageState extends State<AboutPage> {
     );
     const rowPadding = EdgeInsets.symmetric(horizontal: CardsSpace.lg);
     final version = _version;
-    return Scaffold(
-      appBar: AppBar(title: Text(l10n.aboutTitle)),
-      body: ListView(
-        padding: EdgeInsets.fromLTRB(
-          CardsSpace.gutter,
-          CardsSpace.lg,
-          CardsSpace.gutter,
-          MediaQuery.paddingOf(context).bottom + CardsSpace.huge,
+    return SideBack(
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(l10n.aboutTitle),
+          automaticallyImplyLeading: !SideBack.active(context),
         ),
-        children: [
-          const Center(child: CardsLogo(size: 88)),
-          const SizedBox(height: CardsSpace.lg),
-          Text(
-            l10n.appTitle,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w700,
+        body: Builder(
+          builder: (context) => ListView(
+            padding: CardsLayout.page(
+              context,
+              top: CardsSpace.lg,
+              bottom: MediaQuery.paddingOf(context).bottom + CardsSpace.huge,
             ),
-          ),
-          if (version != null) ...[
-            const SizedBox(height: CardsSpace.xs),
-            Text(
-              l10n.aboutVersion(version),
-              textAlign: TextAlign.center,
-              style: muted,
-            ),
-          ],
-          const SizedBox(height: CardsSpace.md),
-          Text(
-            l10n.aboutTagline,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.titleMedium,
-          ),
-          const SizedBox(height: CardsSpace.xl),
-          Text(
-            l10n.aboutBody,
-            style: theme.textTheme.bodyLarge?.copyWith(height: 1.7),
-          ),
-          const SizedBox(height: CardsSpace.xl),
-          Grouped(
             children: [
-              ListTile(
-                contentPadding: rowPadding,
-                leading: const Icon(Icons.chat_rounded),
-                title: Text(
-                  l10n.contactWhatsApp,
-                  style: theme.textTheme.titleSmall,
+              const Center(child: CardsLogo(size: 88)),
+              const SizedBox(height: CardsSpace.lg),
+              Text(
+                l10n.appTitle,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
                 ),
-                subtitle: const Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: Text(
-                    Support.whatsAppDisplay,
-                    textDirection: TextDirection.ltr,
-                  ),
-                ),
-                onTap: () => _open(Support.whatsAppUrl),
               ),
-              ListTile(
-                contentPadding: rowPadding,
-                leading: const Icon(Icons.language_rounded),
-                title: Text(
-                  l10n.websiteTitle,
-                  style: theme.textTheme.titleSmall,
+              if (version != null) ...[
+                const SizedBox(height: CardsSpace.xs),
+                Text(
+                  l10n.aboutVersion(version),
+                  textAlign: TextAlign.center,
+                  style: muted,
                 ),
-                subtitle: Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: Text(
-                    Support.website.host,
-                    textDirection: TextDirection.ltr,
+              ],
+              const SizedBox(height: CardsSpace.md),
+              Text(
+                l10n.aboutTagline,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleMedium,
+              ),
+              const SizedBox(height: CardsSpace.xl),
+              Text(
+                l10n.aboutBody,
+                style: theme.textTheme.bodyLarge?.copyWith(height: 1.7),
+              ),
+              const SizedBox(height: CardsSpace.xl),
+              Grouped(
+                children: [
+                  ListTile(
+                    contentPadding: rowPadding,
+                    leading: const Icon(Icons.chat_rounded),
+                    title: Text(
+                      l10n.contactWhatsApp,
+                      style: theme.textTheme.titleSmall,
+                    ),
+                    subtitle: const Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: Text(
+                        Support.whatsAppDisplay,
+                        textDirection: TextDirection.ltr,
+                      ),
+                    ),
+                    onTap: () => _open(Support.whatsAppUrl),
                   ),
-                ),
-                onTap: () => _open(Support.website),
+                  ListTile(
+                    contentPadding: rowPadding,
+                    leading: const Icon(Icons.language_rounded),
+                    title: Text(
+                      l10n.websiteTitle,
+                      style: theme.textTheme.titleSmall,
+                    ),
+                    subtitle: Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: Text(
+                        Support.website.host,
+                        textDirection: TextDirection.ltr,
+                      ),
+                    ),
+                    onTap: () => _open(Support.website),
+                  ),
+                ],
+              ),
+              const SizedBox(height: CardsSpace.xl),
+              Grouped(
+                children: [
+                  for (final document in LegalDocument.values)
+                    ListTile(
+                      contentPadding: rowPadding,
+                      leading: Icon(_iconOf(document)),
+                      title: Text(
+                        LegalPage.titleOf(l10n, document),
+                        style: theme.textTheme.titleSmall,
+                      ),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      onTap: () => LegalPage.open(context, document),
+                    ),
+                  ListTile(
+                    contentPadding: rowPadding,
+                    leading: const Icon(Icons.code_rounded),
+                    title: Text(
+                      l10n.openSourceLicenses,
+                      style: theme.textTheme.titleSmall,
+                    ),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => LicensesPage.open(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: CardsSpace.xl),
+              Text(
+                l10n.aboutCopyright,
+                textAlign: TextAlign.center,
+                style: muted,
               ),
             ],
           ),
-          const SizedBox(height: CardsSpace.xl),
-          Grouped(
-            children: [
-              for (final document in LegalDocument.values)
-                ListTile(
-                  contentPadding: rowPadding,
-                  leading: Icon(_iconOf(document)),
-                  title: Text(
-                    LegalPage.titleOf(l10n, document),
-                    style: theme.textTheme.titleSmall,
-                  ),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () => LegalPage.open(context, document),
-                ),
-              ListTile(
-                contentPadding: rowPadding,
-                leading: const Icon(Icons.code_rounded),
-                title: Text(
-                  l10n.openSourceLicenses,
-                  style: theme.textTheme.titleSmall,
-                ),
-                trailing: const Icon(Icons.chevron_right_rounded),
-                onTap: () => showLicensePage(
-                  context: context,
-                  applicationName: l10n.appTitle,
-                  applicationVersion: version,
-                  applicationIcon: const Padding(
-                    padding: EdgeInsets.all(CardsSpace.md),
-                    child: CardsLogo(size: 56),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: CardsSpace.xl),
-          Text(l10n.aboutCopyright, textAlign: TextAlign.center, style: muted),
-        ],
+        ),
       ),
     );
   }

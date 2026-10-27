@@ -479,6 +479,10 @@
   "@showQr": {
     "description": "Show the code as a QR."
   },
+  "qrScanHint": "امسحه بالكاميرا لقراءة الرقم السري",
+  "@qrScanHint": {
+    "description": "Beside the QR on the card's back: what the QR is for."
+  },
   "sendAsGift": "أرسلها هدية",
   "@sendAsGift": {
     "description": "Share the card by WhatsApp."
@@ -748,6 +752,10 @@
   "codeLockTitle": "حماية الرموز",
   "codeLockBody": "اطلب Face ID أو البصمة قبل عرض الأرقام السرية",
   "codeLockOffReason": "تأكيد هويتك لإيقاف حماية الرموز",
+  "shareUsageTitle": "مشاركة بيانات الاستخدام",
+  "@shareUsageTitle": {
+    "description": "Settings switch: product analytics and masked session recordings."
+  },
   "themeTitle": "المظهر",
   "themeSystem": "تلقائي",
   "themeLight": "فاتح",
@@ -829,5 +837,40 @@
   "payNotFinishedTitle": "لم يكتمل الدفع",
   "payNotFinishedBody": "لم يُخصم شيء بعد. أكمل الدفع بالبطاقة، أو ألغِ الطلب.",
   "finishPaying": "أكمل الدفع",
-  "orderCancelled": "تم إلغاء الطلب."
+  "orderCancelled": "تم إلغاء الطلب.",
+  "onboardingSkip": "تخطَّ",
+  "onboardingNext": "التالي",
+  "onboardingStart": "ابدأ الآن",
+  "onboardingStep": "الخطوة {current} من {total}",
+  "@onboardingStep": {
+    "description": "Onboarding progress for screen readers, e.g. Step 1 of 3.",
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "onboardingShelfTitle": "كل كروتك في مكان واحد",
+  "onboardingShelfBody": "رصيد ليبيانا والمدار وباقات الإنترنت وغيرها، تختارها في ثوانٍ وبأسعار واضحة.",
+  "onboardingInstantTitle": "ادفع، ويصلك الرقم فوراً",
+  "onboardingInstantBody": "ادفع بمحفظتك أو ببطاقتك المصرفية، فيظهر الرقم السري لكرتك خلال ثوانٍ.",
+  "onboardingVaultTitle": "كروتك محفوظة بأمان",
+  "onboardingVaultBody": "كل كرت تشتريه يبقى في «كروتي» محمياً بقفل هاتفك، جاهزاً متى احتجته.",
+  "onboardingReplay": "جولة في التطبيق",
+  "licensesIntro": "يقوم «دفتر كروت» على برامج مفتوحة المصدر، والشكر لأصحابها. هذه تراخيصها كما نُشرت، بلغتها الأصلية.",
+  "searchTitle": "البحث",
+  "@searchTitle": {
+    "description": "Search page: its title."
+  },
+  "searchBrowseCategories": "تصفّح الأقسام",
+  "@searchBrowseCategories": {
+    "description": "Search page: heading over the categories to browse before typing."
+  },
+  "filterIncomplete": "لم تكتمل",
+  "@filterIncomplete": {
+    "description": "My cards filter: purchases that did not go through (failed, expired, refunded)."
+  }
 }

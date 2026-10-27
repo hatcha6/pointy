@@ -364,6 +364,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get showQr => 'QR code';
 
   @override
+  String get qrScanHint => 'Scan it with a camera to read the secret code';
+
+  @override
   String get sendAsGift => 'Send as a gift';
 
   @override
@@ -577,6 +580,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'Confirm it\'s you to turn off code protection';
 
   @override
+  String get shareUsageTitle => 'Share usage data';
+
+  @override
   String get themeTitle => 'Appearance';
 
   @override
@@ -760,4 +766,55 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get orderCancelled => 'Order cancelled.';
+
+  @override
+  String get onboardingSkip => 'Skip';
+
+  @override
+  String get onboardingNext => 'Next';
+
+  @override
+  String get onboardingStart => 'Get started';
+
+  @override
+  String onboardingStep(int current, int total) {
+    return 'Step $current of $total';
+  }
+
+  @override
+  String get onboardingShelfTitle => 'All your cards in one place';
+
+  @override
+  String get onboardingShelfBody =>
+      'Libyana and Almadar credit, internet bundles and more, picked in seconds at clear prices.';
+
+  @override
+  String get onboardingInstantTitle => 'Pay, and get the code at once';
+
+  @override
+  String get onboardingInstantBody =>
+      'Pay with your wallet or your bank card, and your card\'s code appears within seconds.';
+
+  @override
+  String get onboardingVaultTitle => 'Your cards, kept safe';
+
+  @override
+  String get onboardingVaultBody =>
+      'Every card you buy stays in My cards behind your phone\'s lock, ready whenever you need it.';
+
+  @override
+  String get onboardingReplay => 'Take the tour';
+
+  @override
+  String get licensesIntro =>
+      'Daftar Cards is built on open-source software, with thanks to its authors. Here are their licenses, as published.';
+
+  @override
+  String get searchTitle => 'Search';
+
+  @override
+  String get searchBrowseCategories => 'Browse categories';
+
+  @override
+  String get filterIncomplete => 'Incomplete';
 }

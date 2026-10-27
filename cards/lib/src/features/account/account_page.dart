@@ -7,6 +7,7 @@ import '../../core/result.dart';
 import '../../data/models/customer.dart';
 import '../../data/models/order.dart';
 import '../../design/cards_theme.dart';
+import '../../design/cards_layout.dart';
 import '../../design/cards_tokens.dart';
 import '../../shared/cards_scope.dart';
 import '../../shared/grouped.dart';
@@ -15,6 +16,7 @@ import '../../shared/money_text.dart';
 import '../../shared/relay_error_text.dart';
 import '../sign_in/sign_in_sheet.dart';
 import '../../shared/haptics.dart';
+import '../shell/cards_tab_bar.dart';
 import 'about_section.dart';
 import 'settings_section.dart';
 
@@ -50,69 +52,70 @@ class _SignedOut extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    return ListView(
-      padding: EdgeInsets.fromLTRB(
-        CardsSpace.gutter,
-        CardsSpace.xl,
-        CardsSpace.gutter,
-        MediaQuery.paddingOf(context).bottom + 96,
-      ),
-      children: [
-        Text(l10n.tabAccount, style: theme.textTheme.headlineLarge),
-        const SizedBox(height: CardsSpace.lg),
-        Grouped(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(CardsSpace.xl),
-              child: Column(
-                children: [
-                  Container(
-                    width: 64,
-                    height: 64,
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primaryContainer,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.phone_iphone_rounded,
-                      size: 30,
-                      color: theme.colorScheme.onPrimaryContainer,
-                    ),
-                  ),
-                  const SizedBox(height: CardsSpace.lg),
-                  Text(
-                    l10n.accountSignedOutTitle,
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: CardsSpace.xs),
-                  Text(
-                    l10n.accountSignedOutBody,
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: CardsSpace.lg),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: () => ensureSignedIn(context),
-                      child: Text(l10n.signInAction),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+    return LayoutBuilder(
+      builder: (context, constraints) => ListView(
+        padding: CardsLayout.column(
+          constraints.maxWidth,
+          top: CardsSpace.xl,
+          bottom: CardsTabBar.clearance(context),
         ),
-        const SizedBox(height: CardsSpace.xl),
-        const SettingsSection(),
-        const SizedBox(height: CardsSpace.xl),
-        const AboutSection(),
-      ],
+        children: [
+          Text(l10n.tabAccount, style: theme.textTheme.headlineLarge),
+          const SizedBox(height: CardsSpace.lg),
+          Grouped(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(CardsSpace.xl),
+                child: Column(
+                  children: [
+                    Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primaryContainer,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.phone_iphone_rounded,
+                        size: 30,
+                        color: theme.colorScheme.onPrimaryContainer,
+                      ),
+                    ),
+                    const SizedBox(height: CardsSpace.lg),
+                    Text(
+                      l10n.accountSignedOutTitle,
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: CardsSpace.xs),
+                    Text(
+                      l10n.accountSignedOutBody,
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: CardsSpace.lg),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: () => ensureSignedIn(context),
+                        child: Text(l10n.signInAction),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: CardsSpace.xl),
+          const SettingsSection(),
+          const SizedBox(height: CardsSpace.xl),
+          const AboutSection(),
+        ],
+      ),
     );
   }
 }
@@ -239,169 +242,175 @@ class _SignedInState extends State<_SignedIn> {
     final credit = _credit;
     return RefreshIndicator(
       onRefresh: _load,
-      child: ListView(
-        padding: EdgeInsets.fromLTRB(
-          CardsSpace.gutter,
-          CardsSpace.xl,
-          CardsSpace.gutter,
-          MediaQuery.paddingOf(context).bottom + 96,
-        ),
-        children: [
-          Text(l10n.tabAccount, style: theme.textTheme.headlineLarge),
-          const SizedBox(height: CardsSpace.lg),
-          Row(
-            children: [
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primaryContainer,
-                  shape: BoxShape.circle,
+      child: LayoutBuilder(
+        builder: (context, constraints) => ListView(
+          padding: CardsLayout.column(
+            constraints.maxWidth,
+            top: CardsSpace.xl,
+            bottom: CardsTabBar.clearance(context),
+          ),
+          children: [
+            Text(l10n.tabAccount, style: theme.textTheme.headlineLarge),
+            const SizedBox(height: CardsSpace.lg),
+            Row(
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primaryContainer,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.person_rounded,
+                    color: theme.colorScheme.onPrimaryContainer,
+                    size: 28,
+                  ),
                 ),
-                child: Icon(
-                  Icons.person_rounded,
-                  color: theme.colorScheme.onPrimaryContainer,
-                  size: 28,
-                ),
-              ),
-              const SizedBox(width: CardsSpace.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      l10n.phoneLabel,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    Align(
-                      alignment: AlignmentDirectional.centerStart,
-                      child: Text(
-                        LibyanPhone.display(national),
-                        textDirection: TextDirection.ltr,
-                        style: PointyTypography.numeric(
-                          theme.textTheme.titleLarge!,
+                const SizedBox(width: CardsSpace.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l10n.phoneLabel,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
                         ),
                       ),
-                    ),
-                  ],
+                      Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: Text(
+                          LibyanPhone.display(national),
+                          textDirection: TextDirection.ltr,
+                          style: PointyTypography.numeric(
+                            theme.textTheme.titleLarge!,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
+              ],
+            ),
+            const SizedBox(height: CardsSpace.xl),
+            _CreditHero(
+              balance: credit == null
+                  ? null
+                  : formatMoney(l10n, credit.balance),
+            ),
+            if (credit != null && credit.entries.isNotEmpty) ...[
+              const SizedBox(height: CardsSpace.xl),
+              Grouped(
+                title: l10n.creditHistory,
+                children: [
+                  for (final entry in credit.entries.take(5))
+                    ListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: CardsSpace.lg,
+                      ),
+                      leading: Icon(
+                        entry.amount.isPositive
+                            ? Icons.south_west_rounded
+                            : Icons.north_east_rounded,
+                      ),
+                      title: Text(
+                        _entryLabel(l10n, entry),
+                        style: theme.textTheme.titleSmall,
+                      ),
+                      trailing: Text(
+                        '${entry.amount.isPositive ? '+' : '−'} ${formatMoney(l10n, entry.amount.isPositive ? entry.amount : entry.amount * -1)}',
+                        style:
+                            PointyTypography.numeric(
+                              theme.textTheme.titleSmall!,
+                            ).copyWith(
+                              color: entry.amount.isPositive
+                                  ? theme.colorScheme.tertiary
+                                  : null,
+                            ),
+                      ),
+                    ),
+                ],
               ),
             ],
-          ),
-          const SizedBox(height: CardsSpace.xl),
-          _CreditHero(
-            balance: credit == null ? null : formatMoney(l10n, credit.balance),
-          ),
-          if (credit != null && credit.entries.isNotEmpty) ...[
             const SizedBox(height: CardsSpace.xl),
             Grouped(
-              title: l10n.creditHistory,
+              title: l10n.devicesTitle,
               children: [
-                for (final entry in credit.entries.take(5))
+                for (final device in _devices)
                   ListTile(
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: CardsSpace.lg,
                     ),
                     leading: Icon(
-                      entry.amount.isPositive
-                          ? Icons.south_west_rounded
-                          : Icons.north_east_rounded,
+                      device.platform == 'web'
+                          ? Icons.language_rounded
+                          : Icons.smartphone_rounded,
                     ),
                     title: Text(
-                      _entryLabel(l10n, entry),
+                      device.platform == 'web'
+                          ? l10n.deviceBrowser
+                          : (device.deviceName.isEmpty
+                                ? device.platform
+                                : device.deviceName),
                       style: theme.textTheme.titleSmall,
                     ),
-                    trailing: Text(
-                      '${entry.amount.isPositive ? '+' : '−'} ${formatMoney(l10n, entry.amount.isPositive ? entry.amount : entry.amount * -1)}',
-                      style:
-                          PointyTypography.numeric(theme.textTheme.titleSmall!)
-                              .copyWith(
-                                color: entry.amount.isPositive
-                                    ? theme.colorScheme.tertiary
-                                    : null,
-                              ),
+                    trailing: device.current
+                        ? Pill(text: l10n.thisDevice)
+                        : null,
+                  ),
+                if (_devices.length > 1)
+                  ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: CardsSpace.lg,
                     ),
+                    leading: const Icon(Icons.devices_other_rounded),
+                    title: Text(
+                      l10n.signOutOthers,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        color: CardsTheme.link(theme),
+                      ),
+                    ),
+                    onTap: _signOutOthers,
                   ),
               ],
             ),
-          ],
-          const SizedBox(height: CardsSpace.xl),
-          Grouped(
-            title: l10n.devicesTitle,
-            children: [
-              for (final device in _devices)
+            const SizedBox(height: CardsSpace.xl),
+            const SettingsSection(),
+            const SizedBox(height: CardsSpace.xl),
+            const AboutSection(),
+            const SizedBox(height: CardsSpace.xl),
+            Grouped(
+              title: l10n.accountSection,
+              children: [
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: CardsSpace.lg,
+                  ),
+                  leading: const Icon(Icons.logout_rounded),
+                  title: Text(l10n.signOut, style: theme.textTheme.titleSmall),
+                  onTap: _signOut,
+                ),
                 ListTile(
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: CardsSpace.lg,
                   ),
                   leading: Icon(
-                    device.platform == 'web'
-                        ? Icons.language_rounded
-                        : Icons.smartphone_rounded,
-                  ),
-                  title: Text(
-                    device.platform == 'web'
-                        ? l10n.deviceBrowser
-                        : (device.deviceName.isEmpty
-                              ? device.platform
-                              : device.deviceName),
-                    style: theme.textTheme.titleSmall,
-                  ),
-                  trailing: device.current ? Pill(text: l10n.thisDevice) : null,
-                ),
-              if (_devices.length > 1)
-                ListTile(
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: CardsSpace.lg,
-                  ),
-                  leading: const Icon(Icons.devices_other_rounded),
-                  title: Text(
-                    l10n.signOutOthers,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      color: CardsTheme.link(theme),
-                    ),
-                  ),
-                  onTap: _signOutOthers,
-                ),
-            ],
-          ),
-          const SizedBox(height: CardsSpace.xl),
-          const SettingsSection(),
-          const SizedBox(height: CardsSpace.xl),
-          const AboutSection(),
-          const SizedBox(height: CardsSpace.xl),
-          Grouped(
-            title: l10n.accountSection,
-            children: [
-              ListTile(
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: CardsSpace.lg,
-                ),
-                leading: const Icon(Icons.logout_rounded),
-                title: Text(l10n.signOut, style: theme.textTheme.titleSmall),
-                onTap: _signOut,
-              ),
-              ListTile(
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: CardsSpace.lg,
-                ),
-                leading: Icon(
-                  Icons.delete_outline_rounded,
-                  color: theme.colorScheme.error,
-                ),
-                title: Text(
-                  l10n.deleteAccount,
-                  style: theme.textTheme.titleSmall?.copyWith(
+                    Icons.delete_outline_rounded,
                     color: theme.colorScheme.error,
                   ),
+                  title: Text(
+                    l10n.deleteAccount,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: theme.colorScheme.error,
+                    ),
+                  ),
+                  onTap: _delete,
                 ),
-                onTap: _delete,
-              ),
-            ],
-          ),
-        ],
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

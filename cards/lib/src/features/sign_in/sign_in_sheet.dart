@@ -17,6 +17,7 @@ import '../../shared/relay_error_text.dart';
 import '../../shared/haptics.dart';
 import '../../shared/shake.dart';
 import '../legal/legal_consent.dart';
+import '../../core/analytics/analytics.dart';
 
 /// Signs in when needed: true at once for a signed-in customer, otherwise
 /// the sheet decides. Called at the moment it matters (paying, opening
@@ -28,6 +29,7 @@ Future<bool> ensureSignedIn(BuildContext context) async {
   }
   final done = await showModalBottomSheet<bool>(
     context: context,
+    routeSettings: screenSettings('sign_in'),
     isScrollControlled: true,
     useSafeArea: true,
     builder: (_) => const SignInSheet(),

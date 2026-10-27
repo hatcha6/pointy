@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
@@ -5,7 +6,9 @@ import '../l10n/generated/app_localizations.dart';
 import 'dependencies.dart';
 import 'design/cards_theme.dart';
 import 'features/links/link_inbox.dart';
+import 'features/onboarding/first_run.dart';
 import 'features/shell/cards_shell.dart';
+import 'features/splash/splash_handoff.dart';
 import 'features/splash/splash_overlay.dart';
 import 'shared/cards_scope.dart';
 
@@ -62,6 +65,8 @@ class CardsApp extends StatelessWidget {
               theme: CardsTheme.light(),
               darkTheme: CardsTheme.dark(),
               themeMode: themeMode ?? settings.themeMode,
+              scrollBehavior: const _CardsScrollBehavior(),
+              navigatorObservers: [?dependencies.analytics.observer],
               builder: (context, child) {
                 var app = child!;
                 if (overlay != null) {
@@ -70,7 +75,7 @@ class CardsApp extends StatelessWidget {
                 if (splash != null) {
                   app = _WithSplash(opening: splash!, child: app);
                 }
-                return app;
+                return dependencies.analytics.wrap(app);
               },
               // The app always starts on its shell. A link it was opened with
               // waits in [LinkInbox] for the shell rather than naming a route.
@@ -88,7 +93,8 @@ class CardsApp extends StatelessWidget {
 
   Route<void> _shellRoute() => MaterialPageRoute<void>(
     settings: const RouteSettings(name: Navigator.defaultRouteName),
-    builder: (context) => _Home.of(context) ?? const CardsShell(),
+    builder: (context) =>
+        _Home.of(context) ?? const FirstRun(child: CardsShell()),
   );
 }
 
@@ -120,20 +126,45 @@ class _WithSplash extends StatefulWidget {
 class _WithSplashState extends State<_WithSplash> {
   bool _showing = true;
 
+  /// A screen underneath may take the tile (the onboarding does).
+  final _handoff = SplashHandoff();
+
+  @override
+  void dispose() {
+    _handoff.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        widget.child,
+        SplashHandoffScope(handoff: _handoff, child: widget.child),
         if (_showing)
           Positioned.fill(
             child: SplashOverlay(
               run: widget.opening.run,
               art: widget.opening.art,
-              onDone: () => setState(() => _showing = false),
+              handoff: _handoff,
+              onDone: () {
+                setState(() => _showing = false);
+                _handoff.land();
+              },
             ),
           ),
       ],
     );
   }
+}
+
+/// A mouse drags what a finger swipes: on a desktop the onboarding's pages
+/// and a pager of several cards would otherwise not move at all.
+class _CardsScrollBehavior extends MaterialScrollBehavior {
+  const _CardsScrollBehavior();
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+    ...super.dragDevices,
+    PointerDeviceKind.mouse,
+  };
 }

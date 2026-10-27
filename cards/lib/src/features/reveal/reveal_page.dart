@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pointy_brand/pointy_brand.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../l10n/generated/app_localizations.dart';
@@ -16,8 +15,10 @@ import '../../shared/art_palette.dart';
 import '../../shared/card_art.dart';
 import '../../shared/tilt_card.dart';
 import '../../shared/cards_scope.dart';
-import '../../shared/pill.dart';
 import '../../shared/haptics.dart';
+import '../../shared/side_back.dart';
+import 'card_faces.dart';
+import 'qr_pass.dart';
 
 /// The moment the purchase pays off. A seal says it worked, the card turns
 /// over to show its code (once, on the card itself), and a row of round
@@ -49,6 +50,13 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
     duration: CardsMotion.emphasized,
   );
   final _pages = PageController();
+
+  /// The card on show, measured to lift the QR pass out of it.
+  final _shown = GlobalKey();
+
+  /// While the QR pass is up, the card it lifted out of is gone from the
+  /// page: the pass is that card.
+  bool _passUp = false;
   List<CardCode> _codes = const [];
   Set<String> _used = {};
   bool _locked = false;
@@ -142,6 +150,31 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
     setState(() => used ? _used.add(code) : _used.remove(code));
   }
 
+  Future<void> _showQr(
+    CardBrand brand,
+    ArtPalette palette,
+    CardCode code,
+  ) async {
+    final box = _shown.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.attached) {
+      return;
+    }
+    final from = box.localToGlobal(Offset.zero) & box.size;
+    setState(() => _passUp = true);
+    await QrPass.open(
+      context,
+      from: from,
+      brand: brand,
+      palette: palette,
+      code: code.code,
+      used: _used.contains(code.code),
+      onCopy: () => _copy(context, code.code),
+    );
+    if (mounted) {
+      setState(() => _passUp = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final brand =
@@ -167,79 +200,90 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final tint = palette.tint;
-    return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        title: Text(widget.fromHistory ? widget.order.name : ''),
-        leading: widget.fromHistory
-            ? null
-            : IconButton(
-                tooltip: l10n.closeAction,
-                icon: const Icon(Icons.close_rounded),
-                onPressed: () =>
-                    Navigator.of(context).popUntil((route) => route.isFirst),
-              ),
-      ),
-      body: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.center,
-            colors: [
-              tint.withValues(
-                alpha: theme.brightness == Brightness.dark ? 0.35 : 0.16,
-              ),
-              theme.scaffoldBackgroundColor,
-            ],
-          ),
-        ),
-        child: SafeArea(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 480),
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(
-                  CardsSpace.gutter,
-                  CardsSpace.sm,
-                  CardsSpace.gutter,
-                  CardsSpace.xxl,
+    return SideBack(
+      // The page's colour runs under the column; its SafeArea keeps the
+      // content clear of it.
+      edgeToEdge: true,
+      close: !widget.fromHistory,
+      tooltip: widget.fromHistory ? null : l10n.closeAction,
+      onPressed: widget.fromHistory
+          ? null
+          : () => Navigator.of(context).popUntil((route) => route.isFirst),
+      child: Scaffold(
+        extendBodyBehindAppBar: true,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          title: Text(widget.fromHistory ? widget.order.name : ''),
+          automaticallyImplyLeading: !SideBack.active(context),
+          leading: widget.fromHistory || SideBack.active(context)
+              ? null
+              : IconButton(
+                  tooltip: l10n.closeAction,
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: () =>
+                      Navigator.of(context).popUntil((route) => route.isFirst),
                 ),
-                children: [
-                  if (!widget.fromHistory) ...[
-                    _Seal(animation: _seal),
-                    const SizedBox(height: CardsSpace.md),
-                    Text(
-                      l10n.purchaseSuccess,
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.headlineSmall,
-                    ),
-                    Text(
-                      widget.order.name,
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: CardsSpace.xl),
-                  ],
-                  if (brand != null) _cards(context, brand, palette),
-                  const SizedBox(height: CardsSpace.lg),
-                  // Whatever sits under the card rises in when it changes:
-                  // the codes after Face ID, or after they arrive.
-                  AnimatedSwitcher(
-                    duration: CardsMotion.emphasized,
-                    reverseDuration: CardsMotion.fast,
-                    switchInCurve: CardsMotion.curve,
-                    switchOutCurve: Curves.easeIn,
-                    transitionBuilder: _rise,
-                    layoutBuilder: (current, previous) => Stack(
-                      alignment: Alignment.topCenter,
-                      children: [...previous, ?current],
-                    ),
-                    child: _below(context, brand, current),
+        ),
+        body: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.center,
+              colors: [
+                tint.withValues(
+                  alpha: theme.brightness == Brightness.dark ? 0.35 : 0.16,
+                ),
+                theme.scaffoldBackgroundColor,
+              ],
+            ),
+          ),
+          child: SafeArea(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 480),
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(
+                    CardsSpace.gutter,
+                    CardsSpace.sm,
+                    CardsSpace.gutter,
+                    CardsSpace.xxl,
                   ),
-                ],
+                  children: [
+                    if (!widget.fromHistory) ...[
+                      _Seal(animation: _seal),
+                      const SizedBox(height: CardsSpace.md),
+                      Text(
+                        l10n.purchaseSuccess,
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.headlineSmall,
+                      ),
+                      Text(
+                        widget.order.name,
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: CardsSpace.xl),
+                    ],
+                    if (brand != null) _cards(context, brand, palette),
+                    const SizedBox(height: CardsSpace.lg),
+                    // Whatever sits under the card rises in when it changes:
+                    // the codes after Face ID, or after they arrive.
+                    AnimatedSwitcher(
+                      duration: CardsMotion.emphasized,
+                      reverseDuration: CardsMotion.fast,
+                      switchInCurve: CardsMotion.curve,
+                      switchOutCurve: Curves.easeIn,
+                      transitionBuilder: _rise,
+                      layoutBuilder: (current, previous) => Stack(
+                        alignment: Alignment.topCenter,
+                        children: [...previous, ?current],
+                      ),
+                      child: _below(context, brand, current, palette),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -263,7 +307,12 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
 
   /// What sits under the card: loading, locked, waiting, or the code's
   /// actions. Each state has its own key so the switcher moves between them.
-  Widget _below(BuildContext context, CardBrand? brand, CardCode? current) {
+  Widget _below(
+    BuildContext context,
+    CardBrand? brand,
+    CardCode? current,
+    ArtPalette palette,
+  ) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     if (_loading) {
@@ -297,6 +346,7 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
           redeemHint: brand?.redeemHint ?? '',
           used: _used.contains(current.code),
           onToggleUsed: () => _toggleUsed(current.code),
+          onQr: brand == null ? null : () => _showQr(brand, palette, current),
         ),
         if ((brand?.redeemHint ?? '').isNotEmpty) ...[
           const SizedBox(height: CardsSpace.xl),
@@ -323,16 +373,20 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
       440.0,
     );
     // The card answers the phone's tilt once it has turned to its code.
-    Widget card(CardCode? code) => TiltCard(
-      radius: CardsRadii.tile,
-      strength: _flip,
-      child: _FlipCard(
-        animation: _flip,
-        brand: brand,
-        palette: palette,
-        code: code?.code,
-        used: code != null && _used.contains(code.code),
-        onCopy: code == null ? null : () => _copy(context, code.code),
+    Widget card(CardCode? code, {bool shown = true}) => Opacity(
+      opacity: shown && _passUp ? 0 : 1,
+      child: TiltCard(
+        key: shown ? _shown : null,
+        radius: CardsRadii.tile,
+        strength: _flip,
+        child: _FlipCard(
+          animation: _flip,
+          brand: brand,
+          palette: palette,
+          code: code?.code,
+          used: code != null && _used.contains(code.code),
+          onCopy: code == null ? null : () => _copy(context, code.code),
+        ),
       ),
     );
     if (codes.length == 1) {
@@ -354,7 +408,7 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
                 horizontal: CardsSpace.xs,
                 vertical: CardsSpace.sm,
               ),
-              child: card(codes[index]),
+              child: card(codes[index], shown: index == _page),
             ),
           ),
         ),
@@ -471,7 +525,13 @@ class _FlipCard extends StatelessWidget {
               ? Transform(
                   alignment: Alignment.center,
                   transform: Matrix4.rotationY(math.pi),
-                  child: _back(context),
+                  child: CodeCardFace(
+                    brand: brand,
+                    palette: palette,
+                    code: code!,
+                    used: used,
+                    onTap: onCopy,
+                  ),
                 )
               : DecoratedBox(
                   decoration: const BoxDecoration(boxShadow: CardsShadows.hero),
@@ -485,94 +545,6 @@ class _FlipCard extends StatelessWidget {
       },
     );
   }
-
-  Widget _back(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
-    final ArtPalette(:light, :dark) = palette;
-    return AspectRatio(
-      aspectRatio: kCardAspect,
-      child: Material(
-        color: Colors.transparent,
-        child: Ink(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(CardsRadii.tile),
-            gradient: LinearGradient(
-              begin: AlignmentDirectional.topStart,
-              end: AlignmentDirectional.bottomEnd,
-              colors: [light, dark],
-            ),
-            boxShadow: CardsShadows.hero,
-          ),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(CardsRadii.tile),
-            onTap: onCopy,
-            child: Padding(
-              padding: const EdgeInsets.all(CardsSpace.lg),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          brand.name,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                      if (used)
-                        Pill(text: l10n.usedBadge, tone: PillTone.muted),
-                    ],
-                  ),
-                  const Spacer(),
-                  Text(
-                    l10n.secretCode,
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: Colors.white70,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Directionality(
-                    textDirection: TextDirection.ltr,
-                    // One line always: a code broken across lines gets typed
-                    // wrong. Long ones scale down instead.
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        code!,
-                        maxLines: 1,
-                        style:
-                            PointyTypography.numeric(
-                              theme.textTheme.headlineMedium!,
-                            ).copyWith(
-                              color: Colors.white,
-                              letterSpacing: 2,
-                              decoration: used
-                                  ? TextDecoration.lineThrough
-                                  : null,
-                              decorationColor: Colors.white70,
-                            ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: CardsSpace.sm),
-                  Container(
-                    height: 5,
-                    width: 56,
-                    color: PointyColors.accentAmber,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class _ActionRow extends StatelessWidget {
@@ -582,6 +554,7 @@ class _ActionRow extends StatelessWidget {
     required this.redeemHint,
     required this.used,
     required this.onToggleUsed,
+    this.onQr,
   });
 
   final CardCode code;
@@ -590,48 +563,14 @@ class _ActionRow extends StatelessWidget {
   final bool used;
   final VoidCallback onToggleUsed;
 
+  /// Lifts the card out as a QR pass; no QR button without it.
+  final VoidCallback? onQr;
+
   Future<void> _gift(BuildContext context) async {
     final text = AppLocalizations.of(context).giftMessage(name, code.code);
     await launchUrl(
       Uri.parse('https://wa.me/?text=${Uri.encodeComponent(text)}'),
       mode: LaunchMode.externalApplication,
-    );
-  }
-
-  void _qr(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      useSafeArea: true,
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            CardsSpace.gutter,
-            0,
-            CardsSpace.gutter,
-            CardsSpace.xl,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                name,
-                style: Theme.of(context).textTheme.titleLarge,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: CardsSpace.lg),
-              Container(
-                padding: const EdgeInsets.all(CardsSpace.lg),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(CardsRadii.card),
-                  boxShadow: CardsShadows.raised,
-                ),
-                child: QrImageView(data: code.code, size: 220),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 
@@ -653,11 +592,12 @@ class _ActionRow extends StatelessWidget {
           primary: true,
           onTap: () => launchUrl(Uri(scheme: 'tel', path: dial)),
         ),
-      _RoundAction(
-        icon: Icons.qr_code_2_rounded,
-        label: l10n.showQr,
-        onTap: () => _qr(context),
-      ),
+      if (onQr case final onQr?)
+        _RoundAction(
+          icon: Icons.qr_code_2_rounded,
+          label: l10n.showQr,
+          onTap: onQr,
+        ),
       _RoundAction(
         icon: Icons.card_giftcard_rounded,
         label: l10n.sendAsGift,

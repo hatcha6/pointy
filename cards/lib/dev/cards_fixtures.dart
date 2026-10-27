@@ -19,6 +19,7 @@ import '../src/dependencies.dart';
 import '../src/features/card_payment/moamalat_client.dart';
 import '../src/features/links/link_inbox.dart';
 import 'preview_scenarios.dart';
+import '../src/core/analytics/analytics.dart';
 
 const fixtureSession = CustomerSession(
   sessionId: 'session-1',
@@ -470,6 +471,7 @@ CardsDependencies fixtureDependencies({
   MoamalatClient? moamalat,
   CardVault? cards,
   LinkInbox? links,
+  Analytics? analytics,
 }) {
   final sessions = MemorySessionStore(signedIn ? fixtureSession : null);
   final base = shelfRelay ?? Uri.parse('https://relay.preview');
@@ -496,5 +498,6 @@ CardsDependencies fixtureDependencies({
     moamalat: moamalat ?? FakeMoamalatClient(),
     cards: cards ?? MemoryCardVault(),
     links: links,
+    analytics: analytics,
   );
 }

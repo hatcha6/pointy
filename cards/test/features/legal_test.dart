@@ -112,6 +112,11 @@ void main() {
     tester,
   ) async {
     await openAccount(tester);
+    await tester.scrollUntilVisible(
+      find.text('حول التطبيق'),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
     expect(find.text('حول التطبيق'), findsOneWidget);
 
     await tapRow(tester, 'سياسة الخصوصية');

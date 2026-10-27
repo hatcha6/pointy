@@ -5,6 +5,9 @@
         android:label="دفتر كروت"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <!-- PostHog starts from Dart (lib/src/core/analytics), with the
+             build's token, and not at all in a debug build. -->
+        <meta-data android:name="com.posthog.posthog.AUTO_INIT" android:value="false" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

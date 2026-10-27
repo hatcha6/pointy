@@ -694,6 +694,12 @@ abstract class AppLocalizations {
   /// **'رمز QR'**
   String get showQr;
 
+  /// Beside the QR on the card's back: what the QR is for.
+  ///
+  /// In ar, this message translates to:
+  /// **'امسحه بالكاميرا لقراءة الرقم السري'**
+  String get qrScanHint;
+
   /// Share the card by WhatsApp.
   ///
   /// In ar, this message translates to:
@@ -1084,6 +1090,12 @@ abstract class AppLocalizations {
   /// **'تأكيد هويتك لإيقاف حماية الرموز'**
   String get codeLockOffReason;
 
+  /// Settings switch: product analytics and masked session recordings.
+  ///
+  /// In ar, this message translates to:
+  /// **'مشاركة بيانات الاستخدام'**
+  String get shareUsageTitle;
+
   /// No description provided for @themeTitle.
   ///
   /// In ar, this message translates to:
@@ -1413,6 +1425,96 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تم إلغاء الطلب.'**
   String get orderCancelled;
+
+  /// No description provided for @onboardingSkip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تخطَّ'**
+  String get onboardingSkip;
+
+  /// No description provided for @onboardingNext.
+  ///
+  /// In ar, this message translates to:
+  /// **'التالي'**
+  String get onboardingNext;
+
+  /// No description provided for @onboardingStart.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابدأ الآن'**
+  String get onboardingStart;
+
+  /// Onboarding progress for screen readers, e.g. Step 1 of 3.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخطوة {current} من {total}'**
+  String onboardingStep(int current, int total);
+
+  /// No description provided for @onboardingShelfTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل كروتك في مكان واحد'**
+  String get onboardingShelfTitle;
+
+  /// No description provided for @onboardingShelfBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد ليبيانا والمدار وباقات الإنترنت وغيرها، تختارها في ثوانٍ وبأسعار واضحة.'**
+  String get onboardingShelfBody;
+
+  /// No description provided for @onboardingInstantTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'ادفع، ويصلك الرقم فوراً'**
+  String get onboardingInstantTitle;
+
+  /// No description provided for @onboardingInstantBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'ادفع بمحفظتك أو ببطاقتك المصرفية، فيظهر الرقم السري لكرتك خلال ثوانٍ.'**
+  String get onboardingInstantBody;
+
+  /// No description provided for @onboardingVaultTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'كروتك محفوظة بأمان'**
+  String get onboardingVaultTitle;
+
+  /// No description provided for @onboardingVaultBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل كرت تشتريه يبقى في «كروتي» محمياً بقفل هاتفك، جاهزاً متى احتجته.'**
+  String get onboardingVaultBody;
+
+  /// No description provided for @onboardingReplay.
+  ///
+  /// In ar, this message translates to:
+  /// **'جولة في التطبيق'**
+  String get onboardingReplay;
+
+  /// No description provided for @licensesIntro.
+  ///
+  /// In ar, this message translates to:
+  /// **'يقوم «دفتر كروت» على برامج مفتوحة المصدر، والشكر لأصحابها. هذه تراخيصها كما نُشرت، بلغتها الأصلية.'**
+  String get licensesIntro;
+
+  /// Search page: its title.
+  ///
+  /// In ar, this message translates to:
+  /// **'البحث'**
+  String get searchTitle;
+
+  /// Search page: heading over the categories to browse before typing.
+  ///
+  /// In ar, this message translates to:
+  /// **'تصفّح الأقسام'**
+  String get searchBrowseCategories;
+
+  /// My cards filter: purchases that did not go through (failed, expired, refunded).
+  ///
+  /// In ar, this message translates to:
+  /// **'لم تكتمل'**
+  String get filterIncomplete;
 }
 
 class _AppLocalizationsDelegate

@@ -6,6 +6,7 @@ import '../../shared/grouped.dart';
 import '../legal/about_page.dart';
 import '../legal/legal_document.dart';
 import '../legal/legal_page.dart';
+import '../onboarding/onboarding_page.dart';
 
 /// The app itself, signed in or not: who makes it, and the privacy policy
 /// and terms the stores and the law ask to be one tap away.
@@ -30,6 +31,11 @@ class AboutSection extends StatelessWidget {
           Icons.info_outline_rounded,
           l10n.aboutTitle,
           () => AboutPage.open(context),
+        ),
+        row(
+          Icons.auto_awesome_outlined,
+          l10n.onboardingReplay,
+          () => OnboardingPage.replay(context),
         ),
         row(
           Icons.privacy_tip_outlined,
