@@ -3,15 +3,23 @@
 
 // iOS's soft scroll edge: what scrolls under a pinned header is sharp where
 // the header ends and grows blurrier, and more of the page's own colour, up
-// to the screen's edge. One pass of a Gaussian whose sigma follows the band;
-// run horizontally, then vertically (ImageFilter.compose) as a backdrop
-// filter clipped to the band, so only the band is ever blurred.
+// to the screen's edge. One pass of a Gaussian whose sigma follows the band,
+// run as a backdrop filter clipped to the band, so only the band is ever
+// blurred.
+//
+// Two rounds each way (ImageFilter.compose: small across, large across,
+// small down, large down). A single wide pass samples every few pixels, and
+// sharp content between its taps (text, a chip's edge) came through as
+// stripes; the small round smooths that detail away first, so the large
+// round's taps land on content already soft at their spacing. Together they
+// make the same blur: sigma² = small² + large².
 
 uniform vec2 u_size;      // set by the engine: the backdrop texture's size
 uniform vec4 u_band;      // the band in texture pixels: left, top, width, height
 uniform float u_sigma;    // sigma at the top edge, in texture pixels
 uniform float u_vertical; // 0 horizontal pass, 1 vertical pass
 uniform vec4 u_tint;      // premultiplied page colour at the top edge
+uniform float u_scale;    // this round's share of the sigma
 
 uniform sampler2D u_texture;
 
@@ -40,7 +48,7 @@ void main() {
   // ends, so the blur starts from nothing and is even under the status bar.
   float t = clamp(1.0 - (p.y - u_band.y) / u_band.w, 0.0, 1.0);
   float s = t * t * (3.0 - 2.0 * t);
-  float sigma = u_sigma * s;
+  float sigma = u_sigma * s * u_scale;
 
   vec4 color = texture(u_texture, uv);
   if (sigma >= 0.35) {
