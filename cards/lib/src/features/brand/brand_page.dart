@@ -22,6 +22,7 @@ import '../checkout/checkout_sheet.dart';
 import '../links/cards_link.dart';
 import '../sign_in/sign_in_sheet.dart';
 import 'brand_light.dart';
+import 'brand_share.dart';
 import '../../shared/haptics.dart';
 import '../../core/analytics/analytics.dart';
 import '../../core/analytics/events.dart';
@@ -240,6 +241,7 @@ class _BrandPageState extends State<BrandPage> {
     }
     return SideBack(
       edgeToEdge: true,
+      actions: [BrandShareButton.side(context, brand, item)],
       child: Scaffold(
         extendBody: true,
         body: SettledLight(
@@ -300,6 +302,11 @@ class _BrandPageState extends State<BrandPage> {
                           ),
                           child: Text(brand.name, maxLines: 1),
                         ),
+                        actions: [
+                          // In the side column instead, where there is one.
+                          if (!SideBack.active(context))
+                            BrandShareButton(brand: brand, item: item),
+                        ],
                       ),
                       SliverToBoxAdapter(
                         child: BrandCardStage(
@@ -344,6 +351,7 @@ class _BrandPageState extends State<BrandPage> {
     final rtl = Directionality.of(context) == TextDirection.rtl;
     return SideBack(
       edgeToEdge: true,
+      actions: [BrandShareButton.side(context, widget.brand, _item)],
       child: Scaffold(
         body: SettledLight(
           builder: (context, light) => Stack(
@@ -417,6 +425,12 @@ class _BrandPageState extends State<BrandPage> {
                   top: padding.top,
                   start: rtl ? padding.right : padding.left,
                   child: const _CircleBack(),
+                ),
+              if (!SideBack.active(context))
+                PositionedDirectional(
+                  top: padding.top,
+                  end: rtl ? padding.left : padding.right,
+                  child: BrandShareButton(brand: widget.brand, item: _item),
                 ),
             ],
           ),

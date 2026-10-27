@@ -109,6 +109,17 @@ class AuthRepository {
     await api.delete('/v1/customers/me/sessions');
   });
 
+  /// Tells the relay where this device takes notifications, so the
+  /// company's console can reach this customer here; "" stops it.
+  Future<Result<void>> registerPushToken(String token) =>
+      Result.guard(() async {
+        await api.put(
+          '/v1/customers/me/push',
+          body: {'token': token},
+          signedIn: true,
+        );
+      });
+
   /// Signs this device out. Forgotten locally even when the relay cannot be
   /// reached: the customer asked to be signed out.
   Future<void> signOut() async {

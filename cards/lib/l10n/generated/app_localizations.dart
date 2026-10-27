@@ -388,6 +388,12 @@ abstract class AppLocalizations {
   /// **'محاولات كثيرة. اطلب رمزاً جديداً.'**
   String get errTooManyAttempts;
 
+  /// No description provided for @errAccountBlocked.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا الحساب موقوف. تواصل معنا لإعادة تفعيله.'**
+  String get errAccountBlocked;
+
   /// Asked for a code too soon.
   ///
   /// In ar, this message translates to:
@@ -681,6 +687,18 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تم نسخ الرقم السري'**
   String get copiedNotice;
+
+  /// No description provided for @shareAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'مشاركة'**
+  String get shareAction;
+
+  /// No description provided for @linkCopiedNotice.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم نسخ الرابط'**
+  String get linkCopiedNotice;
 
   /// Open the dialer with the recharge code.
   ///
@@ -1096,6 +1114,24 @@ abstract class AppLocalizations {
   /// **'مشاركة بيانات الاستخدام'**
   String get shareUsageTitle;
 
+  /// No description provided for @notificationOpenAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرض'**
+  String get notificationOpenAction;
+
+  /// No description provided for @notificationsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإشعارات'**
+  String get notificationsTitle;
+
+  /// No description provided for @notificationsBlockedNotice.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإشعارات متوقفة في إعدادات الهاتف'**
+  String get notificationsBlockedNotice;
+
   /// No description provided for @themeTitle.
   ///
   /// In ar, this message translates to:
@@ -1486,11 +1522,53 @@ abstract class AppLocalizations {
   /// **'كل كرت تشتريه يبقى في «كروتي» محمياً بقفل هاتفك، جاهزاً متى احتجته.'**
   String get onboardingVaultBody;
 
+  /// No description provided for @onboardingNotifyTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'العروض تصلك أولاً'**
+  String get onboardingNotifyTitle;
+
+  /// No description provided for @onboardingNotifyBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'فعّل الإشعارات لنخبرك بالعروض والكروت الجديدة لحظة وصولها.'**
+  String get onboardingNotifyBody;
+
+  /// No description provided for @onboardingNotifyAllow.
+  ///
+  /// In ar, this message translates to:
+  /// **'تفعيل الإشعارات'**
+  String get onboardingNotifyAllow;
+
+  /// No description provided for @onboardingNotifyLater.
+  ///
+  /// In ar, this message translates to:
+  /// **'ليس الآن'**
+  String get onboardingNotifyLater;
+
+  /// No description provided for @onboardingNotifyOnBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإشعارات مفعّلة: نخبرك بالعروض والكروت الجديدة لحظة وصولها.'**
+  String get onboardingNotifyOnBody;
+
   /// No description provided for @onboardingReplay.
   ///
   /// In ar, this message translates to:
   /// **'جولة في التطبيق'**
   String get onboardingReplay;
+
+  /// No description provided for @getAppBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'أسرع على هاتفك، وكروتك معك دائماً'**
+  String get getAppBody;
+
+  /// No description provided for @getAppAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحميل'**
+  String get getAppAction;
 
   /// No description provided for @licensesIntro.
   ///

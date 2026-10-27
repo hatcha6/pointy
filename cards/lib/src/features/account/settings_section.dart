@@ -73,6 +73,7 @@ class SettingsSection extends StatelessWidget {
             value: settings.shareUsage,
             onChanged: settings.setShareUsage,
           ),
+          const _NotificationsSwitch(),
           // Cards are kept only on a phone.
           if (CardsScope.of(context).cards.available)
             ListTile(
@@ -161,6 +162,42 @@ class _ChoiceRow extends StatelessWidget {
           child,
         ],
       ),
+    );
+  }
+}
+
+/// The customer's notifications, where the build has them.
+class _NotificationsSwitch extends StatelessWidget {
+  const _NotificationsSwitch();
+
+  @override
+  Widget build(BuildContext context) {
+    final push = CardsScope.of(context).push;
+    final l10n = AppLocalizations.of(context);
+    return ListenableBuilder(
+      listenable: push,
+      builder: (context, _) {
+        if (!push.available) {
+          return const SizedBox.shrink();
+        }
+        return SwitchListTile.adaptive(
+          contentPadding: const EdgeInsets.symmetric(horizontal: CardsSpace.lg),
+          secondary: const Icon(Icons.notifications_none_rounded),
+          title: Text(
+            l10n.notificationsTitle,
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          value: push.enabled,
+          onChanged: (on) async {
+            final messenger = ScaffoldMessenger.of(context);
+            if (!await push.setEnabled(on) && on) {
+              messenger.showSnackBar(
+                SnackBar(content: Text(l10n.notificationsBlockedNotice)),
+              );
+            }
+          },
+        );
+      },
     );
   }
 }

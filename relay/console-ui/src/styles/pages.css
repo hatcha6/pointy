@@ -1150,3 +1150,84 @@
     display: none;
   }
 }
+
+/* «دفتر كروت»: a notification beside how it shows on a phone's lock screen. */
+.gap-top {
+  margin-top: 16px;
+}
+.kpi-value.small {
+  font-size: 1.1rem;
+}
+.notify-compose {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 24px;
+  align-items: start;
+}
+.notify-phone {
+  border-radius: 28px;
+  padding: 18px 12px 28px;
+  background: linear-gradient(160deg, #0f6e69, #064e3b);
+  box-shadow: var(--shadow);
+}
+.notify-time {
+  text-align: center;
+  color: #fff;
+  font-size: 2.6rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-bottom: 18px;
+  direction: ltr;
+}
+.notify-banner {
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.86);
+  backdrop-filter: blur(18px);
+  color: #111;
+}
+.notify-icon {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: #0f6e69;
+}
+.notify-icon svg {
+  width: 18px;
+}
+.notify-text {
+  min-width: 0;
+  flex: 1;
+}
+.notify-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  color: #555;
+}
+.notify-title {
+  font-weight: 700;
+  font-size: 0.92rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.notify-body {
+  font-size: 0.88rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 760px) {
+  .notify-compose {
+    grid-template-columns: 1fr;
+  }
+}

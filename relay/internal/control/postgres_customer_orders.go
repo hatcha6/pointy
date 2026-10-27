@@ -61,6 +61,9 @@ func insertCustomerCreditTx(ctx context.Context, tx pgx.Tx, entry *CustomerCredi
 		ON CONFLICT (order_id, kind) WHERE order_id <> '' DO NOTHING`,
 		id, entry.CustomerID, entry.Kind, entry.Amount, entry.OrderID, entry.TestMode, entry.CreatedAt,
 	)
+	if err == nil {
+		entry.ID = id
+	}
 	return err
 }
 
@@ -273,8 +276,13 @@ func (s *PostgresStore) ListCustomerOrders(ctx context.Context, filter CustomerO
 			AND (NOT $5 OR status IN ('awaiting_payment', 'paid', 'fulfilling')
 				OR (status IN ('cancelled', 'failed', 'expired') AND payment_id <> '' AND checkout_url <> ''
 					AND NOT late_paid AND error_code <> 'payment_mismatch'))
+			AND ($6 = '' OR ($6 = 'open' AND status IN ('awaiting_payment', 'paid', 'fulfilling')) OR status = $6)
+			AND ($7 = '' OR channel = $7)
+			AND ($8 = '' OR lower(id) LIKE $8 OR lower(item_key) LIKE $8 OR lower(brand_key) LIKE $8
+				OR lower(item_name) LIKE $8 OR lower(payment_id) LIKE $8 OR lower(purchase_id) LIKE $8)
 		ORDER BY created_at DESC, id DESC LIMIT $4`,
-		filter.CustomerID, filter.Open, createdAfter, limit, filter.Sweep)
+		filter.CustomerID, filter.Open, createdAfter, limit, filter.Sweep,
+		filter.Status, filter.Channel, likePattern(filter.Query))
 	if err != nil {
 		return nil, err
 	}
@@ -333,7 +341,7 @@ func (s *PostgresStore) CustomerCredit(ctx context.Context, customerID string, l
 		return "", nil, err
 	}
 	rows, err := s.pool.Query(ctx,
-		`SELECT id, customer_id, kind, amount::text, order_id, test_mode, created_at
+		`SELECT id, customer_id, kind, amount::text, order_id, test_mode, created_at, note, actor, reference
 		FROM relay_customer_credit_entries WHERE customer_id = $1
 		ORDER BY created_at DESC, id DESC LIMIT $2`, customerID, limit)
 	if err != nil {
@@ -344,7 +352,7 @@ func (s *PostgresStore) CustomerCredit(ctx context.Context, customerID string, l
 	for rows.Next() {
 		var entry CustomerCreditEntry
 		if err := rows.Scan(&entry.ID, &entry.CustomerID, &entry.Kind, &entry.Amount, &entry.OrderID,
-			&entry.TestMode, &entry.CreatedAt); err != nil {
+			&entry.TestMode, &entry.CreatedAt, &entry.Note, &entry.Actor, &entry.Reference); err != nil {
 			return "", nil, err
 		}
 		entry.Amount = NormalizeWalletAmount(entry.Amount)

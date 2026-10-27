@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -55,6 +56,9 @@ const (
 	// CustomerCreditLatePayment is a Dafa payment proven after its order was
 	// written off: the customer's money, kept for them.
 	CustomerCreditLatePayment = "late_payment"
+	// CustomerCreditAdjustment is an operator's grant (positive) or charge
+	// (negative), with their note.
+	CustomerCreditAdjustment = "adjustment"
 )
 
 // CustomerOrderPaymentMismatch is the error code of an order whose payment
@@ -129,11 +133,22 @@ type CustomerCreditEntry struct {
 	OrderID    string    `json:"order_id,omitempty"`
 	TestMode   bool      `json:"test_mode"`
 	CreatedAt  time.Time `json:"created_at"`
+	// Note and Actor are an adjustment's reason and the operator who made
+	// it; Reference keeps one adjustment from being made twice.
+	Note      string `json:"note,omitempty"`
+	Actor     string `json:"actor,omitempty"`
+	Reference string `json:"reference,omitempty"`
 }
 
 // CustomerOrderFilter narrows a listing.
 type CustomerOrderFilter struct {
 	CustomerID string
+	// Status and Channel, when set, keep only orders with that status (or,
+	// for "open", any that can still change) and from that app build.
+	Status  string
+	Channel string
+	// Query matches an order's id, item, brand, name or payment.
+	Query string
 	// Open lists only orders that can still change.
 	Open bool
 	// Sweep lists what the reconciler acts on: open orders, and bank-card
@@ -412,6 +427,28 @@ func customerOrderSwept(order CustomerOrder) bool {
 	return false
 }
 
+// customerOrderMatches applies a listing's status, channel and query.
+func customerOrderMatches(order CustomerOrder, filter CustomerOrderFilter) bool {
+	switch {
+	case filter.Status == "open" && !CustomerOrderOpen(order.Status):
+		return false
+	case filter.Status != "" && filter.Status != "open" && order.Status != filter.Status:
+		return false
+	case filter.Channel != "" && order.Channel != filter.Channel:
+		return false
+	}
+	query := strings.ToLower(strings.TrimSpace(filter.Query))
+	if query == "" {
+		return true
+	}
+	for _, field := range []string{order.ID, order.ItemKey, order.BrandKey, order.ItemName, order.PaymentID, order.PurchaseID} {
+		if strings.Contains(strings.ToLower(field), query) {
+			return true
+		}
+	}
+	return false
+}
+
 func sumCustomerCredit(entries []CustomerCreditEntry) *big.Rat {
 	balance := new(big.Rat)
 	for _, entry := range entries {
@@ -454,7 +491,7 @@ func (s *FileStore) appendCustomerCreditLocked(entry *CustomerCreditEntry) error
 	}
 	data := s.customerOrdersLocked()
 	for _, existing := range data.Credits {
-		if existing.OrderID == entry.OrderID && existing.Kind == entry.Kind {
+		if entry.OrderID != "" && existing.OrderID == entry.OrderID && existing.Kind == entry.Kind {
 			return nil
 		}
 	}
@@ -639,6 +676,9 @@ func (s *FileStore) ListCustomerOrders(_ context.Context, filter CustomerOrderFi
 		if !filter.CreatedAfter.IsZero() && order.CreatedAt.Before(filter.CreatedAfter) {
 			continue
 		}
+		if !customerOrderMatches(order, filter) {
+			continue
+		}
 		orders = append(orders, order)
 	}
 	sortCustomerOrders(orders)
@@ -679,7 +719,9 @@ func (s *FileStore) CustomerCredit(_ context.Context, customerID string, limit i
 	defer s.mu.RUnlock()
 	entries := s.customerCreditLocked(customerID)
 	balance := sumCustomerCredit(entries)
-	sort.Slice(entries, func(i, j int) bool { return entries[i].CreatedAt.After(entries[j].CreatedAt) })
+	// Newest first; entries of the same moment in the reverse of their order.
+	slices.Reverse(entries)
+	sort.SliceStable(entries, func(i, j int) bool { return entries[i].CreatedAt.After(entries[j].CreatedAt) })
 	if limit > 0 && len(entries) > limit {
 		entries = entries[:limit]
 	}

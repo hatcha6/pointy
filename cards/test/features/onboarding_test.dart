@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pointy_cards/dev/cards_fixtures.dart';
 import 'package:pointy_cards/src/app.dart';
+import 'package:pointy_cards/src/core/push/push.dart';
 import 'package:pointy_cards/src/data/settings/app_settings.dart';
 import 'package:pointy_cards/src/dependencies.dart';
 import 'package:pointy_cards/src/features/links/cards_link.dart';
@@ -25,6 +26,7 @@ Future<void> phone(
 Future<CardsDependencies> firstRun({
   bool signedIn = false,
   LinkInbox? links,
+  Push? push,
 }) async {
   SharedPreferencesAsyncPlatform.instance =
       InMemorySharedPreferencesAsync.empty();
@@ -40,7 +42,18 @@ Future<CardsDependencies> firstRun({
     lock: dependencies.lock,
     settings: settings,
     links: dependencies.links,
+    push: push,
   );
+}
+
+/// Walks the first three steps to the notifications one. Its bell rings on
+/// and on, so from here time is pumped, never settled.
+Future<void> toNotifications(WidgetTester tester) async {
+  for (var i = 0; i < 3; i++) {
+    await tester.tap(find.text('التالي'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+  }
 }
 
 void main() {
@@ -181,6 +194,73 @@ void main() {
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull, reason: '$size');
       expect(find.text('التالي'), findsOneWidget);
+      // The notifications step's second button fits too.
+      await toNotifications(tester);
+      expect(tester.takeException(), isNull, reason: '$size notifications');
+      expect(find.text('ليس الآن'), findsOneWidget);
     }
+  });
+
+  testWidgets('a phone offers notifications last, and turns them on', (
+    tester,
+  ) async {
+    await phone(tester);
+    final push = FixturePush();
+    final dependencies = await firstRun(push: push);
+    await tester.pumpWidget(CardsApp(dependencies: dependencies));
+    await tester.pumpAndSettle();
+    expect(find.bySemanticsLabel('الخطوة 1 من 4'), findsOneWidget);
+
+    await toNotifications(tester);
+    expect(find.text('العروض تصلك أولاً'), findsOneWidget);
+    expect(find.text('ابدأ الآن'), findsNothing);
+    await tester.tap(find.text('تفعيل الإشعارات'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(push.enabled, isTrue);
+    expect(find.byType(OnboardingPage), findsNothing);
+    expect(dependencies.settings.onboarded, isTrue);
+  });
+
+  testWidgets('«ليس الآن» starts the app without asking', (tester) async {
+    await phone(tester);
+    final push = FixturePush();
+    final dependencies = await firstRun(push: push);
+    await tester.pumpWidget(CardsApp(dependencies: dependencies));
+    await tester.pumpAndSettle();
+
+    await toNotifications(tester);
+    await tester.tap(find.text('ليس الآن'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(push.enabled, isFalse);
+    expect(find.byType(OnboardingPage), findsNothing);
+  });
+
+  testWidgets('notifications already on: the step says so and finishes', (
+    tester,
+  ) async {
+    await phone(tester);
+    final push = FixturePush();
+    await push.setEnabled(true);
+    final dependencies = await firstRun(push: push);
+    await tester.pumpWidget(CardsApp(dependencies: dependencies));
+    await tester.pumpAndSettle();
+    expect(find.bySemanticsLabel('الخطوة 1 من 4'), findsOneWidget);
+
+    await toNotifications(tester);
+    expect(find.text('العروض تصلك أولاً'), findsOneWidget);
+    expect(find.textContaining('الإشعارات مفعّلة'), findsOneWidget);
+    expect(find.text('تفعيل الإشعارات'), findsNothing);
+    expect(find.text('ليس الآن'), findsNothing);
+    await tester.tap(find.text('ابدأ الآن'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(push.enabled, isTrue);
+    expect(find.byType(OnboardingPage), findsNothing);
+    expect(dependencies.settings.onboarded, isTrue);
   });
 }

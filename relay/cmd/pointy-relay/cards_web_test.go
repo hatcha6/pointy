@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -30,7 +31,7 @@ func TestCardsWebServesTheBuildOnItsHostOnly(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	relay := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = io.WriteString(w, "relay") })
 
-	same, err := buildCardsWeb(relay, nil, "/nowhere", logger)
+	same, err := buildCardsWeb(relay, nil, "/nowhere", nil, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +41,7 @@ func TestCardsWebServesTheBuildOnItsHostOnly(t *testing.T) {
 		t.Fatal("served a web app nobody asked for")
 	}
 
-	if _, err := buildCardsWeb(relay, []string{"cards.dftr.ly"}, t.TempDir(), logger); err == nil {
+	if _, err := buildCardsWeb(relay, []string{"cards.dftr.ly"}, t.TempDir(), nil, logger); err == nil {
 		t.Fatal("started without a web build")
 	}
 
@@ -48,14 +49,15 @@ func TestCardsWebServesTheBuildOnItsHostOnly(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("cards"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	handler, err := buildCardsWeb(relay, []string{"cards.dftr.ly"}, dir, logger)
+	handler, err := buildCardsWeb(relay, []string{"cards.dftr.ly"}, dir, nil, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for host, want := range map[string]string{"cards.dftr.ly": "cards", "my.dftr.ly": "relay"} {
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "http://"+host+"/brand/pubg", nil))
-		if recorder.Body.String() != want {
+		// The page is the build's, its link preview written in ahead of it.
+		if !strings.HasSuffix(recorder.Body.String(), want) {
 			t.Fatalf("%s: %q", host, recorder.Body.String())
 		}
 	}

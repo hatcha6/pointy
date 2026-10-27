@@ -1,5 +1,8 @@
 import {
   Activity,
+  BellRing,
+  ReceiptText,
+  UserRound,
   BadgeCheck,
   BookOpen,
   Boxes,
@@ -51,6 +54,15 @@ export const navGroups: NavGroup[] = [
       { to: "/company", label: "مشتريات الشركة", icon: ShoppingBag, hint: "شراء بطاقة أو شحن أو فاتورة لنا، أو للبيع نقداً" },
       { to: "/sms", label: "الرسائل النصية", icon: MessageSquare, hint: "الاستهلاك والسجل والإعداد" },
       { to: "/moamalat", label: "معاملات", icon: BadgeCheck, hint: "جلسات التحقق من البطاقات في كل متجر" },
+    ],
+  },
+  {
+    id: "cards-app",
+    label: "تطبيق دفتر كروت",
+    items: [
+      { to: "/cards/customers", label: "الزبائن", icon: UserRound, hint: "من دخل التطبيق وما اشتراه ورصيده وأجهزته" },
+      { to: "/cards/orders", label: "طلبات التطبيق", icon: ReceiptText, hint: "كل ما اشتراه الزبائن، وحالة كل طلب" },
+      { to: "/cards/notifications", label: "الإشعارات", icon: BellRing, hint: "رسالة لكل المستخدمين أو لتطبيق واحد" },
     ],
   },
   {

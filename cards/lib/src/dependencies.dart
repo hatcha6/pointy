@@ -2,6 +2,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'config.dart';
 import 'core/analytics/analytics.dart';
+import 'core/push/push.dart';
 import 'data/api/relay_api.dart';
 import 'data/repositories/auth_repository.dart';
 import 'data/repositories/catalog_repository.dart';
@@ -28,9 +29,11 @@ class CardsDependencies {
     CardVault? cards,
     LinkInbox? links,
     Analytics? analytics,
+    Push? push,
     this.preferences,
   }) : settings = settings ?? AppSettings(),
        analytics = analytics ?? NoAnalytics(),
+       push = push ?? NoPush(),
        moamalat = moamalat ?? MoamalatClient(),
        cards = cards ?? MemoryCardVault(),
        links = links ?? LinkInbox();
@@ -65,6 +68,11 @@ class CardsDependencies {
       lock: CodeLock(settings: settings),
       settings: settings,
       analytics: analytics,
+      push: FirebasePush.forPlatform(
+        channel: config.channel,
+        analytics: analytics,
+        preferences: preferences,
+      ),
       preferences: preferences,
     );
   }
@@ -92,6 +100,9 @@ class CardsDependencies {
 
   /// Product analytics and feature flags (PostHog), or nothing.
   final Analytics analytics;
+
+  /// Notifications (Firebase Cloud Messaging), or nothing.
+  final Push push;
 
   /// Small per-device choices (the last payment method). Null in tests.
   final SharedPreferencesAsync? preferences;

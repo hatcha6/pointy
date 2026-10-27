@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:pointy_brand/pointy_brand.dart';
@@ -13,6 +12,7 @@ import '../../shared/card_art.dart';
 import '../../shared/category_icon.dart';
 import '../../shared/column_bleed.dart';
 import '../../shared/empty_state.dart';
+import '../../shared/glass_edge.dart';
 import '../../shared/glass_edge_header.dart';
 import '../../shared/money_text.dart';
 import '../../shared/pill.dart';
@@ -488,34 +488,17 @@ class _SearchAndCategories extends SliverPersistentHeaderDelegate {
     double shrinkOffset,
     bool overlapsContent,
   ) {
-    final theme = Theme.of(context);
     final scrolled = overlapsContent || shrinkOffset > 0;
-    // No strip: the shelf scrolls on underneath, and once it does, a soft
-    // glass edge (iOS's scroll edge effect) keeps the search and the
-    // categories readable, fading out toward the shelf below.
+    // No strip: the shelf scrolls on underneath, and once it does, iOS's
+    // soft scroll edge keeps the search and the categories readable.
     return Stack(
       fit: StackFit.expand,
       children: [
-        AnimatedOpacity(
+        TweenAnimationBuilder<double>(
+          tween: Tween(end: scrolled ? 1 : 0),
           duration: CardsMotion.standard,
-          opacity: scrolled ? 1 : 0,
-          child: ShaderMask(
-            blendMode: BlendMode.dstIn,
-            shaderCallback: (bounds) => const LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [Colors.white, Colors.white, Colors.transparent],
-              stops: [0, 0.72, 1],
-            ).createShader(bounds),
-            child: ClipRect(
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-                child: ColoredBox(
-                  color: theme.scaffoldBackgroundColor.withValues(alpha: 0.86),
-                ),
-              ),
-            ),
-          ),
+          curve: CardsMotion.curve,
+          builder: (context, amount, _) => GlassEdge(amount: amount),
         ),
         Padding(
           padding: column,

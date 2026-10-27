@@ -8,6 +8,17 @@
         <!-- PostHog starts from Dart (lib/src/core/analytics), with the
              build's token, and not at all in a debug build. -->
         <meta-data android:name="com.posthog.posthog.AUTO_INIT" android:value="false" />
+        <!-- Notifications (Firebase): the card mark in the status bar, the
+             app's teal, and the channel MainActivity names in Arabic. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_notification" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/ic_launcher_background" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="general" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

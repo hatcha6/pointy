@@ -277,6 +277,10 @@ func (s HTTPServer) handleCustomerRoutes(w http.ResponseWriter, r *http.Request)
 			s.logger().Info("customer deleted their account", "customer_id", customer.ID)
 			w.WriteHeader(http.StatusNoContent)
 		})
+	case path == "/v1/customers/me/push" && r.Method == http.MethodPut:
+		s.withCustomer(w, r, store, func(customer control.Customer, session control.CustomerSession) {
+			s.handleCustomerPushToken(w, r, store, customer, session)
+		})
 	case path == "/v1/customers/me/sessions" && r.Method == http.MethodGet:
 		s.withCustomer(w, r, store, func(customer control.Customer, current control.CustomerSession) {
 			sessions, err := store.CustomerSessions(r.Context(), customer.ID)
@@ -481,6 +485,9 @@ func (s HTTPServer) handleCustomerVerify(w http.ResponseWriter, r *http.Request,
 		return
 	case errors.Is(err, control.ErrCustomerOTPExpired):
 		writeCustomerError(w, http.StatusBadRequest, "code_expired", "the code expired; ask for a new one", nil)
+		return
+	case errors.Is(err, control.ErrCustomerBlocked):
+		writeCustomerError(w, http.StatusForbidden, "account_blocked", "this account is stopped; contact us", nil)
 		return
 	case errors.Is(err, control.ErrCustomerOTPLocked):
 		writeCustomerError(w, http.StatusTooManyRequests, "too_many_attempts", "too many wrong codes; ask for a new one", nil)

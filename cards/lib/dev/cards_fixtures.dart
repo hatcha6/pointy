@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
+import '../src/core/push/push.dart';
 import '../src/config.dart';
 import '../src/data/api/relay_api.dart';
 import '../src/data/repositories/auth_repository.dart';
@@ -472,6 +473,7 @@ CardsDependencies fixtureDependencies({
   CardVault? cards,
   LinkInbox? links,
   Analytics? analytics,
+  Push? push,
 }) {
   final sessions = MemorySessionStore(signedIn ? fixtureSession : null);
   final base = shelfRelay ?? Uri.parse('https://relay.preview');
@@ -491,7 +493,14 @@ CardsDependencies fixtureDependencies({
     analytics: analytics,
   )..session.value = sessions.current;
   return CardsDependencies(
-    config: CardsConfig(relayBaseUrl: base, channel: 'apk'),
+    config: CardsConfig(
+      relayBaseUrl: base,
+      channel: 'apk',
+      // The web banner's listings, so a phone-sized preview shows it.
+      iosStoreUrl: 'https://apps.apple.com/app/id0000000000',
+      androidStoreUrl:
+          'https://play.google.com/store/apps/details?id=ly.dftr.cards',
+    ),
     auth: auth,
     catalog: CatalogRepository(api: api, channel: 'apk'),
     orders: OrdersRepository(api: api, channel: 'apk', analytics: analytics),
@@ -502,5 +511,25 @@ CardsDependencies fixtureDependencies({
     cards: cards ?? MemoryCardVault(),
     links: links,
     analytics: analytics,
+    push: push ?? FixturePush(),
   );
+}
+
+/// Notifications as a phone has them, turned on with no phone to ask:
+/// the onboarding's notifications step and the account's switch show.
+class FixturePush extends Push {
+  bool _on = false;
+
+  @override
+  bool get available => true;
+
+  @override
+  bool get enabled => _on;
+
+  @override
+  Future<bool> setEnabled(bool on) async {
+    _on = on;
+    notifyListeners();
+    return true;
+  }
 }

@@ -36,6 +36,10 @@ const ActivityLog = lazy(() => import("./pages/ActivityLog").then((m) => ({ defa
 const Settings = lazy(() => import("./pages/Settings").then((m) => ({ default: m.Settings })));
 const Moamalat = lazy(() => import("./pages/Moamalat").then((m) => ({ default: m.Moamalat })));
 const System = lazy(() => import("./pages/System").then((m) => ({ default: m.System })));
+const CardCustomers = lazy(() => import("./pages/cards/Customers").then((m) => ({ default: m.Customers })));
+const CardCustomerDetail = lazy(() => import("./pages/cards/CustomerDetail").then((m) => ({ default: m.CustomerDetail })));
+const CardOrders = lazy(() => import("./pages/cards/CustomerOrders").then((m) => ({ default: m.CustomerOrders })));
+const CardNotifications = lazy(() => import("./pages/cards/Notifications").then((m) => ({ default: m.Notifications })));
 const Ledger = lazy(() => import("./pages/Ledger").then((m) => ({ default: m.Ledger })));
 
 /** An old address that moved: replaced, so Back does not bounce. */
@@ -50,6 +54,8 @@ function Page({ path }: { path: string }) {
   if (shop) return <ShopDetail key={shop.id} id={shop.id} />;
   const topUp = match("/topups/:id", path);
   if (topUp) return <TopUpDetail key={topUp.id} id={topUp.id} />;
+  const cardCustomer = match("/cards/customers/:id", path);
+  if (cardCustomer) return <CardCustomerDetail key={cardCustomer.id} id={cardCustomer.id} />;
   switch (path) {
     case "/":
       return <Home />;
@@ -99,6 +105,12 @@ function Page({ path }: { path: string }) {
       return <Services />;
     case "/margins":
       return <Margins />;
+    case "/cards/customers":
+      return <CardCustomers />;
+    case "/cards/orders":
+      return <CardOrders />;
+    case "/cards/notifications":
+      return <CardNotifications />;
     default:
       return (
         <Card>
@@ -132,7 +144,7 @@ export function App() {
   }, [me.data]);
 
   useEffect(() => {
-    const name = pageTitles[path] ?? (path.startsWith("/shops/") ? "متجر" : path.startsWith("/topups/") ? "عملية شحن" : "");
+    const name = pageTitles[path] ?? (path.startsWith("/shops/") ? "متجر" : path.startsWith("/topups/") ? "عملية شحن" : path.startsWith("/cards/customers/") ? "زبون" : "");
     setPageTitle(name ? `${name} — دفتر` : "دفتر — لوحة التشغيل");
   }, [path]);
 

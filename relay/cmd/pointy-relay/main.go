@@ -568,6 +568,11 @@ func runServer(args []string) error {
 		envString("POINTY_RELAY_CARDS_WEB_DIR", defaultCardsWebDir),
 		"the card app's web build (index.html at its root); the relay image carries one here",
 	)
+	fcmServiceAccount := flags.String(
+		"fcm-service-account",
+		envString("POINTY_RELAY_FCM_SERVICE_ACCOUNT", ""),
+		"the «دفتر كروت» Firebase project's service account key (the JSON itself, or a path to it); the console sends notifications through it. Empty sends none",
+	)
 	customerReviewCode := flags.String(
 		"customer-review-code",
 		envString("POINTY_RELAY_CUSTOMER_REVIEW_CODE", ""),
@@ -1490,6 +1495,10 @@ func runServer(args []string) error {
 		TargetKey:         deriveServicesTargetKey(*adminToken),
 	}, logger)
 
+	customerPush, err := buildCustomerPush(*fcmServiceAccount, logger)
+	if err != nil {
+		return err
+	}
 	baseHTTPHandler := relayserver.HTTPServer{
 		Store:                         store,
 		Hub:                           hub,
@@ -1529,6 +1538,7 @@ func runServer(args []string) error {
 		},
 		SMS:                  smsConfig,
 		Customers:            customerConfig,
+		CustomerPush:         customerPush,
 		Wallet:               walletConfig,
 		Public:               publicAddresses,
 		Alerts:               alertNotifier,
@@ -1606,7 +1616,7 @@ func runServer(args []string) error {
 		}
 	}
 	// cards.dftr.ly: the card app's web build, by host.
-	publicHandler, err = buildCardsWeb(publicHandler, cardsweb.ParseHosts(*cardsWebHosts), *cardsWebDir, logger)
+	publicHandler, err = buildCardsWeb(publicHandler, cardsweb.ParseHosts(*cardsWebHosts), *cardsWebDir, baseHTTPHandler, logger)
 	if err != nil {
 		return err
 	}

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The app's mark (two cards, the front one striped) as Android draws a
+     notification's icon: one colour, on transparent. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <group android:rotation="-14" android:pivotX="12" android:pivotY="12">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:fillAlpha="0.55"
+            android:pathData="M8.5,4.5h11a1.5,1.5 0,0 1,1.5 1.5v7a1.5,1.5 0,0 1,-1.5 1.5h-11a1.5,1.5 0,0 1,-1.5 -1.5v-7a1.5,1.5 0,0 1,1.5 -1.5z" />
+    </group>
+    <group android:rotation="-6" android:pivotX="12" android:pivotY="12">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M4.5,8.5h12a1.5,1.5 0,0 1,1.5 1.5v8a1.5,1.5 0,0 1,-1.5 1.5h-12a1.5,1.5 0,0 1,-1.5 -1.5v-8a1.5,1.5 0,0 1,1.5 -1.5z M3,11v1.6h15V11z"
+            android:fillType="evenOdd" />
+    </group>
+</vector>

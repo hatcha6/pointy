@@ -25,6 +25,10 @@ type Customer struct {
 	CreatedAt    time.Time  `json:"created_at"`
 	LastSignInAt time.Time  `json:"last_sign_in_at"`
 	DeletedAt    *time.Time `json:"deleted_at,omitempty"`
+	// BlockedAt is when an operator stopped the account: it cannot sign in
+	// again until unblocked. BlockedReason is the operator's note.
+	BlockedAt     *time.Time `json:"blocked_at,omitempty"`
+	BlockedReason string     `json:"blocked_reason,omitempty"`
 }
 
 // CustomerOTPRequest asks the store for a new sign-in code for a phone.
@@ -88,6 +92,8 @@ var (
 	// back after the grace window. Someone else holds a copy, so the session
 	// is ended.
 	ErrCustomerRefreshReused = errors.New("customer refresh token reused")
+	// ErrCustomerBlocked refuses a sign-in to an account an operator stopped.
+	ErrCustomerBlocked = errors.New("customer blocked")
 )
 
 // CustomerSession is one signed-in device.
@@ -109,6 +115,9 @@ type CustomerSession struct {
 	LastSeenAt      time.Time `json:"last_seen_at"`
 	AccessExpiresAt time.Time `json:"access_expires_at"`
 	ExpiresAt       time.Time `json:"expires_at"`
+	// PushToken is the device's Firebase Cloud Messaging token, when the
+	// app registered one: how a notification reaches this customer here.
+	PushToken string `json:"push_token,omitempty"`
 }
 
 // CustomerTokens are the hashes and lifetimes of a fresh token pair.
@@ -297,6 +306,8 @@ type fileCustomerData struct {
 	Customers map[string]Customer        `json:"customers,omitempty"`
 	OTPs      map[string]customerOTP     `json:"otps,omitempty"`
 	Sessions  map[string]CustomerSession `json:"sessions,omitempty"`
+	// Notifications are the operator's sends, newest last.
+	Notifications []CustomerNotification `json:"notifications,omitempty"`
 }
 
 func (s *FileStore) customersLocked() *fileCustomerData {
@@ -378,6 +389,13 @@ func (s *FileStore) VerifyCustomerOTP(_ context.Context, phone, codeHash string,
 			return Customer{}, false, err
 		}
 		customer = Customer{ID: id, Phone: phone, CreatedAt: now}
+	}
+	if customer.BlockedAt != nil {
+		// The code is spent all the same.
+		if err := s.saveLocked(); err != nil {
+			return Customer{}, false, err
+		}
+		return Customer{}, false, ErrCustomerBlocked
 	}
 	customer.LastSignInAt = now
 	c.Customers[customer.ID] = customer

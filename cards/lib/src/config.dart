@@ -12,6 +12,8 @@ class CardsConfig {
     required this.channel,
     this.posthogToken = '',
     this.posthogHost = defaultPosthogHost,
+    this.iosStoreUrl = '',
+    this.androidStoreUrl = '',
   });
 
   /// Read from `--dart-define=CARDS_RELAY_URL=…` and `CARDS_CHANNEL=…`.
@@ -33,6 +35,8 @@ class CardsConfig {
         defaultValue: defaultPosthogToken,
       ),
       posthogHost: posthogHost,
+      iosStoreUrl: const String.fromEnvironment('CARDS_IOS_STORE_URL'),
+      androidStoreUrl: const String.fromEnvironment('CARDS_ANDROID_STORE_URL'),
     );
   }
 
@@ -46,6 +50,13 @@ class CardsConfig {
 
   /// PostHog's ingestion host: the project lives on its EU cloud.
   final String posthogHost;
+
+  /// Where the web app's «get the app» banner sends an iPhone and an Android
+  /// phone: the App Store listing, the Play listing (or the APK's page).
+  /// Empty until the app is listed: the banner then stays away on that
+  /// platform. `--dart-define=CARDS_IOS_STORE_URL=…`, `CARDS_ANDROID_STORE_URL`.
+  final String iosStoreUrl;
+  final String androidStoreUrl;
 
   static const String defaultPosthogToken =
       'phc_Bquv28MdZLocFXyF2mC5xgWQQbBYFzdVix9fWthMD5jo';

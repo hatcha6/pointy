@@ -12,6 +12,9 @@ import 'haptics.dart';
 /// there. Elsewhere the page keeps it in its app bar: pages ask [active] to
 /// leave their own one out.
 ///
+/// A page's other actions ([actions], such as sharing) stand under it in the
+/// same column, where its app bar would otherwise carry them.
+///
 /// The page itself, its app bar and title too, is kept clear of the column,
 /// unless it is [edgeToEdge] (artwork that should run under the column) and
 /// insets its own content.
@@ -23,9 +26,11 @@ class SideBack extends StatelessWidget {
     this.tooltip,
     this.onPressed,
     this.edgeToEdge = false,
+    this.actions = const [],
   });
 
   final Widget child;
+  final List<SideAction> actions;
 
   /// A close (×) rather than a back (‹) button.
   final bool close;
@@ -52,6 +57,9 @@ class SideBack extends StatelessWidget {
 
   /// The column's glass buttons, as Apple sizes them there.
   static const double size = 48;
+
+  /// The space between one of the column's buttons and the next.
+  static const double gap = 12;
 
   static bool active(BuildContext context) =>
       CardsTabBar.side(MediaQuery.paddingOf(context)) != null;
@@ -89,31 +97,75 @@ class SideBack extends StatelessWidget {
             ),
           );
     final localizations = MaterialLocalizations.of(context);
+    final top =
+        padding.top + statusFoot(MediaQuery.sizeOf(context)) + statusGap;
+    Widget at(int slot, Widget button) => Positioned(
+      top: top + slot * (size + gap),
+      left: right ? null : statusCentre - size / 2,
+      right: right ? statusCentre - size / 2 : null,
+      width: size,
+      height: size,
+      child: button,
+    );
+    final rtl = Directionality.of(context) == TextDirection.rtl;
     return Stack(
       children: [
         page,
-        Positioned(
-          top: padding.top + statusFoot(MediaQuery.sizeOf(context)) + statusGap,
-          left: right ? null : statusCentre - size / 2,
-          right: right ? statusCentre - size / 2 : null,
-          width: size,
-          height: size,
-          child: _SideButton(
-            close: close,
+        at(
+          0,
+          _SideButton(
+            symbol: close ? 'xmark' : (rtl ? 'chevron.right' : 'chevron.left'),
+            icon: close
+                ? const Icon(Icons.close_rounded)
+                : const BackButtonIcon(),
             tooltip:
                 tooltip ??
                 (close
                     ? localizations.closeButtonTooltip
                     : localizations.backButtonTooltip),
-            onPressed: () {
+            onPressed: (_) {
               Haptics.tap();
               (onPressed ?? () => Navigator.of(context).maybePop())();
             },
           ),
         ),
+        for (final (i, action) in actions.indexed)
+          at(
+            i + 1,
+            _SideButton(
+              symbol: action.symbol,
+              icon: Icon(action.icon),
+              tooltip: action.tooltip,
+              onPressed: (button) {
+                Haptics.tap();
+                action.onPressed(button);
+              },
+            ),
+          ),
       ],
     );
   }
+}
+
+/// One of a page's actions in the side column.
+@immutable
+class SideAction {
+  const SideAction({
+    required this.symbol,
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  /// The SF Symbol the system's glass button draws (`square.and.arrow.up`).
+  final String symbol;
+
+  /// The same mark where the button is our own glass.
+  final IconData icon;
+  final String tooltip;
+
+  /// Given the button's own context, for a sheet that points at it.
+  final void Function(BuildContext button) onPressed;
 }
 
 /// The button itself: the system's own Liquid Glass where the phone draws
@@ -121,30 +173,27 @@ class SideBack extends StatelessWidget {
 /// frosted glass elsewhere.
 class _SideButton extends StatelessWidget {
   const _SideButton({
-    required this.close,
+    required this.symbol,
+    required this.icon,
     required this.tooltip,
     required this.onPressed,
   });
 
-  final bool close;
+  final String symbol;
+  final Widget icon;
   final String tooltip;
-  final VoidCallback onPressed;
+  final void Function(BuildContext button) onPressed;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     if (CardsTabBar.nativeGlass) {
-      final rtl = Directionality.of(context) == TextDirection.rtl;
       return Semantics(
         button: true,
         label: tooltip,
         child: CNButton.icon(
-          icon: CNSymbol(
-            close ? 'xmark' : (rtl ? 'chevron.right' : 'chevron.left'),
-            size: 17,
-            color: theme.colorScheme.onSurface,
-          ),
-          onPressed: onPressed,
+          icon: CNSymbol(symbol, size: 17, color: theme.colorScheme.onSurface),
+          onPressed: () => onPressed(context),
           config: const CNButtonConfig(
             style: CNButtonStyle.glass,
             width: SideBack.size,
@@ -168,10 +217,8 @@ class _SideButton extends StatelessWidget {
           ),
           child: IconButton(
             tooltip: tooltip,
-            onPressed: onPressed,
-            icon: close
-                ? const Icon(Icons.close_rounded)
-                : const BackButtonIcon(),
+            onPressed: () => onPressed(context),
+            icon: icon,
             color: theme.colorScheme.onSurface,
           ),
         ),

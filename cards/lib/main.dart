@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
@@ -5,6 +7,7 @@ import 'package:flutter_web_plugins/url_strategy.dart';
 import 'src/app.dart';
 import 'src/config.dart';
 import 'src/core/analytics/follow_customer.dart';
+import 'src/core/push/follow_push_token.dart';
 import 'src/dependencies.dart';
 import 'src/features/splash/splash_overlay.dart';
 
@@ -25,6 +28,9 @@ Future<void> main() async {
   // not even the app opening.
   await dependencies.analytics.start(share: dependencies.settings.shareUsage);
   followCustomer(dependencies);
+  // Not waited on: a tapped notification's link waits in the inbox.
+  unawaited(dependencies.push.start(dependencies.links));
+  followPushToken(dependencies);
   runApp(CardsApp(dependencies: dependencies, splash: opening));
 }
 

@@ -17,6 +17,9 @@ extension CardsEvents on Analytics {
   void brandViewed(CardBrand brand) =>
       capture('brand_viewed', {'brand': brand.key, 'category': brand.category});
 
+  void brandShared(CardBrand brand) =>
+      capture('brand_shared', {'brand': brand.key});
+
   void categorySelected(String category) =>
       capture('category_selected', {'category': category});
 
@@ -80,6 +83,14 @@ extension CardsEvents on Analytics {
   void signedOut() => capture('signed_out');
 
   void accountDeleted() => capture('account_deleted');
+
+  // Notifications.
+
+  void pushPermission({required bool granted}) =>
+      capture('push_permission', {'granted': granted});
+
+  void pushOpened({required String link, required String campaign}) =>
+      capture('push_opened', {'link': link, 'campaign': campaign});
 
   void onboardingFinished({required bool skipped, required int step}) =>
       capture('onboarding_finished', {'skipped': skipped, 'step': step});

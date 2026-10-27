@@ -1163,6 +1163,56 @@ ALTER TABLE relay_customer_orders ADD CONSTRAINT relay_customer_orders_fee_valid
 ALTER TABLE relay_customer_orders ADD COLUMN IF NOT EXISTS review boolean NOT NULL DEFAULT false;
 `,
 	},
+	{
+		version: 37,
+		name:    "daftar cards console: blocking, credit adjustments, push",
+		sql: `
+-- An account an operator stopped: it cannot sign in until restarted.
+ALTER TABLE relay_customers ADD COLUMN IF NOT EXISTS blocked_at timestamptz;
+ALTER TABLE relay_customers ADD COLUMN IF NOT EXISTS blocked_reason text NOT NULL DEFAULT '';
+
+-- The device's Firebase Cloud Messaging token, on its session: a signed-out
+-- device can no longer be sent a customer's notification.
+ALTER TABLE relay_customer_sessions ADD COLUMN IF NOT EXISTS push_token text NOT NULL DEFAULT '';
+CREATE INDEX IF NOT EXISTS relay_customer_sessions_push_idx
+	ON relay_customer_sessions (push_token) WHERE push_token <> '';
+
+-- An operator's credit grant or charge: its note, who made it, and the
+-- console's request key (one adjustment per key).
+ALTER TABLE relay_customer_credit_entries ADD COLUMN IF NOT EXISTS note text NOT NULL DEFAULT '';
+ALTER TABLE relay_customer_credit_entries ADD COLUMN IF NOT EXISTS actor text NOT NULL DEFAULT '';
+ALTER TABLE relay_customer_credit_entries ADD COLUMN IF NOT EXISTS reference text NOT NULL DEFAULT '';
+ALTER TABLE relay_customer_credit_entries DROP CONSTRAINT IF EXISTS relay_customer_credit_entries_kind_valid;
+ALTER TABLE relay_customer_credit_entries ADD CONSTRAINT relay_customer_credit_entries_kind_valid CHECK (
+	(kind = 'order' AND amount < 0)
+	OR (kind IN ('release', 'refund', 'late_payment') AND amount > 0)
+	OR (kind = 'adjustment' AND amount <> 0 AND note <> ''));
+CREATE UNIQUE INDEX IF NOT EXISTS relay_customer_credit_entries_reference_idx
+	ON relay_customer_credit_entries (customer_id, reference) WHERE reference <> '';
+
+-- Notifications an operator sent: to everyone, a build's channel, or one
+-- customer.
+CREATE TABLE IF NOT EXISTS relay_customer_notifications (
+	id text PRIMARY KEY,
+	audience text NOT NULL,
+	customer_id text NOT NULL DEFAULT '',
+	title text NOT NULL,
+	body text NOT NULL,
+	link text NOT NULL DEFAULT '',
+	campaign text NOT NULL DEFAULT '',
+	sent_by text NOT NULL DEFAULT '',
+	devices integer NOT NULL DEFAULT 0,
+	sent integer NOT NULL DEFAULT 0,
+	failed integer NOT NULL DEFAULT 0,
+	error text NOT NULL DEFAULT '',
+	created_at timestamptz NOT NULL
+);
+CREATE INDEX IF NOT EXISTS relay_customer_notifications_created_idx
+	ON relay_customer_notifications (created_at DESC);
+CREATE INDEX IF NOT EXISTS relay_customer_notifications_customer_idx
+	ON relay_customer_notifications (customer_id, created_at DESC) WHERE customer_id <> '';
+`,
+	},
 }
 
 // migrationsAdvisoryLockKey serializes concurrent migrators (e.g. autoscaled

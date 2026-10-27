@@ -69,6 +69,12 @@ class RelayApi {
     bool signedIn = false,
   }) => _send('POST', path, body: body ?? const {}, signedIn: signedIn);
 
+  Future<Map<String, dynamic>> put(
+    String path, {
+    Object? body,
+    bool signedIn = false,
+  }) => _send('PUT', path, body: body ?? const {}, signedIn: signedIn);
+
   Future<Map<String, dynamic>> delete(String path, {bool signedIn = true}) =>
       _send('DELETE', path, signedIn: signedIn);
 

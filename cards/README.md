@@ -182,7 +182,7 @@ and every tap answers. The rules live in `src/design/`:
 Previews: `make cards-preview`, then `?screen=board`, or any single screen:
 `home`, `brand`, `brand-itunes`, `sign-in`, `sign-in-code`, `checkout`,
 `wallet-code`, `preparing`, `refunded`, `reveal`, `my-cards`, `account`,
-`signed-out`, `onboarding`, `about`, `privacy`, `terms`, `card-pay` (the bank-card form; `&card=verify` has the bank ask for its code, `&card=decline` refuses the card). The address's path opens like a tapped `cards.dftr.ly` link: `/category/gaming?screen=home`, `/brand/pubg?screen=home`. Add `&theme=dark` for dark, `&lang=en` or `&lang=fr` for English or French (only while `AppSettings.languageChoice` is on).
+`signed-out`, `onboarding`, `about`, `privacy`, `terms`, `card-pay` (the bank-card form; `&card=verify` has the bank ask for its code, `&card=decline` refuses the card). The address's path opens like a tapped `cards.dftr.ly` link: `/category/gaming?screen=home`, `/brand/pubg?screen=home`. Add `&platform=ios` or `&platform=android` for that phone's browser (the web «get the app» bar; a desktop browser's phone emulation still reports a Mac), `&theme=dark` for dark, `&lang=en` or `&lang=fr` for English or French (only while `AppSettings.languageChoice` is on).
 
 `make cards-preview-live` is the same harness on the **real shelf** of a local
 relay (`make relay-run`, then `pointy-relay vouchers catalog push
@@ -214,6 +214,13 @@ channel's shelf opens the shelf. Ad parameters (`utm_*`, …) are ignored. A lin
 tapped while the app runs closes what is open first, except a card payment
 in progress. On the web, the address bar follows the tab, the filter and the
 open page, so any page can be copied and shared.
+
+A link pasted into WhatsApp, Telegram, iMessage or Facebook shows a preview:
+a brand's link shows «كروت ليبيانا» and the brand's card on its own colours,
+a category's link its name, any other link the shelf's mark. The relay
+writes those `og:` tags into each page and draws the pictures itself
+(`relay/internal/cardsweb`), every brand's ahead of time, since those apps
+never run the page's code.
 
 What makes the phone hand the link to the app:
 
@@ -265,6 +272,40 @@ rest of the app sees an `Analytics` with `capture`, `screen`, `identify`,
   code is on screen.
 - **Web.** `web/index.html` holds posthog-js's loader stub; the app calls
   `posthog.init` itself, so the library is fetched only with a token.
+
+## Notifications
+
+Firebase Cloud Messaging, project `daftar-cards` (apps `ly.dftr.cards` on iOS
+and Android), spoken to only through `lib/src/core/push/`. Its client keys are
+in `firebase_options.dart`: no `GoogleService-Info.plist` or
+`google-services.json`. The web build has none.
+
+- **Sending.** From the relay's operator console («تطبيق دفتر كروت» →
+  الإشعارات): to everyone, to one build (`ios`, `play`, `apk`), or from a
+  customer's page to that customer's phones. The App Store build sells
+  services only, so an offer on game cards goes to `play` and `apk`, never
+  everyone. A link (a `https://cards.dftr.ly/…` page) opens when tapped;
+  the campaign name reaches PostHog (`push_opened`). Firebase's own console
+  can send to the topics too.
+- **One customer.** While signed in with notifications on, the app gives the
+  relay its token (`PUT /v1/customers/me/push`, `core/push/follow_push_token.dart`);
+  turning them off or signing out takes it away.
+- **Asking.** The onboarding's last step offers notifications (with its own
+  scene in the art); «ليس الآن» leaves the phone's question for after the
+  first card is revealed, asked once. The account page has the switch.
+- **While open.** An iPhone shows the banner itself; Android shows it along
+  the bottom with «عرض».
+- **iOS needs an APNs key** uploaded in Firebase (Project settings → Cloud
+  Messaging → Apple app configuration: the `.p8`, its key id, team
+  `TAA934964D`). Without it iPhones get nothing.
+
+## Get the app (web)
+
+On a phone's browser every page has a bar across the top offering the app
+from its store (`features/shell/get_app_banner.dart`). Closed, it stays away
+for two weeks. It shows only where the build was given the listing:
+`--dart-define=CARDS_IOS_STORE_URL=…`, `CARDS_ANDROID_STORE_URL=…`; empty,
+as now, it never shows. Preview it with `&platform=ios`.
 
 ## Commands
 

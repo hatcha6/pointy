@@ -6,7 +6,7 @@ import { Button, Empty } from "./ui";
 // happened — the server is unreachable, the feature is switched off on this
 // relay, or it answered with an error — and what to do about each.
 
-type Feature = "updates" | "bundles" | "vouchers" | "services" | "alerts" | "integrations" | "gateway" | "offers" | "moamalat" | "system";
+type Feature = "updates" | "bundles" | "vouchers" | "services" | "alerts" | "integrations" | "gateway" | "offers" | "moamalat" | "system" | "customers";
 
 const features: Record<Feature, { name: string; enable: string }> = {
   updates: { name: "التحديثات عن بعد", enable: "اضبط POINTY_RELAY_ARTIFACT_DIR على مجلد قابل للكتابة في إعدادات الخادم، ثم أعد تشغيله." },
@@ -21,6 +21,7 @@ const features: Record<Feature, { name: string; enable: string }> = {
   integrations: { name: "مفاتيح التكاملات", enable: "تحتاج قاعدة بيانات Postgres للخادم." },
   gateway: { name: "بوابة الدفع", enable: "أضف مفتاح دفع في إعدادات الخادم، ثم أعد تشغيله." },
   system: { name: "حالة النظام", enable: "حدّث الخادم السحابي إلى إصدار يقدّم هذه الصفحة." },
+  customers: { name: "زبائن دفتر كروت", enable: "حدّث الخادم السحابي إلى إصدار يقدّم هذه الصفحة، مع قاعدة بيانات للزبائن." },
   moamalat: {
     name: "جلسات معاملات",
     enable: "اضبط POINTY_RELAY_MOAMALAT_TOKEN_KEY (pointy-relay gen-moamalat-key) في إعدادات الخادم، ثم أعد تشغيله.",

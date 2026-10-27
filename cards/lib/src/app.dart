@@ -8,6 +8,7 @@ import 'design/cards_theme.dart';
 import 'features/links/link_inbox.dart';
 import 'features/onboarding/first_run.dart';
 import 'features/shell/cards_shell.dart';
+import 'features/shell/get_app_banner.dart';
 import 'features/splash/splash_handoff.dart';
 import 'features/splash/splash_overlay.dart';
 import 'shared/cards_scope.dart';
@@ -54,6 +55,7 @@ class CardsApp extends StatelessWidget {
               onGenerateTitle: (context) =>
                   AppLocalizations.of(context).appTitle,
               debugShowCheckedModeBanner: false,
+              scaffoldMessengerKey: dependencies.push.messenger,
               locale: settings.locale,
               supportedLocales: AppLocalizations.supportedLocales,
               localizationsDelegates: const [
@@ -72,6 +74,7 @@ class CardsApp extends StatelessWidget {
                 if (overlay != null) {
                   app = overlay!(context, app);
                 }
+                app = GetAppBanner(child: app);
                 if (splash != null) {
                   app = _WithSplash(opening: splash!, child: app);
                 }

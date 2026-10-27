@@ -180,6 +180,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get errTooManyAttempts => 'Too many attempts. Ask for a new code.';
 
   @override
+  String get errAccountBlocked =>
+      'This account is stopped. Contact us to restart it.';
+
+  @override
   String get errTooSoon => 'Please wait a moment before asking for a new code.';
 
   @override
@@ -356,6 +360,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get copiedNotice => 'Secret code copied';
+
+  @override
+  String get shareAction => 'Share';
+
+  @override
+  String get linkCopiedNotice => 'Link copied';
 
   @override
   String get rechargeNow => 'Recharge now';
@@ -583,6 +593,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shareUsageTitle => 'Share usage data';
 
   @override
+  String get notificationOpenAction => 'View';
+
+  @override
+  String get notificationsTitle => 'Notifications';
+
+  @override
+  String get notificationsBlockedNotice =>
+      'Notifications are off in the phone\'s settings';
+
+  @override
   String get themeTitle => 'Appearance';
 
   @override
@@ -803,7 +823,30 @@ class AppLocalizationsEn extends AppLocalizations {
       'Every card you buy stays in My cards behind your phone\'s lock, ready whenever you need it.';
 
   @override
+  String get onboardingNotifyTitle => 'Offers reach you first';
+
+  @override
+  String get onboardingNotifyBody =>
+      'Turn on notifications and we\'ll tell you about offers and new cards the moment they arrive.';
+
+  @override
+  String get onboardingNotifyAllow => 'Turn on notifications';
+
+  @override
+  String get onboardingNotifyLater => 'Not now';
+
+  @override
+  String get onboardingNotifyOnBody =>
+      'Notifications are on: we\'ll tell you about offers and new cards the moment they arrive.';
+
+  @override
   String get onboardingReplay => 'Take the tour';
+
+  @override
+  String get getAppBody => 'Faster on your phone, your cards always with you';
+
+  @override
+  String get getAppAction => 'Get';
 
   @override
   String get licensesIntro =>

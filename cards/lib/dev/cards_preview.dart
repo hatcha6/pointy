@@ -17,6 +17,7 @@
 //
 // Every screen runs its real code against the fixture relay
 // (cards_fixtures.dart). The board lays the main ones out in phone frames.
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 
@@ -51,6 +52,14 @@ void main() {
   final query = Uri.base.queryParameters;
   final screen = query['screen'] ?? 'board';
   final dark = query['theme'] == 'dark';
+  // `&platform=ios` or `android`: the page as that phone's browser has it
+  // (the web «get the app» bar). A desktop browser's phone emulation still
+  // reports a Mac, so it has to be said.
+  debugDefaultTargetPlatformOverride = switch (query['platform']) {
+    'ios' => TargetPlatform.iOS,
+    'android' => TargetPlatform.android,
+    _ => null,
+  };
   const shelfRelay = String.fromEnvironment('CARDS_PREVIEW_RELAY');
   // The whole app plays scripted purchases: each one ends the next way.
   final scenarios = screen == 'home' ? PreviewScenarios() : null;

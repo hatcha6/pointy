@@ -12,12 +12,16 @@
 // (main.dart.js.br, main.dart.js.gz), and the one the browser accepts is
 // sent. A fingerprinted file (main.3f9a2c1b7d.dart.js) never changes, so a
 // browser keeps it for good; every other file is checked again each visit.
+//
+// A page carries its own link preview (preview.go, page.go): a brand's link
+// shows that brand's name and picture in WhatsApp or Telegram.
 package cardsweb
 
 import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"mime"
 	"net"
 	"net/http"
@@ -35,13 +39,19 @@ type Config struct {
 	Hosts []string
 	// Files is the build (cards/build/web): index.html at its root.
 	Files fs.FS
+	// Previews is the catalog link previews name brands from; nil gives
+	// every page the shelf's own preview.
+	Previews Source
+	Logger   *slog.Logger
 }
 
 // Handler serves the web build for its hosts and hands everything else on.
 type Handler struct {
-	hosts map[string]bool
-	files fs.FS
-	next  http.Handler
+	hosts    map[string]bool
+	files    fs.FS
+	next     http.Handler
+	index    []byte
+	previews *previews
 }
 
 // Wrap puts the web app in front of next for cfg's hosts.
@@ -52,7 +62,8 @@ func Wrap(next http.Handler, cfg Config) (*Handler, error) {
 	if cfg.Files == nil {
 		return nil, errors.New("cardsweb: no web build")
 	}
-	if info, err := fs.Stat(cfg.Files, "index.html"); err != nil || info.IsDir() {
+	index, err := fs.ReadFile(cfg.Files, "index.html")
+	if err != nil {
 		return nil, errors.New("cardsweb: the web build has no index.html")
 	}
 	hosts := make(map[string]bool, len(cfg.Hosts))
@@ -63,7 +74,13 @@ func Wrap(next http.Handler, cfg Config) (*Handler, error) {
 		}
 		hosts[host] = true
 	}
-	return &Handler{hosts: hosts, files: cfg.Files, next: next}, nil
+	return &Handler{
+		hosts:    hosts,
+		files:    cfg.Files,
+		next:     next,
+		index:    index,
+		previews: newPreviews(cfg.Previews, cfg.Logger),
+	}, nil
 }
 
 // Dir is the web build in a directory, checked by [Wrap].
@@ -109,6 +126,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// Apple reads it only as JSON, and the file has no extension.
 		header.Set("Content-Type", "application/json")
 	}
+	if strings.HasPrefix(name, "og/") {
+		h.servePicture(w, r, name)
+		return
+	}
 	if name != "" && h.isFile(name) {
 		h.serve(w, r, name)
 		return
@@ -118,7 +139,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	h.serve(w, r, "index.html")
+	h.servePage(w, r, name)
 }
 
 // fingerprinted is a file name carrying a hash of its content.

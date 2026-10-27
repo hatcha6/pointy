@@ -1,13 +1,12 @@
-import 'dart:ui' show ImageFilter;
-
 import 'package:flutter/material.dart';
 
 import '../design/cards_tokens.dart';
+import 'glass_edge.dart';
 
 /// A pinned header holding one row of controls (the shelf's categories,
-/// My Cards' filters) the way Apple's pages pin them: nothing opaque, a soft
-/// fade over the content once it scrolls beneath, reaching up under the
-/// status bar too. With no [child] it takes no room.
+/// My Cards' filters) the way Apple's pages pin them: nothing opaque, and
+/// once content scrolls beneath, iOS's soft scroll edge ([GlassEdge]) reaching
+/// up under the status bar too. With no [child] it takes no room.
 class GlassEdgeHeader extends SliverPersistentHeaderDelegate {
   GlassEdgeHeader({
     required this.child,
@@ -45,7 +44,6 @@ class GlassEdgeHeader extends SliverPersistentHeaderDelegate {
     double shrinkOffset,
     bool overlapsContent,
   ) {
-    final theme = Theme.of(context);
     final scrolled = overlapsContent || shrinkOffset > 0;
     return Stack(
       fit: StackFit.expand,
@@ -55,27 +53,13 @@ class GlassEdgeHeader extends SliverPersistentHeaderDelegate {
           top: -statusBar,
           left: 0,
           right: 0,
-          bottom: 0,
-          child: AnimatedOpacity(
+          // A little past the row, so the blur has room to die away.
+          bottom: -CardsSpace.md,
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(end: scrolled ? 1 : 0),
             duration: CardsMotion.standard,
-            opacity: scrolled ? 1 : 0,
-            child: ShaderMask(
-              blendMode: BlendMode.dstIn,
-              shaderCallback: (bounds) => const LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Colors.white, Colors.white, Colors.transparent],
-                stops: [0, 0.55, 1],
-              ).createShader(bounds),
-              child: ClipRect(
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                  child: ColoredBox(
-                    color: theme.scaffoldBackgroundColor.withValues(alpha: 0.7),
-                  ),
-                ),
-              ),
-            ),
+            curve: CardsMotion.curve,
+            builder: (context, amount, _) => GlassEdge(amount: amount),
           ),
         ),
         if (child case final row?)

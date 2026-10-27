@@ -224,6 +224,7 @@
     "description": "Code expired."
   },
   "errTooManyAttempts": "محاولات كثيرة. اطلب رمزاً جديداً.",
+  "errAccountBlocked": "هذا الحساب موقوف. تواصل معنا لإعادة تفعيله.",
   "@errTooManyAttempts": {
     "description": "Too many wrong codes."
   },
@@ -468,6 +469,8 @@
     "description": "Copy button."
   },
   "copiedNotice": "تم نسخ الرقم السري",
+  "shareAction": "مشاركة",
+  "linkCopiedNotice": "تم نسخ الرابط",
   "@copiedNotice": {
     "description": "Snackbar after copying."
   },
@@ -753,6 +756,9 @@
   "codeLockBody": "اطلب Face ID أو البصمة قبل عرض الأرقام السرية",
   "codeLockOffReason": "تأكيد هويتك لإيقاف حماية الرموز",
   "shareUsageTitle": "مشاركة بيانات الاستخدام",
+  "notificationOpenAction": "عرض",
+  "notificationsTitle": "الإشعارات",
+  "notificationsBlockedNotice": "الإشعارات متوقفة في إعدادات الهاتف",
   "@shareUsageTitle": {
     "description": "Settings switch: product analytics and masked session recordings."
   },
@@ -859,7 +865,14 @@
   "onboardingInstantBody": "ادفع بمحفظتك أو ببطاقتك المصرفية، فيظهر الرقم السري لكرتك خلال ثوانٍ.",
   "onboardingVaultTitle": "كروتك محفوظة بأمان",
   "onboardingVaultBody": "كل كرت تشتريه يبقى في «كروتي» محمياً بقفل هاتفك، جاهزاً متى احتجته.",
+  "onboardingNotifyTitle": "العروض تصلك أولاً",
+  "onboardingNotifyBody": "فعّل الإشعارات لنخبرك بالعروض والكروت الجديدة لحظة وصولها.",
+  "onboardingNotifyAllow": "تفعيل الإشعارات",
+  "onboardingNotifyLater": "ليس الآن",
+  "onboardingNotifyOnBody": "الإشعارات مفعّلة: نخبرك بالعروض والكروت الجديدة لحظة وصولها.",
   "onboardingReplay": "جولة في التطبيق",
+  "getAppBody": "أسرع على هاتفك، وكروتك معك دائماً",
+  "getAppAction": "تحميل",
   "licensesIntro": "يقوم «دفتر كروت» على برامج مفتوحة المصدر، والشكر لأصحابها. هذه تراخيصها كما نُشرت، بلغتها الأصلية.",
   "searchTitle": "البحث",
   "@searchTitle": {

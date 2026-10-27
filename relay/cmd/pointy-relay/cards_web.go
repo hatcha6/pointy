@@ -14,13 +14,18 @@ import (
 // (copied from the pointy-cards-web image).
 const defaultCardsWebDir = "/srv/cards-web"
 
-// buildCardsWeb serves the card app's web build on hosts, in front of next.
-// No hosts leaves next as it is.
-func buildCardsWeb(next http.Handler, hosts []string, dir string, logger *slog.Logger) (http.Handler, error) {
+// buildCardsWeb serves the card app's web build on hosts, in front of next,
+// its links previewed from previews' catalog. No hosts leaves next as it is.
+func buildCardsWeb(next http.Handler, hosts []string, dir string, previews cardsweb.Source, logger *slog.Logger) (http.Handler, error) {
 	if len(hosts) == 0 {
 		return next, nil
 	}
-	handler, err := cardsweb.Wrap(next, cardsweb.Config{Hosts: hosts, Files: cardsweb.Dir(dir)})
+	handler, err := cardsweb.Wrap(next, cardsweb.Config{
+		Hosts:    hosts,
+		Files:    cardsweb.Dir(dir),
+		Previews: previews,
+		Logger:   logger,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("POINTY_RELAY_CARDS_WEB_HOSTS is set but the web app cannot be served from %s: %w", dir, err)
 	}

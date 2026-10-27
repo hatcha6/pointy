@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -81,6 +82,10 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
 
   Future<void> _start() async {
     final dependencies = CardsScope.of(context);
+    // The first card is in hand: now a notification is worth something.
+    if (!widget.fromHistory) {
+      unawaited(dependencies.push.offer());
+    }
     _locked = widget.fromHistory && !dependencies.lock.isUnlocked;
     if (_codes.isEmpty) {
       _codes = await dependencies.vault.codes(widget.order.id) ?? const [];

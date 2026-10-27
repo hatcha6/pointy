@@ -1651,6 +1651,19 @@ Settings:
   left out sells everything, except `ios`, which defaults to the service
   categories.
 - `POINTY_RELAY_CUSTOMER_ORDER_TTL` (`30m`).
+- `POINTY_RELAY_FCM_SERVICE_ACCOUNT` — the «دفتر كروت» Firebase project's
+  service account key (Firebase console → Project settings → Service
+  accounts → Generate new private key): the JSON itself, or a path to it.
+  The console's notifications go out through it (FCM HTTP v1): to a topic
+  every phone of a build joins (`all`, `ios`, `play`, `apk`), or to one
+  customer's devices, whose tokens the app registers with
+  `PUT /v1/customers/me/push`. Empty sends none; a key that does not parse
+  stops the relay at start.
+- Console, «تطبيق دفتر كروت» (`/v1/customers/admin/…`, admin): customers
+  with what they bought, their credit and devices; every order; the
+  notifications sent. A credit adjustment, stopping an account and erasing
+  one each need a passkey tap. A stopped account is signed out everywhere
+  and its phone refused at sign-in (`account_blocked`) until restarted.
 - `POINTY_RELAY_CARDS_WEB_HOSTS` — hosts the relay serves the card app's
   web build on, comma-separated (`cards.dftr.ly`). Empty serves none.
   - Requests to those hosts get the build; every other host reaches the relay
@@ -1658,6 +1671,14 @@ Settings:
     file is a 404, and the two `.well-known` link files (Universal Links, App
     Links) go out as JSON. Everything is `Cache-Control: no-cache`, so a new
     build shows at once and an unchanged file costs a 304.
+  - Link previews: each page carries `og:` tags from the web channel's
+    catalog (a brand's name, a category's), and `/og/brand/<key>.<id>.jpg` is
+    the brand's 1200×630 picture, its card art on its own colours. Every
+    brand's picture is drawn when the catalog is read (about 15 ms each, one
+    at a time) and kept in memory, so a messaging app never waits on a
+    drawing; one asked for before its turn is drawn at once. New art is a
+    new address. If the catalog or an image cannot be read, the shelf's own
+    picture stands in.
   - Each host's `https://` origin is added to the customer web origins below.
   - The build comes from the `pointy-cards-web` image, which
     `.github/workflows/cards-web.yml` publishes whenever `cards/` changes.

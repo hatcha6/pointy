@@ -1,6 +1,7 @@
 package cardsweb
 
 import (
+	"compress/gzip"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -138,8 +139,6 @@ func TestTheSmallestCopyTheBrowserTakesIsSent(t *testing.T) {
 		{js, "br;q=0, gzip;q=0.8", "gz-main", "gzip"},
 		{js, "", "main();", ""},
 		{js, "identity", "main();", ""},
-		// A page is index.html, compressed too.
-		{"/brand/pubg", "br, gzip", "gz-index", "gzip"},
 		{"/canvaskit/skia.wasm", "br", "br-wasm", "br"},
 	}
 	for _, c := range cases {
@@ -160,8 +159,17 @@ func TestTheSmallestCopyTheBrowserTakesIsSent(t *testing.T) {
 	if kind := getAccepting(h, "/canvaskit/skia.wasm", "br").Header().Get("Content-Type"); kind != "application/wasm" {
 		t.Fatalf("wasm type %q", kind)
 	}
-	if kind := getAccepting(h, "/", "gzip").Header().Get("Content-Type"); !strings.HasPrefix(kind, "text/html") {
+	// A page carries its own preview, so it is compressed as it goes out.
+	page := getAccepting(h, "/brand/pubg", "br, gzip")
+	if kind := page.Header().Get("Content-Type"); !strings.HasPrefix(kind, "text/html") {
 		t.Fatalf("page type %q", kind)
+	}
+	unpacked, err := gzip.NewReader(page.Body)
+	if err != nil || page.Header().Get("Content-Encoding") != "gzip" {
+		t.Fatalf("page encoding %q: %v", page.Header().Get("Content-Encoding"), err)
+	}
+	if body, _ := io.ReadAll(unpacked); !strings.Contains(string(body), "og:image") {
+		t.Fatalf("page %q", body)
 	}
 }
 

@@ -75,6 +75,11 @@ var stepUpRules = []stepUpRule{
 	// Credentials: a new shop's tokens, license keys.
 	rule(http.MethodPost, "/v1/installations"),
 	rule(http.MethodPost, "/v1/enrollment/tokens"),
+	// «دفتر كروت» customers: credit that pays for cards, an account stopped
+	// or erased.
+	rule(http.MethodPost, "/v1/customers/admin/customers/*/credit"),
+	rule(http.MethodPost, "/v1/customers/admin/customers/*/block"),
+	rule(http.MethodDelete, "/v1/customers/admin/customers/*"),
 	// Who can get in.
 	rule(http.MethodPost, "/operators/invite"),
 	rule(http.MethodPost, "/operators/*/disable"),

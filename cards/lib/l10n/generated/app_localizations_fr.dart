@@ -182,6 +182,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get errTooManyAttempts => 'Trop d\'essais. Demandez un nouveau code.';
 
   @override
+  String get errAccountBlocked =>
+      'Ce compte est suspendu. Contactez-nous pour le réactiver.';
+
+  @override
   String get errTooSoon =>
       'Patientez un instant avant de demander un nouveau code.';
 
@@ -361,6 +365,12 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get copiedNotice => 'Code secret copié';
+
+  @override
+  String get shareAction => 'Partager';
+
+  @override
+  String get linkCopiedNotice => 'Lien copié';
 
   @override
   String get rechargeNow => 'Recharger';
@@ -593,6 +603,16 @@ class AppLocalizationsFr extends AppLocalizations {
   String get shareUsageTitle => 'Partager les données d\'utilisation';
 
   @override
+  String get notificationOpenAction => 'Voir';
+
+  @override
+  String get notificationsTitle => 'Notifications';
+
+  @override
+  String get notificationsBlockedNotice =>
+      'Les notifications sont désactivées dans les réglages du téléphone';
+
+  @override
   String get themeTitle => 'Apparence';
 
   @override
@@ -815,7 +835,31 @@ class AppLocalizationsFr extends AppLocalizations {
       'Chaque carte achetée reste dans Mes cartes, protégée par le verrou de votre téléphone, prête quand vous en avez besoin.';
 
   @override
+  String get onboardingNotifyTitle => 'Les offres d\'abord pour vous';
+
+  @override
+  String get onboardingNotifyBody =>
+      'Activez les notifications : nous vous signalons les offres et les nouvelles cartes dès leur arrivée.';
+
+  @override
+  String get onboardingNotifyAllow => 'Activer les notifications';
+
+  @override
+  String get onboardingNotifyLater => 'Plus tard';
+
+  @override
+  String get onboardingNotifyOnBody =>
+      'Les notifications sont activées : nous vous signalons les offres et les nouvelles cartes dès leur arrivée.';
+
+  @override
   String get onboardingReplay => 'Faire la visite';
+
+  @override
+  String get getAppBody =>
+      'Plus rapide sur votre téléphone, vos cartes toujours avec vous';
+
+  @override
+  String get getAppAction => 'Obtenir';
 
   @override
   String get licensesIntro =>

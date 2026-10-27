@@ -15,6 +15,7 @@ String relayErrorText(AppLocalizations l10n, Object error) {
     'wrong_code' => l10n.errWrongCode(attempts),
     'code_expired' => l10n.errCodeExpired,
     'too_many_attempts' => l10n.errTooManyAttempts,
+    'account_blocked' => l10n.errAccountBlocked,
     'too_soon' => l10n.errTooSoon,
     'daily_limit' => l10n.errDailyLimit,
     'send_failed' => l10n.errSendFailed,

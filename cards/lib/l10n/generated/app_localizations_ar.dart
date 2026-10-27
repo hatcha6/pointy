@@ -180,6 +180,9 @@ class AppLocalizationsAr extends AppLocalizations {
   String get errTooManyAttempts => 'محاولات كثيرة. اطلب رمزاً جديداً.';
 
   @override
+  String get errAccountBlocked => 'هذا الحساب موقوف. تواصل معنا لإعادة تفعيله.';
+
+  @override
   String get errTooSoon => 'انتظر قليلاً قبل طلب رمز جديد.';
 
   @override
@@ -355,6 +358,12 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get copiedNotice => 'تم نسخ الرقم السري';
+
+  @override
+  String get shareAction => 'مشاركة';
+
+  @override
+  String get linkCopiedNotice => 'تم نسخ الرابط';
 
   @override
   String get rechargeNow => 'اشحن الآن';
@@ -582,6 +591,15 @@ class AppLocalizationsAr extends AppLocalizations {
   String get shareUsageTitle => 'مشاركة بيانات الاستخدام';
 
   @override
+  String get notificationOpenAction => 'عرض';
+
+  @override
+  String get notificationsTitle => 'الإشعارات';
+
+  @override
+  String get notificationsBlockedNotice => 'الإشعارات متوقفة في إعدادات الهاتف';
+
+  @override
   String get themeTitle => 'المظهر';
 
   @override
@@ -801,7 +819,30 @@ class AppLocalizationsAr extends AppLocalizations {
       'كل كرت تشتريه يبقى في «كروتي» محمياً بقفل هاتفك، جاهزاً متى احتجته.';
 
   @override
+  String get onboardingNotifyTitle => 'العروض تصلك أولاً';
+
+  @override
+  String get onboardingNotifyBody =>
+      'فعّل الإشعارات لنخبرك بالعروض والكروت الجديدة لحظة وصولها.';
+
+  @override
+  String get onboardingNotifyAllow => 'تفعيل الإشعارات';
+
+  @override
+  String get onboardingNotifyLater => 'ليس الآن';
+
+  @override
+  String get onboardingNotifyOnBody =>
+      'الإشعارات مفعّلة: نخبرك بالعروض والكروت الجديدة لحظة وصولها.';
+
+  @override
   String get onboardingReplay => 'جولة في التطبيق';
+
+  @override
+  String get getAppBody => 'أسرع على هاتفك، وكروتك معك دائماً';
+
+  @override
+  String get getAppAction => 'تحميل';
 
   @override
   String get licensesIntro =>

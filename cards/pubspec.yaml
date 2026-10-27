@@ -55,6 +55,9 @@ dependencies:
   webview_flutter: ^4.14.1
   screen_brightness: ^2.1.11
   posthog_flutter: ^5.57.1
+  share_plus: ^13.3.1
+  firebase_core: ^5.1.0
+  firebase_messaging: ^17.0.1
 
 dev_dependencies:
   flutter_test:
@@ -93,6 +96,10 @@ flutter:
     # The privacy policy and terms of use, one file per language
     # (features/legal/legal_document.dart).
     - assets/legal/
+
+  # The pinned headers' glass (shared/glass_edge.dart).
+  shaders:
+    - shaders/glass_edge.frag
 
   # To add assets to your application, add an assets section, like this:
   # assets:

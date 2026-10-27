@@ -6,7 +6,7 @@ import 'package:flutter/rendering.dart';
 
 import '../splash/logo_geometry.dart';
 
-/// The three onboarding pictures, drawn in the mark's own vocabulary: the
+/// The onboarding pictures, drawn in the mark's own vocabulary: the
 /// teal tile, mint cards with the amber stripe, the chip and the two lines,
 /// the same soft shadow.
 ///
@@ -23,6 +23,10 @@ enum OnboardingScene {
 
   /// Kept safe: cards tucked in a pocket behind the phone's lock.
   vault,
+
+  /// Told first: the cards flatten into a stack of notifications, the badge
+  /// a ringing bell.
+  notify,
 }
 
 /// Where one card stands in a scene, and what it wears.
@@ -37,7 +41,12 @@ class _Pose {
     this.lines = 0,
     this.code = 0,
     this.opacity = 1,
+    this.aspect = cardAspect,
+    this.banner = 0,
   });
+
+  /// A card's height to its width.
+  static const double cardAspect = 0.63;
 
   final Offset centre;
   final double width;
@@ -53,6 +62,12 @@ class _Pose {
   final double code;
   final double opacity;
 
+  /// Height to width: a card's, or a notification's long, low shape.
+  final double aspect;
+
+  /// How much of a notification's face shows: the app's icon, two lines.
+  final double banner;
+
   static _Pose lerp(_Pose a, _Pose b, double t) => _Pose(
     centre: Offset.lerp(a.centre, b.centre, t)!,
     width: lerpDouble(a.width, b.width, t)!,
@@ -63,15 +78,21 @@ class _Pose {
     lines: lerpDouble(a.lines, b.lines, t)!,
     code: lerpDouble(a.code, b.code, t)!,
     opacity: lerpDouble(a.opacity, b.opacity, t)!,
+    aspect: lerpDouble(a.aspect, b.aspect, t)!,
+    banner: lerpDouble(a.banner, b.banner, t)!,
   );
 }
 
 class OnboardingArtPainter extends CustomPainter {
-  OnboardingArtPainter({required this.position, this.intro = 1});
+  OnboardingArtPainter({required this.position, this.intro = 1, this.ring = 0});
 
-  /// Where the steps are: 0 the shelf, 1 the instant code, 2 the vault, and
-  /// anything between while a swipe is under way.
+  /// Where the steps are: 0 the shelf, 1 the instant code, 2 the vault, 3
+  /// notifications, and anything between while a swipe is under way.
   final double position;
+
+  /// 0 to 1, over and over while notifications are shown: the bell's swing
+  /// and the rings going out from it.
+  final double ring;
 
   /// 0 to 1: the first picture opening out of the mark itself (the splash's
   /// tile lands on that first frame).
@@ -197,16 +218,43 @@ class OnboardingArtPainter extends CustomPainter {
         chip: 1,
       ),
     ],
+    // Told first: a stack of notifications, the newest in front.
+    [
+      _Pose(
+        centre: Offset(500, 722),
+        width: 600,
+        degrees: 0,
+        color: LogoGeometry.cardsBackSheet,
+        opacity: 0.75,
+        aspect: 0.22,
+      ),
+      _Pose(
+        centre: Offset(500, 662),
+        width: 670,
+        degrees: 0,
+        color: LogoGeometry.cardsBackSheet,
+        aspect: 0.22,
+      ),
+      _Pose(
+        centre: Offset(500, 565),
+        width: 740,
+        degrees: 0,
+        color: LogoGeometry.cardsSheet,
+        aspect: 0.25,
+        banner: 1,
+      ),
+    ],
   ];
 
   // The amber badge: none on the shelf, the check on the code's card, the
-  // lock on the pocket.
+  // lock on the pocket, the bell on the newest notification.
   static const _badgeAt = [
     Offset(760, 395),
     Offset(760, 395),
     Offset(500, 690),
+    Offset(500, 275),
   ];
-  static const _badgeRadius = [0.0, 92.0, 112.0];
+  static const _badgeRadius = [0.0, 92.0, 112.0, 100.0];
 
   /// How much scene [index] is on screen: 1 when shown, fading to 0 a whole
   /// step away.
@@ -221,6 +269,13 @@ class OnboardingArtPainter extends CustomPainter {
     canvas.scale(side / _units);
     final opened = Curves.easeOutCubic.transform(intro.clamp(0.0, 1.0));
     _tile(canvas, opened);
+    // Whatever slides in or out stays on the tile.
+    canvas.clipRRect(
+      RRect.fromRectAndRadius(
+        const Rect.fromLTWH(0, 0, _units, _units),
+        const Radius.circular(LogoGeometry.cardsTileRadius * _units / 1024),
+      ),
+    );
 
     // Between which two scenes, and how far: eased, so each card glides
     // rather than sliding at the finger's raw speed.
@@ -229,6 +284,7 @@ class OnboardingArtPainter extends CustomPainter {
     final t = Curves.easeInOutCubic.transform(p - from);
     final instant = _weight(1);
     final vault = _weight(2);
+    final notify = _weight(3);
 
     _speedLines(canvas, instant);
     for (var card = 0; card < 3; card++) {
@@ -244,6 +300,8 @@ class OnboardingArtPainter extends CustomPainter {
     _badge(canvas, badge, radius * (from == 0 ? opened : 1));
     _check(canvas, badge, radius / 92, instant);
     _lock(canvas, badge, radius / 112, vault);
+    _rings(canvas, badge, radius, notify);
+    _bell(canvas, badge, radius / 100, notify);
 
     final shelf = _weight(0) * opened;
     _sparkle(canvas, const Offset(225, 270), 26 * shelf, LogoGeometry.amber);
@@ -264,6 +322,14 @@ class OnboardingArtPainter extends CustomPainter {
     );
     _sparkle(canvas, const Offset(210, 300), 22 * vault, LogoGeometry.amber);
     _dot(canvas, const Offset(820, 300), 12 * vault, LogoGeometry.cardsSheet);
+    _sparkle(canvas, const Offset(250, 250), 24 * notify, LogoGeometry.amber);
+    _dot(canvas, const Offset(760, 200), 12 * notify, LogoGeometry.cardsSheet);
+    _sparkle(
+      canvas,
+      const Offset(800, 330),
+      16 * notify,
+      LogoGeometry.cardsSheet,
+    );
     canvas.restore();
   }
 
@@ -323,9 +389,11 @@ class OnboardingArtPainter extends CustomPainter {
       chip: pose.chip,
       lines: pose.lines,
       opacity: pose.opacity,
-      paintFace: pose.code <= 0
+      aspect: pose.aspect,
+      paintFace: pose.code <= 0 && pose.banner <= 0
           ? null
           : (canvas, width, height) {
+              _bannerFace(canvas, width, height, pose.banner);
               // The code, group by group: four blocks on the card's face.
               const groups = 4;
               final gap = width * 0.035;
@@ -365,7 +433,11 @@ class OnboardingArtPainter extends CustomPainter {
       830,
     ).shift(Offset(0, (1 - shown) * 260));
     if (shown < 1) {
-      canvas.saveLayer(null, Paint()..color = Color.fromRGBO(0, 0, 0, shown));
+      // Gone well before the swipe ends, so no ghost of it trails.
+      canvas.saveLayer(
+        null,
+        Paint()..color = Color.fromRGBO(0, 0, 0, shown * shown),
+      );
     } else {
       canvas.save();
     }
@@ -390,6 +462,142 @@ class OnboardingArtPainter extends CustomPainter {
         canvas.drawPath(metric.extractPath(d, d + 22), dashes);
       }
     }
+    canvas.restore();
+  }
+
+  /// A notification's face: the app's own icon at the start of the line (on
+  /// the right, as an Arabic phone lays it out) and two lines of words.
+  void _bannerFace(Canvas canvas, double width, double height, double shown) {
+    if (shown <= 0) {
+      return;
+    }
+    final icon = height * 0.58;
+    final iconCentre = Offset(width / 2 - height * 0.21 - icon / 2, 0);
+    final tile = RRect.fromRectAndRadius(
+      Rect.fromCenter(center: iconCentre, width: icon, height: icon),
+      Radius.circular(icon * 0.24),
+    );
+    canvas.drawRRect(
+      tile,
+      Paint()..color = LogoGeometry.cardsTile.withValues(alpha: shown),
+    );
+    // The mark's front card, small, on the icon.
+    final card = Rect.fromCenter(
+      center: iconCentre + Offset(0, icon * 0.04),
+      width: icon * 0.62,
+      height: icon * 0.4,
+    );
+    canvas.save();
+    canvas.translate(iconCentre.dx, iconCentre.dy);
+    canvas.rotate(-6 * math.pi / 180);
+    canvas.translate(-iconCentre.dx, -iconCentre.dy);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(card, Radius.circular(icon * 0.06)),
+      Paint()..color = LogoGeometry.cardsSheet.withValues(alpha: shown),
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(
+        card.left,
+        card.top + card.height * 0.2,
+        card.width,
+        card.height * 0.18,
+      ),
+      Paint()..color = LogoGeometry.amber.withValues(alpha: shown),
+    );
+    canvas.restore();
+    // Its words, ending where the icon begins.
+    final end = iconCentre.dx - icon / 2 - height * 0.14;
+    for (final (dy, length, color) in [
+      (-0.13, 0.5, _deepTeal.withValues(alpha: 0.8)),
+      (0.14, 0.34, _line),
+    ]) {
+      final each = ((shown - (dy > 0 ? 0.2 : 0)) / 0.8).clamp(0.0, 1.0);
+      final long = width * length * each;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(
+            end - long,
+            height * dy - height * 0.065,
+            long,
+            height * 0.13,
+          ),
+          Radius.circular(height * 0.065),
+        ),
+        Paint()..color = color.withValues(alpha: color.a * shown),
+      );
+    }
+  }
+
+  /// Rings going out from the bell as it rings.
+  void _rings(Canvas canvas, Offset bell, double radius, double shown) {
+    if (shown <= 0 || radius <= 0) {
+      return;
+    }
+    for (final phase in [0.0, 0.5]) {
+      final t = (ring + phase) % 1;
+      canvas.drawCircle(
+        bell,
+        radius * (1 + 0.75 * Curves.easeOut.transform(t)),
+        Paint()
+          ..color = LogoGeometry.amber.withValues(alpha: 0.5 * (1 - t) * shown)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 10,
+      );
+    }
+  }
+
+  /// The bell on the badge, at [scale] of its full size, swinging from its
+  /// top with [ring].
+  void _bell(Canvas canvas, Offset centre, double scale, double shown) {
+    if (shown <= 0 || scale <= 0) {
+      return;
+    }
+    final s = scale * shown;
+    // A ring is a quick swing and a long rest.
+    final swing = ring < 0.4
+        ? math.sin(ring / 0.4 * math.pi * 3) * (1 - ring / 0.4)
+        : 0.0;
+    final white = Paint()..color = _white.withValues(alpha: shown);
+    canvas.save();
+    final pivot = centre + Offset(0, -40 * s);
+    canvas.translate(pivot.dx, pivot.dy);
+    canvas.rotate(swing * 18 * math.pi / 180);
+    canvas.translate(-pivot.dx, -pivot.dy);
+    final body = Path()
+      ..moveTo(centre.dx - 40 * s, centre.dy + 22 * s)
+      ..quadraticBezierTo(
+        centre.dx - 30 * s,
+        centre.dy + 8 * s,
+        centre.dx - 30 * s,
+        centre.dy - 8 * s,
+      )
+      ..cubicTo(
+        centre.dx - 30 * s,
+        centre.dy - 36 * s,
+        centre.dx - 16 * s,
+        centre.dy - 44 * s,
+        centre.dx,
+        centre.dy - 44 * s,
+      )
+      ..cubicTo(
+        centre.dx + 16 * s,
+        centre.dy - 44 * s,
+        centre.dx + 30 * s,
+        centre.dy - 36 * s,
+        centre.dx + 30 * s,
+        centre.dy - 8 * s,
+      )
+      ..quadraticBezierTo(
+        centre.dx + 30 * s,
+        centre.dy + 8 * s,
+        centre.dx + 40 * s,
+        centre.dy + 22 * s,
+      )
+      ..close();
+    canvas.drawPath(body, white);
+    canvas.drawCircle(centre + Offset(0, -48 * s), 8 * s, white);
+    // The clapper, swinging a little further than the bell.
+    canvas.drawCircle(centre + Offset(swing * 8 * s, 34 * s), 11 * s, white);
     canvas.restore();
   }
 
@@ -477,12 +685,13 @@ class OnboardingArtPainter extends CustomPainter {
     double chip = 0,
     double lines = 0,
     double opacity = 1,
+    double aspect = _Pose.cardAspect,
     void Function(Canvas canvas, double width, double height)? paintFace,
   }) {
     if (opacity <= 0) {
       return;
     }
-    final height = width * 0.63;
+    final height = width * aspect;
     if (opacity < 1) {
       canvas.saveLayer(null, Paint()..color = Color.fromRGBO(0, 0, 0, opacity));
     } else {
@@ -492,7 +701,7 @@ class OnboardingArtPainter extends CustomPainter {
     canvas.rotate(degrees * math.pi / 180);
     final shape = RRect.fromRectAndRadius(
       Rect.fromCenter(center: Offset.zero, width: width, height: height),
-      Radius.circular(width * 0.09),
+      Radius.circular(math.min(width * 0.09, height * 0.36)),
     );
     _shadow(canvas, shape);
     canvas.drawRRect(shape, Paint()..color = color);
@@ -603,7 +812,9 @@ class OnboardingArtPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(OnboardingArtPainter oldDelegate) =>
-      oldDelegate.position != position || oldDelegate.intro != intro;
+      oldDelegate.position != position ||
+      oldDelegate.intro != intro ||
+      oldDelegate.ring != ring;
 
   /// How amber [color] is, from the mint sheet (0) to the amber (1).
   static double _amberness(Color color) {

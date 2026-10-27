@@ -10,11 +10,12 @@ import (
 
 var _ CustomerStore = (*PostgresStore)(nil)
 
-const selectCustomerColumns = `id, coalesce(phone, ''), created_at, last_sign_in_at, deleted_at`
+const selectCustomerColumns = `id, coalesce(phone, ''), created_at, last_sign_in_at, deleted_at, blocked_at, blocked_reason`
 
 func scanCustomer(row pgx.Row) (Customer, error) {
 	var customer Customer
-	if err := row.Scan(&customer.ID, &customer.Phone, &customer.CreatedAt, &customer.LastSignInAt, &customer.DeletedAt); err != nil {
+	if err := row.Scan(&customer.ID, &customer.Phone, &customer.CreatedAt, &customer.LastSignInAt, &customer.DeletedAt,
+		&customer.BlockedAt, &customer.BlockedReason); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return Customer{}, ErrCustomerNotFound
 		}
@@ -26,11 +27,15 @@ func scanCustomer(row pgx.Row) (Customer, error) {
 		deleted := customer.DeletedAt.UTC()
 		customer.DeletedAt = &deleted
 	}
+	if customer.BlockedAt != nil {
+		blocked := customer.BlockedAt.UTC()
+		customer.BlockedAt = &blocked
+	}
 	return customer, nil
 }
 
 const selectCustomerSessionColumns = `id, customer_id, access_hash, refresh_hash, previous_refresh_hash,
-	rotated_at, device_id, device_name, platform, created_at, last_seen_at, access_expires_at, expires_at`
+	rotated_at, device_id, device_name, platform, created_at, last_seen_at, access_expires_at, expires_at, push_token`
 
 func scanCustomerSession(row pgx.Row) (CustomerSession, error) {
 	var session CustomerSession
@@ -38,7 +43,7 @@ func scanCustomerSession(row pgx.Row) (CustomerSession, error) {
 	if err := row.Scan(
 		&session.ID, &session.CustomerID, &session.AccessHash, &session.RefreshHash, &session.PreviousRefreshHash,
 		&rotatedAt, &session.DeviceID, &session.DeviceName, &session.Platform, &session.CreatedAt,
-		&session.LastSeenAt, &session.AccessExpiresAt, &session.ExpiresAt,
+		&session.LastSeenAt, &session.AccessExpiresAt, &session.ExpiresAt, &session.PushToken,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return CustomerSession{}, ErrCustomerSessionNotFound
@@ -171,7 +176,9 @@ func (s *PostgresStore) VerifyCustomerOTP(ctx context.Context, phone, codeHash s
 		return Customer{}, false, verdict
 	}
 	customer, err := scanCustomer(tx.QueryRow(ctx,
-		`UPDATE relay_customers SET last_sign_in_at = $2 WHERE phone = $1
+		`UPDATE relay_customers
+		SET last_sign_in_at = CASE WHEN blocked_at IS NULL THEN $2 ELSE last_sign_in_at END
+		WHERE phone = $1
 		RETURNING `+selectCustomerColumns, phone, now))
 	created := false
 	if errors.Is(err, ErrCustomerNotFound) {
@@ -186,6 +193,13 @@ func (s *PostgresStore) VerifyCustomerOTP(ctx context.Context, phone, codeHash s
 	}
 	if err != nil {
 		return Customer{}, false, err
+	}
+	if customer.BlockedAt != nil {
+		// The code is spent all the same; the sign-in is refused.
+		if err := tx.Commit(ctx); err != nil {
+			return Customer{}, false, err
+		}
+		return Customer{}, false, ErrCustomerBlocked
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return Customer{}, false, err

@@ -11,8 +11,9 @@ import '../../shared/cards_scope.dart';
 
 /// The first run: three short steps, each a picture in the mark's style, a
 /// title and a sentence, then the shelf. Skippable from the first step; no
-/// sign-in, no permission prompt. The shelf is open to everyone, and those
-/// come when they are needed.
+/// sign-in. On a phone a fourth step offers notifications, the one question
+/// the phone itself then asks; «ليس الآن» leaves it for after the first
+/// card.
 class OnboardingPage extends StatefulWidget {
   const OnboardingPage({super.key, required this.onDone});
 
@@ -35,14 +36,17 @@ class OnboardingPage extends StatefulWidget {
 }
 
 class _Step {
-  const _Step(this.title, this.body);
+  const _Step(this.title, this.body, {this.notify = false});
 
   final String title;
   final String body;
+
+  /// The notifications step: its button asks the phone.
+  final bool notify;
 }
 
 class _OnboardingPageState extends State<OnboardingPage>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   final _pages = PageController();
 
   /// The first picture's own entrance; the others settle as they are swiped
@@ -52,6 +56,21 @@ class _OnboardingPageState extends State<OnboardingPage>
     duration: const Duration(milliseconds: 900),
   );
   int _index = 0;
+
+  /// The bell's ring, over and over while the notifications step shows.
+  late final _ring = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2400),
+  );
+
+  /// Whether the phone can take notifications at all; the step shows
+  /// whenever it can, a replay from the settings included.
+  late final bool _offerNotifications;
+
+  /// Already on when the steps first showed: the step says so and its
+  /// button only finishes. Fixed then, so turning them on here does not
+  /// change the step under the finger.
+  late final bool _alreadyOn;
 
   /// The first picture's box: the opening's tile lands on it.
   final _artKey = GlobalKey();
@@ -69,6 +88,9 @@ class _OnboardingPageState extends State<OnboardingPage>
       return;
     }
     _started = true;
+    final push = CardsScope.of(context).push;
+    _offerNotifications = push.available;
+    _alreadyOn = push.enabled;
     final handoff = SplashHandoffScope.maybeOf(context);
     if (handoff != null &&
         !handoff.landed &&
@@ -106,6 +128,7 @@ class _OnboardingPageState extends State<OnboardingPage>
       ..release(_artKey);
     _pages.dispose();
     _intro.dispose();
+    _ring.dispose();
     super.dispose();
   }
 
@@ -114,7 +137,32 @@ class _OnboardingPageState extends State<OnboardingPage>
     _Step(l10n.onboardingShelfTitle, l10n.onboardingShelfBody),
     _Step(l10n.onboardingInstantTitle, l10n.onboardingInstantBody),
     _Step(l10n.onboardingVaultTitle, l10n.onboardingVaultBody),
+    if (_offerNotifications)
+      _Step(
+        l10n.onboardingNotifyTitle,
+        _alreadyOn ? l10n.onboardingNotifyOnBody : l10n.onboardingNotifyBody,
+        notify: true,
+      ),
   ];
+
+  /// The bell rings only while its step is the one shown.
+  void _ringFor(_Step step) {
+    if (step.notify && !MediaQuery.disableAnimationsOf(context)) {
+      _ring.repeat();
+    } else {
+      _ring
+        ..stop()
+        ..value = 0;
+    }
+  }
+
+  Future<void> _allowNotifications() async {
+    Haptics.select();
+    await CardsScope.of(context).push.setEnabled(true);
+    if (mounted) {
+      _finish(skipped: false);
+    }
+  }
 
   void _finish({required bool skipped}) {
     CardsScope.of(context).analytics
@@ -148,7 +196,7 @@ class _OnboardingPageState extends State<OnboardingPage>
   /// through. Beside each other where the screen is wider than it is tall
   /// (a tablet, the iPhone Duo open), the picture above otherwise.
   Widget _stage(List<_Step> steps) {
-    final moving = Listenable.merge([_pages, _intro]);
+    final moving = Listenable.merge([_pages, _intro, _ring]);
     final art = Semantics(
       excludeSemantics: true,
       child: AnimatedBuilder(
@@ -158,7 +206,11 @@ class _OnboardingPageState extends State<OnboardingPage>
           opacity: _waiting ? 0 : 1,
           child: CustomPaint(
             key: _artKey,
-            painter: OnboardingArtPainter(position: _page, intro: _intro.value),
+            painter: OnboardingArtPainter(
+              position: _page,
+              intro: _intro.value,
+              ring: _ring.value,
+            ),
           ),
         ),
       ),
@@ -169,6 +221,7 @@ class _OnboardingPageState extends State<OnboardingPage>
       onPageChanged: (index) {
         Haptics.select();
         setState(() => _index = index);
+        _ringFor(steps[index]);
       },
       itemBuilder: (context, index) => AnimatedBuilder(
         animation: moving,
@@ -241,6 +294,8 @@ class _OnboardingPageState extends State<OnboardingPage>
     final theme = Theme.of(context);
     final steps = _steps(l10n);
     final last = _index == steps.length - 1;
+    // Asks only while they are off; otherwise it is a plain last step.
+    final notify = steps[_index].notify && !_alreadyOn;
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
@@ -290,7 +345,9 @@ class _OnboardingPageState extends State<OnboardingPage>
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 420),
                     child: FilledButton(
-                      onPressed: () => _next(steps.length),
+                      onPressed: notify
+                          ? _allowNotifications
+                          : () => _next(steps.length),
                       child: AnimatedSwitcher(
                         duration: CardsMotion.standard,
                         switchInCurve: CardsMotion.curve,
@@ -305,12 +362,32 @@ class _OnboardingPageState extends State<OnboardingPage>
                           ),
                         ),
                         child: Text(
-                          last ? l10n.onboardingStart : l10n.onboardingNext,
-                          key: ValueKey(last),
+                          notify
+                              ? l10n.onboardingNotifyAllow
+                              : (last
+                                    ? l10n.onboardingStart
+                                    : l10n.onboardingNext),
+                          key: ValueKey((last, notify)),
                         ),
                       ),
                     ),
                   ),
+                  // «ليس الآن» under the notifications step's button; the
+                  // same room kept empty elsewhere, so nothing jumps.
+                  if (_offerNotifications && !_alreadyOn)
+                    SizedBox(
+                      height: CardsSizes.touch,
+                      child: AnimatedOpacity(
+                        duration: CardsMotion.fast,
+                        opacity: notify ? 1 : 0,
+                        child: TextButton(
+                          onPressed: notify
+                              ? () => _finish(skipped: false)
+                              : null,
+                          child: Text(l10n.onboardingNotifyLater),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),

@@ -8,5 +8,9 @@
 	<array>
 		<string>applinks:cards.dftr.ly</string>
 	</array>
+	<!-- Notifications, through Firebase. Xcode writes "production" into
+	     App Store and TestFlight builds. -->
+	<key>aps-environment</key>
+	<string>development</string>
 </dict>
 </plist>

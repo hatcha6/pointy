@@ -40,6 +40,11 @@
 	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- Notifications (Firebase) are delivered while the app sleeps. -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<key>NSFaceIDUsageDescription</key>
 	<string>لحماية رموز كروتك، نطلب بصمة الوجه قبل إظهارها.</string>
 	<!-- cards.dftr.ly links reach the app as routes: see LinkInbox. -->
