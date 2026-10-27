@@ -179,6 +179,33 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('turning the screen mid-onboarding keeps the step, no crash', (
+    tester,
+  ) async {
+    // PostHog: "Bad state: Too many elements" on the web, when the layout
+    // flipped and two page views held the controller for a frame.
+    await phone(tester);
+    await tester.pumpWidget(
+      CardsApp(
+        dependencies: fixtureDependencies(),
+        home: OnboardingPage(onDone: () {}),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('التالي'));
+    await tester.pumpAndSettle();
+    for (final size in const [Size(890, 626), Size(390, 844), Size(890, 626)]) {
+      tester.view.physicalSize = size * 3;
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    }
+    // Still on the second step: the swipe moved with the layout.
+    final pages = tester.widget<PageView>(find.byType(PageView)).controller!;
+    expect(pages.page, 1);
+  });
+
   testWidgets('it fits the iPhone Duo closed and a small phone', (
     tester,
   ) async {

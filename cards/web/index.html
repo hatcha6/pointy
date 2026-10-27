@@ -103,6 +103,24 @@
       document.body.style.background = "transparent";
     }
   </script>
+  <!-- Facebook's in-app browser wraps document.createEvent, and its wrapper
+       throws "Illegal invocation" when Flutter announces its first frame with
+       it. Where the real call fails, a plain Event (which still takes
+       initEvent) stands in; everywhere else nothing changes. -->
+  <script>
+    (function () {
+      var create = document.createEvent;
+      if (typeof create !== "function") return;
+      document.createEvent = function (type) {
+        try {
+          return create.apply(document, arguments);
+        } catch (error) {
+          if (/^(Event|Events|HTMLEvents)$/.test(String(type))) return new Event("");
+          throw error;
+        }
+      };
+    })();
+  </script>
   <!-- PostHog's loader: a stub `posthog` that queues calls. The app starts it
        (posthog.init) itself, with the project token its build was given, and
        only then is the library fetched; a build with no token never loads it. -->

@@ -110,7 +110,10 @@ class AmbientLight extends StatelessWidget {
       child: AnimatedBuilder(
         animation: Listenable.merge([light, scroll]),
         builder: (context, child) {
-          final offset = scroll.hasClients
+          // Exactly one view: while the page turns between its narrow and
+          // wide layouts, two may be attached for a frame, and `offset`
+          // would throw.
+          final offset = scroll.positions.length == 1
               ? scroll.offset.clamp(0.0, height)
               : 0.0;
           return Transform.translate(

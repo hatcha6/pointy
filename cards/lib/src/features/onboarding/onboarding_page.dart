@@ -48,6 +48,7 @@ class _Step {
 class _OnboardingPageState extends State<OnboardingPage>
     with TickerProviderStateMixin {
   final _pages = PageController();
+  final _wordsKey = GlobalKey();
 
   /// The first picture's own entrance; the others settle as they are swiped
   /// in.
@@ -187,9 +188,16 @@ class _OnboardingPageState extends State<OnboardingPage>
     }
   }
 
-  double get _page => _pages.hasClients && _pages.position.haveDimensions
-      ? _pages.page ?? _index.toDouble()
-      : _index.toDouble();
+  /// Where the swipe is, in steps. For the frame in which the layout turns
+  /// (a phone rotated, a browser's bar sliding away), the old and the new
+  /// page view are both attached, and the controller's `position` would
+  /// throw ("Too many elements"): the step the pages rest on stands in.
+  double get _page {
+    if (_pages.positions.length != 1 || !_pages.position.haveDimensions) {
+      return _index.toDouble();
+    }
+    return _pages.page ?? _index.toDouble();
+  }
 
   /// One picture that stays where it is and morphs from step to step as the
   /// pages move, and the steps' words, which are what the swipe pages
@@ -216,6 +224,9 @@ class _OnboardingPageState extends State<OnboardingPage>
       ),
     );
     final words = PageView.builder(
+      // One page view, wherever the layout puts it: turning the screen moves
+      // it, swipe and all, instead of building a second one.
+      key: _wordsKey,
       controller: _pages,
       itemCount: steps.length,
       onPageChanged: (index) {
