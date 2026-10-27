@@ -3,6 +3,8 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/analytics/analytics.dart';
+import '../../core/analytics/events.dart';
 import '../../core/result.dart';
 import '../api/relay_api.dart';
 import '../models/customer.dart';
@@ -17,11 +19,15 @@ class AuthRepository {
     required this.api,
     required this.sessions,
     this.preferences,
-  }) {
+    Analytics? analytics,
+  }) : analytics = analytics ?? NoAnalytics() {
     api.onSignedOut = () => session.value = null;
   }
 
   final RelayApi api;
+
+  /// Told how each sign-in step went, and of a sign-out.
+  final Analytics analytics;
   final SessionStore sessions;
   final SharedPreferencesAsync? preferences;
   final ValueNotifier<CustomerSession?> session = ValueNotifier(null);
@@ -33,16 +39,36 @@ class AuthRepository {
 
   bool get isSignedIn => session.value != null;
 
-  Future<Result<CodeChallenge>> requestCode(String phone) =>
-      Result.guard(() async {
-        final answer = await api.post(
-          '/v1/customers/auth/otp',
-          body: {'phone': phone},
-        );
-        return CodeChallenge.fromJson(answer);
-      });
+  Future<Result<CodeChallenge>> requestCode(String phone) async {
+    final result = await Result.guard(() async {
+      final answer = await api.post(
+        '/v1/customers/auth/otp',
+        body: {'phone': phone},
+      );
+      return CodeChallenge.fromJson(answer);
+    });
+    switch (result) {
+      case Ok():
+        analytics.signInCodeRequested();
+      case Error(:final exception):
+        analytics.signInFailed('phone', errorCodeOf(exception));
+    }
+    return result;
+  }
 
-  Future<Result<Customer>> verify(String phone, String code) =>
+  Future<Result<Customer>> verify(String phone, String code) async {
+    final result = await _verify(phone, code);
+    switch (result) {
+      // After the session is set, so the event joins the customer.
+      case Ok():
+        analytics.signedIn();
+      case Error(:final exception):
+        analytics.signInFailed('code', errorCodeOf(exception));
+    }
+    return result;
+  }
+
+  Future<Result<Customer>> _verify(String phone, String code) =>
       Result.guard(() async {
         final answer = await api.post(
           '/v1/customers/auth/verify',
@@ -86,6 +112,8 @@ class AuthRepository {
   /// Signs this device out. Forgotten locally even when the relay cannot be
   /// reached: the customer asked to be signed out.
   Future<void> signOut() async {
+    // Before the session goes, so the event is still the customer's.
+    analytics.signedOut();
     try {
       await api.post('/v1/customers/auth/logout', signedIn: true);
     } on RelayApiException {
@@ -97,6 +125,7 @@ class AuthRepository {
   /// Deletes the account (App Store guideline 5.1.1(v)).
   Future<Result<void>> deleteAccount() => Result.guard(() async {
     await api.delete('/v1/customers/me');
+    analytics.accountDeleted();
     await _forget();
   });
 

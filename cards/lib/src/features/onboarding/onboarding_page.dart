@@ -6,6 +6,8 @@ import '../../shared/haptics.dart';
 import '../splash/splash_handoff.dart';
 import 'onboarding_art.dart';
 import '../../core/analytics/analytics.dart';
+import '../../core/analytics/events.dart';
+import '../../shared/cards_scope.dart';
 
 /// The first run: three short steps, each a picture in the mark's style, a
 /// title and a sentence, then the shelf. Skippable from the first step; no
@@ -114,10 +116,16 @@ class _OnboardingPageState extends State<OnboardingPage>
     _Step(l10n.onboardingVaultTitle, l10n.onboardingVaultBody),
   ];
 
+  void _finish({required bool skipped}) {
+    CardsScope.of(context).analytics
+        .onboardingFinished(skipped: skipped, step: _index + 1);
+    widget.onDone();
+  }
+
   void _next(int count) {
     if (_index >= count - 1) {
       Haptics.success();
-      widget.onDone();
+      _finish(skipped: false);
       return;
     }
     Haptics.select();
@@ -255,7 +263,7 @@ class _OnboardingPageState extends State<OnboardingPage>
                     duration: CardsMotion.fast,
                     opacity: last ? 0 : 1,
                     child: TextButton(
-                      onPressed: last ? null : widget.onDone,
+                      onPressed: last ? null : () => _finish(skipped: true),
                       child: Text(l10n.onboardingSkip),
                     ),
                   ),

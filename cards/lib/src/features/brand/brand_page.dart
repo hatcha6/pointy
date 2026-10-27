@@ -24,6 +24,7 @@ import '../sign_in/sign_in_sheet.dart';
 import 'brand_light.dart';
 import '../../shared/haptics.dart';
 import '../../core/analytics/analytics.dart';
+import '../../core/analytics/events.dart';
 
 /// One brand, presented the way a premium storefront presents a product: its
 /// card floating at the top of the page, what it comes in, and a frosted buy bar
@@ -72,6 +73,16 @@ class _BrandPageState extends State<BrandPage> {
   /// The light's scroll beside the details: never attached, so the light
   /// stays put while the details scroll.
   final _still = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        CardsScope.of(context).analytics.brandViewed(widget.brand);
+      }
+    });
+  }
 
   @override
   void dispose() {

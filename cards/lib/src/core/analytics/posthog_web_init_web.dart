@@ -25,6 +25,9 @@ void startPosthogWeb({
           'autocapture': false,
           'capture_pageview': 'history_change',
           'disable_session_recording': true,
+          // Errors the page itself throws, beside the app's own (which the
+          // plugin reports).
+          'capture_exceptions': true,
           // Nor what the page would only fetch more scripts for: page-speed
           // timings, dead-click hunting, surveys. They are switched on here
           // when one is wanted.

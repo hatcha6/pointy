@@ -41,24 +41,30 @@ class CardsDependencies {
     final sessions = SecureSessionStore();
     final api = RelayApi(baseUrl: config.relayBaseUrl, sessions: sessions);
     final settings = AppSettings(preferences: preferences);
+    final analytics = PostHogAnalytics.forConfig(config);
     return CardsDependencies(
       config: config,
       auth: AuthRepository(
         api: api,
         sessions: sessions,
         preferences: preferences,
+        analytics: analytics,
       ),
       catalog: CatalogRepository(
         api: api,
         channel: config.channel,
         preferences: preferences,
       ),
-      orders: OrdersRepository(api: api, channel: config.channel),
+      orders: OrdersRepository(
+        api: api,
+        channel: config.channel,
+        analytics: analytics,
+      ),
       vault: SecureCodeVault(),
       cards: SecureCardVault(),
       lock: CodeLock(settings: settings),
       settings: settings,
-      analytics: PostHogAnalytics.forConfig(config),
+      analytics: analytics,
       preferences: preferences,
     );
   }

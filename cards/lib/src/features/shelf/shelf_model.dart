@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../core/arabic_search.dart';
@@ -8,6 +10,7 @@ import '../../data/models/order.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../../data/repositories/catalog_repository.dart';
 import '../../data/repositories/orders_repository.dart';
+import '../../core/analytics/events.dart';
 
 /// One card the customer bought before and can buy again in one tap.
 typedef BuyAgain = ({CardBrand brand, CardItem item});
@@ -77,11 +80,31 @@ class ShelfModel extends ChangeNotifier {
   void search(String text) {
     query = text;
     notifyListeners();
+    _searched?.cancel();
+    final typed = text.trim();
+    if (typed.isEmpty) {
+      return;
+    }
+    // Told once the customer stops typing, not at every letter.
+    _searched = Timer(const Duration(milliseconds: 1200), () {
+      orders.analytics.searched(typed, find(typed).length);
+    });
   }
 
+  Timer? _searched;
+
   void filter(String? key) {
+    if (key != null && key != category) {
+      orders.analytics.categorySelected(key);
+    }
     category = key;
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _searched?.cancel();
+    super.dispose();
   }
 
   bool get searching => query.trim().isNotEmpty;

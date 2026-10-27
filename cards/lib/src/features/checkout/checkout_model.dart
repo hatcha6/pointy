@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/analytics/events.dart';
 import '../../core/money.dart';
 import '../../core/result.dart';
 import '../../data/models/catalog.dart';
@@ -52,6 +53,7 @@ class CheckoutModel extends ChangeNotifier {
   }
 
   Future<void> load() async {
+    orders.analytics.checkoutStarted(brand, item, quantity);
     final results = await Future.wait([
       orders.checkoutOptions(),
       orders.credit(),
@@ -96,6 +98,7 @@ class CheckoutModel extends ChangeNotifier {
   }
 
   void choose(PaymentMethod value) {
+    orders.analytics.paymentMethodSelected(value.key);
     method = value;
     error = null;
     notifyListeners();
@@ -137,6 +140,10 @@ class CheckoutModel extends ChangeNotifier {
       case Error(:final exception):
         error = exception;
         _key = _newKey();
+        orders.analytics.orderPlaceFailed(
+          errorCodeOf(exception),
+          method: creditCovers ? 'credit' : method?.key ?? '',
+        );
     }
     notifyListeners();
     return order;

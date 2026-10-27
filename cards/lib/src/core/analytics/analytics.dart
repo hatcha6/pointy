@@ -164,6 +164,14 @@ class PostHogAnalytics implements Analytics {
           // Card art and brand logos are the catalog's, nobody's secret.
           ..maskAllImages = false)
         ..onFeatureFlags = _flags.changed;
+      // Error tracking: Flutter's own errors, uncaught async ones, and the
+      // phone's native crashes, each with its stack, frames from this app
+      // marked as ours.
+      setup.errorTrackingConfig
+        ..captureFlutterErrors = true
+        ..capturePlatformDispatcherErrors = true
+        ..captureNativeExceptions = !kIsWeb
+        ..inAppIncludes.add('package:pointy_cards');
       await Posthog().setup(setup);
       // Every event says which build sent it, as the relay's catalog does.
       await Posthog().register('channel', config.channel);

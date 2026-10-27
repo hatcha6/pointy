@@ -485,13 +485,16 @@ CardsDependencies fixtureDependencies({
           scripted: scenarios == null ? null : ScriptedOrders(scenarios),
         ),
   );
-  final auth = AuthRepository(api: api, sessions: sessions)
-    ..session.value = sessions.current;
+  final auth = AuthRepository(
+    api: api,
+    sessions: sessions,
+    analytics: analytics,
+  )..session.value = sessions.current;
   return CardsDependencies(
     config: CardsConfig(relayBaseUrl: base, channel: 'apk'),
     auth: auth,
     catalog: CatalogRepository(api: api, channel: 'apk'),
-    orders: OrdersRepository(api: api, channel: 'apk'),
+    orders: OrdersRepository(api: api, channel: 'apk', analytics: analytics),
     vault: MemoryCodeVault(),
     lock: CodeLock(enabled: false),
     settings: AppSettings(),

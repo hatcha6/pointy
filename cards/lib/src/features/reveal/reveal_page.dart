@@ -19,6 +19,7 @@ import '../../shared/haptics.dart';
 import '../../shared/side_back.dart';
 import 'card_faces.dart';
 import 'qr_pass.dart';
+import '../../core/analytics/events.dart';
 
 /// The moment the purchase pays off. A seal says it worked, the card turns
 /// over to show its code (once, on the card itself), and a row of round
@@ -347,6 +348,9 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
           used: _used.contains(current.code),
           onToggleUsed: () => _toggleUsed(current.code),
           onQr: brand == null ? null : () => _showQr(brand, palette, current),
+          onAction: (action) =>
+              CardsScope.of(context).analytics
+                  .codeAction(action, brand: widget.order.brandKey),
         ),
         if ((brand?.redeemHint ?? '').isNotEmpty) ...[
           const SizedBox(height: CardsSpace.xl),
@@ -554,6 +558,7 @@ class _ActionRow extends StatelessWidget {
     required this.redeemHint,
     required this.used,
     required this.onToggleUsed,
+    required this.onAction,
     this.onQr,
   });
 
@@ -562,6 +567,10 @@ class _ActionRow extends StatelessWidget {
   final String redeemHint;
   final bool used;
   final VoidCallback onToggleUsed;
+
+  /// Told which action was taken, for analytics: copy, recharge, qr, gift,
+  /// mark_used, mark_unused.
+  final ValueChanged<String> onAction;
 
   /// Lifts the card out as a QR pass; no QR button without it.
   final VoidCallback? onQr;
@@ -583,30 +592,45 @@ class _ActionRow extends StatelessWidget {
         icon: Icons.copy_rounded,
         label: l10n.copyAction,
         primary: dial == null,
-        onTap: () => _copy(context, code.code),
+        onTap: () {
+          onAction('copy');
+          _copy(context, code.code);
+        },
       ),
       if (dial != null)
         _RoundAction(
           icon: Icons.phone_forwarded_rounded,
           label: l10n.rechargeNow,
           primary: true,
-          onTap: () => launchUrl(Uri(scheme: 'tel', path: dial)),
+          onTap: () {
+            onAction('recharge');
+            launchUrl(Uri(scheme: 'tel', path: dial));
+          },
         ),
       if (onQr case final onQr?)
         _RoundAction(
           icon: Icons.qr_code_2_rounded,
           label: l10n.showQr,
-          onTap: onQr,
+          onTap: () {
+            onAction('qr');
+            onQr();
+          },
         ),
       _RoundAction(
         icon: Icons.card_giftcard_rounded,
         label: l10n.sendAsGift,
-        onTap: () => _gift(context),
+        onTap: () {
+          onAction('gift');
+          _gift(context);
+        },
       ),
       _RoundAction(
         icon: used ? Icons.undo_rounded : Icons.check_rounded,
         label: used ? l10n.markUnused : l10n.markUsed,
-        onTap: onToggleUsed,
+        onTap: () {
+          onAction(used ? 'mark_unused' : 'mark_used');
+          onToggleUsed();
+        },
       ),
     ];
     return Row(

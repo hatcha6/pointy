@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import '../../core/analytics/analytics.dart';
+import '../../core/analytics/events.dart';
 import '../../core/money.dart';
 import '../../core/result.dart';
 import '../api/relay_api.dart';
@@ -35,10 +37,21 @@ class OrderRequest {
 
 /// Orders, payment and the customer's credit.
 class OrdersRepository {
-  OrdersRepository({required this.api, required this.channel});
+  OrdersRepository({
+    required this.api,
+    required this.channel,
+    Analytics? analytics,
+  }) : analytics = analytics ?? NoAnalytics();
 
   final RelayApi api;
   final String channel;
+
+  /// Told when an order placed here is paid, delivered or ends.
+  final Analytics analytics;
+
+  /// The last status seen of each order placed here, so each step of its
+  /// life is told once, however often it is asked about.
+  final Map<String, OrderStatus> _placed = {};
 
   /// Moves whenever an order is placed or paid here: the shelf listens, so
   /// «اشترِ مجدداً» and the credit follow a purchase at once.
@@ -69,7 +82,10 @@ class OrdersRepository {
           },
         );
         changes.value++;
-        return _order(answer);
+        final order = _order(answer);
+        analytics.orderPlaced(order);
+        _placed[order.id] = OrderStatus.awaitingPayment;
+        return _track(order);
       });
 
   Future<Result<CardOrder>> confirm(String orderId, String otp) =>
@@ -82,12 +98,14 @@ class OrdersRepository {
           ),
         );
         changes.value++;
-        return order;
+        return _track(order);
       });
 
   Future<Result<CardOrder>> cancel(String orderId) => Result.guard(() async {
-    return _order(
-      await api.post('/v1/customers/orders/$orderId/cancel', signedIn: true),
+    return _track(
+      _order(
+        await api.post('/v1/customers/orders/$orderId/cancel', signedIn: true),
+      ),
     );
   });
 
@@ -102,7 +120,7 @@ class OrdersRepository {
         );
         final session = answer['card_session'];
         return (
-          _order(answer),
+          _track(_order(answer)),
           session is Map<String, dynamic>
               ? CardSession.fromJson(session)
               : null,
@@ -123,7 +141,7 @@ class OrdersRepository {
       ),
     );
     changes.value++;
-    return order;
+    return _track(order);
   });
 
   /// Where the card's bank sends the payer back after its 3-D Secure step;
@@ -132,8 +150,8 @@ class OrdersRepository {
 
   /// One order; a delivered one comes back with its codes.
   Future<Result<CardOrder>> order(String orderId) => Result.guard(() async {
-    return _order(
-      await api.get('/v1/customers/orders/$orderId', signedIn: true),
+    return _track(
+      _order(await api.get('/v1/customers/orders/$orderId', signedIn: true)),
     );
   });
 
@@ -150,6 +168,30 @@ class OrdersRepository {
       await api.get('/v1/customers/credit', signedIn: true),
     );
   });
+
+  /// Tells analytics how far an order placed here has come since it was
+  /// last seen: paid (once, whatever follows), delivered, or ended.
+  CardOrder _track(CardOrder order) {
+    final before = _placed[order.id];
+    final now = order.status;
+    if (before == null || before == now) {
+      return order;
+    }
+    _placed[order.id] = now;
+    bool paidBy(OrderStatus status) =>
+        status == OrderStatus.paid ||
+        status == OrderStatus.fulfilling ||
+        status == OrderStatus.delivered;
+    if (paidBy(now) && !paidBy(before)) {
+      analytics.orderPaid(order);
+    }
+    if (now == OrderStatus.delivered) {
+      analytics.orderDelivered(order);
+    } else if (!now.isOpen) {
+      analytics.orderEnded(order);
+    }
+    return order;
+  }
 
   static CardOrder _order(Map<String, dynamic> answer) =>
       CardOrder.fromJson(answer['order'] as Map<String, dynamic>? ?? const {});
