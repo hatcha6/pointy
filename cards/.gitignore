@@ -46,3 +46,8 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Store listing renders: large, made from lib/dev/store_shots.dart captures
+/store_listing/**/*.png
+/store_listing/**/*.jpg
+/store_listing/**/*.mp4

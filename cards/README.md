@@ -184,6 +184,15 @@ Previews: `make cards-preview`, then `?screen=board`, or any single screen:
 `wallet-code`, `preparing`, `refunded`, `reveal`, `my-cards`, `account`,
 `signed-out`, `onboarding`, `about`, `privacy`, `terms`, `card-pay` (the bank-card form; `&card=verify` has the bank ask for its code, `&card=decline` refuses the card). The address's path opens like a tapped `cards.dftr.ly` link: `/category/gaming?screen=home`, `/brand/pubg?screen=home`. Add `&platform=ios` or `&platform=android` for that phone's browser (the web «get the app» bar; a desktop browser's phone emulation still reports a Mac), `&theme=dark` for dark, `&lang=en` or `&lang=fr` for English or French (only while `AppSettings.languageChoice` is on).
 
+**Store screenshots and the app preview** come from `lib/dev/store_shots.dart`,
+the real app on the live shelf with fake orders, run on a phone, the iPhone Duo
+simulator or an emulator. It reads `store_shot.json` from the app's temporary
+folder (an iOS app sees no environment), e.g. `{"STORE_SCREEN": "reveal",
+"STORE_BRAND": "almadar", "STORE_THEME": "dark"}`; `"film"` plays one purchase
+by itself for recording (`store_film.dart`). The finished sets, their sizes and
+the store text are in [`store_listing/`](store_listing/README.md); the renders
+themselves are not in git.
+
 `make cards-preview-live` is the same harness on the **real shelf** of a local
 relay (`make relay-run`, then `pointy-relay vouchers catalog push
 ops/catalog/catalog.json` to it). It is already signed in, and orders, payment

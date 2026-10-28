@@ -474,6 +474,7 @@ CardsDependencies fixtureDependencies({
   LinkInbox? links,
   Analytics? analytics,
   Push? push,
+  String channel = 'apk',
 }) {
   final sessions = MemorySessionStore(signedIn ? fixtureSession : null);
   final base = shelfRelay ?? Uri.parse('https://relay.preview');
@@ -495,15 +496,15 @@ CardsDependencies fixtureDependencies({
   return CardsDependencies(
     config: CardsConfig(
       relayBaseUrl: base,
-      channel: 'apk',
+      channel: channel,
       // The web banner's listings, so a phone-sized preview shows it.
       iosStoreUrl: 'https://apps.apple.com/app/id0000000000',
       androidStoreUrl:
           'https://play.google.com/store/apps/details?id=ly.dftr.cards',
     ),
     auth: auth,
-    catalog: CatalogRepository(api: api, channel: 'apk'),
-    orders: OrdersRepository(api: api, channel: 'apk', analytics: analytics),
+    catalog: CatalogRepository(api: api, channel: channel),
+    orders: OrdersRepository(api: api, channel: channel, analytics: analytics),
     vault: MemoryCodeVault(),
     lock: CodeLock(enabled: false),
     settings: AppSettings(),

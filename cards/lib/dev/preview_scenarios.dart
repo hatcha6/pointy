@@ -156,7 +156,13 @@ class ScriptedOrders {
         total: total,
         nextAction: hosted ? 'hosted_page' : 'otp',
       );
-      _scripts[id] = _Script(outcome: outcome, hosted: hosted, order: placed);
+      final script = _Script(outcome: outcome, hosted: hosted, order: placed);
+      _scripts[id] = script;
+      // Credit that covers it all pays at once, as the relay does.
+      if (sent['use_credit'] == true && (double.tryParse(total) ?? 99) <= 10) {
+        script.paid = true;
+        return _json({'order': _with(script, 'paid', '', order)}, 201);
+      }
       return _json({'order': placed}, 201);
     }
     final match = RegExp(r'^/v1/customers/orders/([^/]+)(/confirm)?$')
