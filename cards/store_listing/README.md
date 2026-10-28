@@ -17,6 +17,13 @@ for Apple-platform mock-ups only, so they appear in the App Store set only.
 | iPhone Duo, outer display | `app-store/iphone-duo-outer` | 1398 × 2034 |
 | App preview (iPhone and iPhone Duo slots) | `app-store/app-preview` | 886 × 1920, 21 s, 30 fps |
 
+| Product page header (iOS 27 creative asset, 21:9) | `app-store/creative/product-page-header.png` | 3840 × 1646 |
+| Search results (iOS 27 creative asset, 3:2) | `app-store/creative/search-results.png` | 3840 × 2560 |
+
+The creative assets follow Apple's rules for them: no prices, URLs or other
+stores, key art in the centre. The header's top band sits under the Dynamic
+Island and the back and share buttons, so the text starts below it.
+
 Uploading both Duo sizes gives the product page Apple's «optimized for iPhone
 Duo» badge. From April 2027 they are required for apps built with the
 iOS 27.1 SDK.

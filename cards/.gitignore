@@ -51,3 +51,4 @@ app.*.map.json
 /store_listing/**/*.png
 /store_listing/**/*.jpg
 /store_listing/**/*.mp4
+/store_listing/**/*.aab
