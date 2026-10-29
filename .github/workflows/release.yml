@@ -1080,17 +1080,40 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
-      - name: Build relay image
-        run: >
-          docker build -f relay/Dockerfile
-          --build-arg POINTY_VERSION=${{ needs.version.outputs.version }}
-          -t "${{ steps.image.outputs.ref }}:${{ needs.version.outputs.version }}" .
+      # Pushed as ONE Docker v2 manifest — no OCI index, no attestation.
+      # JPaaS cannot read an OCI index and reports it as "The authorization
+      # has failed while trying to fetch image data": v0.9.8 broke that way
+      # when the runner's Docker moved to the containerd image store, whose
+      # plain `docker build` + `docker push` emit an index with a provenance
+      # attestation (v0.9.7 and earlier were Docker v2).
+      #
+      # :latest moves only for real releases so JPaaS can track a stable
+      # tag; manual test builds (workflow_dispatch) publish just their version.
+      - name: Build and push relay image
+        env:
+          REF: ${{ steps.image.outputs.ref }}
+          VERSION: ${{ needs.version.outputs.version }}
+          IS_RELEASE: ${{ needs.version.outputs.is_release }}
+        run: |
+          tags=(-t "$REF:$VERSION")
+          if [ "$IS_RELEASE" = "true" ]; then tags+=(-t "$REF:latest"); fi
+          docker buildx build -f relay/Dockerfile \
+            --build-arg POINTY_VERSION="$VERSION" \
+            --provenance=false --sbom=false \
+            --output "type=registry,oci-mediatypes=false" \
+            "${tags[@]}" .
 
-      # Move :latest only for real releases so JPaaS can track a stable tag;
-      # manual test builds (workflow_dispatch) publish just their version tag.
-      - name: Tag :latest (releases only)
-        if: ${{ needs.version.outputs.is_release == 'true' }}
-        run: docker tag "${{ steps.image.outputs.ref }}:${{ needs.version.outputs.version }}" "${{ steps.image.outputs.ref }}:latest"
-
-      - name: Push relay image
-        run: docker push --all-tags "${{ steps.image.outputs.ref }}"
+      - name: Check JPaaS can read the manifest (Docker v2)
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE: ${{ steps.image.outputs.ref }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          repo="${IMAGE#ghcr.io/}"
+          type=$(curl -fsS -o /dev/null -w '%{content_type}' \
+            -H "Authorization: Bearer $(printf %s "$GHCR_TOKEN" | base64 -w0)" \
+            -H "Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json" \
+            "https://ghcr.io/v2/$repo/manifests/$VERSION")
+          echo "manifest media type: $type"
+          [ "$type" = "application/vnd.docker.distribution.manifest.v2+json" ] || {
+            echo "::error::$IMAGE:$VERSION is $type, not a Docker v2 manifest; JPaaS will refuse it"; exit 1; }
