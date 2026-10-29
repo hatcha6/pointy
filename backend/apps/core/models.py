@@ -385,6 +385,12 @@ class ShopSettings(TimeStampedModel):
     # can't browse other cashiers' invoices or edit customer records. Off =
     # customer lookup + debt collection stay manager/accountant only.
     allow_cashier_customer_access = models.BooleanField(default=True)
+    # Lets a manager sign in from anywhere through the relay with nothing but
+    # the installation ID and their password — the web app on iPhone, a phone
+    # that never joined the shop's Wi-Fi. Off, remote access still needs the
+    # device to have paired on the shop's own network first. Off by default:
+    # it puts the shop's sign-in page on the internet, so the owner opts in.
+    allow_remote_sign_in = models.BooleanField(default=False)
     # Per-purchase ceiling for POS cash purchases (drawer-paid POs created from
     # the sell screen by holders of purchasing.add_pos_cash_purchase). Applies to
     # every user of that flow — bigger buys belong in the purchasing screen.

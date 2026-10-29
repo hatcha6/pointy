@@ -1057,6 +1057,15 @@ def _wallet_path(path, **params):
 
 
 def relay_status_payload(installation):
+    return {
+        **_relay_status_payload(installation),
+        # The shop's own switch for the relay's sign-in route (ShopSettings),
+        # shown beside the installation ID it is used with.
+        "allow_remote_sign_in": ShopSettings.load().allow_remote_sign_in,
+    }
+
+
+def _relay_status_payload(installation):
     if installation is None:
         return {
             "configured": False,

@@ -200,6 +200,17 @@ flutter run
 
 The Flutter app reads from the Django API. The POS catalog keeps a small Arabic sample fallback only for local development when the API is unavailable.
 
+The relay also serves the app's web build on `app.dftr.ly`, so staff can reach
+their shop from anywhere, an iPhone in Safari included. A device with no ticket
+names the shop by its installation ID (الإعدادات ← الاشتراك) and a manager
+signs in. This works only when the owner has turned on «السماح بتسجيل الدخول
+عن بُعد» on that page (off by default). The manual-address screen on every
+build offers the same route («الاتصال عن بُعد عبر دفتر»).
+
+```sh
+make frontend-web-build # WebAssembly + JS, fingerprinted and precompressed (frontend/build/web)
+```
+
 Screens are reviewed without a backend through dev-only preview harnesses under
 `frontend/lib/dev/`, each with its own `make` target. The owner dashboard is
 `make frontend-dashboard-preview`
@@ -832,9 +843,18 @@ headlessly with
 LNET keeps one account-wide payments report — every payment the agency made,
 from the till or from billing.lnet.ly — printed **ten rows a page over the
 agency's whole life**. `apps/integrations/payment_report.py` mirrors it into
-`ProviderPayment` (half-hourly, `integrations.sync-payment-reports`, deepening a
-young mirror towards three months) and records how far the copy is known to be
-whole, so a screen can say "every payment of the day" only when it is true.
+`ProviderPayment` and records how far the copy is known to be whole, so a screen
+can say "every payment of the day" only when it is true. It is read on demand,
+never on a timer: opening **Register sessions → شحنات موقع LNET** reads the day
+(and starts walking a young mirror back towards three months in the
+background), and a line's history at the till reads the head first.
+
+Unattended reads of the provider portals keep to the trading day:
+`POINTY_PROVIDER_QUIET_HOURS` (shop-local `start-end`, default `1-9`) silences
+the hourly float refresh, and the daily reconciliation runs at :20 in the hour
+the window ends (09:20). The LNET login is reused for
+`POINTY_INTEGRATION_SESSION_CACHE_TTL` seconds (default 1800), renewed by every
+page that comes back logged in.
 The till's history for an LNET line reads that mirror; read live it only ever
 reached about a day back, which is why it was always empty.
 

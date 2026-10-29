@@ -9,6 +9,7 @@ import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../view_models/local_server_host_controller.dart';
 import 'local_server_starting_screen.dart';
+import 'relay_connection_form.dart';
 
 /// Gates the app behind connection state: a spinner while discovery runs during
 /// the startup cap, a manual IP/URL entry when auto-discovery gives up, and the
@@ -72,7 +73,9 @@ class _ConnectingScreen extends StatelessWidget {
 
 /// Escape hatch shown after auto-discovery fails within the startup cap. The
 /// user can type the server's IP/URL; the background sweep keeps running and
-/// will dismiss this screen automatically if it finds the server first.
+/// will dismiss this screen automatically if it finds the server first. Or
+/// skip the shop's network and go through the relay ([RelayConnectionForm]) —
+/// all there is in the web build the relay serves.
 class ManualConnectionScreen extends StatefulWidget {
   const ManualConnectionScreen({
     super.key,
@@ -91,6 +94,45 @@ class _ManualConnectionScreenState extends State<ManualConnectionScreen> {
   final _controller = TextEditingController();
   bool _submitting = false;
   bool _failed = false;
+
+  /// Showing the relay form instead of the address field.
+  late bool _viaRelay = !widget.coordinator.searchesLan;
+  String _knownInstallationId = '';
+  RemoteConnectOutcome? _relayOutcome;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.coordinator.knownInstallationId().then((id) {
+      if (mounted) {
+        setState(() => _knownInstallationId = id);
+      }
+    });
+  }
+
+  /// The relay button: straight through for a device that knows its shop,
+  /// the installation ID form otherwise — or when that try did not get in.
+  Future<void> _tryRelay() async {
+    if (_submitting) {
+      return;
+    }
+    if (_knownInstallationId.isEmpty) {
+      setState(() => _viaRelay = true);
+      return;
+    }
+    setState(() => _submitting = true);
+    final outcome = await widget.coordinator.connectThroughRelay(
+      _knownInstallationId,
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _submitting = false;
+      _viaRelay = true;
+      _relayOutcome = outcome;
+    });
+  }
 
   @override
   void dispose() {
@@ -139,90 +181,112 @@ class _ManualConnectionScreenState extends State<ManualConnectionScreen> {
           child: AdaptiveMaxWidth(
             width: AppContentWidth.compact,
             expand: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Icon(
-                  Icons.wifi_find_outlined,
-                  size: 44,
-                  color: colors.mutedInk,
-                ),
-                SizedBox(height: spacing.md),
-                Text(
-                  l10n.connectionManualTitle,
-                  textAlign: TextAlign.center,
-                  style: textTheme.titleLarge,
-                ),
-                SizedBox(height: spacing.xs),
-                Text(
-                  l10n.connectionManualMessage,
-                  textAlign: TextAlign.center,
-                  style: textTheme.bodyMedium?.copyWith(color: colors.mutedInk),
-                ),
-                SizedBox(height: spacing.lg),
-                TextField(
-                  controller: _controller,
-                  autofocus: true,
-                  // IPs and URLs read left-to-right even inside the RTL app.
-                  textDirection: TextDirection.ltr,
-                  keyboardType: TextInputType.url,
-                  textInputAction: TextInputAction.go,
-                  enabled: !_submitting,
-                  onSubmitted: (_) => _connect(),
-                  decoration: InputDecoration(
-                    labelText: l10n.connectionManualFieldLabel,
-                    hintText: l10n.connectionManualFieldHint,
-                    hintTextDirection: TextDirection.ltr,
-                    prefixIcon: const Icon(Icons.dns_outlined),
-                  ),
-                ),
-                if (_failed) ...[
-                  SizedBox(height: spacing.md),
-                  PointyInlineMessage.error(
-                    message: l10n.connectionManualError,
-                  ),
-                ],
-                SizedBox(height: spacing.lg),
-                FilledButton.icon(
-                  onPressed: _submitting ? null : _connect,
-                  icon: _submitting
-                      ? const SizedBox.square(
-                          dimension: 18,
-                          child: PointySpinner(strokeWidth: 2.4),
-                        )
-                      : const Icon(Icons.link),
-                  label: Text(l10n.connectionManualConnectButton),
-                ),
-                SizedBox(height: spacing.sm),
-                TextButton.icon(
-                  onPressed: _submitting ? null : _retryAuto,
-                  icon: const Icon(Icons.refresh),
-                  label: Text(l10n.connectionManualRetryButton),
-                ),
-                if (widget.controller.searchingInBackground) ...[
-                  SizedBox(height: spacing.md),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+            child: _viaRelay
+                ? RelayConnectionForm(
+                    key: ValueKey(_knownInstallationId),
+                    coordinator: widget.coordinator,
+                    initialInstallationId: _knownInstallationId,
+                    initialOutcome: _relayOutcome,
+                    onSearchLan: widget.coordinator.searchesLan
+                        ? () => setState(() {
+                            _viaRelay = false;
+                            _relayOutcome = null;
+                          })
+                        : null,
+                  )
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const SizedBox.square(
-                        dimension: 14,
-                        child: PointySpinner(strokeWidth: 2),
+                      Icon(
+                        Icons.wifi_find_outlined,
+                        size: 44,
+                        color: colors.mutedInk,
                       ),
-                      SizedBox(width: spacing.xs),
-                      Flexible(
-                        child: Text(
-                          l10n.connectionManualSearchingHint,
-                          style: textTheme.bodySmall?.copyWith(
-                            color: colors.mutedInk,
-                          ),
+                      SizedBox(height: spacing.md),
+                      Text(
+                        l10n.connectionManualTitle,
+                        textAlign: TextAlign.center,
+                        style: textTheme.titleLarge,
+                      ),
+                      SizedBox(height: spacing.xs),
+                      Text(
+                        l10n.connectionManualMessage,
+                        textAlign: TextAlign.center,
+                        style: textTheme.bodyMedium?.copyWith(
+                          color: colors.mutedInk,
                         ),
                       ),
+                      SizedBox(height: spacing.lg),
+                      TextField(
+                        controller: _controller,
+                        autofocus: true,
+                        // IPs and URLs read left-to-right even inside the RTL app.
+                        textDirection: TextDirection.ltr,
+                        keyboardType: TextInputType.url,
+                        textInputAction: TextInputAction.go,
+                        enabled: !_submitting,
+                        onSubmitted: (_) => _connect(),
+                        decoration: InputDecoration(
+                          labelText: l10n.connectionManualFieldLabel,
+                          hintText: l10n.connectionManualFieldHint,
+                          hintTextDirection: TextDirection.ltr,
+                          prefixIcon: const Icon(Icons.dns_outlined),
+                        ),
+                      ),
+                      if (_failed) ...[
+                        SizedBox(height: spacing.md),
+                        PointyInlineMessage.error(
+                          message: l10n.connectionManualError,
+                        ),
+                      ],
+                      SizedBox(height: spacing.lg),
+                      FilledButton.icon(
+                        onPressed: _submitting ? null : _connect,
+                        icon: _submitting
+                            ? const SizedBox.square(
+                                dimension: 18,
+                                child: PointySpinner(strokeWidth: 2.4),
+                              )
+                            : const Icon(Icons.link),
+                        label: Text(l10n.connectionManualConnectButton),
+                      ),
+                      SizedBox(height: spacing.sm),
+                      TextButton.icon(
+                        onPressed: _submitting ? null : _retryAuto,
+                        icon: const Icon(Icons.refresh),
+                        label: Text(l10n.connectionManualRetryButton),
+                      ),
+                      SizedBox(height: spacing.md),
+                      OutlinedButton.icon(
+                        key: const ValueKey('connect_via_relay_button'),
+                        onPressed: _submitting ? null : _tryRelay,
+                        icon: const Icon(Icons.public),
+                        label: Text(l10n.connectionRemoteButton),
+                      ),
+                      if (widget.controller.searchingInBackground) ...[
+                        SizedBox(height: spacing.md),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const SizedBox.square(
+                              dimension: 14,
+                              child: PointySpinner(strokeWidth: 2),
+                            ),
+                            SizedBox(width: spacing.xs),
+                            Flexible(
+                              child: Text(
+                                l10n.connectionManualSearchingHint,
+                                style: textTheme.bodySmall?.copyWith(
+                                  color: colors.mutedInk,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
-                ],
-              ],
-            ),
           ),
         ),
       ),

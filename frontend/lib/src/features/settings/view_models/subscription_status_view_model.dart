@@ -89,6 +89,30 @@ class SubscriptionStatusViewModel extends ChangeNotifier {
     return ok;
   }
 
+  bool _isSavingRemoteSignIn = false;
+  bool get isSavingRemoteSignIn => _isSavingRemoteSignIn;
+
+  /// Turns the shop's sign-in from the internet on or off, then re-reads the
+  /// snapshot that carries the switch. Returns whether the shop took it.
+  Future<bool> setRemoteSignIn({required bool allowed}) async {
+    if (_isSavingRemoteSignIn) {
+      return false;
+    }
+    _isSavingRemoteSignIn = true;
+    notifyListeners();
+    final result = await _repository.setRemoteSignIn(allowed: allowed);
+    final ok = result is Ok<void>;
+    if (ok) {
+      final reloaded = await _repository.loadStatus();
+      if (reloaded case Ok<RelayInstallationStatus>(value: final status)) {
+        _status = status;
+      }
+    }
+    _isSavingRemoteSignIn = false;
+    notifyListeners();
+    return ok;
+  }
+
   /// Loads AI usage only when the snapshot says AI is entitled; otherwise clears
   /// it. A usage fetch failure is non-fatal — the page just omits the bars.
   Future<void> _refreshUsage() async {

@@ -211,6 +211,13 @@ class _PortalCase(_NoonCase):
         self.now = timezone.now()
         self.client = APIClient()
         self.client.force_authenticate(self.manager)
+        # Opening the page queues the mirror's deepening. Never on a real
+        # broker from a test: Redis is shared, and a worker would run it.
+        queue = mock.patch(
+            "apps.integrations.tasks.deepen_payment_report_task.apply_async"
+        )
+        self.queued_deepening = queue.start()
+        self.addCleanup(queue.stop)
 
     # --- helpers ---------------------------------------------------------
     def mirror(self, rows, **kwargs):
@@ -470,6 +477,49 @@ class PaymentSweepTests(_PortalCase):
             self.account.payments_covered_since,
             self.now - payment_report.KEEP_WINDOW,
         )
+
+    def test_opening_the_page_deepens_a_young_mirror_in_the_background(self):
+        # The half-hourly timer is gone: the page a manager opens starts it.
+        # A month of history, so the day's read stops long before the end.
+        rows = [
+            pay(70000 - day, "45", f"line{day}", self.now - timedelta(days=day, hours=1))
+            for day in range(30)
+        ]
+        self.listing(rows, self.now)
+        self.queued_deepening.assert_called_once_with(
+            args=[self.account.pk], retry=False
+        )
+
+    def test_a_mirror_already_three_months_deep_is_not_walked_again(self):
+        self.account.payments_covered_since = self.now - payment_report.KEEP_WINDOW
+        self.account.save(update_fields=["payments_covered_since"])
+        self.listing([], self.now)
+        self.queued_deepening.assert_not_called()
+
+    def test_a_portal_that_did_not_answer_starts_no_deepening(self):
+        with portal(PortalSession(down=True)):
+            self.client.get("/api/integrations/lnet/portal-payments/")
+        self.queued_deepening.assert_not_called()
+
+    def test_the_background_deepening_walks_towards_three_months(self):
+        rows = [
+            pay(80000 - day, "45", f"line{day}", self.now - timedelta(days=day, hours=1))
+            for day in range(120)
+        ]
+        with portal(PortalSession(rows)):
+            outcome = payment_report.deepen(self.account, now=self.now)
+        self.account.refresh_from_db()
+        self.assertTrue(outcome["complete"])
+        self.assertLessEqual(
+            self.account.payments_covered_since,
+            self.now - payment_report.KEEP_WINDOW,
+        )
+
+    def test_a_deepening_already_running_is_not_joined(self):
+        cache.add(payment_report._SWEEP_LOCK.format(account=self.account.pk), 1, 60)
+        with portal(PortalSession([])):
+            outcome = payment_report.deepen(self.account, now=self.now)
+        self.assertEqual(outcome, {"provider": "lnet", "skipped": True})
 
     def test_a_sweep_already_running_is_not_joined(self):
         cache.add(payment_report._SWEEP_LOCK.format(account=self.account.pk), 1, 60)

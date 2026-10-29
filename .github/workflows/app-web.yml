@@ -1,0 +1,81 @@
+# The shop app's web build, published as ghcr.io/<owner>/pointy-app-web.
+#
+# The relay image copies it in (relay/Dockerfile) and serves it on
+# app.dftr.ly (POINTY_RELAY_APP_WEB_HOSTS): staff sign in to their shop from
+# anywhere — an iPhone in Safari included — through the relay. Built here,
+# only when the app changes, so a relay release takes the latest build in
+# seconds instead of compiling Flutter. A new web build reaches app.dftr.ly
+# with the next relay image.
+#
+# The package should be PUBLIC (Package settings → Change visibility), like
+# pointy-cards-web: local `docker build` of the relay pulls it without a token.
+name: Shop app web image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - "tools/flutter_web_postbuild.sh"
+      - ".github/workflows/app-web.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: app-web
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: "3.47.6"
+
+jobs:
+  publish:
+    name: Build and publish (ghcr)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter ${{ env.FLUTTER_VERSION }}
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      # WebAssembly (skwasm) where the browser runs it, Chrome and Edge; the
+      # JavaScript build from the same output for Safari and Firefox. The
+      # define makes it the relay-hosted build: no shop network to search,
+      # the relay on its own origin.
+      - name: Build the web app
+        working-directory: frontend
+        run: >
+          flutter build web --wasm --release
+          --dart-define=POINTY_RELAY_HOSTED_WEB=true
+
+      - name: Ready the build for slow networks
+        working-directory: frontend
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq brotli
+          pip install --quiet fonttools
+          ../tools/flutter_web_postbuild.sh
+
+      - name: Resolve image name (ghcr requires lowercase)
+        id: image
+        shell: bash
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: echo "ref=ghcr.io/${OWNER,,}/pointy-app-web" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to ghcr.io
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build and push the image
+        run: |
+          docker build -f frontend/web.Dockerfile \
+            -t "${{ steps.image.outputs.ref }}:${GITHUB_SHA::12}" \
+            -t "${{ steps.image.outputs.ref }}:latest" frontend
+          docker push --all-tags "${{ steps.image.outputs.ref }}"

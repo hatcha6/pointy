@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import '../../../data/services/api_error_detail.dart';
 import '../../../data/services/api_session.dart';
+import '../../../data/services/connection_coordinator.dart';
 
 /// Why a sign-in did not go through, as far as the app can tell.
 ///
@@ -42,6 +43,13 @@ enum LoginFailure {
   /// The shop's server could not be reached on the LAN.
   serverUnreachable,
 
+  /// Signing in from the internet: the shop has it turned off.
+  remoteSignInDisabled,
+
+  /// Signing in from the internet: only a manager may, and this account is
+  /// not one.
+  remoteSignInNotAllowed,
+
   /// The backend answered, but not with a sign-in.
   serverError,
 }
@@ -60,6 +68,8 @@ extension LoginFailureKind on LoginFailure {
     LoginFailure.invalidCredentials ||
     LoginFailure.accountDisabled ||
     LoginFailure.tooManyAttempts ||
+    LoginFailure.remoteSignInDisabled ||
+    LoginFailure.remoteSignInNotAllowed ||
     LoginFailure.serverError => false,
   };
 }
@@ -71,6 +81,11 @@ extension LoginFailureKind on LoginFailure {
 LoginFailure classifyLoginFailure(Object error, {required bool viaRelay}) {
   if (error is PosApiException) {
     return _classifyApiFailure(error);
+  }
+  if (error is RemoteSignInPairingException) {
+    return error.reason == 'relay_not_active'
+        ? LoginFailure.relaySubscriptionInactive
+        : LoginFailure.relayUnavailable;
   }
   if (_isTransportFailure(error)) {
     return viaRelay
@@ -94,9 +109,18 @@ LoginFailure _classifyApiFailure(PosApiException error) {
     // The backend's own refusal of the pair — a validation error, so 400.
     400 when _mentions(error, 'disabled') => LoginFailure.accountDisabled,
     400 => LoginFailure.invalidCredentials,
+    403 when _code(error) == 'remote_sign_in_disabled' =>
+      LoginFailure.remoteSignInDisabled,
+    403 when _code(error) == 'remote_sign_in_not_allowed' =>
+      LoginFailure.remoteSignInNotAllowed,
     429 => LoginFailure.tooManyAttempts,
     _ => LoginFailure.serverError,
   };
+}
+
+String? _code(PosApiException error) {
+  final decoded = error.decodedBody;
+  return decoded is Map ? decoded['code']?.toString() : null;
 }
 
 bool _mentions(PosApiException error, String fragment) {

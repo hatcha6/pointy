@@ -50,7 +50,11 @@ x-backend-environment: &backend-environment
   # dead server-side, so this only bounds ordinary portal-side expiry, never
   # correctness. 0 disables (every capability call logs in for real, as
   # before this cache existed).
-  POINTY_INTEGRATION_SESSION_CACHE_TTL: "${POINTY_INTEGRATION_SESSION_CACHE_TTL:-600}"
+  POINTY_INTEGRATION_SESSION_CACHE_TTL: "${POINTY_INTEGRATION_SESSION_CACHE_TTL:-1800}"
+  # Shop-local hours ("start-end") when unattended jobs leave the LNET/HD Box
+  # portals alone; the daily reconciliation runs at :20 in the hour it ends.
+  # Empty turns it off.
+  POINTY_PROVIDER_QUIET_HOURS: "${POINTY_PROVIDER_QUIET_HOURS:-1-9}"
   POINTY_CATALOG_CACHE_ENABLED: "${POINTY_CATALOG_CACHE_ENABLED:-true}"
   POINTY_PRICE_LOOKUP_CACHE_TTL: "${POINTY_PRICE_LOOKUP_CACHE_TTL:-30}"
   # The "what changed" counters every client revalidates on: an admin's edit

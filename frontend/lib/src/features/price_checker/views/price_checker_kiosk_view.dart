@@ -196,7 +196,7 @@ class _BrandMedallion extends StatelessWidget {
             : null,
       ),
       child: Image.asset(
-        'assets/branding/logo.png',
+        'assets/branding/logo_512.png',
         fit: BoxFit.contain,
         filterQuality: FilterQuality.high,
       ),

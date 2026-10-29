@@ -53,6 +53,7 @@ from .relay_serializers import (
     RelayPairingResponseSerializer,
 )
 from .relay_transport import resolver_snapshot
+from .remote_sign_in import remote_sign_in_refusal, request_is_remote_sign_in
 
 
 logger = logging.getLogger(__name__)
@@ -160,7 +161,16 @@ class RelayPairingView(views.APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        if not request_discovery_allowed(request):
+        remote_sign_in = request_is_remote_sign_in(request)
+        if remote_sign_in:
+            # Off the shop's network with no ticket yet: the relay's sign-in
+            # route, open only when the shop allows it, and only to a manager.
+            if remote_sign_in_refusal(request, request.user):
+                return Response(
+                    self._inactive_payload(reason="relay_requires_lan_pairing"),
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        elif not request_discovery_allowed(request):
             return Response(
                 self._inactive_payload(reason="relay_requires_lan_pairing"),
                 status=status.HTTP_403_FORBIDDEN,
@@ -225,6 +235,7 @@ class RelayPairingView(views.APIView):
                 "relay_enabled": installation.relay_enabled,
                 "subscription_active": installation.subscription_active,
                 "device_id_present": bool(device_id),
+                "remote_sign_in": remote_sign_in,
                 "device_name_present": bool(
                     serializer.validated_data.get("device_name", "")
                 ),

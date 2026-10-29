@@ -262,7 +262,7 @@ class _LoginMark extends StatelessWidget {
         child: ClipRRect(
           borderRadius: radius,
           child: Image.asset(
-            'assets/branding/logo.png',
+            'assets/branding/logo_512.png',
             fit: BoxFit.cover,
             filterQuality: FilterQuality.medium,
           ),

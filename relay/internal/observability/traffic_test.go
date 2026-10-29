@@ -7,8 +7,8 @@ import (
 
 func TestTrafficCountsInFlightAndTheLastMinute(t *testing.T) {
 	m := NewMetrics()
-	done := m.PhoneRequestStarted()
-	other := m.PhoneRequestStarted()
+	done := m.RequestStarted()
+	other := m.RequestStarted()
 	if got := m.Traffic().InFlight; got != 2 {
 		t.Fatalf("expected 2 in flight, got %d", got)
 	}

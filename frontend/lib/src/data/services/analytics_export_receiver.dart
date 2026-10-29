@@ -2,7 +2,7 @@ import 'package:http/http.dart' as http;
 
 import '../models/analytics_export.dart';
 import 'analytics_export_receiver_stub.dart'
-    if (dart.library.html) 'analytics_export_receiver_web.dart';
+    if (dart.library.js_interop) 'analytics_export_receiver_web.dart';
 
 /// Materializes a streamed export response into an [AnalyticsExportFile].
 ///

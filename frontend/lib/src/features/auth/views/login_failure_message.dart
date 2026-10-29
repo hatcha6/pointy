@@ -15,6 +15,9 @@ String loginFailureMessage(LoginFailure failure, AppLocalizations l10n) {
     LoginFailure.relayUnavailable => l10n.loginErrorRelayUnavailable,
     LoginFailure.relayUnreachable => l10n.loginErrorRelayUnreachable,
     LoginFailure.serverUnreachable => l10n.loginErrorServerUnreachable,
+    LoginFailure.remoteSignInDisabled => l10n.loginErrorRemoteSignInDisabled,
+    LoginFailure.remoteSignInNotAllowed =>
+      l10n.loginErrorRemoteSignInNotAllowed,
     LoginFailure.serverError => l10n.loginErrorServer,
   };
 }

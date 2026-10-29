@@ -5,11 +5,19 @@
 # than compiling Flutter. The on-prem bundle, which serves no web app, passes
 # CARDS_WEB=no-cards-web.
 ARG CARDS_WEB=ghcr.io/hatcha6/pointy-cards-web:latest
+# The shop app's web build (app.dftr.ly), published the same way by
+# .github/workflows/app-web.yml. The on-prem bundle passes APP_WEB=no-app-web.
+ARG APP_WEB=ghcr.io/hatcha6/pointy-app-web:latest
 
 FROM alpine:3.22 AS no-cards-web
 RUN mkdir /cards-web
 
 FROM ${CARDS_WEB} AS cards-web
+
+FROM alpine:3.22 AS no-app-web
+RUN mkdir /app-web
+
+FROM ${APP_WEB} AS app-web
 
 # The operator console's web app (relay/console-ui), built first so the Go
 # binary embeds it (internal/console/dist).
@@ -57,6 +65,8 @@ RUN apk add --no-cache ca-certificates tzdata \
 COPY --from=build /out/pointy-relay /usr/local/bin/pointy-relay
 # Served only on POINTY_RELAY_CARDS_WEB_HOSTS (cards.dftr.ly).
 COPY --from=cards-web /cards-web /srv/cards-web
+# Served only on POINTY_RELAY_APP_WEB_HOSTS (app.dftr.ly).
+COPY --from=app-web /app-web /srv/app-web
 
 USER 65532:65532
 WORKDIR /var/lib/pointy

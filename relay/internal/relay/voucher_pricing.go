@@ -106,9 +106,7 @@ func (c *VoucherSettingsCache) rememberRates(rates []control.ExchangeRate, now t
 // its cheapest supplier's cost by the card margin policy. A card with no known
 // supplier cost keeps its written prices.
 func (s HTTPServer) autoPricedDocument(document vouchers.Document, offers voucherOffers, settings vouchers.Settings) vouchers.Document {
-	margin := settings.MarginFor(vouchers.ServiceKindCard)
-	rate, _ := settings.EffectiveUSDRate()
-	now := s.clock().Now()
+	price := s.cardPricer(offers, settings)
 	return document.WithPrices(func(item vouchers.Item) (string, string, bool) {
 		if !document.AutoPriced(item) {
 			return "", "", false
@@ -117,6 +115,31 @@ func (s HTTPServer) autoPricedDocument(document vouchers.Document, offers vouche
 		if !found {
 			return "", "", false
 		}
+		return price(located)
+	})
+}
+
+// autoPricedItem is one card of the document priced exactly as
+// autoPricedDocument prices it. A purchase needs only its own card, and
+// pricing the whole shelf for it (every card ranked, each one found again)
+// was time the till spent waiting.
+func (s HTTPServer) autoPricedItem(document vouchers.Document, located vouchers.Located, offers voucherOffers, settings vouchers.Settings) vouchers.Located {
+	if !document.AutoPriced(located.Item) {
+		return located
+	}
+	if shop, retail, ok := s.cardPricer(offers, settings)(located); ok {
+		located.Item.Price, located.Item.RetailPrice = shop, retail
+	}
+	return located
+}
+
+// cardPricer prices an auto-priced card from its cheapest supplier's cost.
+func (s HTTPServer) cardPricer(offers voucherOffers, settings vouchers.Settings) func(vouchers.Located) (string, string, bool) {
+	margin := settings.MarginFor(vouchers.ServiceKindCard)
+	rate, _ := settings.EffectiveUSDRate()
+	now := s.clock().Now()
+	return func(located vouchers.Located) (string, string, bool) {
+		item := located.Item
 		var cost *big.Rat
 		for _, candidate := range s.Vouchers.rankSuppliers(located, offers, settings).Candidates {
 			if candidate.Cost != nil && (cost == nil || candidate.Cost.Cmp(cost) < 0) {
@@ -150,5 +173,5 @@ func (s HTTPServer) autoPricedDocument(document vouchers.Document, offers vouche
 			shop, retail = prices.ShopPays, prices.Retail
 		}
 		return vouchers.FormatDinars(shop), vouchers.FormatDinars(retail), true
-	})
+	}
 }

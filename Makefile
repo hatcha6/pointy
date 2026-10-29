@@ -135,7 +135,7 @@ ENDURANCE_WORKERS ?= 4
 	backend-tracked-simulation backend-stock-integrity backend-contract-gate backend-search-eval \
 	backend-shell backend-superuser backend-test backend-test-pg backend-test-keepdb backend-test-slowest \
 	backend-check backend-celery backend-celery-beat backend-ftp backend-ingest-footage \
-	frontend-install frontend-l10n frontend-run frontend-web frontend-test frontend-camera-wedge-test frontend-camera-wedge-linux frontend-camera-wedge-linux-clean frontend-camera-wedge-preview frontend-calculator-preview frontend-e2e frontend-analyze frontend-format frontend-navigation-preview frontend-balances-preview frontend-employee-loans-preview frontend-scales-preview frontend-invoice-attribution-preview frontend-learning-preview frontend-integrations-preview frontend-moamalat-preview frontend-bulk-price-preview frontend-recharge-preview frontend-portal-payments-preview frontend-printers-preview frontend-reports-preview frontend-marketing-preview frontend-app-update-preview \
+	frontend-install frontend-l10n frontend-run frontend-web frontend-web-build frontend-test frontend-camera-wedge-test frontend-camera-wedge-linux frontend-camera-wedge-linux-clean frontend-camera-wedge-preview frontend-calculator-preview frontend-e2e frontend-analyze frontend-format frontend-navigation-preview frontend-balances-preview frontend-employee-loans-preview frontend-scales-preview frontend-invoice-attribution-preview frontend-learning-preview frontend-integrations-preview frontend-moamalat-preview frontend-bulk-price-preview frontend-recharge-preview frontend-portal-payments-preview frontend-printers-preview frontend-reports-preview frontend-marketing-preview frontend-app-update-preview \
 	marketing-site marketing-site-capture marketing-site-dist marketing-pos-tour \
 	camera-rig camera-rig-stop camera-rig-logs camera-rig-test \
 	relay-install relay-format relay-check relay-test relay-production-test relay-fleet-test relay-run relay-openserp relay-openserp-stop relay-connector relay-connector-remote relay-migrate relay-provision relay-subscription-update relay-remote-mint relay-remote-activate relay-remote-provision relay-cli \
@@ -340,6 +340,10 @@ frontend-run: frontend-install ## Run the Flutter app on the default selected de
 frontend-web: frontend-install ## Run the Flutter app as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT)
 
+frontend-web-build: frontend-install ## Build the web app the relay serves on app.dftr.ly (frontend/build/web), as the app-web image does: WebAssembly + JS, fingerprinted, preloaded, precompressed (needs brotli).
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) build web --wasm --release --dart-define=POINTY_RELAY_HOSTED_WEB=true
+	cd "$(FRONTEND_DIR)" && ../tools/flutter_web_postbuild.sh
+
 CARDS_DIR ?= cards
 .PHONY: cards-install cards-check cards-run cards-web cards-web-build cards-preview cards-preview-live cards-splash
 CARDS_WEB_PORT ?= 8090
@@ -360,7 +364,7 @@ cards-web: cards-install ## Run the card app's web build on :8093 against a loca
 
 cards-web-build: cards-install ## Build the web app for cards.dftr.ly (cards/build/web), as the cards-web image does: fingerprinted, preloaded, precompressed (needs brotli).
 	cd "$(CARDS_DIR)" && $(FLUTTER) build web --wasm --release --dart-define=CARDS_RELAY_URL=$(or $(CARDS_RELAY_URL),https://my.dftr.ly) --dart-define=CARDS_CHANNEL=web
-	cd "$(CARDS_DIR)" && tool/web_postbuild.sh
+	cd "$(CARDS_DIR)" && ../tools/flutter_web_postbuild.sh
 
 cards-preview: cards-install ## Run the card app's preview harness (?screen=board|home|my-cards|account|brand) as a local web server.
 	cd "$(CARDS_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(CARDS_WEB_PORT) -t lib/dev/cards_preview.dart

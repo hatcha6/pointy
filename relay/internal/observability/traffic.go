@@ -5,8 +5,8 @@ import (
 	"time"
 )
 
-// The phone traffic a node took in lately, for the console's system view: how
-// many requests are being served right now, and the last few minutes in
+// The requests a node took in lately, for the console's system view: how
+// many are being served right now, and the last few minutes in
 // 10-second steps. Steps sit on whole multiples of 10 s since the epoch, so
 // every node's steps line up and the console can add them together.
 const (
@@ -28,7 +28,7 @@ type traffic struct {
 	buckets  [trafficSteps]trafficBucket
 }
 
-// TrafficSnapshot is a node's phone traffic, as the registry publishes it.
+// TrafficSnapshot is a node's request traffic, as the registry publishes it.
 type TrafficSnapshot struct {
 	// InFlight is the requests being served right now.
 	InFlight int `json:"in_flight"`
@@ -51,10 +51,10 @@ type TrafficWindow struct {
 	MaxMS    int64 `json:"max_ms"`
 }
 
-// PhoneRequestStarted counts a phone request as in flight, and returns the
-// func that records how it ended. Count each request on the node it reached
-// first: one forwarded here from another node is that node's.
-func (m *Metrics) PhoneRequestStarted() func(statusCode int) {
+// RequestStarted counts a request as in flight, and returns the func that
+// records how it ended. Count each request on the node it reached first: one
+// forwarded here from another node is that node's.
+func (m *Metrics) RequestStarted() func(statusCode int) {
 	if m == nil {
 		return func(int) {}
 	}
@@ -88,7 +88,7 @@ func (t *traffic) finish(now time.Time, took time.Duration, failed bool) {
 	}
 }
 
-// Traffic is the node's phone traffic now and over the last five minutes.
+// Traffic is the node's request traffic now and over the last five minutes.
 func (m *Metrics) Traffic() TrafficSnapshot {
 	if m == nil {
 		return (&Metrics{}).Traffic()

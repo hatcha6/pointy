@@ -239,6 +239,9 @@ class PointyAppDependencies {
     // the request is sent again.
     service.onRelayTicketRejected =
         connectionCoordinator.refreshRelayTicketAfterRejection;
+    // A manager who signed in on the relay's sign-in route gets this
+    // device's ticket before the sign-in counts.
+    service.onSignedInRemotely = connectionCoordinator.completeRemoteSignIn;
     clientUpdateService = ClientUpdateService(
       apiBaseUrl: () => service.baseUrl,
     );

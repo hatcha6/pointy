@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
 import 'camera_file_saver_stub.dart'
-    if (dart.library.html) 'camera_file_saver_web.dart';
+    if (dart.library.js_interop) 'camera_file_saver_web.dart';
 
 enum CameraSaveStatus { saved, canceled, failed }
 

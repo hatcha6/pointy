@@ -1,2 +1,2 @@
 export 'order_document_web_delivery_stub.dart'
-    if (dart.library.html) 'order_document_web_delivery_web.dart';
+    if (dart.library.js_interop) 'order_document_web_delivery_web.dart';

@@ -156,25 +156,29 @@ type HTTPServer struct {
 	RateLimiter                   ratelimit.Limiter
 	RelayRequestRateLimit         ratelimit.Policy
 	TicketIssueRateLimit          ratelimit.Policy
-	TicketRefreshRateLimit        ratelimit.Policy
-	Metrics                       *observability.Metrics
-	Presence                      ConnectorPresence
-	Fleet                         *Fleet
-	ConnectorHold                 time.Duration
-	Version                       string
-	Database                      DatabaseHealthChecker
-	Redis                         redis.Cmdable
-	NodeID                        string
-	Drain                         *NodeDrain
-	NodeProxyToken                string
-	NodeProxyHTTPClient           *http.Client
-	AllowInsecureNodeProxy        bool
-	Tickets                       control.RelayTicketService
-	TicketTTL                     time.Duration
-	TicketRefreshTTL              time.Duration
-	Clock                         control.Clock
-	ConnectorCertificateIssuer    ConnectorCertificateIssuer
-	ConnectorCertificateTTL       time.Duration
+	// RemoteSignInRateLimit bounds the sign-in route per installation, and
+	// RemoteSignInClientRateLimit per installation and caller address.
+	RemoteSignInRateLimit       ratelimit.Policy
+	RemoteSignInClientRateLimit ratelimit.Policy
+	TicketRefreshRateLimit      ratelimit.Policy
+	Metrics                     *observability.Metrics
+	Presence                    ConnectorPresence
+	Fleet                       *Fleet
+	ConnectorHold               time.Duration
+	Version                     string
+	Database                    DatabaseHealthChecker
+	Redis                       redis.Cmdable
+	NodeID                      string
+	Drain                       *NodeDrain
+	NodeProxyToken              string
+	NodeProxyHTTPClient         *http.Client
+	AllowInsecureNodeProxy      bool
+	Tickets                     control.RelayTicketService
+	TicketTTL                   time.Duration
+	TicketRefreshTTL            time.Duration
+	Clock                       control.Clock
+	ConnectorCertificateIssuer  ConnectorCertificateIssuer
+	ConnectorCertificateTTL     time.Duration
 	// Fulus (exchange rates). The subscription token lives only here, for the
 	// same reason as the OpenRouter key: the fleet buys one and fans it out.
 	Fulus FulusConfig
@@ -320,6 +324,10 @@ type adminConsoleData struct {
 }
 
 func (s HTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	s.countRequest(w, r, s.route)
+}
+
+func (s HTTPServer) route(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.URL.Path == "/healthz":
 		s.setNodeHeader(w)
@@ -635,6 +643,10 @@ func (s HTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			writeNotFound(w)
 			return
 		}
+		if installationID, targetPath, ok := signInTarget(r); ok {
+			s.handleRemoteSignIn(w, r, installationID, targetPath, true)
+			return
+		}
 		token, targetPath, ok := relayTarget(r)
 		if !ok {
 			writeNotFound(w)
@@ -833,6 +845,18 @@ func (s HTTPServer) handleMetrics(w http.ResponseWriter, r *http.Request) {
 
 func (s HTTPServer) handleNodeRelay(w http.ResponseWriter, r *http.Request) {
 	rawToken := strings.TrimSpace(r.Header.Get(AccessTokenHeader))
+	if installationID := strings.TrimSpace(r.Header.Get(SignInInstallationHeader)); rawToken == "" && installationID != "" {
+		// A sign-in route request the receiving node already let through.
+		targetPath := "/" + strings.TrimPrefix(r.URL.Path, "/v1/node/relay/")
+		if !remoteSignInPaths[targetPath] {
+			writeNotFound(w)
+			return
+		}
+		s.handleRelayWithOptions(w, r, "", targetPath, relayOptions{
+			SignInInstallationID: installationID,
+		})
+		return
+	}
 	if rawToken == "" {
 		s.metrics().RecordCredentialRejected()
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "relay token required"})
@@ -879,9 +903,7 @@ func (s HTTPServer) handlePublicInvoiceTarget(
 	startedAt := time.Now()
 	statusCode := 0
 	outcome := "unknown"
-	phoneRequestDone := s.phoneRequestStarted(r)
 	defer func() {
-		phoneRequestDone(statusCode)
 		s.metrics().RecordRelayRequest(observability.RelayRequestObservation{
 			Outcome:    outcome,
 			StatusCode: statusCode,
@@ -2313,6 +2335,9 @@ func (s HTTPServer) handleIssueConnectorCertificate(
 
 type relayOptions struct {
 	AllowNodeProxy bool
+	// SignInInstallationID makes this a sign-in route request: the
+	// installation it names stands in for a ticket. See remote_sign_in.go.
+	SignInInstallationID string
 }
 
 func (s HTTPServer) handleRelay(
@@ -2336,9 +2361,7 @@ func (s HTTPServer) handleRelayWithOptions(
 	startedAt := time.Now()
 	statusCode := 0
 	outcome := "unknown"
-	phoneRequestDone := s.phoneRequestStarted(r)
 	defer func() {
-		phoneRequestDone(statusCode)
 		s.metrics().RecordRelayRequest(observability.RelayRequestObservation{
 			Outcome:    outcome,
 			StatusCode: statusCode,
@@ -2346,7 +2369,13 @@ func (s HTTPServer) handleRelayWithOptions(
 		})
 	}()
 
-	installation, err := s.validateRelayCredential(r.Context(), rawToken)
+	var installation control.Installation
+	var err error
+	if options.SignInInstallationID != "" {
+		installation, err = s.validateSignInInstallation(r.Context(), options.SignInInstallationID)
+	} else {
+		installation, err = s.validateRelayCredential(r.Context(), rawToken)
+	}
 	if err != nil {
 		statusCode = relayCredentialStatusCode(err)
 		outcome = relayCredentialOutcome(err)
@@ -2417,6 +2446,9 @@ func (s HTTPServer) handleRelayWithOptions(
 	defer stopDeadlineCloser()
 
 	request := outboundRequest(relayRequest, targetPath)
+	if options.SignInInstallationID != "" {
+		request.Header.Set(SignInRouteHeader, "1")
+	}
 	if maxBytes := s.MaxRelayedRequestBodyBytes; maxBytes > 0 && request.Body != nil {
 		request.Body = http.MaxBytesReader(w, request.Body, maxBytes)
 	}
@@ -2867,6 +2899,9 @@ func outboundRequest(in *http.Request, targetPath string) *http.Request {
 	request.Header = in.Header.Clone()
 	request.Header.Del(AccessTokenHeader)
 	request.Header.Del(RelayedRequestHeader)
+	// Only the relay says a request came in on the sign-in route.
+	request.Header.Del(SignInInstallationHeader)
+	request.Header.Del(SignInRouteHeader)
 	request.Header.Del(NodeProxyTokenHeader)
 	request.Header.Del(NodeProxyMarkerHeader)
 	removeHopHeaders(request.Header)
@@ -3180,15 +3215,6 @@ func (s HTTPServer) logger() *slog.Logger {
 		return s.Logger
 	}
 	return slog.Default()
-}
-
-// phoneRequestStarted counts a phone request in the node's live traffic, on
-// the node it reached first: one forwarded from another node is that node's.
-func (s HTTPServer) phoneRequestStarted(r *http.Request) func(statusCode int) {
-	if strings.TrimSpace(r.Header.Get(NodeProxyMarkerHeader)) != "" {
-		return func(int) {}
-	}
-	return s.metrics().PhoneRequestStarted()
 }
 
 func (s HTTPServer) metrics() *observability.Metrics {

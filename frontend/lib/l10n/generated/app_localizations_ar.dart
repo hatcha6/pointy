@@ -2713,6 +2713,14 @@ class AppLocalizationsAr extends AppLocalizations {
       'تعذر الاتصال بخدمة الوصول عن بُعد. تحقق من اتصال هذا الجهاز بالإنترنت.';
 
   @override
+  String get loginErrorRemoteSignInDisabled =>
+      'هذا المتجر لا يسمح بتسجيل الدخول عن بُعد. يمكن للمالك تفعيله من الإعدادات ← الاشتراك.';
+
+  @override
+  String get loginErrorRemoteSignInNotAllowed =>
+      'تسجيل الدخول عن بُعد متاح للمدير فقط. استخدم حساب المدير، أو سجّل الدخول من داخل المتجر.';
+
+  @override
   String get loginErrorServerUnreachable =>
       'تعذر الوصول إلى خادم المتجر. تحقق من اتصال الجهاز بشبكة المتجر.';
 
@@ -18137,6 +18145,17 @@ class AppLocalizationsAr extends AppLocalizations {
       'أرسل هذا المعرّف للدعم لتفعيل اشتراكك أو تجديده.';
 
   @override
+  String get subscriptionRemoteSignInLabel => 'السماح بتسجيل الدخول عن بُعد';
+
+  @override
+  String get subscriptionRemoteSignInSubtitle =>
+      'يتيح للمدير فتح المتجر من أي مكان — من الآيفون أو المتصفح — برقم التثبيت وكلمة المرور، دون ربط الجهاز داخل المتجر أولًا. للمدير فقط.';
+
+  @override
+  String get subscriptionRemoteSignInSaveFailed =>
+      'تعذّر حفظ الإعداد. تغييره متاح للمدير فقط.';
+
+  @override
   String get subscriptionInstallationIdCopy => 'نسخ';
 
   @override
@@ -18988,6 +19007,46 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get connectionManualSearchingHint =>
       'ما زلنا نبحث تلقائيًا في الخلفية…';
+
+  @override
+  String get connectionRemoteButton => 'الاتصال عن بُعد عبر دفتر';
+
+  @override
+  String get connectionRemoteTitle => 'الاتصال بالمتجر عن بُعد';
+
+  @override
+  String get connectionRemoteMessage =>
+      'أدخل رقم التثبيت الخاص بالمتجر. يجده المالك في الإعدادات ← الاشتراك.';
+
+  @override
+  String get connectionRemoteFieldLabel => 'رقم التثبيت';
+
+  @override
+  String get connectionRemoteFieldHint =>
+      'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx';
+
+  @override
+  String get connectionRemoteConnectButton => 'متابعة';
+
+  @override
+  String get connectionRemoteSearchLanButton =>
+      'البحث عن الخادم في شبكة المتجر';
+
+  @override
+  String get connectionRemoteNotFound =>
+      'لا يوجد متجر مشترك في الوصول عن بُعد بهذا الرقم. تأكد من الرقم وحاول مجددًا.';
+
+  @override
+  String get connectionRemoteDisabled =>
+      'هذا المتجر لا يسمح بتسجيل الدخول عن بُعد. يمكن للمالك تفعيله من الإعدادات ← الاشتراك.';
+
+  @override
+  String get connectionRemoteShopOffline =>
+      'خادم المتجر غير متصل بالإنترنت الآن. حاول مجددًا بعد قليل.';
+
+  @override
+  String get connectionRemoteUnreachable =>
+      'تعذّر الوصول إلى خدمة الوصول عن بُعد. تحقق من اتصال هذا الجهاز بالإنترنت.';
 
   @override
   String get serverHostTitle => 'تشغيل خادم المتجر';

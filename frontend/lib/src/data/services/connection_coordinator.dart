@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import '../models/connection_profile.dart';
 import '../models/relay_pairing.dart';
+import '../models/remote_sign_in_status.dart';
 import 'api_session.dart';
 import 'backend_discovery_service.dart';
 import 'connection_profile_storage.dart';
@@ -22,6 +23,7 @@ class ConnectionCoordinator {
     List<Duration> localReturnBackoffs = defaultLocalReturnBackoffs,
     Duration pairingRetryDelay = defaultPairingRetryDelay,
     Duration resumeCheckAfter = defaultResumeCheckAfter,
+    this.searchesLan = !kRelayHostedWeb,
   }) : _service = service,
        _discovery = discovery,
        _storage = storage,
@@ -43,6 +45,11 @@ class ConnectionCoordinator {
   final List<Duration> _returnHunt;
   final Duration _pairingRetryDelay;
   final Duration _resumeCheckAfter;
+
+  /// Whether this app looks for the shop's server on the network it is on.
+  /// Not the web build the relay serves: it runs on whatever network its
+  /// user is on, and reaches every shop through the relay.
+  final bool searchesLan;
   bool _isPairing = false;
   bool _disposed = false;
   DateTime? _lastFailureRecoveryAt;
@@ -149,7 +156,7 @@ class ConnectionCoordinator {
 
     // Fast path: race the stored IP, the loopback defaults and UDP broadcast.
     // The stored IP is only a hint here — a stale one loses instead of gating.
-    if (await rediscover(includeSweep: false)) {
+    if (searchesLan && await rediscover(includeSweep: false)) {
       return;
     }
     // Settled elsewhere meanwhile — a rediscovery from the app coming back
@@ -162,7 +169,9 @@ class ConnectionCoordinator {
     // let the user type an address — and either way keep hunting for the LAN
     // backend, quickly at first and then for as long as it takes.
     final profile = await _storage.loadProfile();
-    final relayProfile = profile == null ? null : await _moveToRelay(profile);
+    final relayProfile = profile == null
+        ? null
+        : await _moveToRelay(_withHostedRelay(profile));
     if (_disposed || _route != route) {
       return;
     }
@@ -184,7 +193,7 @@ class ConnectionCoordinator {
   /// [includeSweep] is the first caller's). Returns whether a LAN backend was
   /// (re)acquired.
   Future<bool> rediscover({bool includeSweep = true}) {
-    if (_disposed) {
+    if (_disposed || !searchesLan) {
       return Future.value(false);
     }
     return _discoveryInFlight ??= _discoverAndApply(
@@ -296,7 +305,7 @@ class ConnectionCoordinator {
   Future<void> noteAppResumed() async {
     final hiddenSince = _hiddenSince;
     _hiddenSince = null;
-    if (!_started || _disposed) {
+    if (!_started || _disposed || !searchesLan) {
       return;
     }
     if (!_onLocal) {
@@ -388,7 +397,152 @@ class ConnectionCoordinator {
     _onLocal = false;
     _route++;
     _status?.update(phase, shopName: shopName);
-    _startHunt(_returnHunt);
+    if (searchesLan) {
+      _startHunt(_returnHunt);
+    }
+  }
+
+  /// The other way in: the relay, to the shop [rawInstallationId] names. For
+  /// a device with no ticket that is the relay's sign-in route — the shop's
+  /// sign-in screen, through which a manager can reach it from anywhere if
+  /// the shop allows it; see [completeRemoteSignIn] for what follows the
+  /// sign-in. A device that already holds a way in to that shop uses it.
+  ///
+  /// Stays on the screen it was called from unless the shop answered: the
+  /// session moves only on [RemoteConnectOutcome.connected] and
+  /// [RemoteConnectOutcome.signInRequired].
+  Future<RemoteConnectOutcome> connectThroughRelay(
+    String rawInstallationId,
+  ) async {
+    final installationId = rawInstallationId.trim().toLowerCase();
+    if (!_installationIdPattern.hasMatch(installationId) || _disposed) {
+      return RemoteConnectOutcome.notFound;
+    }
+    _status?.setSearching(true);
+    try {
+      final profile = await _storage.loadProfile();
+      if (_disposed) {
+        return RemoteConnectOutcome.unreachable;
+      }
+      if (profile != null && profile.installationId.trim() == installationId) {
+        final relayProfile = await _moveToRelay(_withHostedRelay(profile));
+        if (_disposed) {
+          return RemoteConnectOutcome.unreachable;
+        }
+        if (relayProfile != null) {
+          _leaveLocal(
+            ConnectionPhase.connectedRelay,
+            shopName: relayProfile.shopName,
+          );
+          return RemoteConnectOutcome.connected;
+        }
+      }
+      final storedRelay = profile?.relayApiBaseUrl.trim() ?? '';
+      final relayApiBaseUrl =
+          hostedWebRelayApiBaseUrl() ??
+          (storedRelay.isNotEmpty ? storedRelay : kDefaultRelayApiBaseUrl);
+      _service.configureConnectionTarget(
+        baseUrl: relayApiBaseUrl,
+        signInInstallationId: installationId,
+      );
+      final RemoteSignInStatus status;
+      try {
+        status = await _service.fetchRemoteSignInStatus();
+      } on PosApiException catch (error) {
+        return switch (error.statusCode) {
+          401 || 402 || 404 => RemoteConnectOutcome.notFound,
+          503 => RemoteConnectOutcome.shopOffline,
+          _ => RemoteConnectOutcome.unreachable,
+        };
+      } on Object {
+        return RemoteConnectOutcome.unreachable;
+      }
+      if (_disposed) {
+        return RemoteConnectOutcome.unreachable;
+      }
+      if (!status.enabled) {
+        return RemoteConnectOutcome.disabled;
+      }
+      final saved = (await _updateProfile((stored) {
+        final base = stored ?? ConnectionProfile.empty();
+        final sameShop = base.installationId.trim() == installationId;
+        // Another shop's LAN address and credentials lead nowhere here.
+        return ConnectionProfile(
+          localApiBaseUrl: sameShop ? base.localApiBaseUrl : '',
+          relayApiBaseUrl: relayApiBaseUrl,
+          relayToken: sameShop ? base.relayToken : '',
+          relayRefreshToken: sameShop ? base.relayRefreshToken : '',
+          relayTokenExpiresAt: sameShop ? base.relayTokenExpiresAt : null,
+          relayRefreshExpiresAt: sameShop ? base.relayRefreshExpiresAt : null,
+          installationId: installationId,
+          shopName: status.shopName.isNotEmpty
+              ? status.shopName
+              : base.shopName,
+        );
+      }))!;
+      if (_disposed) {
+        return RemoteConnectOutcome.unreachable;
+      }
+      if (profile?.installationId.trim() != installationId) {
+        _service.forgetBackendState();
+        _relaySubscriptionInactiveUntil = null;
+      }
+      _leaveLocal(ConnectionPhase.connectedRelay, shopName: saved.shopName);
+      return RemoteConnectOutcome.signInRequired;
+    } finally {
+      if (!_disposed) {
+        _status?.setSearching(false);
+      }
+    }
+  }
+
+  /// Hook for [PosApiService.onSignedInRemotely]: a manager just signed in on
+  /// the relay's sign-in route, and the shop's pairing turns that session into
+  /// this device's ticket and refresh token — from then on it is on the relay
+  /// like any till paired in the shop. Throws [RemoteSignInPairingException]
+  /// when the shop gave none: the sign-in is of no use without it.
+  Future<void> completeRemoteSignIn() async {
+    final deviceId = await _storage.loadOrCreateDeviceId();
+    final RelayPairing pairing;
+    try {
+      pairing = await _service.requestRelayPairing(deviceId: deviceId);
+    } on PosApiException catch (error) {
+      final body = error.decodedBody;
+      throw RemoteSignInPairingException(
+        body is Map ? body['reason']?.toString() ?? '' : '',
+      );
+    }
+    if (!pairing.hasTicket) {
+      throw RemoteSignInPairingException(pairing.reason);
+    }
+    final saved = (await _updateProfile(
+      (stored) => _profileFromPairing(
+        pairing,
+        localApiBaseUrl: stored?.localApiBaseUrl ?? '',
+        existingProfile: stored,
+      ),
+    ))!;
+    if (_disposed) {
+      return;
+    }
+    _relaySubscriptionInactiveUntil = null;
+    _configureRelay(saved);
+    _scheduleRefresh(saved);
+    _status?.update(ConnectionPhase.connectedRelay, shopName: saved.shopName);
+  }
+
+  /// The shop this device last reached, for the relay button to try without
+  /// asking; empty for a device that never reached one.
+  Future<String> knownInstallationId() async {
+    final profile = await _storage.loadProfile();
+    return profile?.installationId.trim() ?? '';
+  }
+
+  /// [profile] as the relay-hosted web build must use it: the relay on the
+  /// page's own origin, wherever the shop's pairing said the relay was.
+  ConnectionProfile _withHostedRelay(ConnectionProfile profile) {
+    final hosted = hostedWebRelayApiBaseUrl();
+    return hosted == null ? profile : profile.copyWith(relayApiBaseUrl: hosted);
   }
 
   /// Looks for the LAN backend on [schedule] (its last delay repeats) until
@@ -881,6 +1035,44 @@ class ConnectionCoordinator {
   }
 }
 
+/// What [ConnectionCoordinator.connectThroughRelay] found.
+enum RemoteConnectOutcome {
+  /// On the relay with this device's own ticket: the app carries on.
+  connected,
+
+  /// The shop takes sign-ins from the internet: the sign-in screen is next.
+  signInRequired,
+
+  /// No paid installation by that ID — mistyped, or without remote access.
+  /// The relay answers both alike, on purpose.
+  notFound,
+
+  /// The shop does not take sign-ins from the internet.
+  disabled,
+
+  /// The relay knows the shop, but its server is not connected right now.
+  shopOffline,
+
+  /// The relay could not be reached, or did not answer clearly.
+  unreachable,
+}
+
+/// The shop answered a remote sign-in without a ticket for this device;
+/// [reason] is the backend's (`relay_not_active`, `relay_unavailable`, …).
+class RemoteSignInPairingException implements Exception {
+  const RemoteSignInPairingException(this.reason);
+
+  final String reason;
+
+  @override
+  String toString() => 'Remote sign-in pairing refused: $reason';
+}
+
+/// An installation ID as the relay issues them: a UUID.
+final _installationIdPattern = RegExp(
+  r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+);
+
 /// One exchange of the refresh token: the profile it produced, or the relay's
 /// status when it refused ([refusedWith] is null when it never answered).
 class _RemoteRefresh {
@@ -895,7 +1087,9 @@ ConnectionProfile _profileFromPairing(
   required String localApiBaseUrl,
   ConnectionProfile? existingProfile,
 }) {
-  final relayApiBaseUrl = pairing.relayPublicApiUrl.trim().isNotEmpty
+  final relayApiBaseUrl = hostedWebRelayApiBaseUrl() != null
+      ? hostedWebRelayApiBaseUrl()!
+      : pairing.relayPublicApiUrl.trim().isNotEmpty
       ? _relayApiBaseUrl(pairing.relayPublicApiUrl)
       : (existingProfile?.relayApiBaseUrl.trim().isNotEmpty ?? false)
       ? existingProfile!.relayApiBaseUrl

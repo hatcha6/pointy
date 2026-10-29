@@ -200,6 +200,7 @@ class PosApiSession {
   String? _csrfToken;
   String _baseUrl;
   String _relayToken = '';
+  String _signInInstallationId = '';
   ApiConnectionTarget? _fallbackTarget;
 
   /// Invoked when a request fails at the transport level while pointed at a
@@ -263,6 +264,11 @@ class PosApiSession {
   String get baseUrl => _baseUrl;
   bool get usesRelay => _relayToken.isNotEmpty;
 
+  /// On the relay's sign-in route: no ticket yet, the installation named
+  /// instead. The relay lets such a request reach only what a sign-in needs.
+  bool get signsInRemotely =>
+      _relayToken.isEmpty && _signInInstallationId.isNotEmpty;
+
   Uri uri(String path, {Map<String, String>? queryParameters}) {
     final normalizedPath = path.startsWith('/') ? path.substring(1) : path;
     return Uri.parse(
@@ -292,12 +298,14 @@ class PosApiSession {
   void configureConnectionTarget({
     required String baseUrl,
     String relayToken = '',
+    String signInInstallationId = '',
     ApiConnectionTarget? fallbackTarget,
   }) {
     final nextBaseUrl = _normalizeBaseUrl(baseUrl);
     final sameAddress = nextBaseUrl == _baseUrl;
     _baseUrl = nextBaseUrl;
     _relayToken = relayToken.trim();
+    _signInInstallationId = signInInstallationId.trim();
     _fallbackTarget = fallbackTarget;
     if (sameAddress) {
       // Re-confirming the address we already talk to — a rediscovery that
@@ -869,6 +877,7 @@ class PosApiSession {
             .join('; '),
       if (includeCsrf && _csrfToken != null) 'X-CSRFToken': _csrfToken!,
       if (_relayToken.isNotEmpty) 'X-Pointy-Relay-Token': _relayToken,
+      if (signsInRemotely) 'X-Pointy-Relay-Installation': _signInInstallationId,
       if (normalizedIdempotencyKey.isNotEmpty)
         'Idempotency-Key': normalizedIdempotencyKey,
     };

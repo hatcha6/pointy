@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="ar" dir="rtl">
 <head>
   <!--
     If you are serving your web app in a path other than the root, change the
@@ -18,11 +18,15 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="description" content="دفتر — نظام نقاط البيع">
+  <meta name="theme-color" content="#F8F7F4" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0D1117" media="(prefers-color-scheme: dark)">
 
-  <!-- iOS meta tags & icons -->
+  <!-- iOS meta tags & icons: «أضف إلى الشاشة الرئيسية» opens it like an app. -->
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="دفتر">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
@@ -31,8 +35,41 @@
 
   <title>دفتر</title>
   <link rel="manifest" href="manifest.json">
+
+  <!--
+    Something on screen the moment the page arrives, while the app's code is
+    still on its way: a few hundred bytes of CSS, no image, no font to fetch.
+    The app removes it on its first frame (the script at the end of body).
+  -->
+  <style>
+    html, body { height: 100%; margin: 0; background: #F8F7F4; }
+    #pointy-splash {
+      position: fixed; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 20px;
+      font: 600 28px system-ui, -apple-system, "Segoe UI", Tahoma, sans-serif;
+      color: #0F766E; transition: opacity .2s;
+    }
+    #pointy-splash i {
+      width: 28px; height: 28px; border-radius: 50%;
+      border: 3px solid #E0F2EF; border-top-color: #0F766E;
+      animation: pointy-spin .8s linear infinite;
+    }
+    @keyframes pointy-spin { to { transform: rotate(360deg); } }
+    @media (prefers-color-scheme: dark) {
+      html, body { background: #0D1117; }
+      #pointy-splash { color: #2DD4BF; }
+      #pointy-splash i { border-color: #0C3A34; border-top-color: #2DD4BF; }
+    }
+  </style>
 </head>
 <body>
+  <div id="pointy-splash" aria-hidden="true">دفتر<i></i></div>
+  <script>
+    window.addEventListener("flutter-first-frame", function () {
+      var splash = document.getElementById("pointy-splash");
+      if (splash) splash.remove();
+    });
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

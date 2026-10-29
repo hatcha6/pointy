@@ -31,7 +31,7 @@ type systemNode struct {
 const systemProbeTimeout = 2 * time.Second
 
 // handleSystem is everything the console's system view shows: every live node
-// with its tunnels, shops and phone traffic (from the registry, this node's
+// with its tunnels, shops and request traffic (from the registry, this node's
 // read live), the shops connected anywhere, and PostgreSQL and Redis checked
 // now.
 func (s HTTPServer) handleSystem(w http.ResponseWriter, r *http.Request) {

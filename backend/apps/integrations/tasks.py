@@ -10,13 +10,19 @@ from celery import shared_task
     retry_kwargs={"max_retries": 2},
 )
 def reconcile_providers_task(self):
-    """Nightly: prove that what Pointy sold, the provider actually did.
+    """Daily: prove that what Pointy sold, the provider actually did.
 
-    Retries are shallow on purpose — a provider that is down at 02:00 is very
-    likely down at 02:05, and tomorrow's sweep covers the same window anyway.
+    Fired every hour; runs only in the hour the provider quiet hours end, so
+    the portals see one read as the shop's day starts instead of one at four
+    in the morning (see :mod:`apps.integrations.quiet_hours`). Retries are
+    shallow on purpose — a provider that is down now is very likely down in
+    five minutes, and tomorrow's sweep covers the same window anyway.
     """
+    from .quiet_hours import reconciliation_due
     from .reconciliation import reconcile_all
 
+    if not reconciliation_due():
+        return {"skipped": "not_due"}
     return reconcile_all()
 
 
@@ -132,15 +138,32 @@ def _one_at_a_time(lock, sweep):
 
 @shared_task(bind=True, name="integrations.sync_payment_reports")
 def sync_payment_reports_task(self):
-    """Half-hourly: keep each provider's payments report mirrored.
+    """Every provider's payments report, mirrored now. Not scheduled.
 
-    What the till's history for an LNET line and a manager's "payments made on
-    the website" both read. Not retried: the next run is half an hour away and
-    walks the same report; each account keeps to itself under its own lock.
+    The mirror is read when somebody needs it (see
+    :func:`deepen_payment_report_task`); this stays for an operator who wants
+    every report brought up to date at once. Each account keeps to itself
+    under its own lock.
     """
     from .payment_report import sweep_all
 
     return sweep_all()
+
+
+@shared_task(bind=True, name="integrations.deepen_payment_report")
+def deepen_payment_report_task(self, account_id):
+    """Walk one young mirror back towards three months, in the background.
+
+    Started by the register sessions' «شحنات موقع LNET» page rather than a
+    timer, so the portal is only ever walked while somebody is working.
+    """
+    from .models import IntegrationAccount
+    from .payment_report import deepen
+
+    account = IntegrationAccount.objects.filter(pk=account_id, is_active=True).first()
+    if account is None:
+        return {"skipped": True}
+    return deepen(account)
 
 
 @shared_task(bind=True, name="integrations.sync_voucher_catalog")

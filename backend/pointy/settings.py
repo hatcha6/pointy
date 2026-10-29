@@ -677,17 +677,20 @@ CELERY_BEAT_SCHEDULE = {
         "task": "reports.snapshot_month_end",
         "schedule": crontab(minute=5, hour=1),
     },
-    # Nightly, after the day's trading: match what Pointy sold against what
+    # Once a day, before the shop opens: match what Pointy sold against what
     # the provider's own log says it performed. See apps.integrations.
-    # reconciliation for why the three failure modes are kept apart.
+    # reconciliation for why the three failure modes are kept apart. The beat
+    # fires hourly; the task runs only in the hour the provider quiet hours
+    # end (09:20 shop time by default) — the shop's timezone is not Celery's.
     "integrations.reconcile-providers": {
         "task": "integrations.reconcile_providers",
-        "schedule": crontab(minute=20, hour=2),
+        "schedule": crontab(minute=20),
     },
     # Hourly, through the trading day: re-read each provider's prepaid float so
     # the low-float warning is set against a number from this hour rather than
-    # from the 02:20 sweep. Without it a shop can spend its whole float between
-    # opening and closing and hear about it the next morning.
+    # from the morning sweep. Without it a shop can spend its whole float
+    # between opening and closing and hear about it the next morning. Skips
+    # the provider quiet hours, and any float a sale already read this hour.
     "integrations.refresh-float-balances": {
         "task": "integrations.refresh_float_balances",
         "schedule": crontab(minute=50),
@@ -725,15 +728,11 @@ CELERY_BEAT_SCHEDULE = {
         "task": "integrations.settle_relay_vouchers",
         "schedule": timedelta(minutes=2),
     },
-    # Half-hourly: mirror each provider's account-wide payments report (LNET).
-    # It prints ten rows a page over the agency's whole life, so read live it
-    # only ever showed the last day — this is what a line's history at the
-    # till and a manager's "payments made on the website" read instead. A
-    # young mirror is also walked deeper, towards three months, now and then.
-    "integrations.sync-payment-reports": {
-        "task": "integrations.sync_payment_reports",
-        "schedule": crontab(minute="5,35"),
-    },
+    # No schedule for the LNET payments-report mirror: it is read when somebody
+    # needs it — the register sessions' «شحنات موقع LNET» page and a line's
+    # history at the till both read the head first, and that page starts the
+    # three-month deepening of a young mirror. Reading it every half hour, all
+    # night, was 48 logins a day to a portal that can block the agency.
     "employees.draft-monthly-payroll": {
         "task": "employees.draft_monthly_payroll",
         "schedule": crontab(minute=10, hour=0, day_of_month="1"),
@@ -907,6 +906,8 @@ CORS_ALLOW_HEADERS = (
     # till after login rather than at it, which is worse to diagnose.
     "x-pointy-register-session",
     "x-pointy-relay-token",
+    # Names the shop on the relay's sign-in route, before there is a ticket.
+    "x-pointy-relay-installation",
 )
 # The mirror image of CORS_ALLOW_HEADERS, and just as easy to forget: on a
 # CROSS-origin request a browser hides every non-safelisted response header from
@@ -1261,9 +1262,20 @@ POINTY_ACTIVE_PRODUCT_CACHE_TTL = (
 # server-side, so this TTL only bounds ordinary portal-side expiry, never
 # correctness. 0 disables; forced off under tests, which build a fresh
 # IntegrationAccount (and a fresh fake session) per test and would otherwise
-# leak one test's cached cookies into the next.
+# leak one test's cached cookies into the next. LNET renews it on every page
+# that comes back logged in, so a busy shift logs in once, not every ten
+# minutes: a login every few minutes, all day, is what a portal's anti-bot
+# rules look for (Annaseem, 2026-10-29).
 POINTY_INTEGRATION_SESSION_CACHE_TTL = (
-    0 if TESTING else env.int("POINTY_INTEGRATION_SESSION_CACHE_TTL", default=600)
+    0 if TESTING else env.int("POINTY_INTEGRATION_SESSION_CACHE_TTL", default=1800)
+)
+# Shop-local hours ("start-end", end exclusive) when unattended jobs leave the
+# provider portals (LNET, HD Box) alone, so the shop's address does not read
+# them at 04:00 like a script. The daily reconciliation runs at :20 in the
+# hour the window ends. Empty turns it off; off under tests so the suites do
+# not depend on the hour they run at. See apps.integrations.quiet_hours.
+POINTY_PROVIDER_QUIET_HOURS = (
+    "" if TESTING else env("POINTY_PROVIDER_QUIET_HOURS", default="1-9")
 )
 # Catalog version stamp (apps.catalog.cache): drives the list-endpoint ETags
 # (304 on unchanged polls) and invalidates the price-checker lookup cache.

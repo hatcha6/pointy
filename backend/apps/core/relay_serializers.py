@@ -25,6 +25,7 @@ class RelayInstallationStatusSerializer(serializers.Serializer):
     last_synced_at = serializers.DateTimeField(allow_null=True)
     connector_last_seen_at = serializers.DateTimeField(allow_null=True)
     connector_version = serializers.CharField(allow_blank=True)
+    allow_remote_sign_in = serializers.BooleanField()
 
 
 class RelayInstallationProvisionSerializer(serializers.Serializer):

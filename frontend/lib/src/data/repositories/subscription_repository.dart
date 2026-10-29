@@ -20,6 +20,11 @@ class SubscriptionRepository {
     );
   }
 
+  /// Turns the shop's sign-in from the internet on or off.
+  Future<Result<void>> setRemoteSignIn({required bool allowed}) {
+    return Result.guard(() => _service.updateRemoteSignIn(allowed: allowed));
+  }
+
   /// Current 5h + weekly AI usage. Only meaningful when AI is entitled; the
   /// backend returns 403 otherwise, surfaced here as a [Result] error.
   Future<Result<AiUsage>> loadAiUsage() {

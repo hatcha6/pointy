@@ -4708,6 +4708,18 @@ abstract class AppLocalizations {
   /// **'تعذر الاتصال بخدمة الوصول عن بُعد. تحقق من اتصال هذا الجهاز بالإنترنت.'**
   String get loginErrorRelayUnreachable;
 
+  /// Login screen, relay sign-in route: the shop has remote sign-in turned off.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا المتجر لا يسمح بتسجيل الدخول عن بُعد. يمكن للمالك تفعيله من الإعدادات ← الاشتراك.'**
+  String get loginErrorRemoteSignInDisabled;
+
+  /// Login screen, relay sign-in route: the account is not a manager.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسجيل الدخول عن بُعد متاح للمدير فقط. استخدم حساب المدير، أو سجّل الدخول من داخل المتجر.'**
+  String get loginErrorRemoteSignInNotAllowed;
+
   /// Login screen: the shop's server could not be reached on the LAN.
   ///
   /// In ar, this message translates to:
@@ -30958,6 +30970,24 @@ abstract class AppLocalizations {
   /// **'أرسل هذا المعرّف للدعم لتفعيل اشتراكك أو تجديده.'**
   String get subscriptionInstallationIdHelper;
 
+  /// Subscription page: switch that lets a manager sign in from anywhere with the installation ID.
+  ///
+  /// In ar, this message translates to:
+  /// **'السماح بتسجيل الدخول عن بُعد'**
+  String get subscriptionRemoteSignInLabel;
+
+  /// Subscription page: what the remote sign-in switch does.
+  ///
+  /// In ar, this message translates to:
+  /// **'يتيح للمدير فتح المتجر من أي مكان — من الآيفون أو المتصفح — برقم التثبيت وكلمة المرور، دون ربط الجهاز داخل المتجر أولًا. للمدير فقط.'**
+  String get subscriptionRemoteSignInSubtitle;
+
+  /// Subscription page: the remote sign-in switch could not be saved.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر حفظ الإعداد. تغييره متاح للمدير فقط.'**
+  String get subscriptionRemoteSignInSaveFailed;
+
   /// Label for the copy-installation-ID button.
   ///
   /// In ar, this message translates to:
@@ -32409,6 +32439,72 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'ما زلنا نبحث تلقائيًا في الخلفية…'**
   String get connectionManualSearchingHint;
+
+  /// Manual connection screen: button that skips the shop network and goes through the relay.
+  ///
+  /// In ar, this message translates to:
+  /// **'الاتصال عن بُعد عبر دفتر'**
+  String get connectionRemoteButton;
+
+  /// Relay connection form title.
+  ///
+  /// In ar, this message translates to:
+  /// **'الاتصال بالمتجر عن بُعد'**
+  String get connectionRemoteTitle;
+
+  /// Relay connection form: where to find the installation ID.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل رقم التثبيت الخاص بالمتجر. يجده المالك في الإعدادات ← الاشتراك.'**
+  String get connectionRemoteMessage;
+
+  /// Relay connection form: installation ID field label.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم التثبيت'**
+  String get connectionRemoteFieldLabel;
+
+  /// Relay connection form: installation ID field hint (the ID format, left-to-right).
+  ///
+  /// In ar, this message translates to:
+  /// **'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'**
+  String get connectionRemoteFieldHint;
+
+  /// Relay connection form: submit button.
+  ///
+  /// In ar, this message translates to:
+  /// **'متابعة'**
+  String get connectionRemoteConnectButton;
+
+  /// Relay connection form: go back to finding the server on the local network.
+  ///
+  /// In ar, this message translates to:
+  /// **'البحث عن الخادم في شبكة المتجر'**
+  String get connectionRemoteSearchLanButton;
+
+  /// Relay connection form: no paid installation with that ID.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد متجر مشترك في الوصول عن بُعد بهذا الرقم. تأكد من الرقم وحاول مجددًا.'**
+  String get connectionRemoteNotFound;
+
+  /// Relay connection form: the shop has remote sign-in turned off.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا المتجر لا يسمح بتسجيل الدخول عن بُعد. يمكن للمالك تفعيله من الإعدادات ← الاشتراك.'**
+  String get connectionRemoteDisabled;
+
+  /// Relay connection form: the relay knows the shop but its server is not connected.
+  ///
+  /// In ar, this message translates to:
+  /// **'خادم المتجر غير متصل بالإنترنت الآن. حاول مجددًا بعد قليل.'**
+  String get connectionRemoteShopOffline;
+
+  /// Relay connection form: the relay could not be reached.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر الوصول إلى خدمة الوصول عن بُعد. تحقق من اتصال هذا الجهاز بالإنترنت.'**
+  String get connectionRemoteUnreachable;
 
   /// Title of the screen a WSL server PC's till shows while it starts the shop's server on this PC.
   ///

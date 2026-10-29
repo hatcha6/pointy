@@ -17,6 +17,7 @@ on:
     paths:
       - "cards/**"
       - "shared/pointy_brand/**"
+      - "tools/flutter_web_postbuild.sh"
       - ".github/workflows/cards-web.yml"
   workflow_dispatch:
 
@@ -55,13 +56,13 @@ jobs:
           --dart-define=CARDS_CHANNEL=web
 
       # Fingerprinted names, early hints and Brotli/gzip copies: what the
-      # relay serves to keep the first load small (cards/tool/web_postbuild.sh).
+      # relay serves to keep the first load small (tools/flutter_web_postbuild.sh).
       - name: Ready the build for slow networks
         working-directory: cards
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq brotli
           pip install --quiet fonttools
-          tool/web_postbuild.sh
+          ../tools/flutter_web_postbuild.sh
 
       - name: Resolve image name (ghcr requires lowercase)
         id: image

@@ -27,7 +27,7 @@ func TestSystemViewShowsTheWholeFleet(t *testing.T) {
 	session, _ := pipeSession(t)
 	hub.RegisterTunnel("shop", 1, session)
 	metrics := observability.NewMetrics()
-	done := metrics.PhoneRequestStarted()
+	done := metrics.RequestStarted()
 	defer done(200)
 
 	registry := &memoryRegistry{}

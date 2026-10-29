@@ -24,6 +24,7 @@ from .password_policy import password_policy
 from .permission_catalog import grouped_for
 from .permissions import HasPointyPermission
 from .relay import push_shop_name_to_relay, relay_ai_available
+from .remote_sign_in import remote_sign_in_refusal, request_is_remote_sign_in
 from .roles import (
     create_initial_admin_user,
     ensure_role_groups,
@@ -122,10 +123,34 @@ def setup_initial_admin_view(request):
 @permission_classes([AllowAny])
 @throttle_classes([LoginRateThrottle, LoginUsernameRateThrottle])
 def login_view(request):
+    refusal = remote_sign_in_refusal(request)
+    if refusal:
+        return _remote_sign_in_refused(refusal)
     serializer = LoginSerializer(data=request.data, context={"request": request})
     serializer.is_valid(raise_exception=True)
     user = serializer.validated_data["user"]
+    refusal = remote_sign_in_refusal(request, user)
+    if refusal:
+        record_domain_event(
+            name="auth.remote_sign_in.refused",
+            event_type=AnalyticsEvent.EventType.SECURITY,
+            severity=AnalyticsEvent.Severity.WARNING,
+            user=user,
+            entity_type="user",
+            entity_id=user.pk,
+            attributes={"reason": refusal},
+        )
+        return _remote_sign_in_refused(refusal)
     login(request, user)
+    if request_is_remote_sign_in(request):
+        record_domain_event(
+            name="auth.remote_sign_in.succeeded",
+            event_type=AnalyticsEvent.EventType.SECURITY,
+            user=user,
+            entity_type="user",
+            entity_id=user.pk,
+            attributes={"username": user.username},
+        )
     record_domain_event(
         name="auth.login.succeeded",
         event_type=AnalyticsEvent.EventType.SECURITY,
@@ -165,6 +190,22 @@ def login_view(request):
             ),
         }
     )
+
+
+def _remote_sign_in_refused(code):
+    return Response({"code": code, "detail": code}, status=status.HTTP_403_FORBIDDEN)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def remote_sign_in_status_view(request):
+    """What the relay-hosted app shows before anyone signs in: whether this
+    shop takes sign-ins from the internet, and — only when it does — its name.
+    """
+    settings = ShopSettings.load()
+    if not settings.allow_remote_sign_in:
+        return Response({"enabled": False, "shop_name": ""})
+    return Response({"enabled": True, "shop_name": settings.shop_name})
 
 
 @api_view(["POST"])
@@ -410,7 +451,9 @@ class ShopSettingsView(views.APIView):
 
     def patch(self, request):
         settings = ShopSettings.load()
-        serializer = ShopSettingsSerializer(settings, data=request.data, partial=True)
+        serializer = ShopSettingsSerializer(
+            settings, data=request.data, partial=True, context={"request": request}
+        )
         serializer.is_valid(raise_exception=True)
         before = {
             field: getattr(settings, field)

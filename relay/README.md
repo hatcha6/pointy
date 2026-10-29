@@ -1688,6 +1688,34 @@ Settings:
   - The relay refuses to start when a host is set and the build has no
     `index.html`.
 - `POINTY_RELAY_CARDS_WEB_DIR` (`/srv/cards-web`, where the image keeps it).
+- `POINTY_RELAY_APP_WEB_HOSTS` — hosts the relay serves the shop app's web
+  build on, comma-separated (`app.dftr.ly`). Empty serves none.
+  - Staff open it from anywhere — an iPhone in Safari, where there is no app —
+    and reach their shop through the relay. `/api/` and
+    `/v1/relay-ticket-refresh` on those hosts are the relay's own, so the app
+    needs no CORS; every other path is the build (pages are `index.html`).
+  - The relay drops the `Origin` (and `Referer`) a browser on that host sends
+    with `/api/`: behind the connector the backend sees its LAN address, and
+    would refuse the app's own origin as a CSRF failure. A foreign origin
+    passes untouched. The CSRF token itself is still checked.
+  - Fingerprinted files are kept for good, the rest `no-cache`, Brotli/gzip
+    copies sent when accepted (`relay/internal/webbuild`, shared with
+    cards.dftr.ly). `X-Frame-Options: DENY`.
+  - The build comes from the `pointy-app-web` image
+    (`.github/workflows/app-web.yml`, whenever `frontend/` changes; make the
+    package public). The on-prem bundle builds with `APP_WEB=no-app-web`.
+- `POINTY_RELAY_APP_WEB_DIR` (`/srv/app-web`).
+- Remote sign-in (the sign-in route): a request with no ticket that names a
+  shop in `X-Pointy-Relay-Installation` reaches only that shop's sign-in
+  paths — `relay/remote-sign-in/`, `auth/me/`, `setup/status/`,
+  `auth/login/`, `auth/logout/`, `relay/pairing/` — marked
+  `X-Pointy-Relay-Sign-In: 1`, and only while its relay access is paid (an
+  unknown and an unpaid installation both get the same 401). The shop decides
+  the rest: its `allow_remote_sign_in` switch (off by default, الإعدادات ←
+  الاشتراك) and managers only. A manager's sign-in then pairs the device for an
+  ordinary ticket. `POINTY_RELAY_RATE_LIMIT_REMOTE_SIGN_IN` (60 per window per
+  installation) and `POINTY_RELAY_RATE_LIMIT_REMOTE_SIGN_IN_CLIENT` (20 per
+  installation and caller address) bound the tries.
 - `POINTY_RELAY_CUSTOMER_WEB_ORIGINS` — the card app's web build origins,
   comma-separated (`https://cards.dftr.ly`).
   - Browsers on them get CORS answers on `/v1/customers/*`, preflight included.

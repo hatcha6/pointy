@@ -610,9 +610,7 @@ func (s HTTPServer) placeCardPurchase(
 		return
 	}
 	// An auto-priced card is charged at the price the shop was listed.
-	if priced, ok := vouchers.Find(s.autoPricedDocument(loaded.document, offers, settings), request.Item); ok {
-		located = priced
-	}
+	located = s.autoPricedItem(loaded.document, located, offers, settings)
 	ranking := s.Vouchers.rankSuppliers(located, offers, settings)
 	if buyer.company() {
 		// The company's own stock is the company's already: it buys from

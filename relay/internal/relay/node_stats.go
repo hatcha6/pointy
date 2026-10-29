@@ -7,7 +7,7 @@ import (
 )
 
 // NodeStats is a node's live figures, published in its registry record so any
-// node can show the whole fleet: its phone traffic, its tunnels and shops, the
+// node can show the whole fleet: its request traffic, its tunnels and shops, the
 // process, and what it has done with tunnels since it started.
 type NodeStats struct {
 	Version            string                        `json:"version,omitempty"`

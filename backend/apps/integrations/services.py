@@ -8,6 +8,7 @@ always has one writer and cannot drift from what was actually observed.
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 
 from django.utils import timezone
 
@@ -17,6 +18,11 @@ from .providers import provider_for
 from .providers.base import ERROR_NOT_CONFIGURED, RECHARGE_TOPUP, ProbeResult
 
 logger = logging.getLogger(__name__)
+
+#: A float read this recently — by a sale's own reply, or a probe — is not
+#: read again by the hourly refresh. Just under the hour, so a figure the last
+#: run wrote is still re-read by this one.
+FLOAT_FRESH_FOR = timedelta(minutes=50)
 
 # Health columns a probe owns; listed once so save() and tests agree.
 _HEALTH_FIELDS = (
@@ -67,7 +73,7 @@ def probe_account(account: IntegrationAccount) -> ProbeResult:
     return result
 
 
-def refresh_float_balances() -> dict:
+def refresh_float_balances(*, now=None) -> dict:
     """Re-read every connected provider's float.
 
     The low-float warning is only as truthful as the number it reads, and
@@ -82,7 +88,18 @@ def refresh_float_balances() -> dict:
     One account failing must not stop the rest: ``probe_account`` already
     swallows a driver crash and writes the reason to the account, so a
     provider that is down records that and the next one is still read.
+
+    Two reads are not made at all. None during the provider quiet hours — an
+    hourly login all night is what gets an agency's address blocked — and
+    none for a float read within ``FLOAT_FRESH_FOR``: a sale's own reply
+    already said what the float is, and a login to be told again buys
+    nothing.
     """
+    from .quiet_hours import in_quiet_hours
+
+    now = now or timezone.now()
+    if in_quiet_hours(now):
+        return {"checked": 0, "connected": 0, "quiet_hours": True}
     checked = 0
     connected = 0
     # A provider switched off for the fleet is not read at all: its last known
@@ -94,6 +111,8 @@ def refresh_float_balances() -> dict:
         if not account.is_configured:
             # No credentials is not a failure worth recording every hour; it
             # is a shop that has not connected this provider.
+            continue
+        if account.balance_at is not None and now - account.balance_at < FLOAT_FRESH_FOR:
             continue
         checked += 1
         if probe_account(account).ok:

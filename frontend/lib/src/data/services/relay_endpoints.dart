@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
+
 /// Production hosted-relay endpoints, baked as the default for clients.
 ///
 /// [kDefaultRelayApiBaseUrl] is the relay's public API base the app falls back to
@@ -17,3 +19,18 @@ const String kDefaultRelayApiBaseUrl = String.fromEnvironment(
   'POINTY_RELAY_API_BASE_URL',
   defaultValue: 'https://my.dftr.ly/api',
 );
+
+/// Whether this is the web build the relay itself serves (app.dftr.ly), built
+/// with `--dart-define=POINTY_RELAY_HOSTED_WEB=true`. There is no shop network
+/// to search from there: the app goes straight to the relay, on its own
+/// origin.
+const bool kRelayHostedWeb = bool.fromEnvironment('POINTY_RELAY_HOSTED_WEB');
+
+/// The relay API base the relay-hosted web build must use — its own origin,
+/// where the relay answers /api/ with no CORS — or null in every other build.
+String? hostedWebRelayApiBaseUrl() {
+  if (!kIsWeb || !kRelayHostedWeb) {
+    return null;
+  }
+  return '${Uri.base.origin}/api';
+}

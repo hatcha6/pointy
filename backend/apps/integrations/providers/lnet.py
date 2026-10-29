@@ -81,6 +81,7 @@ from ..telemetry import (
 )
 from .base import (
     ERROR_INDETERMINATE,
+    ERROR_INSUFFICIENT_FLOAT,
     ERROR_NOT_FOUND,
     ERROR_PROVIDER_ERROR,
     ERROR_UNAUTHORIZED,
@@ -176,6 +177,12 @@ _CSRF_ALT_RE = re.compile(
     r'value=["\']([^"\']+)["\'][^>]*name=["\']ci_csrf_token["\']', re.I
 )
 _LOGIN_FORM_RE = re.compile(r'name=["\']password["\']', re.I)
+#: How the portal refuses a top-up the agency's float cannot cover — "Your
+#: balance is not enough to recharge the customer." (Annaseem, 2026-10-11 and
+#: 2026-10-28). Arabic too, in case the portal is ever localised.
+_INSUFFICIENT_RE = re.compile(
+    r"balance\b[^.]{0,20}\bnot\s+(?:enough|sufficient)|رصيد\S*\s+غير\s+كاف", re.I
+)
 _COMMENT_RE = re.compile(r"<!--.*?-->", re.S)
 _TAG_RE = re.compile(r"<[^>]+>")
 _ROW_RE = re.compile(r"<tr\b.*?</tr>", re.S | re.I)
@@ -433,7 +440,26 @@ class LnetProvider(IntegrationProvider):
                     return self._get(path, **kwargs)
                 return None, code, detail
             return None, ERROR_UNAUTHORIZED, "session expired"
+        self._renew_cached_session()
         return response, "", ""
+
+    def _renew_cached_session(self) -> None:
+        """Keep a session that just proved alive cached for another full TTL.
+
+        Without this a login lived ten minutes from the moment it was made,
+        however busy the shift, and a shop logged in all day long — dozens of
+        logins a day from one address, the pattern a portal's anti-bot rules
+        look for. Saving the session's current cookies also follows the
+        portal if it ever rotates its session id on a request.
+        """
+        session = self._session
+        if session is None:
+            return
+        try:
+            cookies = dict(session.cookies)
+        except Exception:  # noqa: BLE001 - a cookie name clash: keep the old entry
+            return
+        session_cache.save("lnet", self.account, {"cookies": cookies, "token": self._token})
 
     def _search(self, token: str, term: str, mode: str):
         """One search, as the portal's own filter form issues it.
@@ -964,11 +990,16 @@ class LnetProvider(IntegrationProvider):
         if payload.get("status") != "success":
             # An explicit refusal, before a serial number existed. This is the
             # one outcome where the float and the customer are both untouched.
+            message = str(payload.get("message") or "").strip()
             return RechargeResult(
                 ok=False,
-                error_code=ERROR_PROVIDER_ERROR,
-                error_detail=str(payload.get("message") or "").strip()
-                or "payment refused",
+                # An empty float gets its own code: the till then says «رصيد
+                # الوكالة غير كافٍ» instead of a generic failure, and the
+                # cashier stops retrying a sale only the owner can unblock.
+                error_code=ERROR_INSUFFICIENT_FLOAT
+                if _INSUFFICIENT_RE.search(message)
+                else ERROR_PROVIDER_ERROR,
+                error_detail=message or "payment refused",
             )
 
         data = payload.get("data")

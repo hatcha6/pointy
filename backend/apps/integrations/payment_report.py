@@ -81,8 +81,8 @@ DEEPEN_BACKOFF = timedelta(days=7)
 #: "Before anything": a read that reached the report's last page has seen all.
 BEGINNING_OF_TIME = datetime(1970, 1, 1, tzinfo=dt_timezone.utc)
 
-#: One sweep per account at a time. A deepening read can run for minutes and
-#: the next half-hourly sweep must not start the same walk beside it.
+#: One deepening walk per account at a time. It can run for minutes, and a
+#: second page open must not start the same walk beside it.
 _SWEEP_LOCK = "pointy:integrations:payment-report:sweep:{account}"
 _SWEEP_LOCK_SECONDS = 30 * 60
 _DEEPENED_KEY = "pointy:integrations:payment-report:deepened:{account}"
@@ -353,9 +353,9 @@ def _fields_of(payment) -> dict:
 def sweep_all(*, now=None) -> dict:
     """Keep every report's mirror current, and deepen a young one. Never raises.
 
-    Half-hourly: one walk down to where the last one began — a page, for a
-    shop's half hour — so the till's history and a manager's day are a page
-    away rather than a morning away. While the mirror is shallower than
+    No longer scheduled — an operator's "bring everything up to date now".
+    One walk down to where the last one began, and while the mirror is
+    shallower than
     ``KEEP_WINDOW`` it is also walked deeper, at most every ``DEEPEN_EVERY``,
     and left alone for ``DEEPEN_BACKOFF`` once a walk runs out of pages
     before getting there: that is as deep as this report will be kept.
@@ -377,7 +377,7 @@ def sweep_all(*, now=None) -> dict:
                 "pages": head.pages,
                 "error_code": head.error_code,
             }
-            if head.ok and _wants_deepening(account, now=now):
+            if head.ok and wants_deepening(account, now=now):
                 deeper = sync(
                     account,
                     back_to=now - KEEP_WINDOW,
@@ -399,7 +399,40 @@ def sweep_all(*, now=None) -> dict:
     return {"accounts": results}
 
 
-def _wants_deepening(account, *, now) -> bool:
+def deepen(account, *, now=None) -> dict:
+    """Walk a young mirror back towards ``KEEP_WINDOW``, if it is due. Never raises.
+
+    What the register sessions' «شحنات موقع LNET» page starts in the
+    background — the mirror is only walked while somebody is working, never
+    on a timer. Keeps to the same per-account lock as the sweep.
+    """
+    now = now or timezone.now()
+    if not supports_payment_report(account) or not account.is_configured:
+        return {"provider": account.provider, "skipped": True}
+    if not wants_deepening(account, now=now):
+        return {"provider": account.provider, "skipped": True}
+    lock = _SWEEP_LOCK.format(account=account.pk)
+    if not _acquire(lock):
+        return {"provider": account.provider, "skipped": True}
+    try:
+        deeper = sync(account, back_to=now - KEEP_WINDOW, max_pages=SWEEP_PAGES, now=now)
+        _remember_deepening(account, deeper, now=now)
+        return {
+            "provider": account.provider,
+            "ok": deeper.ok,
+            "pages": deeper.pages,
+            "complete": deeper.complete,
+        }
+    except Exception:  # noqa: BLE001 - a background walk must not crash a worker
+        logger.exception("payments report deepening crashed for %s", account.provider)
+        return {"provider": account.provider, "ok": False}
+    finally:
+        _release(lock)
+
+
+def wants_deepening(account, *, now=None) -> bool:
+    """Whether the mirror is shallower than ``KEEP_WINDOW`` and not resting."""
+    now = now or timezone.now()
     since = account.payments_covered_since
     if since is not None and since <= now - KEEP_WINDOW + timedelta(days=1):
         return False

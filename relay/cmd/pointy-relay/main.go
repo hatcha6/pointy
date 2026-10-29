@@ -47,6 +47,7 @@ import (
 	relayserver "pointy/relay/internal/relay"
 	"pointy/relay/internal/resala"
 	"pointy/relay/internal/security"
+	"pointy/relay/internal/webbuild"
 )
 
 const (
@@ -393,6 +394,16 @@ func runServer(args []string) error {
 		envInt("POINTY_RELAY_RATE_LIMIT_TICKET_ISSUE", 60),
 		"maximum relay tickets issued per installation/device per rate-limit window; set 0 to disable",
 	)
+	remoteSignInRateLimit := flags.Int(
+		"remote-sign-in-rate-limit",
+		envInt("POINTY_RELAY_RATE_LIMIT_REMOTE_SIGN_IN", 60),
+		"maximum sign-in route requests (installation ID, no ticket) per installation per rate-limit window; set 0 to disable",
+	)
+	remoteSignInClientRateLimit := flags.Int(
+		"remote-sign-in-client-rate-limit",
+		envInt("POINTY_RELAY_RATE_LIMIT_REMOTE_SIGN_IN_CLIENT", 20),
+		"maximum sign-in route requests per installation and caller address per rate-limit window; set 0 to disable",
+	)
 	ticketRefreshRateLimit := flags.Int(
 		"ticket-refresh-rate-limit",
 		envInt("POINTY_RELAY_RATE_LIMIT_TICKET_REFRESH", 120),
@@ -567,6 +578,16 @@ func runServer(args []string) error {
 		"cards-web-dir",
 		envString("POINTY_RELAY_CARDS_WEB_DIR", defaultCardsWebDir),
 		"the card app's web build (index.html at its root); the relay image carries one here",
+	)
+	appWebHosts := flags.String(
+		"app-web-hosts",
+		envString("POINTY_RELAY_APP_WEB_HOSTS", ""),
+		"comma-separated hosts the shop app's web build is served on (app.dftr.ly); its /api/ is this relay's own. Empty serves no web app",
+	)
+	appWebDir := flags.String(
+		"app-web-dir",
+		envString("POINTY_RELAY_APP_WEB_DIR", defaultAppWebDir),
+		"the shop app's web build (index.html at its root); the relay image carries one here",
 	)
 	fcmServiceAccount := flags.String(
 		"fcm-service-account",
@@ -1515,6 +1536,8 @@ func runServer(args []string) error {
 		RateLimiter:                   rateLimiter,
 		RelayRequestRateLimit:         ratelimit.Policy{Limit: *relayRequestRateLimit, Window: *rateLimitWindow},
 		TicketIssueRateLimit:          ratelimit.Policy{Limit: *ticketIssueRateLimit, Window: *rateLimitWindow},
+		RemoteSignInRateLimit:         ratelimit.Policy{Limit: *remoteSignInRateLimit, Window: *rateLimitWindow},
+		RemoteSignInClientRateLimit:   ratelimit.Policy{Limit: *remoteSignInClientRateLimit, Window: *rateLimitWindow},
 		TicketRefreshRateLimit:        ratelimit.Policy{Limit: *ticketRefreshRateLimit, Window: *rateLimitWindow},
 		Metrics:                       metrics,
 		Presence:                      presence,
@@ -1617,6 +1640,11 @@ func runServer(args []string) error {
 	}
 	// cards.dftr.ly: the card app's web build, by host.
 	publicHandler, err = buildCardsWeb(publicHandler, cardsweb.ParseHosts(*cardsWebHosts), *cardsWebDir, baseHTTPHandler, logger)
+	if err != nil {
+		return err
+	}
+	// app.dftr.ly: the shop app's web build, by host.
+	publicHandler, err = buildAppWeb(publicHandler, webbuild.ParseHosts(*appWebHosts), *appWebDir, logger)
 	if err != nil {
 		return err
 	}

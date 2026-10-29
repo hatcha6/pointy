@@ -1,5 +1,6 @@
 import '../models/relay_installation_status.dart';
 import '../models/relay_pairing.dart';
+import '../models/remote_sign_in_status.dart';
 import 'api_session.dart';
 
 class RelayApiClient {
@@ -12,8 +13,23 @@ class RelayApiClient {
       'relay/pairing/',
       body: request.toJson(),
     );
-    _session.ensureSuccess(response, 'Relay pairing failed with status');
+    _session.throwApiException(response, 'Relay pairing failed with status');
     return RelayPairing.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  /// Whether the shop takes sign-ins from the internet, asked on the relay's
+  /// sign-in route. Throws [PosApiException] with the relay's own status when
+  /// the relay refuses (401: no such paid installation; 503: the shop's
+  /// server is not connected).
+  Future<RemoteSignInStatus> fetchRemoteSignInStatus() async {
+    final response = await _session.get('relay/remote-sign-in/');
+    _session.throwApiException(
+      response,
+      'Remote sign-in status failed with status',
+    );
+    return RemoteSignInStatus.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,
     );
   }

@@ -23,6 +23,7 @@ class RelayInstallationStatus {
     this.lastSyncedAt,
     this.connectorLastSeenAt,
     this.connectorVersion = '',
+    this.allowRemoteSignIn = false,
   }) : _aiAvailable = aiAvailable,
        _smsAvailable = smsAvailable;
 
@@ -68,6 +69,10 @@ class RelayInstallationStatus {
   /// When the remote-access connector last checked in. Null if it never has.
   final DateTime? connectorLastSeenAt;
   final String connectorVersion;
+
+  /// The shop lets a manager sign in from anywhere with the installation ID
+  /// (the relay's sign-in route). A shop setting, carried here beside the ID.
+  final bool allowRemoteSignIn;
 
   bool get hasInstallationId => installationId.trim().isNotEmpty;
 
@@ -124,6 +129,7 @@ class RelayInstallationStatus {
       lastSyncedAt: _dateTime(json['last_synced_at']),
       connectorLastSeenAt: _dateTime(json['connector_last_seen_at']),
       connectorVersion: json['connector_version']?.toString() ?? '',
+      allowRemoteSignIn: json['allow_remote_sign_in'] == true,
     );
   }
 }

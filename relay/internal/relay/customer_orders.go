@@ -323,10 +323,11 @@ func (s HTTPServer) locateCustomerCard(ctx context.Context, cards control.Vouche
 	if err != nil {
 		return vouchers.Located{}, supplierRanking{}, "item_unavailable"
 	}
-	located, found := vouchers.Find(s.autoPricedDocument(loaded.document, offers, settings), itemKey)
+	located, found := vouchers.Find(loaded.document, itemKey)
 	if !found {
 		return vouchers.Located{}, supplierRanking{}, "unknown_item"
 	}
+	located = s.autoPricedItem(loaded.document, located, offers, settings)
 	suppliers := s.Vouchers
 	if review {
 		suppliers = suppliers.reviewSuppliers()

@@ -254,7 +254,7 @@ Chrome, from 6.3 MB):
 - **WebAssembly** (`--wasm`, the skwasm renderer) where the browser runs it,
   Chrome and Edge; Safari and Firefox get the JavaScript build in the same
   output.
-- **`tool/web_postbuild.sh`** (part of `make cards-web-build` and CI; needs
+- **`../tools/flutter_web_postbuild.sh`** (part of `make cards-web-build` and CI; needs
   `brotli`, and `pyftsubset` from fonttools): fingerprints the code files so
   the relay caches them for good, adds preconnects and preloads for exactly
   what this browser will fetch, trims the web copy of the Arabic font

@@ -1,6 +1,6 @@
 import '../models/analytics_export.dart';
 import 'analytics_export_downloader_stub.dart'
-    if (dart.library.html) 'analytics_export_downloader_web.dart';
+    if (dart.library.js_interop) 'analytics_export_downloader_web.dart';
 
 /// Hands the exported tracking file to the platform so the user can keep it.
 ///

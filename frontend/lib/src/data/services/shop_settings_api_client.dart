@@ -39,6 +39,20 @@ class ShopSettingsApiClient {
     );
   }
 
+  /// Turns sign-in from the internet (installation ID + a manager's password)
+  /// on or off, naming that key alone. A manager's call: anyone else is
+  /// refused with 400.
+  Future<void> updateRemoteSignIn({required bool allowed}) async {
+    final response = await _session.patch(
+      'shop-settings/',
+      body: {'allow_remote_sign_in': allowed},
+    );
+    _session.throwApiException(
+      response,
+      'Remote sign-in update failed with status',
+    );
+  }
+
   /// Saves the identified-stock switches alone. A partial update naming only
   /// those keys, so nothing else on the shop is touched.
   Future<ShopSettings> updateIdentifiedStockSettings(

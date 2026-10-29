@@ -1861,6 +1861,14 @@
   "@loginErrorRelayUnreachable": {
     "description": "Login screen: the relay itself could not be reached from this device."
   },
+  "loginErrorRemoteSignInDisabled": "هذا المتجر لا يسمح بتسجيل الدخول عن بُعد. يمكن للمالك تفعيله من الإعدادات ← الاشتراك.",
+  "@loginErrorRemoteSignInDisabled": {
+    "description": "Login screen, relay sign-in route: the shop has remote sign-in turned off."
+  },
+  "loginErrorRemoteSignInNotAllowed": "تسجيل الدخول عن بُعد متاح للمدير فقط. استخدم حساب المدير، أو سجّل الدخول من داخل المتجر.",
+  "@loginErrorRemoteSignInNotAllowed": {
+    "description": "Login screen, relay sign-in route: the account is not a manager."
+  },
   "loginErrorServerUnreachable": "تعذر الوصول إلى خادم المتجر. تحقق من اتصال الجهاز بشبكة المتجر.",
   "@loginErrorServerUnreachable": {
     "description": "Login screen: the shop's server could not be reached on the LAN."
@@ -12272,6 +12280,18 @@
   "@subscriptionInstallationIdHelper": {
     "description": "Explains what the installation ID is for."
   },
+  "subscriptionRemoteSignInLabel": "السماح بتسجيل الدخول عن بُعد",
+  "@subscriptionRemoteSignInLabel": {
+    "description": "Subscription page: switch that lets a manager sign in from anywhere with the installation ID."
+  },
+  "subscriptionRemoteSignInSubtitle": "يتيح للمدير فتح المتجر من أي مكان — من الآيفون أو المتصفح — برقم التثبيت وكلمة المرور، دون ربط الجهاز داخل المتجر أولًا. للمدير فقط.",
+  "@subscriptionRemoteSignInSubtitle": {
+    "description": "Subscription page: what the remote sign-in switch does."
+  },
+  "subscriptionRemoteSignInSaveFailed": "تعذّر حفظ الإعداد. تغييره متاح للمدير فقط.",
+  "@subscriptionRemoteSignInSaveFailed": {
+    "description": "Subscription page: the remote sign-in switch could not be saved."
+  },
   "subscriptionInstallationIdCopy": "نسخ",
   "@subscriptionInstallationIdCopy": {
     "description": "Label for the copy-installation-ID button."
@@ -13033,6 +13053,50 @@
   "connectionManualSearchingHint": "ما زلنا نبحث تلقائيًا في الخلفية…",
   "@connectionManualSearchingHint": {
     "description": "Hint that background auto-discovery is still running on the manual connection screen."
+  },
+  "connectionRemoteButton": "الاتصال عن بُعد عبر دفتر",
+  "@connectionRemoteButton": {
+    "description": "Manual connection screen: button that skips the shop network and goes through the relay."
+  },
+  "connectionRemoteTitle": "الاتصال بالمتجر عن بُعد",
+  "@connectionRemoteTitle": {
+    "description": "Relay connection form title."
+  },
+  "connectionRemoteMessage": "أدخل رقم التثبيت الخاص بالمتجر. يجده المالك في الإعدادات ← الاشتراك.",
+  "@connectionRemoteMessage": {
+    "description": "Relay connection form: where to find the installation ID."
+  },
+  "connectionRemoteFieldLabel": "رقم التثبيت",
+  "@connectionRemoteFieldLabel": {
+    "description": "Relay connection form: installation ID field label."
+  },
+  "connectionRemoteFieldHint": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "@connectionRemoteFieldHint": {
+    "description": "Relay connection form: installation ID field hint (the ID format, left-to-right)."
+  },
+  "connectionRemoteConnectButton": "متابعة",
+  "@connectionRemoteConnectButton": {
+    "description": "Relay connection form: submit button."
+  },
+  "connectionRemoteSearchLanButton": "البحث عن الخادم في شبكة المتجر",
+  "@connectionRemoteSearchLanButton": {
+    "description": "Relay connection form: go back to finding the server on the local network."
+  },
+  "connectionRemoteNotFound": "لا يوجد متجر مشترك في الوصول عن بُعد بهذا الرقم. تأكد من الرقم وحاول مجددًا.",
+  "@connectionRemoteNotFound": {
+    "description": "Relay connection form: no paid installation with that ID."
+  },
+  "connectionRemoteDisabled": "هذا المتجر لا يسمح بتسجيل الدخول عن بُعد. يمكن للمالك تفعيله من الإعدادات ← الاشتراك.",
+  "@connectionRemoteDisabled": {
+    "description": "Relay connection form: the shop has remote sign-in turned off."
+  },
+  "connectionRemoteShopOffline": "خادم المتجر غير متصل بالإنترنت الآن. حاول مجددًا بعد قليل.",
+  "@connectionRemoteShopOffline": {
+    "description": "Relay connection form: the relay knows the shop but its server is not connected."
+  },
+  "connectionRemoteUnreachable": "تعذّر الوصول إلى خدمة الوصول عن بُعد. تحقق من اتصال هذا الجهاز بالإنترنت.",
+  "@connectionRemoteUnreachable": {
+    "description": "Relay connection form: the relay could not be reached."
   },
   "serverHostTitle": "تشغيل خادم المتجر",
   "@serverHostTitle": {

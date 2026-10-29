@@ -1,6 +1,7 @@
-// ignore_for_file: avoid_web_libraries_in_flutter, deprecated_member_use
+import 'dart:js_interop';
+import 'dart:typed_data';
 
-import 'dart:html' as html;
+import 'package:web/web.dart' as web;
 
 import '../models/analytics_export.dart';
 
@@ -16,14 +17,31 @@ Future<AnalyticsExportSaveResult> downloadAnalyticsExportFilePlatform(
     return const AnalyticsExportSaveResult.failed();
   }
 
-  final blob = html.Blob([bytes], file.contentType);
-  final url = html.Url.createObjectUrlFromBlob(blob);
-  final anchor = html.AnchorElement(href: url)
-    ..download = file.filename
+  saveBytesInBrowser([bytes], file.filename, file.contentType);
+  return const AnalyticsExportSaveResult.saved();
+}
+
+/// Hands [parts] to the browser as one download named [filename]. The browser
+/// owns the destination folder.
+void saveBytesInBrowser(
+  List<List<int>> parts,
+  String filename,
+  String contentType,
+) {
+  final blob = web.Blob(
+    [
+      for (final part in parts)
+        (part is Uint8List ? part : Uint8List.fromList(part)).toJS,
+    ].toJS,
+    web.BlobPropertyBag(type: contentType),
+  );
+  final url = web.URL.createObjectURL(blob);
+  final anchor = web.HTMLAnchorElement()
+    ..href = url
+    ..download = filename
     ..style.display = 'none';
-  html.document.body?.append(anchor);
+  web.document.body?.append(anchor);
   anchor.click();
   anchor.remove();
-  html.Url.revokeObjectUrl(url);
-  return const AnalyticsExportSaveResult.saved();
+  web.URL.revokeObjectURL(url);
 }

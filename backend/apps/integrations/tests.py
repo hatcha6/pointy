@@ -68,6 +68,7 @@ from .providers import is_implemented, provider_for
 from .providers.base import in_parallel  # noqa: E402
 from .providers.base import (
     ERROR_INDETERMINATE,
+    ERROR_INSUFFICIENT_FLOAT,
     ERROR_NOT_CONFIGURED,
     ERROR_NOT_FOUND,
     ERROR_PROVIDER_ERROR,
@@ -649,6 +650,26 @@ class HdBoxSessionReuseTests(TestCase):
             self.assertTrue(HdBoxProvider(account).probe().ok)
             self.assertTrue(HdBoxProvider(account).probe().ok)
         self.assertEqual(len(session.post_calls), 1)
+
+    def test_a_cached_session_that_answers_is_kept_for_another_full_ttl(self):
+        # A login used to live ten minutes from the moment it was made, however
+        # busy the shift — so a shop logged in all day. Every page that comes
+        # back logged in now renews it, without logging in again.
+        account = lnet_account()
+        with patch_lnet(lnet_session()):
+            self.assertTrue(LnetProvider(account).probe().ok)
+
+        second = lnet_session()
+        with (
+            patch_lnet(second),
+            mock.patch.object(
+                lnet_module.session_cache, "save", wraps=lnet_module.session_cache.save
+            ) as save,
+        ):
+            self.assertTrue(LnetProvider(account).probe().ok)
+        self.assertEqual(second.post_calls, [])
+        self.assertTrue(save.called)
+        self.assertEqual(save.call_args.args[:2], ("lnet", account))
 
     def test_a_stale_cached_session_is_retried_once_not_reported_as_a_failure(self):
         """The cached session died on the portal's side between two calls.
@@ -4582,7 +4603,7 @@ class LnetRechargeTests(TransactionTestCase):
         session = self._session(
             posts={
                 "validatePaymentAJAX": _LnetResponse(
-                    '{"status":"error","message":"Balance not sufficient"}'
+                    '{"status":"error","message":"This user is not active"}'
                 )
             }
         )
@@ -4592,7 +4613,46 @@ class LnetRechargeTests(TransactionTestCase):
             )
         self.assertTrue(result.is_definite_failure)
         self.assertEqual(result.error_code, ERROR_PROVIDER_ERROR)
-        self.assertIn("Balance not sufficient", result.error_detail)
+        self.assertIn("This user is not active", result.error_detail)
+
+    def test_an_empty_float_is_named_as_one_not_a_generic_refusal(self):
+        # LNET's exact words at Annaseem (2026-10-11, 2026-10-28). Named, the
+        # till says «رصيد الوكالة غير كافٍ» and the cashier stops retrying.
+        session = self._session(
+            posts={
+                "validatePaymentAJAX": _LnetResponse(
+                    '{"status":"error","message":"Your balance is not enough'
+                    ' to recharge the customer."}'
+                )
+            }
+        )
+        with patch_lnet(session):
+            result = LnetProvider(lnet_account()).recharge(
+                "alhussainbasheir", "topup:45"
+            )
+        self.assertTrue(result.is_definite_failure)
+        self.assertFalse(result.indeterminate)
+        self.assertEqual(result.error_code, ERROR_INSUFFICIENT_FLOAT)
+        self.assertIn("not enough", result.error_detail)
+        # Refused before a serial existed: the float was never asked to pay.
+        self.assertFalse(
+            [u for u, _k in session.post_calls if "rechargeOperator" in u]
+        )
+
+    def test_it_asks_lnet_even_when_the_float_it_last_saw_is_too_low(self):
+        # The stored float is a reading, not the truth: the owner may have
+        # topped up on the website since. LNET decides, not our copy of it.
+        account = lnet_account()
+        account.balance = Decimal("1.00")
+        account.balance_at = timezone.now()
+        account.save(update_fields=["balance", "balance_at"])
+        session = self._session()
+        with patch_lnet(session):
+            result = LnetProvider(account).recharge("alhussainbasheir", "topup:45")
+        self.assertTrue(result.ok, result.error_detail)
+        self.assertTrue(
+            [u for u, _k in session.post_calls if "validatePaymentAJAX" in u]
+        )
 
     def test_a_lost_answer_to_the_payment_call_is_indeterminate(self):
         session = self._session(raise_on={"validatePaymentAJAX": "post"})

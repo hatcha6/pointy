@@ -17,6 +17,7 @@ from .roles import (
     ROLE_GROUPS,
     assigned_role_from_group_names,
     role_permission_codes,
+    user_is_manager,
 )
 
 
@@ -584,6 +585,15 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             )
         return terms
 
+    def validate_allow_remote_sign_in(self, value):
+        # Settings can be granted per person; opening the shop's sign-in to
+        # the internet is the owner's call alone.
+        current = (self.instance or ShopSettings.load()).allow_remote_sign_in
+        request = self.context.get("request")
+        if value != current and not user_is_manager(getattr(request, "user", None)):
+            raise serializers.ValidationError("Only a manager may change remote sign-in.")
+        return value
+
     def validate_trusted_card_terminal_ids(self, value):
         if not isinstance(value, list):
             raise serializers.ValidationError("Trusted terminal IDs must be a list.")
@@ -667,6 +677,9 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "lookup_integrations",
             "payment_report_integrations",
             "allow_cashier_customer_access",
+            # Sign-in from the internet with the installation ID alone. Only a
+            # manager may change it: see validate_allow_remote_sign_in.
+            "allow_remote_sign_in",
             "pos_cash_purchase_limit",
             # Ceiling on the discount a cashier may take off one invoice at the
             # till. Null = no ceiling, 0 = no till discounts at all.

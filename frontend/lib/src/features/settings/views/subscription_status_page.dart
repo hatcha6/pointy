@@ -72,6 +72,18 @@ class _SubscriptionStatusPageState extends State<SubscriptionStatusPage> {
     }
   }
 
+  Future<void> _setRemoteSignIn(bool allowed) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    final ok = await widget.viewModel.setRemoteSignIn(allowed: allowed);
+    if (!mounted || ok) {
+      return;
+    }
+    messenger.showSnackBar(
+      SnackBar(content: Text(l10n.subscriptionRemoteSignInSaveFailed)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -149,7 +161,11 @@ class _SubscriptionStatusPageState extends State<SubscriptionStatusPage> {
                   WalletSection(viewModel: wallet, onSpent: viewModel.load),
                   SizedBox(height: spacing.md),
                 ],
-                _InstallationIdSection(status: status),
+                _InstallationIdSection(
+                  status: status,
+                  savingRemoteSignIn: viewModel.isSavingRemoteSignIn,
+                  onRemoteSignInChanged: _setRemoteSignIn,
+                ),
                 SizedBox(height: spacing.md),
                 _RemoteAccessSection(
                   status: status,
@@ -272,9 +288,15 @@ String _subscriptionStatusLabel(
 /// line explanation of what to do with it. Falls back to a "not linked yet"
 /// callout when the shop has never been provisioned on the relay.
 class _InstallationIdSection extends StatelessWidget {
-  const _InstallationIdSection({required this.status});
+  const _InstallationIdSection({
+    required this.status,
+    required this.savingRemoteSignIn,
+    required this.onRemoteSignInChanged,
+  });
 
   final RelayInstallationStatus status;
+  final bool savingRemoteSignIn;
+  final ValueChanged<bool> onRemoteSignInChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -295,6 +317,15 @@ class _InstallationIdSection extends StatelessWidget {
                 Text(
                   l10n.subscriptionInstallationIdHelper,
                   style: textTheme.bodySmall?.copyWith(color: colors.mutedInk),
+                ),
+                SizedBox(height: spacing.sm),
+                SwitchListTile(
+                  key: const ValueKey('allow_remote_sign_in_switch'),
+                  contentPadding: EdgeInsets.zero,
+                  value: status.allowRemoteSignIn,
+                  onChanged: savingRemoteSignIn ? null : onRemoteSignInChanged,
+                  title: Text(l10n.subscriptionRemoteSignInLabel),
+                  subtitle: Text(l10n.subscriptionRemoteSignInSubtitle),
                 ),
               ],
             )

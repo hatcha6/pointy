@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:http/http.dart' as http;
 
 import '../models/money_source.dart';
+import '../models/remote_sign_in_status.dart';
 import '../models/return_search.dart';
 import '../models/attachment_summary.dart';
 import '../models/password_policy.dart';
@@ -365,17 +366,51 @@ class PosApiService {
   void configureConnectionTarget({
     required String baseUrl,
     String relayToken = '',
+    String signInInstallationId = '',
     ApiConnectionTarget? fallbackTarget,
   }) {
     _session.configureConnectionTarget(
       baseUrl: baseUrl,
       relayToken: relayToken,
+      signInInstallationId: signInInstallationId,
       fallbackTarget: fallbackTarget,
     );
   }
 
-  Future<PosUser> login({required String username, required String password}) {
-    return _auth.login(username: username, password: password);
+  /// See [PosApiSession.signsInRemotely].
+  bool get signsInRemotely => _session.signsInRemotely;
+
+  /// Run after a sign-in on the relay's sign-in route, before [login]
+  /// returns: it trades the new session for this device's ticket. Until it
+  /// has, the relay lets no screen's request through, so the app must not
+  /// think it is signed in. Wired to the [ConnectionCoordinator].
+  Future<void> Function()? onSignedInRemotely;
+
+  Future<PosUser> login({
+    required String username,
+    required String password,
+  }) async {
+    final user = await _auth.login(username: username, password: password);
+    final pair = onSignedInRemotely;
+    if (_session.signsInRemotely && pair != null) {
+      try {
+        await pair();
+      } on Object {
+        // Signed in at the shop with no way to use it: do not leave the
+        // session open behind a screen that says the sign-in failed.
+        try {
+          await _auth.logout();
+        } on Object {
+          _session.clearAuthState();
+        }
+        rethrow;
+      }
+    }
+    return user;
+  }
+
+  Future<RemoteSignInStatus> fetchRemoteSignInStatus() {
+    return _relay.fetchRemoteSignInStatus();
   }
 
   Future<void> logout() => _auth.logout();
@@ -810,6 +845,10 @@ class PosApiService {
     return response.bodyBytes;
   }
 
+  Future<void> updateRemoteSignIn({required bool allowed}) {
+    return _shopSettings.updateRemoteSignIn(allowed: allowed);
+  }
+
   Future<ShopSettings> updateShopSettings(ShopSettingsDraft draft) {
     return _shopSettings.updateShopSettings(draft);
   }
@@ -965,12 +1004,8 @@ class PosApiService {
     required BulkPricePreviewView view,
     int offset = 0,
     int limit = 50,
-  }) => _bulkPrices.preview(
-    spec: spec,
-    view: view,
-    offset: offset,
-    limit: limit,
-  );
+  }) =>
+      _bulkPrices.preview(spec: spec, view: view, offset: offset, limit: limit);
 
   Future<BulkPriceChangeRecord> applyBulkPriceChange({
     required Map<String, Object?> spec,

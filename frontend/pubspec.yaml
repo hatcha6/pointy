@@ -194,9 +194,12 @@ flutter:
   assets:
     - assets/fonts/IBMPlexSansArabic-Regular.ttf
     - assets/fonts/IBMPlexSansArabic-Bold.ttf
-    # Brand logo, shown in-app (e.g. the login screen) and used to generate
-    # the per-platform launcher icons via flutter_launcher_icons.
-    - assets/branding/logo.png
+    # Brand logo as shown in-app (the login screen, the price checker): 512 px,
+    # enough for its largest use at 3x. The 3762 px master,
+    # assets/branding/logo.png, only feeds flutter_launcher_icons and is not
+    # bundled — at 3.6 MB it was the biggest thing the web app's sign-in
+    # screen downloaded.
+    - assets/branding/logo_512.png
     # Monochrome brand mark used inside the printed "دُوِّنَ في دفتر" tagline
     # (PDF documents + thermal receipts). Read as raw bytes for print rendering.
     - assets/branding/logo_black.png

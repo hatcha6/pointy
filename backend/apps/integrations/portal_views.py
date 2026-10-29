@@ -8,6 +8,7 @@ live in :mod:`apps.integrations.portal_sales`; this module only speaks HTTP.
 
 from __future__ import annotations
 
+import logging
 from datetime import date
 from decimal import Decimal
 
@@ -33,9 +34,28 @@ RECORD_SALE = (*RECORD, "sales.add_order")
 
 MONEY = Decimal("0.01")
 
+logger = logging.getLogger(__name__)
+
 
 def _money(value) -> str | None:
     return None if value is None else str(Decimal(value).quantize(MONEY))
+
+
+def _deepen_in_background(account) -> None:
+    """Start walking a young mirror towards three months, off the request.
+
+    The one thing that used to need a half-hourly timer; it now happens while
+    a manager is on this page instead. Best-effort: a broker that is down
+    costs only depth, which the next visit asks for again.
+    """
+    if not payment_report.wants_deepening(account):
+        return
+    from .tasks import deepen_payment_report_task
+
+    try:
+        deepen_payment_report_task.apply_async(args=[account.pk], retry=False)
+    except Exception:  # noqa: BLE001 - never fail the page over a backfill
+        logger.warning("could not queue the payments report deepening", exc_info=True)
 
 
 def _account_for(provider: str):
@@ -98,6 +118,8 @@ class IntegrationPortalPaymentsView(APIView):
                 account, back_to=start, max_pages=payment_report.DAY_PAGES
             )
             account.refresh_from_db()
+            if read.ok:
+                _deepen_in_background(account)
 
         payments = list(payment_report.payments_between(account, start, end))
         standings = portal_sales.describe(account, payments)

@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Readies `flutter build web` output (cards/build/web) for cards.dftr.ly, where
-# customers on Libyan mobile networks pay for every byte and every round trip:
+# Readies `flutter build web --wasm` output for a host the relay serves —
+# cards.dftr.ly (cards/) and app.dftr.ly (frontend/) — whose users are on
+# Libyan mobile networks and pay for every byte and every round trip:
 #
 #   1. The app's code gets its content's hash in its name (main.<hash>.dart.js,
 #      main.<hash>.dart.wasm, flutter_bootstrap.<hash>.js), so the relay lets
-#      browsers keep it for good (relay/internal/cardsweb) and a return visit
+#      browsers keep it for good (relay/internal/webbuild) and a return visit
 #      fetches none of it.
 #   2. index.html starts the downloads that would otherwise wait their turn:
 #      the code this browser will run (WebAssembly on Chrome and Edge, the
@@ -14,7 +15,9 @@
 #   3. Every file that compresses is stored beside a Brotli and a gzip copy,
 #      which the relay sends to browsers that take them.
 #
-# Run from cards/ after the build: `make cards-web-build` does both.
+# Run from the app's directory after the build, with the build directory as
+# the argument (default build/web): `make cards-web-build` and
+# `make frontend-web-build` do both.
 set -euo pipefail
 
 web="${1:-build/web}"
@@ -30,7 +33,7 @@ fingerprint() { # file, its key in the bootstrap's build config
   sed -i.bak "s/\"${key}\":\"${file}\"/\"${key}\":\"${named}\"/" flutter_bootstrap.js
   rm flutter_bootstrap.js.bak
   grep -q "\"${key}\":\"${named}\"" flutter_bootstrap.js || {
-    echo "web_postbuild: flutter_bootstrap.js no longer names ${file} as ${key}" >&2
+    echo "flutter_web_postbuild: flutter_bootstrap.js no longer names ${file} as ${key}" >&2
     exit 1
   }
   echo "$named"
@@ -86,7 +89,7 @@ page = page.replace('src="flutter_bootstrap.js"', f'src="{boot}"', 1)
 open("index.html", "w", encoding="utf-8").write(page)
 PY
 
-# The web's copy of the Arabic font, trimmed to what the shelf can show: all
+# The web's copy of the Arabic font, trimmed to what the app can show: all
 # of Arabic (shaping keeps every form it reaches), Latin-1, punctuation and
 # currency; without TrueType hinting, which the web's renderer does not run.
 # A quarter smaller per weight; the phone apps keep the whole font.
@@ -100,7 +103,7 @@ if command -v pyftsubset >/dev/null; then
     mv "assets/${font}.subset" "assets/${font}"
   done
 else
-  echo "web_postbuild: pyftsubset (pip install fonttools) not found; fonts left whole" >&2
+  echo "flutter_web_postbuild: pyftsubset (pip install fonttools) not found; fonts left whole" >&2
 fi
 
 # The service worker Flutter still writes is never registered (the loader
@@ -120,4 +123,4 @@ find . -type f \( -name '*.js' -o -name '*.mjs' -o -name '*.wasm' -o -name '*.js
     done
   done
 
-echo "web_postbuild: ${main_wasm}, ${main_js}, ${boot_js}; $(find . -name '*.br' | wc -l | tr -d ' ') files compressed"
+echo "flutter_web_postbuild: ${main_wasm}, ${main_js}, ${boot_js}; $(find . -name '*.br' | wc -l | tr -d ' ') files compressed"

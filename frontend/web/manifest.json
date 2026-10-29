@@ -3,10 +3,10 @@
     "short_name": "دفتر",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#FFFFFF",
-    "theme_color": "#FFFFFF",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "background_color": "#F8F7F4",
+    "theme_color": "#0F766E",
+    "description": "دفتر — نظام نقاط البيع",
+    "orientation": "any",
     "prefer_related_applications": false,
     "icons": [
         {
@@ -31,5 +31,7 @@
             "type": "image/png",
             "purpose": "maskable"
         }
-    ]
+    ],
+    "lang": "ar",
+    "dir": "rtl"
 }
