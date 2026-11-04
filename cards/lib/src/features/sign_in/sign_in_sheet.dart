@@ -9,6 +9,7 @@ import '../../../l10n/generated/app_localizations.dart';
 import '../../core/phone.dart';
 import '../../core/result.dart';
 import '../../data/models/customer.dart';
+import '../../data/repositories/attribution_repository.dart';
 import '../../design/cards_logo.dart';
 import '../../design/cards_tokens.dart';
 import '../../shared/cards_scope.dart';
@@ -16,6 +17,7 @@ import '../../shared/pin_boxes.dart';
 import '../../shared/relay_error_text.dart';
 import '../../shared/haptics.dart';
 import '../../shared/shake.dart';
+import '../attribution/heard_from_form.dart';
 import '../legal/legal_consent.dart';
 import '../../core/analytics/analytics.dart';
 import '../../core/analytics/events.dart';
@@ -47,10 +49,14 @@ Future<bool> ensureSignedIn(BuildContext context) async {
 /// Phone, then the 6-digit code from the SMS. One field each; the code field
 /// takes the OS's autofill and goes on its own at the sixth digit.
 class SignInSheet extends StatefulWidget {
-  const SignInSheet({super.key, this.initialChallenge});
+  const SignInSheet({super.key, this.initialChallenge, this.askFirst = false});
 
   /// Opens on the code step (the preview harness).
   final CodeChallenge? initialChallenge;
+
+  /// Opens on the question asked after a new customer's sign-in (the
+  /// preview harness).
+  final bool askFirst;
 
   @override
   State<SignInSheet> createState() => _SignInSheetState();
@@ -64,12 +70,24 @@ class _SignInSheetState extends State<SignInSheet> {
   String? _phoneError;
   String? _codeError;
   bool _busy = false;
+
+  /// Signed in, now asking «من أين سمعت عنا؟».
+  late bool _asking = widget.askFirst;
   Timer? _ticker;
   int _resendIn = 0;
+
+  /// Held from covering this sheet: a reward shows once it closes.
+  late final AttributionRepository _attribution;
 
   @override
   void initState() {
     super.initState();
+    _attribution =
+        context
+            .getInheritedWidgetOfExactType<CardsScope>()!
+            .dependencies
+            .attribution
+          ..hold();
     if (_challenge != null) {
       _startCountdown();
     }
@@ -77,6 +95,7 @@ class _SignInSheetState extends State<SignInSheet> {
 
   @override
   void dispose() {
+    _attribution.release();
     _ticker?.cancel();
     _phone.dispose();
     _code.dispose();
@@ -157,7 +176,12 @@ class _SignInSheetState extends State<SignInSheet> {
     switch (result) {
       case Ok():
         Haptics.success();
-        Navigator.of(context).pop(true);
+        if (CardsScope.of(context).attribution.shouldAskAfterSignIn) {
+          // A new customer: where they heard of the app, then on.
+          setState(() => _asking = true);
+        } else {
+          Navigator.of(context).pop(true);
+        }
       case Error(:final exception):
         relayErrorIsPassing(exception) ? Haptics.warning() : Haptics.error();
         _codeShake.shake();
@@ -179,7 +203,13 @@ class _SignInSheetState extends State<SignInSheet> {
         ),
         child: AnimatedSwitcher(
           duration: CardsMotion.standard,
-          child: _challenge == null
+          child: _asking
+              ? HeardFromForm(
+                  key: const ValueKey('heard-from'),
+                  signedIn: true,
+                  onDone: () => Navigator.of(context).pop(true),
+                )
+              : _challenge == null
               ? _phoneStep(context)
               : _codeStep(context, _challenge!),
         ),

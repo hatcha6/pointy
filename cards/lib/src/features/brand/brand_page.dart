@@ -7,6 +7,7 @@ import 'package:pointy_brand/pointy_brand.dart';
 
 import '../../../l10n/generated/app_localizations.dart';
 import '../../core/money.dart';
+import '../../data/models/account_target.dart';
 import '../../data/models/catalog.dart';
 import '../../design/cards_layout.dart';
 import '../../design/cards_tokens.dart';
@@ -26,6 +27,11 @@ import 'brand_share.dart';
 import '../../shared/haptics.dart';
 import '../../core/analytics/analytics.dart';
 import '../../core/analytics/events.dart';
+import '../../shared/name_text.dart';
+import '../../shared/shake.dart';
+import '../topup/account_card.dart';
+import '../topup/account_form_model.dart';
+import '../topup/topup_text.dart';
 
 /// One brand, presented the way a premium storefront presents a product: its
 /// card floating at the top of the page, what it comes in, and a frosted buy bar
@@ -75,6 +81,12 @@ class _BrandPageState extends State<BrandPage> {
   /// stays put while the details scroll.
   final _still = ScrollController();
 
+  /// The account a top-up is sent to, for a card that is one (and is sold
+  /// in this build).
+  AccountFormModel? _account;
+  final _accountKey = GlobalKey();
+  final _accountShake = ShakeController();
+
   @override
   void initState() {
     super.initState();
@@ -86,11 +98,73 @@ class _BrandPageState extends State<BrandPage> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final brand = widget.brand;
+    if (_account == null && brand.toAccount && !brand.webOnly) {
+      final dependencies = CardsScope.of(context);
+      _account = AccountFormModel(
+        brand: brand,
+        orders: dependencies.orders,
+        accounts: dependencies.accounts,
+        signedIn: () => dependencies.auth.isSignedIn,
+      )..itemKey = _item?.key ?? '';
+      _account!.load();
+    }
+  }
+
+  @override
   void dispose() {
     _cardGone.dispose();
     _scroll.dispose();
     _still.dispose();
+    _account?.dispose();
+    _accountShake.dispose();
     super.dispose();
+  }
+
+  void _choose(CardItem item) {
+    setState(() => _item = item);
+    _account?.itemKey = item.key;
+  }
+
+  /// The account is not ready to be sent to: the page goes to it, shakes
+  /// it, and puts the cursor where it needs typing.
+  bool _accountReady() {
+    final account = _account;
+    if (account == null) {
+      return true;
+    }
+    if (account.validate() && !account.refused) {
+      return true;
+    }
+    Haptics.warning();
+    _accountShake.shake();
+    final card = _accountKey.currentContext;
+    if (card != null) {
+      Scrollable.ensureVisible(
+        card,
+        alignment: 0.2,
+        duration: CardsMotion.standard,
+        curve: CardsMotion.curve,
+      );
+    }
+    (account.firstField() ?? account.focusOf(account.target.fields.first.key))
+        .requestFocus();
+    return false;
+  }
+
+  /// Back from checkout to change the account: the cursor goes to its ID.
+  void _editAccount() {
+    final account = _account;
+    if (account == null || !mounted) {
+      return;
+    }
+    final card = _accountKey.currentContext;
+    if (card != null) {
+      Scrollable.ensureVisible(card, alignment: 0.2);
+    }
+    account.firstField()?.requestFocus();
   }
 
   List<String> get _countries {
@@ -116,6 +190,9 @@ class _BrandPageState extends State<BrandPage> {
     if (item == null || !item.available || widget.brand.webOnly) {
       return;
     }
+    if (!_accountReady()) {
+      return;
+    }
     Haptics.tap();
     if (!await ensureSignedIn(context) || !mounted) {
       return;
@@ -124,8 +201,10 @@ class _BrandPageState extends State<BrandPage> {
       context,
       brand: widget.brand,
       item: item,
-      quantity: _quantity,
+      quantity: _account == null ? _quantity : 1,
       heroTag: widget.heroTag,
+      account: _account,
+      onEditAccount: _editAccount,
     );
   }
 
@@ -153,8 +232,17 @@ class _BrandPageState extends State<BrandPage> {
           null,
           (min, p) => min == null || p.compareTo(min) < 0 ? p : min,
         );
+    // A Steam gift of one edition, sent to an account: nothing to choose
+    // but the account, and the price is on the bar.
+    final oneEdition =
+        brand.toAccount && brand.items.length == 1 && _account != null;
+    final valuesTitle = switch (brand.target?.kind) {
+      TargetKind.steamInvite => l10n.chooseEdition,
+      null => l10n.chooseValue,
+      _ => l10n.chooseAmount,
+    };
     final details = <Widget>[
-      Text(brand.name, style: theme.textTheme.headlineMedium),
+      NameText(brand.name, style: theme.textTheme.headlineMedium),
       const SizedBox(height: CardsSpace.xs),
       Wrap(
         spacing: CardsSpace.sm,
@@ -169,6 +257,15 @@ class _BrandPageState extends State<BrandPage> {
               ),
             ),
           if (brand.webOnly) const WebOnlyPill(onArt: false),
+          if (brand.gamePlatform case final platform?)
+            PlatformPill(platform, onArt: false),
+          if (brand.target case final target?)
+            Pill(
+              text: l10n.topUpPill(kindKey(target.kind)),
+              icon: target.kind == TargetKind.steamInvite
+                  ? Icons.card_giftcard_rounded
+                  : Icons.bolt_rounded,
+            ),
           if (brand.badge.isNotEmpty)
             Pill(text: brand.badge, tone: PillTone.promo),
         ],
@@ -193,51 +290,69 @@ class _BrandPageState extends State<BrandPage> {
           ],
         ),
       ],
-      const SizedBox(height: CardsSpace.xl),
-      Text(l10n.chooseValue, style: theme.textTheme.titleLarge),
-      const SizedBox(height: CardsSpace.md),
-      LayoutBuilder(
-        builder: (context, constraints) {
-          final columns = constraints.maxWidth < 360
-              ? 2
-              : (constraints.maxWidth < 600 ? 3 : 4);
-          const gap = CardsSpace.sm;
-          final tileWidth =
-              (constraints.maxWidth - gap * (columns - 1)) / columns;
-          return Wrap(
-            spacing: gap,
-            runSpacing: gap,
-            children: [
-              for (final option in _items)
-                SizedBox(
-                  width: tileWidth,
-                  child: _ValueTile(
-                    item: option,
-                    selected: option.key == item?.key,
-                    onTap: option.available
-                        ? () => setState(() => _item = option)
-                        : null,
+      if (_account case final account?) ...[
+        const SizedBox(height: CardsSpace.xl),
+        _StepTitle(
+          // A game with one edition has one step: the account.
+          step: oneEdition ? null : 1,
+          title: l10n.topUpAccountTitle(kindKey(account.target.kind)),
+        ),
+        const SizedBox(height: CardsSpace.xs),
+        Text(
+          l10n.topUpAccountBody(kindKey(account.target.kind)),
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: CardsSpace.md),
+        Shake(
+          controller: _accountShake,
+          child: AccountCard(key: _accountKey, model: account),
+        ),
+      ],
+      if (!oneEdition) ...[
+        const SizedBox(height: CardsSpace.xl),
+        if (_account != null)
+          _StepTitle(step: 2, title: valuesTitle)
+        else
+          Text(valuesTitle, style: theme.textTheme.titleLarge),
+        const SizedBox(height: CardsSpace.md),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final columns = constraints.maxWidth < 360
+                ? 2
+                : (constraints.maxWidth < 600 ? 3 : 4);
+            const gap = CardsSpace.sm;
+            final tileWidth =
+                (constraints.maxWidth - gap * (columns - 1)) / columns;
+            // A game's editions have names, not values: every tile gives them
+            // two lines, so the row still lines up.
+            final named = _items.any((option) => option.label.length > 14);
+            return Wrap(
+              spacing: gap,
+              runSpacing: gap,
+              children: [
+                for (final option in _items)
+                  SizedBox(
+                    width: tileWidth,
+                    child: _ValueTile(
+                      item: option,
+                      named: named,
+                      selected: option.key == item?.key,
+                      onTap: option.available ? () => _choose(option) : null,
+                    ),
                   ),
-                ),
-            ],
-          );
-        },
-      ),
+              ],
+            );
+          },
+        ),
+      ],
       if (brand.redeemHint.isNotEmpty) ...[
         const SizedBox(height: CardsSpace.xl),
         _RedeemCard(hint: brand.redeemHint),
       ],
     ];
-    final buyBar = item == null
-        ? null
-        : _BuyBar(
-            total: item.price * _quantity,
-            quantity: _quantity,
-            enabled: item.available,
-            webOnly: brand.webOnly,
-            onQuantity: (value) => setState(() => _quantity = value),
-            onBuy: _buy,
-          );
+    final buyBar = _buyBar();
     if (CardsLayout.sideBySide(media.size)) {
       return _sideBySide(context, details: details);
     }
@@ -302,7 +417,7 @@ class _BrandPageState extends State<BrandPage> {
                             opacity: gone ? 1 : 0,
                             child: child,
                           ),
-                          child: Text(brand.name, maxLines: 1),
+                          child: NameText(brand.name, maxLines: 1),
                         ),
                         actions: [
                           // In the side column instead, where there is one.
@@ -335,6 +450,51 @@ class _BrandPageState extends State<BrandPage> {
           ),
         ),
         bottomNavigationBar: buyBar,
+      ),
+    );
+  }
+
+  /// The buy bar for the chosen card. A top-up's says where it goes (the
+  /// player's name once the game gave it) and has no quantity: one goes to
+  /// an account at a time.
+  Widget? _buyBar({bool floating = false}) {
+    final item = _item;
+    if (item == null) {
+      return null;
+    }
+    final account = _account;
+    if (account == null) {
+      return _BuyBar(
+        total: item.price * _quantity,
+        quantity: _quantity,
+        enabled: item.available,
+        webOnly: widget.brand.webOnly,
+        onQuantity: (value) => setState(() => _quantity = value),
+        onBuy: _buy,
+        floating: floating,
+      );
+    }
+    final l10n = AppLocalizations.of(context);
+    final kind = kindKey(account.target.kind);
+    return ListenableBuilder(
+      listenable: account,
+      builder: (context, _) => _BuyBar(
+        total: item.price,
+        quantity: 1,
+        enabled: item.available,
+        onQuantity: (_) {},
+        onBuy: _buy,
+        floating: floating,
+        actionLabel: l10n.topUpAction(kind),
+        note: account.complete
+            ? l10n.buyBarTo(
+                account.playerName.isNotEmpty
+                    ? isolatedName(account.playerName)
+                    : isolated(
+                        accountShown(account.target.line(account.values)),
+                      ),
+              )
+            : l10n.buyBarNeedsAccount(kind),
       ),
     );
   }
@@ -405,17 +565,7 @@ class _BrandPageState extends State<BrandPage> {
                                 children: details,
                               ),
                             ),
-                            if (_item case final item?)
-                              _BuyBar(
-                                total: item.price * _quantity,
-                                quantity: _quantity,
-                                enabled: item.available,
-                                webOnly: widget.brand.webOnly,
-                                onQuantity: (value) =>
-                                    setState(() => _quantity = value),
-                                onBuy: _buy,
-                                floating: true,
-                              ),
+                            ?_buyBar(floating: true),
                           ],
                         ),
                       ),
@@ -439,6 +589,45 @@ class _BrandPageState extends State<BrandPage> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// A numbered step of a top-up's page: first the account, then the amount.
+class _StepTitle extends StatelessWidget {
+  const _StepTitle({required this.step, required this.title});
+
+  /// Null for a page of one step, which needs no number.
+  final int? step;
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    if (step == null) {
+      return Text(title, style: theme.textTheme.titleLarge);
+    }
+    return Row(
+      children: [
+        Container(
+          width: 26,
+          height: 26,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: theme.colorScheme.onSurface,
+            shape: BoxShape.circle,
+          ),
+          child: Text(
+            '$step',
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: theme.colorScheme.surface,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        const SizedBox(width: CardsSpace.sm),
+        Expanded(child: Text(title, style: theme.textTheme.titleLarge)),
+      ],
     );
   }
 }
@@ -540,6 +729,7 @@ class _CountryChip extends StatelessWidget {
 
 class _ValueTile extends StatelessWidget {
   const _ValueTile({
+    this.named = false,
     required this.item,
     required this.selected,
     required this.onTap,
@@ -549,11 +739,17 @@ class _ValueTile extends StatelessWidget {
   final bool selected;
   final VoidCallback? onTap;
 
+  /// An edition's name rather than a value: two lines at full size.
+  final bool named;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final unavailable = onTap == null;
+    final labelStyle = theme.textTheme.titleSmall?.copyWith(
+      fontWeight: FontWeight.w700,
+    );
     final label = item.label.isNotEmpty
         ? item.label
         : '${item.faceValue} ${item.faceCurrency}';
@@ -592,19 +788,31 @@ class _ValueTile extends StatelessWidget {
             opacity: unavailable ? 0.4 : 1,
             child: Column(
               children: [
-                // One line in every tile, so a row of values lines up; a
-                // long one shrinks a little instead of wrapping.
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    label,
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
+                if (named)
+                  SizedBox(
+                    height: _twoLines(context, labelStyle),
+                    child: Center(
+                      child: NameText(
+                        label,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: labelStyle,
+                      ),
+                    ),
+                  )
+                else
+                  // One line in every tile, so a row of values lines up; a
+                  // long one shrinks a little instead of wrapping.
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      label,
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      style: labelStyle,
                     ),
                   ),
-                ),
                 const SizedBox(height: 2),
                 Text(
                   unavailable
@@ -629,6 +837,14 @@ class _ValueTile extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The height of two lines of [style], as the reader's text size sets it.
+double _twoLines(BuildContext context, TextStyle? style) {
+  final size = style?.fontSize ?? 14;
+  return MediaQuery.textScalerOf(context).scale(size) *
+      (style?.height ?? 1.4) *
+      2;
 }
 
 class _RedeemCard extends StatelessWidget {
@@ -701,6 +917,8 @@ class _BuyBar extends StatelessWidget {
     required this.onBuy,
     this.webOnly = false,
     this.floating = false,
+    this.note,
+    this.actionLabel,
   });
 
   final Money total;
@@ -715,6 +933,12 @@ class _BuyBar extends StatelessWidget {
   /// A glass panel floating over the page (beside the card on a wide
   /// screen), rather than a bar across the bottom edge.
   final bool floating;
+
+  /// In place of the card count and the quantity: where a top-up goes.
+  final String? note;
+
+  /// In place of «اشترِ».
+  final String? actionLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -739,22 +963,34 @@ class _BuyBar extends StatelessWidget {
                         ),
                       ),
                     ),
-                    Text(
-                      l10n.cardCount(quantity),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
+                    AnimatedSwitcher(
+                      duration: CardsMotion.fast,
+                      layoutBuilder: (current, previous) => Stack(
+                        alignment: AlignmentDirectional.centerStart,
+                        children: [...previous, ?current],
+                      ),
+                      child: Text(
+                        note ?? l10n.cardCount(quantity),
+                        key: ValueKey(note),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
-              QuantityStepper(value: quantity, onChanged: onQuantity),
-              const SizedBox(width: CardsSpace.sm),
+              if (note == null) ...[
+                QuantityStepper(value: quantity, onChanged: onQuantity),
+                const SizedBox(width: CardsSpace.sm),
+              ],
               SizedBox(
                 width: 112,
                 child: FilledButton(
                   onPressed: enabled ? onBuy : null,
-                  child: Text(l10n.buyNow),
+                  child: Text(actionLabel ?? l10n.buyNow),
                 ),
               ),
             ],

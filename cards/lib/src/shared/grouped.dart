@@ -126,16 +126,27 @@ class SegmentedPill<T> extends StatelessWidget {
                         child: GestureDetector(
                           behavior: HitTestBehavior.opaque,
                           onTap: () => onChanged(value),
-                          child: Center(
-                            child: Text(
-                              label,
-                              style: theme.textTheme.labelLarge?.copyWith(
-                                fontWeight: value == selected
-                                    ? FontWeight.w700
-                                    : FontWeight.w500,
-                                color: value == selected
-                                    ? theme.colorScheme.onSurface
-                                    : theme.colorScheme.onSurfaceVariant,
+                          // One line always, a little smaller where it has
+                          // to be: a wrapped label is cut off by the capsule.
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: CardsSpace.xs,
+                            ),
+                            child: Center(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  label,
+                                  maxLines: 1,
+                                  style: theme.textTheme.labelLarge?.copyWith(
+                                    fontWeight: value == selected
+                                        ? FontWeight.w700
+                                        : FontWeight.w500,
+                                    color: value == selected
+                                        ? theme.colorScheme.onSurface
+                                        : theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
                               ),
                             ),
                           ),

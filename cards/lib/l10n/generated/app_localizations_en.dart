@@ -325,6 +325,24 @@ class AppLocalizationsEn extends AppLocalizations {
       'Usually within seconds. You can close the app; the card will be saved in “My cards”.';
 
   @override
+  String get preparingSlowTitle => 'The supplier is slower this time';
+
+  @override
+  String get preparingSlowNotify =>
+      'No need to wait here: when your order is ready we\'ll send you a notification that opens it in My cards.';
+
+  @override
+  String get preparingSlowAsk =>
+      'Turn on notifications and we\'ll tell you when your order is ready, or come back to it later in My cards.';
+
+  @override
+  String get preparingSlowLater =>
+      'No need to wait here: you\'ll find your order in My cards when it\'s ready.';
+
+  @override
+  String get goToMyCards => 'Go to My cards';
+
+  @override
   String get refundedTitle => 'We couldn\'t buy the card';
 
   @override
@@ -368,10 +386,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get linkCopiedNotice => 'Link copied';
 
   @override
+  String get redeemAction => 'Redeem';
+
+  @override
+  String get dialCopiedNotice =>
+      'Dial code copied. Paste it into Phone, then call.';
+
+  @override
+  String get redeemCopiedNotice =>
+      'Secret code copied. If the page does not show it, paste it there.';
+
+  @override
   String get rechargeNow => 'Recharge now';
 
   @override
   String get showQr => 'QR code';
+
+  @override
+  String get qrRevealHint => 'Tap the card to show the QR';
 
   @override
   String get qrScanHint => 'Scan it with a camera to read the secret code';
@@ -869,5 +901,409 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get webOnlyBody =>
-      'This card can\'t be bought in the iPhone app. Find it on cards.dftr.ly';
+      'This card can\'t be bought in this app. Find it on cards.dftr.ly';
+
+  @override
+  String get steamBadge => 'Steam';
+
+  @override
+  String get xboxBadge => 'Xbox';
+
+  @override
+  String get eaBadge => 'EA';
+
+  @override
+  String get rockstarBadge => 'Rockstar';
+
+  @override
+  String get heardFromTitle => 'Where did you hear about Daftar Cards?';
+
+  @override
+  String get heardFromBody =>
+      'Pick one: it helps us reach people who need the app.';
+
+  @override
+  String get heardFromFacebook => 'Facebook';
+
+  @override
+  String get heardFromInstagram => 'Instagram';
+
+  @override
+  String get heardFromTiktok => 'TikTok';
+
+  @override
+  String get heardFromWhatsapp => 'WhatsApp';
+
+  @override
+  String get heardFromFriend => 'A friend or relative';
+
+  @override
+  String get heardFromShop => 'A shop';
+
+  @override
+  String get heardFromBillboard => 'A billboard';
+
+  @override
+  String get heardFromStoreSearch => 'Searching the app store';
+
+  @override
+  String get heardFromOther => 'Something else';
+
+  @override
+  String get campaignCodeLabel => 'Got a code from an ad or a friend?';
+
+  @override
+  String get campaignCodeHint => 'e.g. UNI1';
+
+  @override
+  String get campaignCodeCheck => 'Check';
+
+  @override
+  String get campaignCodeUnknown => 'This code is unknown or has ended.';
+
+  @override
+  String get campaignCodeValid => 'Code accepted, thank you.';
+
+  @override
+  String campaignCodeRewardLater(String amount) {
+    return 'Code accepted: $amount goes into your balance when you sign in.';
+  }
+
+  @override
+  String campaignCodeRewardNow(String amount) {
+    return 'Code accepted: $amount goes into your balance.';
+  }
+
+  @override
+  String campaignLinkReward(String code, String amount) {
+    return 'You came with code $code: $amount goes into your balance when you sign in.';
+  }
+
+  @override
+  String rewardTitle(String amount) {
+    return '$amount added to your balance';
+  }
+
+  @override
+  String rewardBecauseCode(String code) {
+    return 'Because you used the code $code.';
+  }
+
+  @override
+  String rewardBecauseCreator(String name) {
+    return 'Because you came through $name.';
+  }
+
+  @override
+  String get rewardBecauseCreatorUnnamed =>
+      'Because you came through a creator we work with.';
+
+  @override
+  String rewardBecauseFlyer(String name) {
+    return 'Because you scanned the $name code.';
+  }
+
+  @override
+  String get rewardBecauseFlyerUnnamed =>
+      'Because you scanned the flyer\'s code.';
+
+  @override
+  String get rewardBecauseBillboardUnnamed =>
+      'Because you scanned the billboard\'s code.';
+
+  @override
+  String rewardBecauseInvite(String name) {
+    return 'Because $name invited you.';
+  }
+
+  @override
+  String get rewardBecauseInviteUnnamed => 'Because a friend invited you.';
+
+  @override
+  String get rewardBecauseAd => 'Because you came from our ad.';
+
+  @override
+  String get rewardBody =>
+      'It comes off the price of your next card automatically, with no fees.';
+
+  @override
+  String get rewardAction => 'Shop now';
+
+  @override
+  String topUpPill(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'invite': 'Gift to your account',
+      'other': 'Direct top-up',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String topUpAccountTitle(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'telegram': 'Telegram account',
+      'steam': 'Steam account',
+      'invite': 'Steam account',
+      'other': 'Player account',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String topUpAccountBody(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'telegram': 'Sent straight to the account, no code to enter.',
+      'steam': 'Added straight to your Steam wallet.',
+      'invite':
+          'The game arrives as a gift on your Steam account, no code to enter.',
+      'other': 'Sent straight to your game account, no code to enter.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String topUpHintTitle(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'telegram': 'Where do I find my username?',
+      'steam': 'What is my login?',
+      'invite': 'How do I get the link?',
+      'other': 'Where do I find my ID?',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get chooseAmount => 'Choose an amount';
+
+  @override
+  String get savedAccounts => 'Your accounts';
+
+  @override
+  String get otherAccount => 'Another account';
+
+  @override
+  String forgetAccount(String account) {
+    return 'Forget $account';
+  }
+
+  @override
+  String get pasteAction => 'Paste';
+
+  @override
+  String get chooseOption => 'Choose';
+
+  @override
+  String accountRequired(String field) {
+    return 'Enter $field';
+  }
+
+  @override
+  String accountChoose(String field) {
+    return 'Choose $field';
+  }
+
+  @override
+  String get accountTooLong => 'Too long.';
+
+  @override
+  String get accountNotTelegram =>
+      'A username is 5 to 32 English letters, digits or _, starting with a letter.';
+
+  @override
+  String get accountNotSteamLogin =>
+      'A login is English letters, digits and _ only, with no spaces.';
+
+  @override
+  String get accountNotInvite =>
+      'This is not a Steam invite link. Copy the “Quick Invite” link from Steam as it is and paste it here.';
+
+  @override
+  String get accountChecking => 'Checking the account…';
+
+  @override
+  String accountPlayer(String name) {
+    return 'Player: $name';
+  }
+
+  @override
+  String accountFound(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'steam': 'This account can be topped up',
+      'other': 'Account found',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String accountNotFound(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'steam': 'This Steam account cannot be topped up. Check the login.',
+      'other': 'No account has this ID. Check it on your profile in the game.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get accountUnconfirmed =>
+      'We could not confirm the account right now. Check it carefully before paying.';
+
+  @override
+  String accountUnchecked(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'invite': 'Check the link: the gift goes to its owner.',
+      'telegram': 'Check the username: it is sent straight there and cannot be returned.',
+      'other': 'Check the ID: the top-up goes straight there and cannot be returned.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String topUpAction(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'invite': 'Buy',
+      'telegram': 'Buy',
+      'other': 'Top up',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String buyBarTo(String account) {
+    return 'To $account';
+  }
+
+  @override
+  String buyBarNeedsAccount(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'telegram': 'Enter the username',
+      'steam': 'Enter the login',
+      'invite': 'Paste the invite link',
+      'other': 'Enter the ID',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get sendToLabel => 'To';
+
+  @override
+  String get editAction => 'Edit';
+
+  @override
+  String topUpPreparingTitle(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'invite': 'Sending your gift…',
+      'other': 'Topping up the account…',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String topUpPreparingBody(String kind, String item, String account) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'invite': 'Steam will send you a friend request, then the gift: accept both when they arrive.',
+      'other': 'Sending $item to $account. It usually takes a minute or two.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get topUpSlowTitle => 'The top-up is taking longer this time';
+
+  @override
+  String get topUpRefundedTitle => 'The top-up did not go through';
+
+  @override
+  String topUpRefundedBody(String amount) {
+    return 'The top-up did not reach the account, so we put $amount back in your credit. Check the account and try again.';
+  }
+
+  @override
+  String toppedUpTitle(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'invite': 'Gift sent',
+      'other': 'Topped up',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get receiptTo => 'To';
+
+  @override
+  String get receiptPlayer => 'Player';
+
+  @override
+  String get receiptPaid => 'Amount';
+
+  @override
+  String get receiptWhen => 'Time';
+
+  @override
+  String get receiptOrder => 'Order number';
+
+  @override
+  String get whatNextTitle => 'What next?';
+
+  @override
+  String topUpNext(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'telegram': 'Open Telegram: it is in your account within minutes.',
+      'steam': 'Open Steam: the balance shows in your wallet within minutes.',
+      'invite': 'In Steam: accept the friend request you get, then the gift from your notifications. The gift arrives minutes after the friend request is accepted.',
+      'other': 'Open the game: the balance shows in your account within minutes. If it does not, close the game and open it again.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String topUpAgain(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'invite': 'Buy another gift',
+      'other': 'Top up again',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get topUpHelp => 'Not arrived? Message us on WhatsApp';
+
+  @override
+  String topUpHelpMessage(String order) {
+    return 'Hello, order $order has not reached the account.';
+  }
+
+  @override
+  String get orderIdCopied => 'Order number copied';
+
+  @override
+  String statusToppedUp(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'invite': 'Gift sent',
+      'other': 'Topped up',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get statusToppingUp => 'Topping up';
+
+  @override
+  String orderTo(String account) {
+    return 'To $account';
+  }
+
+  @override
+  String get removeAccount => 'Remove';
+
+  @override
+  String accountRemoved(String account) {
+    return '$account removed from this phone';
+  }
+
+  @override
+  String get undoAction => 'Undo';
+
+  @override
+  String get chooseEdition => 'Choose an edition';
 }

@@ -11,6 +11,7 @@ import '../../core/redeem.dart';
 import '../../core/result.dart';
 import '../../data/models/catalog.dart';
 import '../../data/models/order.dart';
+import '../../dependencies.dart';
 import '../../design/cards_tokens.dart';
 import '../../shared/art_palette.dart';
 import '../../shared/card_art.dart';
@@ -18,13 +19,17 @@ import '../../shared/tilt_card.dart';
 import '../../shared/cards_scope.dart';
 import '../../shared/haptics.dart';
 import '../../shared/side_back.dart';
+import '../../shared/success_seal.dart';
 import 'card_faces.dart';
 import 'qr_pass.dart';
 import '../../core/analytics/events.dart';
+import '../../shared/name_text.dart';
 
 /// The moment the purchase pays off. A seal says it worked, the card turns
 /// over to show its code (once, on the card itself), and a row of round
-/// actions sits under the thumb: copy, QR, send as a gift, recharge, used.
+/// actions sits under the thumb: copy, QR, send as a gift, recharge, used. The
+/// QR action, or tapping the card, lifts the card and scratches the foil off
+/// its QR.
 /// Opened from «كروتي», the codes wait behind Face ID or a fingerprint.
 class RevealPage extends StatefulWidget {
   const RevealPage({
@@ -59,11 +64,26 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
   /// While the QR pass is up, the card it lifted out of is gone from the
   /// page: the pass is that card.
   bool _passUp = false;
+
+  /// The codes whose QR has had its foil scratched off, this visit.
+  final Set<String> _scratched = {};
   List<CardCode> _codes = const [];
   Set<String> _used = {};
   bool _locked = false;
   bool _loading = true;
   int _page = 0;
+
+  /// Asks again for a code the supplier has not handed over yet.
+  Timer? _follow;
+
+  /// Stops telling the app this order is on screen.
+  VoidCallback? _unwatch;
+
+  /// Some suppliers take minutes to deliver a paid card (FazerCards took 2m43s
+  /// on 2026-11-03). Past this the relay keeps chasing it, and «كروتي» shows
+  /// the code once it lands.
+  static const _followFor = Duration(minutes: 10);
+  static const _followEvery = Duration(seconds: 4);
 
   @override
   void initState() {
@@ -73,7 +93,19 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // The card's own "code ready" notification stays quiet while it is up.
+    _unwatch ??= CardsScope.of(context).push.watch(
+      widget.order.id,
+      () => mounted && (ModalRoute.of(context)?.isCurrent ?? false),
+    );
+  }
+
+  @override
   void dispose() {
+    _unwatch?.call();
+    _follow?.cancel();
     _flip.dispose();
     _seal.dispose();
     _pages.dispose();
@@ -90,9 +122,11 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
     if (_codes.isEmpty) {
       _codes = await dependencies.vault.codes(widget.order.id) ?? const [];
     }
+    var latest = widget.order;
     if (_codes.isEmpty) {
       final result = await dependencies.orders.order(widget.order.id);
       if (result case Ok(:final value)) {
+        latest = value;
         _codes = value.codes;
         await dependencies.vault.keep(value.id, value.codes);
       }
@@ -105,6 +139,48 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
     if (!_locked) {
       _reveal();
     }
+    if (_codes.isEmpty && _codesComing(latest)) {
+      _followCodes(dependencies);
+    }
+  }
+
+  static bool _codesComing(CardOrder order) =>
+      order.codesPending || order.status.isOpen;
+
+  /// The card is paid for and its code is on its way: ask until it comes,
+  /// the order closes without it, or [_followFor] runs out.
+  void _followCodes(CardsDependencies dependencies) {
+    final until = DateTime.now().add(_followFor);
+    var asking = false;
+    _follow = Timer.periodic(_followEvery, (timer) async {
+      if (asking) {
+        return;
+      }
+      if (DateTime.now().isAfter(until)) {
+        timer.cancel();
+        return;
+      }
+      asking = true;
+      final result = await dependencies.orders.order(widget.order.id);
+      asking = false;
+      if (!mounted || result is! Ok<CardOrder>) {
+        return;
+      }
+      final order = result.value;
+      if (order.codes.isEmpty) {
+        if (!_codesComing(order)) {
+          timer.cancel();
+        }
+        return;
+      }
+      timer.cancel();
+      await dependencies.vault.keep(order.id, order.codes);
+      if (!mounted) {
+        return;
+      }
+      Haptics.success();
+      setState(() => _codes = order.codes);
+    });
   }
 
   void _reveal() {
@@ -165,7 +241,12 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
     if (box == null || !box.attached) {
       return;
     }
+    // Asked for mid-turn: the card finishes at once.
+    _flip.value = 1;
     final from = box.localToGlobal(Offset.zero) & box.size;
+    // The page's card is hidden while the pass is up, so it can lose its foil
+    // now and be bare when the pass lands back on it.
+    final scratch = _scratched.add(code.code);
     setState(() => _passUp = true);
     await QrPass.open(
       context,
@@ -175,6 +256,7 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
       code: code.code,
       used: _used.contains(code.code),
       onCopy: () => _copy(context, code.code),
+      scratch: scratch,
     );
     if (mounted) {
       setState(() => _passUp = false);
@@ -256,14 +338,14 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
                   ),
                   children: [
                     if (!widget.fromHistory) ...[
-                      _Seal(animation: _seal),
+                      SuccessSeal(animation: _seal),
                       const SizedBox(height: CardsSpace.md),
                       Text(
                         l10n.purchaseSuccess,
                         textAlign: TextAlign.center,
                         style: theme.textTheme.headlineSmall,
                       ),
-                      Text(
+                      NameText(
                         widget.order.name,
                         textAlign: TextAlign.center,
                         style: theme.textTheme.bodyMedium?.copyWith(
@@ -311,6 +393,21 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
     );
   }
 
+  /// The country of the item bought, for an issuer whose cards only work on
+  /// their own country's site.
+  String _countryOf(CardBrand? brand) {
+    for (final item in brand?.items ?? const <CardItem>[]) {
+      if (item.key == widget.order.itemKey) {
+        return item.country;
+      }
+    }
+    return '';
+  }
+
+  void _track(String action) =>
+      CardsScope.of(context).analytics
+          .codeAction(action, brand: widget.order.brandKey);
+
   /// What sits under the card: loading, locked, waiting, or the code's
   /// actions. Each state has its own key so the switcher moves between them.
   Widget _below(
@@ -349,13 +446,15 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
         _ActionRow(
           code: current,
           name: widget.order.name,
-          redeemHint: brand?.redeemHint ?? '',
+          step: redeemStep(
+            brand?.redeem,
+            code: current.code,
+            country: _countryOf(brand),
+          ),
           used: _used.contains(current.code),
           onToggleUsed: () => _toggleUsed(current.code),
           onQr: brand == null ? null : () => _showQr(brand, palette, current),
-          onAction: (action) =>
-              CardsScope.of(context).analytics
-                  .codeAction(action, brand: widget.order.brandKey),
+          onAction: _track,
         ),
         if ((brand?.redeemHint ?? '').isNotEmpty) ...[
           const SizedBox(height: CardsSpace.xl),
@@ -373,7 +472,7 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
     );
   }
 
-  /// One flipping card, or a pager of them with dots for several.
+  /// One card, or a pager of them with dots for several.
   Widget _cards(BuildContext context, CardBrand brand, ArtPalette palette) {
     final l10n = AppLocalizations.of(context);
     final codes = _codes.isEmpty || _locked ? const <CardCode?>[null] : _codes;
@@ -394,7 +493,13 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
           palette: palette,
           code: code?.code,
           used: code != null && _used.contains(code.code),
-          onCopy: code == null ? null : () => _copy(context, code.code),
+          qrScratched: code != null && _scratched.contains(code.code),
+          onTap: code == null
+              ? null
+              : () {
+                  _track('qr');
+                  _showQr(brand, palette, code);
+                },
         ),
       ),
     );
@@ -449,52 +554,24 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
   }
 }
 
-Future<void> _copy(BuildContext context, String code) async {
-  await Clipboard.setData(ClipboardData(text: code));
+Future<void> _copy(BuildContext context, String code) =>
+    _copyWithNotice(context, code, AppLocalizations.of(context).copiedNotice);
+
+Future<void> _copyWithNotice(
+  BuildContext context,
+  String text,
+  String notice,
+) async {
+  await Clipboard.setData(ClipboardData(text: text));
   Haptics.tap();
   if (context.mounted) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context).copiedNotice)),
-      );
+      ..showSnackBar(SnackBar(content: Text(notice)));
   }
 }
 
-/// The success mark: a teal disc with a check, landing with a little spring.
-class _Seal extends StatelessWidget {
-  const _Seal({required this.animation});
-
-  final Animation<double> animation;
-
-  @override
-  Widget build(BuildContext context) {
-    return ScaleTransition(
-      scale: CurvedAnimation(parent: animation, curve: CardsMotion.spring),
-      child: Center(
-        child: Container(
-          width: 64,
-          height: 64,
-          decoration: BoxDecoration(
-            color: PointyColors.primary,
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: PointyColors.primary.withValues(alpha: 0.35),
-                blurRadius: 24,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: const Icon(Icons.check_rounded, color: Colors.white, size: 36),
-        ),
-      ),
-    );
-  }
-}
-
-/// The card's art turning over to show its code on the back. The back is the
-/// code's one home: large, left to right, one line, tap to copy.
+/// The card's art turning over to show its code on the back: its one turn.
 class _FlipCard extends StatelessWidget {
   const _FlipCard({
     required this.animation,
@@ -502,7 +579,8 @@ class _FlipCard extends StatelessWidget {
     required this.brand,
     required this.code,
     required this.used,
-    this.onCopy,
+    required this.qrScratched,
+    this.onTap,
   });
 
   final Animation<double> animation;
@@ -512,7 +590,8 @@ class _FlipCard extends StatelessWidget {
   final ArtPalette palette;
   final String? code;
   final bool used;
-  final VoidCallback? onCopy;
+  final bool qrScratched;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -539,7 +618,10 @@ class _FlipCard extends StatelessWidget {
                     palette: palette,
                     code: code!,
                     used: used,
-                    onTap: onCopy,
+                    qrScratched: qrScratched
+                        ? kAlwaysCompleteAnimation
+                        : kAlwaysDismissedAnimation,
+                    onTap: onTap,
                   ),
                 )
               : DecoratedBox(
@@ -560,7 +642,7 @@ class _ActionRow extends StatelessWidget {
   const _ActionRow({
     required this.code,
     required this.name,
-    required this.redeemHint,
+    required this.step,
     required this.used,
     required this.onToggleUsed,
     required this.onAction,
@@ -569,12 +651,14 @@ class _ActionRow extends StatelessWidget {
 
   final CardCode code;
   final String name;
-  final String redeemHint;
+
+  /// The one-tap way to redeem it; null where there is none.
+  final RedeemStep? step;
   final bool used;
   final VoidCallback onToggleUsed;
 
-  /// Told which action was taken, for analytics: copy, recharge, qr, gift,
-  /// mark_used, mark_unused.
+  /// Told which action was taken, for analytics: copy, recharge, redeem_link,
+  /// qr, gift, mark_used, mark_unused.
   final ValueChanged<String> onAction;
 
   /// Lifts the card out as a QR pass; no QR button without it.
@@ -588,30 +672,67 @@ class _ActionRow extends StatelessWidget {
     );
   }
 
+  /// Calls the code in. A phone that cannot (an iPad, a browser) gets the
+  /// number to dial from another, rather than nothing.
+  Future<void> _call(BuildContext context, String dial) async {
+    final notice = AppLocalizations.of(context).dialCopiedNotice;
+    var called = false;
+    try {
+      called = await launchUrl(Uri(scheme: 'tel', path: dial));
+    } on PlatformException {
+      called = false;
+    }
+    if (!called && context.mounted) {
+      await _copyWithNotice(context, dial, notice);
+    }
+  }
+
+  /// Opens the issuer's page, the code on the clipboard first: not every page
+  /// takes it from the link, and the customer leaves the app with it in hand.
+  Future<void> _openIssuer(BuildContext context, String link) async {
+    await _copyWithNotice(
+      context,
+      code.code,
+      AppLocalizations.of(context).redeemCopiedNotice,
+    );
+    await launchUrl(Uri.parse(link), mode: LaunchMode.externalApplication);
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final dial = rechargeDialString(redeemHint, code.code);
+    final step = this.step;
     final actions = <Widget>[
       _RoundAction(
         icon: Icons.copy_rounded,
         label: l10n.copyAction,
-        primary: dial == null,
+        primary: step == null,
         onTap: () {
           onAction('copy');
           _copy(context, code.code);
         },
       ),
-      if (dial != null)
-        _RoundAction(
-          icon: Icons.phone_forwarded_rounded,
-          label: l10n.rechargeNow,
-          primary: true,
-          onTap: () {
-            onAction('recharge');
-            launchUrl(Uri(scheme: 'tel', path: dial));
-          },
-        ),
+      if (step != null)
+        switch (step.kind) {
+          RedeemKind.call => _RoundAction(
+            icon: Icons.phone_forwarded_rounded,
+            label: l10n.rechargeNow,
+            primary: true,
+            onTap: () {
+              onAction('recharge');
+              _call(context, step.value);
+            },
+          ),
+          RedeemKind.link => _RoundAction(
+            icon: Icons.open_in_new_rounded,
+            label: l10n.redeemAction,
+            primary: true,
+            onTap: () {
+              onAction('redeem_link');
+              _openIssuer(context, step.value);
+            },
+          ),
+        },
       if (onQr case final onQr?)
         _RoundAction(
           icon: Icons.qr_code_2_rounded,

@@ -30,6 +30,11 @@ class TiltCard extends StatefulWidget {
   final double radius;
   final Animation<double>? strength;
 
+  /// How the card around [context] is leaning, for a surface on it that plays
+  /// with the light, as a share of [maxAngle] on each axis. Null off a card.
+  static ValueListenable<Offset>? lightOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<_TiltScope>()?.tilt;
+
   /// The furthest the card leans, either way: vanilla-tilt's default, the
   /// web's reference for this effect.
   static const double maxAngle = 15 * math.pi / 180;
@@ -195,7 +200,7 @@ class _TiltCardState extends State<TiltCard>
     final strength = widget.strength ?? kAlwaysCompleteAnimation;
     return AnimatedBuilder(
       animation: Listenable.merge([_tilt, strength]),
-      child: widget.child,
+      child: _TiltScope(tilt: _tilt, child: widget.child),
       builder: (context, child) {
         // The same tree flat as tilted, so the card underneath (and the
         // Hero in it) is never rebuilt as the phone passes through level.
@@ -246,4 +251,13 @@ class _TiltCardState extends State<TiltCard>
       },
     );
   }
+}
+
+class _TiltScope extends InheritedWidget {
+  const _TiltScope({required this.tilt, required super.child});
+
+  final ValueListenable<Offset> tilt;
+
+  @override
+  bool updateShouldNotify(_TiltScope old) => old.tilt != tilt;
 }

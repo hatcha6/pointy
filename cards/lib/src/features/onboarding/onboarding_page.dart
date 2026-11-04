@@ -4,6 +4,7 @@ import '../../../l10n/generated/app_localizations.dart';
 import '../../design/cards_tokens.dart';
 import '../../shared/haptics.dart';
 import '../splash/splash_handoff.dart';
+import '../attribution/heard_from_form.dart';
 import 'onboarding_art.dart';
 import '../../core/analytics/analytics.dart';
 import '../../core/analytics/events.dart';
@@ -14,11 +15,27 @@ import '../../shared/cards_scope.dart';
 /// sign-in. On a phone a fourth step offers notifications, the one question
 /// the phone itself then asks; «ليس الآن» leaves it for after the first
 /// card.
+///
+/// With [askHeardFrom], the last step is «من أين سمعت عنا؟»: the picture
+/// shrinks and rises out of the way, the last words fade, and the question
+/// builds itself in under it, one part after another. «تخطَّ» on any step
+/// goes to it rather than past it; it is skippable too.
 class OnboardingPage extends StatefulWidget {
-  const OnboardingPage({super.key, required this.onDone});
+  const OnboardingPage({
+    super.key,
+    required this.onDone,
+    this.askHeardFrom = false,
+    this.startAsking = false,
+  });
 
   /// Skipped or finished: either way it is not shown again.
   final VoidCallback onDone;
+
+  /// End on «من أين سمعت عنا؟» (the first run, while never answered).
+  final bool askHeardFrom;
+
+  /// Open on the question (the preview harness).
+  final bool startAsking;
 
   /// Replays the steps from «عن التطبيق»; closing goes back.
   static Future<void> replay(BuildContext context) =>
@@ -73,6 +90,15 @@ class _OnboardingPageState extends State<OnboardingPage>
   /// change the step under the finger.
   late final bool _alreadyOn;
 
+  /// The step into «من أين سمعت عنا؟»: 0 the steps, 1 the question.
+  late final _toQuestion = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1100),
+  );
+  bool _asking = false;
+  bool _questionReady = false;
+  final _question = GlobalKey<HeardFromFormState>();
+
   /// The first picture's box: the opening's tile lands on it.
   final _artKey = GlobalKey();
   SplashHandoff? _handoff;
@@ -92,6 +118,10 @@ class _OnboardingPageState extends State<OnboardingPage>
     final push = CardsScope.of(context).push;
     _offerNotifications = push.available;
     _alreadyOn = push.enabled;
+    if (widget.askHeardFrom && widget.startAsking) {
+      _asking = true;
+      _toQuestion.value = 1;
+    }
     final handoff = SplashHandoffScope.maybeOf(context);
     if (handoff != null &&
         !handoff.landed &&
@@ -130,6 +160,7 @@ class _OnboardingPageState extends State<OnboardingPage>
     _pages.dispose();
     _intro.dispose();
     _ring.dispose();
+    _toQuestion.dispose();
     super.dispose();
   }
 
@@ -161,7 +192,29 @@ class _OnboardingPageState extends State<OnboardingPage>
     Haptics.select();
     await CardsScope.of(context).push.setEnabled(true);
     if (mounted) {
-      _finish(skipped: false);
+      _onward(skipped: false);
+    }
+  }
+
+  /// Past the steps: to the question when it is asked, else done.
+  void _onward({required bool skipped}) {
+    if (widget.askHeardFrom && !_asking) {
+      _ask();
+    } else {
+      _finish(skipped: skipped);
+    }
+  }
+
+  void _ask() {
+    Haptics.select();
+    _ring
+      ..stop()
+      ..value = 0;
+    setState(() => _asking = true);
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _toQuestion.value = 1;
+    } else {
+      _toQuestion.forward();
     }
   }
 
@@ -172,9 +225,14 @@ class _OnboardingPageState extends State<OnboardingPage>
   }
 
   void _next(int count) {
+    if (_asking) {
+      Haptics.success();
+      _question.currentState?.submit();
+      return;
+    }
     if (_index >= count - 1) {
       Haptics.success();
-      _finish(skipped: false);
+      _onward(skipped: false);
       return;
     }
     Haptics.select();
@@ -204,7 +262,7 @@ class _OnboardingPageState extends State<OnboardingPage>
   /// through. Beside each other where the screen is wider than it is tall
   /// (a tablet, the iPhone Duo open), the picture above otherwise.
   Widget _stage(List<_Step> steps) {
-    final moving = Listenable.merge([_pages, _intro, _ring]);
+    final moving = Listenable.merge([_pages, _intro, _ring, _toQuestion]);
     final art = Semantics(
       excludeSemantics: true,
       child: AnimatedBuilder(
@@ -218,6 +276,8 @@ class _OnboardingPageState extends State<OnboardingPage>
               position: _page,
               intro: _intro.value,
               ring: _ring.value,
+              // Turning into the question's own picture as it rises.
+              heard: const Interval(0.05, 0.75).transform(_toQuestion.value),
             ),
           ),
         ),
@@ -248,6 +308,9 @@ class _OnboardingPageState extends State<OnboardingPage>
         ),
       ),
     );
+    if (_asking) {
+      return _questionStage(steps, art);
+    }
     return LayoutBuilder(
       builder: (context, constraints) {
         final wide =
@@ -299,14 +362,192 @@ class _OnboardingPageState extends State<OnboardingPage>
     );
   }
 
+  /// The steps' stage turning into the question. On a phone held upright
+  /// the picture, as it was, glides up and shrinks to a small one above the
+  /// question; side by side (landscape, a tablet) it stays in its own
+  /// column, settling a little smaller, and the question builds in the
+  /// words' column. Either way the picture turns into the question's own
+  /// and the last step's words sink and fade where the question appears.
+  Widget _questionStage(List<_Step> steps, Widget art) {
+    final glide = CurvedAnimation(
+      parent: _toQuestion,
+      curve: const Interval(0, 0.7, curve: CardsMotion.curve),
+    );
+    final leave = CurvedAnimation(
+      parent: _toQuestion,
+      curve: const Interval(0, 0.3, curve: Curves.easeIn),
+    );
+    Widget form({bool compact = false}) => ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 460),
+      child: HeardFromForm(
+        key: _question,
+        actions: false,
+        centered: true,
+        compact: compact,
+        entrance: _toQuestion,
+        onReady: (ready) => setState(() => _questionReady = ready),
+        onDone: () => _finish(skipped: false),
+      ),
+    );
+    // The last step's words, leaving. On their way out they may stand
+    // taller than a short landscape stage: clipped, never squeezed.
+    Widget leaving() => IgnorePointer(
+      child: ClipRect(
+        child: OverflowBox(
+          maxHeight: double.infinity,
+          child: Opacity(
+            opacity: 1 - leave.value,
+            child: Transform.translate(
+              offset: Offset(0, leave.value * CardsSpace.xl),
+              child: _Words(step: steps[_index], offset: 0, arrived: 1),
+            ),
+          ),
+        ),
+      ),
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final height = constraints.maxHeight;
+        if (width > height && width >= 560) {
+          return _questionBeside(
+            art,
+            // A phone on its side has room for the title and the answers,
+            // not the line between them.
+            form(compact: height < 320),
+            leaving,
+            glide,
+            leave,
+            height,
+          );
+        }
+        // Where the picture stood among the steps (as [_stage] lays it).
+        final wordsHeight = MediaQuery.textScalerOf(context).scale(200);
+        final fromSide = [
+          340.0,
+          width - CardsSpace.gutter * 2,
+          height - wordsHeight - CardsSpace.xl,
+        ].reduce((a, b) => a < b ? a : b).clamp(0.0, 340.0);
+        final fromCenter = Offset(
+          width / 2,
+          (height - wordsHeight - CardsSpace.xl) / 2,
+        );
+        const toSide = 132.0;
+        final toCenter = Offset(width / 2, toSide / 2);
+        return AnimatedBuilder(
+          animation: _toQuestion,
+          builder: (context, _) {
+            final t = glide.value;
+            final side = fromSide + (toSide - fromSide) * t;
+            final center = Offset.lerp(fromCenter, toCenter, t)!;
+            return Stack(
+              children: [
+                if (leave.value < 1)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    top: height - wordsHeight,
+                    bottom: 0,
+                    child: leaving(),
+                  ),
+                Positioned.fill(
+                  top: toSide + CardsSpace.lg,
+                  child: _FadingScroll(
+                    padding: const EdgeInsets.fromLTRB(
+                      CardsSpace.gutter,
+                      0,
+                      CardsSpace.gutter,
+                      CardsSpace.lg,
+                    ),
+                    child: Align(alignment: Alignment.topCenter, child: form()),
+                  ),
+                ),
+                Positioned(
+                  left: center.dx - side / 2,
+                  top: center.dy - side / 2,
+                  width: side,
+                  height: side,
+                  child: IgnorePointer(child: art),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// Landscape and tablets: the steps' two columns, kept. The picture's
+  /// column keeps its width (nothing beside it moves) while the picture
+  /// settles a fifth smaller; the words' column trades the last step's
+  /// words for the question, centred, scrolling on a short screen.
+  Widget _questionBeside(
+    Widget art,
+    Widget form,
+    Widget Function() leaving,
+    Animation<double> glide,
+    Animation<double> leave,
+    double height,
+  ) {
+    // As [_stage] sizes the picture beside the words.
+    final side = (height - CardsSpace.xl * 2).clamp(0.0, 360.0);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: CardsSpace.huge),
+      child: Row(
+        // The question's column takes the stage's whole height to scroll in.
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: side,
+            child: Center(
+              child: AnimatedBuilder(
+                animation: glide,
+                builder: (context, child) => SizedBox.square(
+                  dimension: side * (1 - 0.2 * glide.value),
+                  child: child,
+                ),
+                child: IgnorePointer(child: art),
+              ),
+            ),
+          ),
+          const SizedBox(width: CardsSpace.huge),
+          Expanded(
+            child: Stack(
+              children: [
+                AnimatedBuilder(
+                  animation: leave,
+                  builder: (context, _) => leave.value < 1
+                      ? Positioned.fill(child: leaving())
+                      : const SizedBox.shrink(),
+                ),
+                Positioned.fill(
+                  child: _FadingScroll(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: CardsSpace.md,
+                    ),
+                    center: true,
+                    child: form,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final steps = _steps(l10n);
-    final last = _index == steps.length - 1;
+    final total = steps.length + (widget.askHeardFrom ? 1 : 0);
+    final current = _asking ? steps.length : _index;
+    // The last step finishes: the onboarding's own, or the question.
+    final last = current == total - 1;
     // Asks only while they are off; otherwise it is a plain last step.
-    final notify = steps[_index].notify && !_alreadyOn;
+    final notify = !_asking && steps[_index].notify && !_alreadyOn;
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
@@ -327,9 +568,13 @@ class _OnboardingPageState extends State<OnboardingPage>
                   alignment: AlignmentDirectional.centerEnd,
                   child: AnimatedOpacity(
                     duration: CardsMotion.fast,
-                    opacity: last ? 0 : 1,
+                    opacity: last && !_asking ? 0 : 1,
                     child: TextButton(
-                      onPressed: last ? null : () => _finish(skipped: true),
+                      onPressed: last && !_asking
+                          ? null
+                          : _asking
+                          ? () => _question.currentState?.skip()
+                          : () => _onward(skipped: true),
                       child: Text(l10n.onboardingSkip),
                     ),
                   ),
@@ -348,9 +593,9 @@ class _OnboardingPageState extends State<OnboardingPage>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _Dots(
-                    count: steps.length,
-                    index: _index,
-                    label: l10n.onboardingStep(_index + 1, steps.length),
+                    count: total,
+                    index: current,
+                    label: l10n.onboardingStep(current + 1, total),
                   ),
                   const SizedBox(height: CardsSpace.xl),
                   ConstrainedBox(
@@ -358,6 +603,8 @@ class _OnboardingPageState extends State<OnboardingPage>
                     child: FilledButton(
                       onPressed: notify
                           ? _allowNotifications
+                          : _asking && !_questionReady
+                          ? null
                           : () => _next(steps.length),
                       child: AnimatedSwitcher(
                         duration: CardsMotion.standard,
@@ -375,10 +622,12 @@ class _OnboardingPageState extends State<OnboardingPage>
                         child: Text(
                           notify
                               ? l10n.onboardingNotifyAllow
+                              : _asking
+                              ? l10n.continueAction
                               : (last
                                     ? l10n.onboardingStart
                                     : l10n.onboardingNext),
-                          key: ValueKey((last, notify)),
+                          key: ValueKey((last, notify, _asking)),
                         ),
                       ),
                     ),
@@ -393,7 +642,7 @@ class _OnboardingPageState extends State<OnboardingPage>
                         opacity: notify ? 1 : 0,
                         child: TextButton(
                           onPressed: notify
-                              ? () => _finish(skipped: false)
+                              ? () => _onward(skipped: false)
                               : null,
                           child: Text(l10n.onboardingNotifyLater),
                         ),
@@ -403,6 +652,58 @@ class _OnboardingPageState extends State<OnboardingPage>
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The question's room: it scrolls when the screen is too short for it,
+/// its edges fading rather than cutting the answers off. With [center],
+/// centred when it fits.
+class _FadingScroll extends StatelessWidget {
+  const _FadingScroll({
+    required this.child,
+    this.padding = EdgeInsets.zero,
+    this.center = false,
+  });
+
+  final Widget child;
+  final EdgeInsets padding;
+  final bool center;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) => ShaderMask(
+        blendMode: BlendMode.dstIn,
+        shaderCallback: (bounds) {
+          final edge = (CardsSpace.md / bounds.height).clamp(0.0, 0.5);
+          return LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: const [
+              Color(0x00000000),
+              Color(0xFF000000),
+              Color(0xFF000000),
+              Color(0x00000000),
+            ],
+            stops: [0, edge, 1 - edge, 1],
+          ).createShader(bounds);
+        },
+        child: SingleChildScrollView(
+          padding: padding,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: center
+                  ? (constraints.maxHeight - padding.vertical).clamp(
+                      0.0,
+                      double.infinity,
+                    )
+                  : 0,
+            ),
+            child: center ? Center(child: child) : child,
+          ),
         ),
       ),
     );

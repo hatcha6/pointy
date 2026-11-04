@@ -161,9 +161,18 @@ and every tap answers. The rules live in `src/design/`:
   - A seal springs in, then the card flips from its art to the code, with
     haptics on both. The code is large, one line, left to right, and copies
     in one tap. Several codes page with dots.
+  - The card turns over only that once. Its QR waits under a holographic foil
+    stamped with the app's mark, whose rainbow follows the phone's tilt. Tapping
+    the card, or the QR action, lifts it to the middle of the screen, bright for
+    a scanner, and scratches the foil off.
+  - The QR is drawn by `features/reveal/card_qr.dart`, not `qr_flutter`'s
+    painter, which rounds its dots to the screen and so draws a different
+    picture at each size.
   - QR, «أرسلها هدية» by WhatsApp, and mark as used.
-  - «اشحن الآن» dials only where the brand's redeem hint spells the code out
-    (`*112*…#`). The app never guesses an operator's code.
+  - One tap to redeem, where the catalog's `redeem` says how (`core/redeem.dart`):
+    it dials the code (`120…`, `*112*…#`), or copies the code and opens the
+    issuer's own page. Only listed from the issuer's own instructions; evidence is
+    in `ops/catalog/source/REDEEM.md`. A code that does not fit gets no button.
 - **كروتي** (`features/my_cards`):
   - Open orders first, then all / unused / used.
   - Saved codes open behind Face ID / fingerprint, unlocked for 5 minutes.
@@ -182,7 +191,7 @@ and every tap answers. The rules live in `src/design/`:
 Previews: `make cards-preview`, then `?screen=board`, or any single screen:
 `home`, `brand`, `brand-itunes`, `sign-in`, `sign-in-code`, `checkout`,
 `wallet-code`, `preparing`, `refunded`, `reveal`, `my-cards`, `account`,
-`signed-out`, `onboarding`, `about`, `privacy`, `terms`, `card-pay` (the bank-card form; `&card=verify` has the bank ask for its code, `&card=decline` refuses the card). The address's path opens like a tapped `cards.dftr.ly` link: `/category/gaming?screen=home`, `/brand/pubg?screen=home`. Add `&platform=ios` or `&platform=android` for that phone's browser (the web «get the app» bar; a desktop browser's phone emulation still reports a Mac), `&theme=dark` for dark, `&lang=en` or `&lang=fr` for English or French (only while `AppSettings.languageChoice` is on).
+`signed-out`, `onboarding`, `heard-from` («من أين سمعت عنا؟»; `heard-from-link` with a followed flyer link's code, `sign-in-heard-from` in the sign-in sheet; the code `UNI1` checks), `reward` (a campaign's credit, `&kind=flyer|billboard|creator|referral|ad`, `&via=link|code`, `&name=`), `about`, `privacy`, `terms`, `card-pay` (the bank-card form; `&card=verify` has the bank ask for its code, `&card=decline` refuses the card). Top-ups sent straight to an account: `topup` (a game the relay looks up by ID; «000…» is an unknown player), `topup-saved` (the phone's saved accounts), `topup-zone` (ID with its zone; paste «123456789 (4567)»), `topup-server` (a server to pick), `topup-telegram`, `topup-steam` (a Steam login), `topup-gift` (a Steam gift by invite link), `topup-checkout`, `topup-preparing`, `topup-done`, `topup-receipt` (from «كروتي»), `topup-refunded`, and `topup-board` for all of them in phone frames. The address's path opens like a tapped `cards.dftr.ly` link: `/category/gaming?screen=home`, `/brand/pubg?screen=home`. Add `&platform=ios` or `&platform=android` for that phone's browser (the web «get the app» bar; a desktop browser's phone emulation still reports a Mac), `&theme=dark` for dark, `&lang=en` or `&lang=fr` for English or French (only while `AppSettings.languageChoice` is on).
 
 **Store screenshots and the app preview** come from `lib/dev/store_shots.dart`,
 the real app on the live shelf with fake orders, run on a phone, the iPhone Duo
@@ -236,10 +245,13 @@ What makes the phone hand the link to the app:
 - iOS: `ios/Runner/Runner.entitlements` (`applinks:cards.dftr.ly`) and
   `web/.well-known/apple-app-site-association` (team `TAA934964D`).
 - Android: the `autoVerify` intent filter in `AndroidManifest.xml` and
-  `web/.well-known/assetlinks.json`. It lists the SHA-256 of the key the APK
-  is signed with; today that is the build Mac's debug key. When the app gets
-  a release key (or Play App Signing), add that key's fingerprint there, or
-  Android opens the links in the browser instead.
+  `web/.well-known/assetlinks.json`. It lists the SHA-256 of every key an
+  installed APK can be signed with: the build Mac's debug key and the upload
+  key (`~/.dftr-keys/dftr-cards-upload.jks`, release builds and the website's
+  APK), and Play's app signing key (`0F:55:0B:…:A4:68`, Play Console → Test
+  and release → App integrity → App signing), which signs every install from
+  Google Play. Without the right one Android opens the links, campaign links
+  included, in the browser.
 
 Hosting: the relay serves the web build on `cards.dftr.ly`
 (`POINTY_RELAY_CARDS_WEB_HOSTS=cards.dftr.ly`; see `relay/README.md`).

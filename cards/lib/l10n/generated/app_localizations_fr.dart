@@ -330,6 +330,24 @@ class AppLocalizationsFr extends AppLocalizations {
       'En général en quelques secondes. Vous pouvez fermer l\'app ; la carte sera gardée dans « Mes cartes ».';
 
   @override
+  String get preparingSlowTitle => 'Le fournisseur est plus lent cette fois';
+
+  @override
+  String get preparingSlowNotify =>
+      'Inutile d\'attendre ici : dès que votre commande est prête, une notification l\'ouvre dans Mes cartes.';
+
+  @override
+  String get preparingSlowAsk =>
+      'Activez les notifications et nous vous préviendrons quand votre commande sera prête, ou revenez-y plus tard dans Mes cartes.';
+
+  @override
+  String get preparingSlowLater =>
+      'Inutile d\'attendre ici : vous trouverez votre commande dans Mes cartes dès qu\'elle sera prête.';
+
+  @override
+  String get goToMyCards => 'Aller à Mes cartes';
+
+  @override
   String get refundedTitle => 'Nous n\'avons pas pu acheter la carte';
 
   @override
@@ -373,10 +391,24 @@ class AppLocalizationsFr extends AppLocalizations {
   String get linkCopiedNotice => 'Lien copié';
 
   @override
+  String get redeemAction => 'Utiliser';
+
+  @override
+  String get dialCopiedNotice =>
+      'Code à composer copié. Collez-le dans Téléphone, puis appelez.';
+
+  @override
+  String get redeemCopiedNotice =>
+      'Code secret copié. Si la page ne l\'affiche pas, collez-le.';
+
+  @override
   String get rechargeNow => 'Recharger';
 
   @override
   String get showQr => 'Code QR';
+
+  @override
+  String get qrRevealHint => 'Touchez la carte pour afficher le QR';
 
   @override
   String get qrScanHint =>
@@ -882,5 +914,415 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get webOnlyBody =>
-      'Cette carte ne s\'achète pas dans l\'app iPhone. Retrouvez-la sur cards.dftr.ly';
+      'Cette carte ne s\'achète pas dans cette app. Retrouvez-la sur cards.dftr.ly';
+
+  @override
+  String get steamBadge => 'Steam';
+
+  @override
+  String get xboxBadge => 'Xbox';
+
+  @override
+  String get eaBadge => 'EA';
+
+  @override
+  String get rockstarBadge => 'Rockstar';
+
+  @override
+  String get heardFromTitle => 'Où avez-vous entendu parler de Daftar Cards ?';
+
+  @override
+  String get heardFromBody =>
+      'Choisissez une réponse : cela nous aide à toucher ceux qui en ont besoin.';
+
+  @override
+  String get heardFromFacebook => 'Facebook';
+
+  @override
+  String get heardFromInstagram => 'Instagram';
+
+  @override
+  String get heardFromTiktok => 'TikTok';
+
+  @override
+  String get heardFromWhatsapp => 'WhatsApp';
+
+  @override
+  String get heardFromFriend => 'Un ami ou un proche';
+
+  @override
+  String get heardFromShop => 'Un magasin';
+
+  @override
+  String get heardFromBillboard => 'Un panneau publicitaire';
+
+  @override
+  String get heardFromStoreSearch => 'Une recherche dans le store';
+
+  @override
+  String get heardFromOther => 'Autre';
+
+  @override
+  String get campaignCodeLabel => 'Un code reçu d’une pub ou d’un ami ?';
+
+  @override
+  String get campaignCodeHint => 'ex. UNI1';
+
+  @override
+  String get campaignCodeCheck => 'Vérifier';
+
+  @override
+  String get campaignCodeUnknown => 'Ce code est inconnu ou a expiré.';
+
+  @override
+  String get campaignCodeValid => 'Code accepté, merci.';
+
+  @override
+  String campaignCodeRewardLater(String amount) {
+    return 'Code accepté : $amount sera ajouté à votre solde à la connexion.';
+  }
+
+  @override
+  String campaignCodeRewardNow(String amount) {
+    return 'Code accepté : $amount est ajouté à votre solde.';
+  }
+
+  @override
+  String campaignLinkReward(String code, String amount) {
+    return 'Vous êtes venu avec le code $code : $amount sera ajouté à votre solde à la connexion.';
+  }
+
+  @override
+  String rewardTitle(String amount) {
+    return '$amount ajouté à votre solde';
+  }
+
+  @override
+  String rewardBecauseCode(String code) {
+    return 'Parce que vous avez utilisé le code $code.';
+  }
+
+  @override
+  String rewardBecauseCreator(String name) {
+    return 'Parce que vous êtes venu via $name.';
+  }
+
+  @override
+  String get rewardBecauseCreatorUnnamed =>
+      'Parce que vous êtes venu via un créateur partenaire.';
+
+  @override
+  String rewardBecauseFlyer(String name) {
+    return 'Parce que vous avez scanné le code $name.';
+  }
+
+  @override
+  String get rewardBecauseFlyerUnnamed =>
+      'Parce que vous avez scanné le code de l’affiche.';
+
+  @override
+  String get rewardBecauseBillboardUnnamed =>
+      'Parce que vous avez scanné le code du panneau.';
+
+  @override
+  String rewardBecauseInvite(String name) {
+    return 'Parce que $name vous a invité.';
+  }
+
+  @override
+  String get rewardBecauseInviteUnnamed => 'Parce qu’un ami vous a invité.';
+
+  @override
+  String get rewardBecauseAd => 'Parce que vous êtes venu via notre publicité.';
+
+  @override
+  String get rewardBody =>
+      'Il est déduit automatiquement du prix de votre prochaine carte, sans frais.';
+
+  @override
+  String get rewardAction => 'Acheter maintenant';
+
+  @override
+  String topUpPill(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'invite': 'Cadeau sur votre compte',
+      'other': 'Recharge directe',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String topUpAccountTitle(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'telegram': 'Compte Telegram',
+      'steam': 'Compte Steam',
+      'invite': 'Compte Steam',
+      'other': 'Compte du joueur',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String topUpAccountBody(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'telegram': 'Envoyé directement sur le compte, sans code à saisir.',
+      'steam': 'Ajouté directement à votre portefeuille Steam.',
+      'invite':
+          'Le jeu arrive en cadeau sur votre compte Steam, sans code à saisir.',
+      'other':
+          'Envoyé directement sur votre compte de jeu, sans code à saisir.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String topUpHintTitle(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'telegram': 'Où trouver mon nom d’utilisateur ?',
+      'steam': 'Quel est mon identifiant ?',
+      'invite': 'Comment obtenir le lien ?',
+      'other': 'Où trouver mon ID ?',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get chooseAmount => 'Choisissez un montant';
+
+  @override
+  String get savedAccounts => 'Vos comptes';
+
+  @override
+  String get otherAccount => 'Autre compte';
+
+  @override
+  String forgetAccount(String account) {
+    return 'Oublier $account';
+  }
+
+  @override
+  String get pasteAction => 'Coller';
+
+  @override
+  String get chooseOption => 'Choisir';
+
+  @override
+  String accountRequired(String field) {
+    return 'Saisissez $field';
+  }
+
+  @override
+  String accountChoose(String field) {
+    return 'Choisissez $field';
+  }
+
+  @override
+  String get accountTooLong => 'Trop long.';
+
+  @override
+  String get accountNotTelegram =>
+      'Un nom d’utilisateur compte 5 à 32 lettres latines, chiffres ou _, et commence par une lettre.';
+
+  @override
+  String get accountNotSteamLogin =>
+      'Un identifiant ne contient que des lettres latines, des chiffres et _, sans espace.';
+
+  @override
+  String get accountNotInvite =>
+      'Ce n’est pas un lien d’invitation Steam. Copiez le lien « Invitation rapide » de Steam tel quel et collez-le ici.';
+
+  @override
+  String get accountChecking => 'Vérification du compte…';
+
+  @override
+  String accountPlayer(String name) {
+    return 'Joueur : $name';
+  }
+
+  @override
+  String accountFound(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'steam': 'Ce compte peut être rechargé',
+      'other': 'Compte trouvé',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String accountNotFound(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'steam':
+          'Ce compte Steam ne peut pas être rechargé. Vérifiez l’identifiant.',
+      'other':
+          'Aucun compte n’a cet ID. Vérifiez-le sur votre profil dans le jeu.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get accountUnconfirmed =>
+      'Impossible de confirmer le compte pour l’instant. Vérifiez-le bien avant de payer.';
+
+  @override
+  String accountUnchecked(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'invite': 'Vérifiez le lien : le cadeau va à son propriétaire.',
+      'telegram':
+          'Vérifiez le nom d’utilisateur : l’envoi est direct et sans retour.',
+      'other': 'Vérifiez l’ID : la recharge y va directement et sans retour.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String topUpAction(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'invite': 'Acheter',
+      'telegram': 'Acheter',
+      'other': 'Recharger',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String buyBarTo(String account) {
+    return 'Pour $account';
+  }
+
+  @override
+  String buyBarNeedsAccount(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'telegram': 'Saisissez le nom d’utilisateur',
+      'steam': 'Saisissez l’identifiant',
+      'invite': 'Collez le lien d’invitation',
+      'other': 'Saisissez l’ID',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get sendToLabel => 'Pour';
+
+  @override
+  String get editAction => 'Modifier';
+
+  @override
+  String topUpPreparingTitle(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'invite': 'Envoi de votre cadeau…',
+      'other': 'Recharge du compte…',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String topUpPreparingBody(String kind, String item, String account) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'invite': 'Steam vous enverra une demande d’ami, puis le cadeau : acceptez les deux.',
+      'other':
+          'Envoi de $item à $account. Cela prend en général une à deux minutes.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get topUpSlowTitle => 'La recharge prend plus de temps cette fois';
+
+  @override
+  String get topUpRefundedTitle => 'La recharge n’a pas abouti';
+
+  @override
+  String topUpRefundedBody(String amount) {
+    return 'La recharge n’a pas atteint le compte : $amount a été remis sur votre solde. Vérifiez le compte et réessayez.';
+  }
+
+  @override
+  String toppedUpTitle(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'invite': 'Cadeau envoyé',
+      'other': 'Recharge effectuée',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get receiptTo => 'Pour';
+
+  @override
+  String get receiptPlayer => 'Joueur';
+
+  @override
+  String get receiptPaid => 'Montant';
+
+  @override
+  String get receiptWhen => 'Heure';
+
+  @override
+  String get receiptOrder => 'Numéro de commande';
+
+  @override
+  String get whatNextTitle => 'Et ensuite ?';
+
+  @override
+  String topUpNext(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'telegram':
+          'Ouvrez Telegram : c’est sur votre compte en quelques minutes.',
+      'steam': 'Ouvrez Steam : le solde apparaît dans votre portefeuille en quelques minutes.',
+      'invite': 'Dans Steam : acceptez la demande d’ami reçue, puis le cadeau depuis vos notifications. Le cadeau arrive quelques minutes après.',
+      'other': 'Ouvrez le jeu : le solde apparaît sur votre compte en quelques minutes. Sinon, fermez le jeu et rouvrez-le.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String topUpAgain(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'invite': 'Acheter un autre cadeau',
+      'other': 'Recharger à nouveau',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get topUpHelp => 'Pas reçu ? Écrivez-nous sur WhatsApp';
+
+  @override
+  String topUpHelpMessage(String order) {
+    return 'Bonjour, la commande $order n’est pas arrivée sur le compte.';
+  }
+
+  @override
+  String get orderIdCopied => 'Numéro de commande copié';
+
+  @override
+  String statusToppedUp(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'invite': 'Cadeau envoyé',
+      'other': 'Rechargé',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get statusToppingUp => 'Recharge en cours';
+
+  @override
+  String orderTo(String account) {
+    return 'Pour $account';
+  }
+
+  @override
+  String get removeAccount => 'Retirer';
+
+  @override
+  String accountRemoved(String account) {
+    return '$account retiré de ce téléphone';
+  }
+
+  @override
+  String get undoAction => 'Annuler';
+
+  @override
+  String get chooseEdition => 'Choisissez une édition';
 }

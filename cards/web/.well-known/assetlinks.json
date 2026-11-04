@@ -1,11 +1,15 @@
 [
   {
-    "relation": ["delegate_permission/common.handle_all_urls"],
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
     "target": {
       "namespace": "android_app",
       "package_name": "ly.dftr.cards",
       "sha256_cert_fingerprints": [
-        "E1:50:94:62:A3:E6:CE:C7:B8:55:8B:B4:EF:69:2A:0C:1A:59:7C:2F:80:DA:6B:F7:43:83:E9:E4:F2:75:B8:BD"
+        "E1:50:94:62:A3:E6:CE:C7:B8:55:8B:B4:EF:69:2A:0C:1A:59:7C:2F:80:DA:6B:F7:43:83:E9:E4:F2:75:B8:BD",
+        "45:DA:5B:17:29:F0:E2:68:1A:3B:01:A8:AB:DD:99:69:18:1D:2C:72:C6:CC:2C:02:A6:D1:52:B3:40:17:D5:D3",
+        "0F:55:0B:A1:B0:46:00:D2:35:9F:90:E3:13:3E:A5:95:EC:03:77:05:3B:EF:0A:D4:28:33:29:A0:5F:33:A4:68"
       ]
     }
   }

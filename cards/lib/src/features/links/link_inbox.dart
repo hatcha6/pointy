@@ -23,7 +23,14 @@ class LinkInbox extends ChangeNotifier {
 
   CardsLink? get pending => _pending;
 
-  void open(Uri uri) => deliver(CardsLink.parse(uri));
+  /// Told of every address before it is opened: a campaign's code is read
+  /// from it.
+  void Function(Uri uri)? onOpen;
+
+  void open(Uri uri) {
+    onOpen?.call(uri);
+    deliver(CardsLink.parse(uri));
+  }
 
   void deliver(CardsLink link) {
     // A phone can report the link that started the app a second time as it

@@ -1,4 +1,5 @@
 import '../../data/api/relay_api.dart';
+import '../../data/models/campaign.dart';
 import '../../data/models/catalog.dart';
 import '../../data/models/order.dart';
 import '../money.dart';
@@ -99,6 +100,28 @@ extension CardsEvents on Analytics {
 
   void onboardingFinished({required bool skipped, required int step}) =>
       capture('onboarding_finished', {'skipped': skipped, 'step': step});
+
+  // Where customers come from. A campaign code is the operator's, printed on
+  // posters: not the customer's secret.
+
+  void attributionAnswered({
+    required String heardFrom,
+    required bool hasCode,
+  }) => capture('attribution_answered', {
+    'heard_from': heardFrom.isEmpty ? 'skipped' : heardFrom,
+    'has_code': hasCode,
+  });
+
+  void campaignCodeChecked({required bool valid}) =>
+      capture('campaign_code_checked', {'valid': valid});
+
+  void campaignRewardShown(CampaignReward reward) =>
+      capture('campaign_reward_shown', {
+        'campaign': reward.code,
+        'kind': reward.kind,
+        'via': reward.via,
+        'amount': dinars(reward.amount),
+      });
 
   static Map<String, Object> _order(CardOrder order) => {
     'order_id': order.id,

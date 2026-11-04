@@ -28,9 +28,13 @@ class OrderWatcher extends ChangeNotifier {
 
   CardOrder get order => _order;
 
+  /// Done moving: a top-up once it is on the account, a card once its codes
+  /// are in hand.
   bool get settled =>
       !_order.status.isOpen &&
-      !(_order.status == OrderStatus.delivered && _order.codes.isEmpty);
+      !(_order.status == OrderStatus.delivered &&
+          _order.codes.isEmpty &&
+          !_order.toAccount);
 
   void start() {
     _startedAt ??= DateTime.now();

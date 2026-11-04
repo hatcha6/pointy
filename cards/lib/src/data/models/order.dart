@@ -24,6 +24,11 @@ class CardOrder {
     required this.codes,
     required this.codesPending,
     required this.createdAt,
+    this.paidAt,
+    this.completedAt,
+    this.account = '',
+    this.accountValues = const {},
+    this.toAccount = false,
   });
 
   factory CardOrder.fromJson(Map<String, dynamic> json) => CardOrder(
@@ -47,6 +52,17 @@ class CardOrder {
     codes: [for (final c in readList(json, 'codes')) CardCode.fromJson(c)],
     codesPending: readBool(json, 'codes_pending'),
     createdAt: readTime(json, 'created_at'),
+    paidAt: readTime(json, 'paid_at'),
+    completedAt: readTime(json, 'completed_at'),
+    account: readString(json, 'account'),
+    accountValues: {
+      for (final MapEntry(:key, :value) in readMap(
+        json,
+        'account_values',
+      ).entries)
+        if (value is String) key: value,
+    },
+    toAccount: readString(json, 'delivery') == 'account',
   );
 
   final String id;
@@ -73,6 +89,25 @@ class CardOrder {
   final List<CardCode> codes;
   final bool codesPending;
   final DateTime? createdAt;
+
+  /// When the payment was proven: the card's wait starts here.
+  final DateTime? paidAt;
+
+  /// When it was delivered (or ended without a card).
+  final DateTime? completedAt;
+
+  /// Whose account a top-up went to, on one line, as the customer typed it.
+  final String account;
+
+  /// The same account by field ("player_id": "5123…"), so it can be shown
+  /// in the brand's own order with its labels; empty from an older relay.
+  final Map<String, String> accountValues;
+
+  /// Credit sent to an account: delivered with no code at all.
+  final bool toAccount;
+
+  /// Topped up: delivered to the account, nothing left to reveal.
+  bool get toppedUp => toAccount && status == OrderStatus.delivered;
 }
 
 enum OrderStatus {

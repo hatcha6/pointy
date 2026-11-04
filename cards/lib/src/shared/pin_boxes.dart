@@ -88,10 +88,14 @@ class _PinBoxesState extends State<PinBoxes> {
                             ? CardsSpace.md
                             : CardsSpace.sm,
                       ),
-                    _box(
-                      theme,
-                      i < text.length ? text[i] : '',
-                      i == text.length && _focus.hasFocus,
+                    // Their full width where it fits, narrower on the
+                    // smallest phones: all six always show.
+                    Flexible(
+                      child: _box(
+                        theme,
+                        i < text.length ? text[i] : '',
+                        i == text.length && _focus.hasFocus,
+                      ),
                     ),
                   ],
                 ],

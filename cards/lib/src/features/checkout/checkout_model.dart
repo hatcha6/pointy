@@ -9,6 +9,7 @@ import '../../core/result.dart';
 import '../../data/models/catalog.dart';
 import '../../data/models/order.dart';
 import '../../data/repositories/orders_repository.dart';
+import '../topup/account_form_model.dart';
 
 /// One checkout: what is bought, how it is paid, and the order it became.
 ///
@@ -22,6 +23,7 @@ class CheckoutModel extends ChangeNotifier {
     required this.item,
     this.quantity = 1,
     this.preferences,
+    this.account,
   }) : _key = _newKey();
 
   final OrdersRepository orders;
@@ -29,6 +31,9 @@ class CheckoutModel extends ChangeNotifier {
   final CardItem item;
   final SharedPreferencesAsync? preferences;
   int quantity;
+
+  /// Where a top-up goes, as typed on the brand's page; null for a code.
+  final AccountFormModel? account;
 
   CheckoutOptions? options;
   Money credit = Money.zero;
@@ -125,6 +130,7 @@ class CheckoutModel extends ChangeNotifier {
         method: creditCovers ? '' : method?.key ?? '',
         payerIdentifier: payer,
         birthYear: birthYear,
+        account: account?.values ?? const {},
       ),
     );
     busy = false;
@@ -134,6 +140,8 @@ class CheckoutModel extends ChangeNotifier {
         if (method != null) {
           await preferences?.setString(_methodKey, method!.key);
         }
+        // Topped up once, offered first next time.
+        await account?.remember();
         if (!value.status.isOpen && value.status != OrderStatus.delivered) {
           _key = _newKey();
         }

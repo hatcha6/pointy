@@ -78,6 +78,7 @@ final Map<String, dynamic> fixtureCatalog = {
       'featured': true,
       'badge': 'الأكثر طلباً',
       'redeem_hint': 'اتصل بالرقم 120 متبوعاً بالرقم السري',
+      'redeem': {'kind': 'dial', 'template': '120{code}'},
       'logo': '',
       'items': [
         _item('libyana-5', '5 دينار', '5.00', rank: 1),
@@ -95,6 +96,7 @@ final Map<String, dynamic> fixtureCatalog = {
       'featured': true,
       'badge': '',
       'redeem_hint': 'اطلب *112* ثم الرقم السري ثم #',
+      'redeem': {'kind': 'dial', 'template': '*112*{code}#'},
       'logo': '',
       'items': [
         _item('almadar-5', '5 دينار', '5.00'),
@@ -122,6 +124,10 @@ final Map<String, dynamic> fixtureCatalog = {
       'featured': false,
       'badge': '',
       'redeem_hint': 'midasbuy.com ← إدخال الرمز',
+      'redeem': {
+        'kind': 'link',
+        'template': 'https://www.midasbuy.com/midasbuy/ot/redeem/pubgm',
+      },
       'logo': '',
       'items': [
         _item('pubg-60', '60 شدة', '5.50', regular: '6.00', promo: 'عرض'),
@@ -138,6 +144,11 @@ final Map<String, dynamic> fixtureCatalog = {
       'featured': false,
       'badge': '',
       'redeem_hint': 'App Store ← صورة الحساب ← استرداد بطاقة الهدايا',
+      'redeem': {
+        'kind': 'link',
+        'template': 'https://apps.apple.com/redeem?code={code}',
+        'pattern': 'X[A-Z0-9]{15}',
+      },
       'logo': '',
       'items': [
         _item('itunes-us-10', '10 دولار', '60.00', country: 'US'),
@@ -154,11 +165,224 @@ final Map<String, dynamic> fixtureCatalog = {
       'featured': false,
       'badge': '',
       'redeem_hint': 'netflix.com/redeem',
+      'redeem': {
+        'kind': 'link',
+        'template': 'https://www.netflix.com/redeem?code={code}',
+      },
       'logo': '',
       'items': [_item('netflix-15', '15 دولار', '92.00', available: false)],
     },
   ],
 };
+
+/// Cards sent straight to an account, each kind of account once: a game
+/// looked up by its ID (Free Fire), an ID with its zone (Mobile Legends), an
+/// ID with a server to pick (Genshin), a Telegram username, a Steam login
+/// and a Steam gift by invite link. Kept off [fixtureCatalog], whose brands
+/// the tests reach by position; [fixtureRelay] adds them when asked.
+const fixtureTopUpCategory = {
+  'key': 'game_topup',
+  'name': 'شحن الألعاب بالمعرّف',
+  'rank': 6,
+};
+
+const _gameHint =
+    'اكتب المعرّف كما يظهر في ملفك الشخصي داخل اللعبة. يصل الشحن إلى الحساب '
+    'مباشرة ولا يمكن استرجاعه إذا كان المعرّف خاطئاً.';
+
+final List<Map<String, dynamic>> fixtureTopUpBrands = [
+  {
+    'key': 'tu-free-fire',
+    'name': 'فري فاير',
+    'aliases': ['Free Fire'],
+    'category': 'game_topup',
+    'rank': 7,
+    'featured': false,
+    'badge': '',
+    'redeem_hint': '',
+    'logo': '',
+    'target': {
+      'kind': 'game_account',
+      'fields': [
+        {'key': 'player_id', 'label': 'معرّف اللاعب (ID)'},
+      ],
+      'check': 'free_fire',
+      'hint': _gameHint,
+    },
+    'items': [
+      _item('tu-free-fire-100', '100 جوهرة', '6.50', rank: 1),
+      _item('tu-free-fire-310', '310 جوهرة', '19.00', rank: 2),
+      _item('tu-free-fire-520', '520 جوهرة', '31.00', rank: 3),
+      _item('tu-free-fire-1060', '1060 جوهرة', '62.00', rank: 4),
+      _item('tu-free-fire-2180', '2180 جوهرة', '124.00', rank: 5),
+      _item('tu-free-fire-weekly', 'العضوية الأسبوعية', '12.00', rank: 6),
+    ],
+  },
+  {
+    'key': 'tu-mlbb',
+    'name': 'موبايل ليجندز',
+    'aliases': ['Mobile Legends', 'MLBB'],
+    'category': 'game_topup',
+    'rank': 8,
+    'featured': false,
+    'badge': '',
+    'redeem_hint': '',
+    'logo': '',
+    'target': {
+      'kind': 'game_account',
+      'fields': [
+        {'key': 'player_id', 'label': 'معرّف اللاعب (ID)'},
+        {'key': 'zone_id', 'label': 'رقم المنطقة (Zone ID)'},
+      ],
+      'hint':
+          'افتح ملفك في اللعبة: المعرّف هو الرقم الأول، ورقم المنطقة بين '
+          'القوسين بعده.',
+    },
+    'items': [
+      _item('tu-mlbb-86', '86 ماسة', '9.50', rank: 1),
+      _item('tu-mlbb-172', '172 ماسة', '19.00', rank: 2),
+      _item('tu-mlbb-257', '257 ماسة', '28.00', rank: 3),
+    ],
+  },
+  {
+    'key': 'tu-genshin',
+    'name': 'غينشين إمباكت',
+    'aliases': ['Genshin Impact'],
+    'category': 'game_topup',
+    'rank': 9,
+    'featured': false,
+    'badge': '',
+    'redeem_hint': '',
+    'logo': '',
+    'target': {
+      'kind': 'game_account',
+      'fields': [
+        {'key': 'uid', 'label': 'رقم الحساب (UID)'},
+        {
+          'key': 'server',
+          'label': 'الخادم',
+          'type': 'select',
+          'options': [
+            {'value': 'os_usa', 'label': 'America'},
+            {'value': 'os_euro', 'label': 'Europe'},
+            {'value': 'os_asia', 'label': 'Asia'},
+            {'value': 'os_cht', 'label': 'TW, HK, MO'},
+          ],
+        },
+      ],
+      'hint': _gameHint,
+    },
+    'items': [
+      _item('tu-genshin-60', '60 Genesis Crystals', '4.50', rank: 1),
+      _item('tu-genshin-330', '330 Genesis Crystals', '22.00', rank: 2),
+      _item(
+        'tu-genshin-welkin',
+        'Blessing of the Welkin Moon',
+        '22.00',
+        rank: 3,
+      ),
+    ],
+  },
+  {
+    'key': 'tg-stars',
+    'name': 'نجوم تيليجرام',
+    'aliases': ['Telegram Stars'],
+    'category': 'game_topup',
+    'rank': 10,
+    'featured': false,
+    'badge': '',
+    'redeem_hint': '',
+    'logo': '',
+    'target': {
+      'kind': 'telegram_username',
+      'fields': [
+        {'key': 'username', 'label': 'اسم المستخدم في تيليجرام'},
+      ],
+      'hint':
+          'اسم المستخدم في تيليجرام (يبدأ بـ @)، من الإعدادات. يصل مباشرة إلى '
+          'الحساب.',
+    },
+    'items': [
+      _item('tg-stars-50', '50 نجمة', '6.00', rank: 1),
+      _item('tg-stars-100', '100 نجمة', '11.50', rank: 2),
+      _item('tg-stars-250', '250 نجمة', '28.00', rank: 3),
+    ],
+  },
+  {
+    'key': 'steam-topup',
+    'name': 'شحن محفظة ستيم',
+    'aliases': ['Steam Wallet'],
+    'category': 'game_topup',
+    'rank': 11,
+    'featured': false,
+    'badge': '',
+    'redeem_hint': '',
+    'logo': '',
+    'platform': 'steam',
+    'target': {
+      'kind': 'steam_login',
+      'fields': [
+        {'key': 'login', 'label': 'اسم الدخول في ستيم'},
+      ],
+      'hint':
+          'اسم الدخول إلى ستيم (Account name)، وليس اسم الملف الشخصي الظاهر '
+          'للأصدقاء.',
+    },
+    'items': [
+      _item('steam-topup-5', '5 دولار', '33.00', rank: 1),
+      _item('steam-topup-10', '10 دولار', '65.00', rank: 2),
+      _item('steam-topup-20', '20 دولار', '129.00', rank: 3),
+    ],
+  },
+  {
+    'key': 'sg-palworld',
+    'name': 'Palworld',
+    'aliases': ['بال وورلد'],
+    'category': 'game_topup',
+    'rank': 12,
+    'featured': false,
+    'badge': '',
+    'redeem_hint': '',
+    'logo': '',
+    'platform': 'steam',
+    'target': {
+      'kind': 'steam_invite',
+      'fields': [
+        {'key': 'invite_url', 'label': 'رابط دعوة الصداقة في ستيم'},
+      ],
+      'hint':
+          'تصلك اللعبة هدية على حسابك في ستيم. من ستيم: الأصدقاء ← إضافة صديق '
+          '← انسخ رابط الدعوة السريعة والصقه هنا، ثم اقبل طلب الصداقة '
+          'والهدية. لحسابات منطقة الشرق الأوسط وشمال أفريقيا (ومنها ليبيا).',
+    },
+    'items': [_item('sg-palworld-base', 'اللعبة الأساسية', '96.00')],
+  },
+];
+
+/// [fixtureCatalog] with the top-up brands on its shelf.
+Map<String, dynamic> get fixtureCatalogWithTopUps => {
+  ...fixtureCatalog,
+  'categories': [...fixtureCatalog['categories'] as List, fixtureTopUpCategory],
+  'brands': [...fixtureCatalog['brands'] as List, ...fixtureTopUpBrands],
+};
+
+/// A Free Fire top-up, the way the relay answers it.
+Map<String, dynamic> fixtureTopUpOrder({
+  String id = 'topup-1',
+  String status = 'delivered',
+  String errorCode = '',
+  String createdAt = '2026-10-25T18:30:00Z',
+}) => fixtureOrder(
+  id: id,
+  status: status,
+  item: 'tu-free-fire-520',
+  brand: 'tu-free-fire',
+  name: 'فري فاير · 520 جوهرة',
+  total: '31.000',
+  errorCode: errorCode,
+  createdAt: createdAt,
+  account: const {'player_id': '5123456789'},
+);
 
 Map<String, dynamic> fixtureOrder({
   String id = 'order-1',
@@ -172,6 +396,7 @@ Map<String, dynamic> fixtureOrder({
   bool withCodes = true,
   String errorCode = '',
   String createdAt = '2026-10-24T10:00:00Z',
+  Map<String, String>? account,
 }) => {
   'id': id,
   'status': status,
@@ -189,13 +414,17 @@ Map<String, dynamic> fixtureOrder({
   'payer_hint': '091•••678',
   'next_action': nextAction,
   'error_code': errorCode,
-  'codes': withCodes && status == 'delivered'
+  'codes': withCodes && status == 'delivered' && account == null
       ? [
           {'code': '4827 1930 5561 2208', 'serial': 'LY-00981234'},
         ]
       : [],
   'codes_pending': false,
   'created_at': createdAt,
+  if (status == 'delivered') 'completed_at': createdAt,
+  'account': account == null ? '' : account.values.join(' · '),
+  'account_values': account ?? const <String, String>{},
+  'delivery': account == null ? 'codes' : 'account',
 };
 
 /// The fake relay. [confirmStatus] is what a confirmed order answers,
@@ -210,8 +439,11 @@ http.Client fixtureRelay({
   String orderStatus = 'delivered',
   http.Client? shelf,
   ScriptedOrders? scripted,
+  bool topUps = false,
+  Duration lookUpTakes = Duration.zero,
 }) {
-  scripted?.learnShelf(jsonEncode(fixtureCatalog));
+  final catalog = topUps ? fixtureCatalogWithTopUps : fixtureCatalog;
+  scripted?.learnShelf(jsonEncode(catalog));
   http.Response json(Object body, [int status = 200]) => http.Response(
     jsonEncode(body),
     status,
@@ -231,7 +463,25 @@ http.Client fixtureRelay({
         scripted?.learnShelf(answer.body);
         return answer;
       case ('GET', '/v1/customers/catalog'):
-        return json(fixtureCatalog);
+        return json(catalog);
+      // The game knows every player but «000…», under a name for each.
+      case ('POST', '/v1/customers/accounts/check'):
+        await Future<void>.delayed(lookUpTakes);
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        final account = (body['account'] as Map).cast<String, String>();
+        final item = body['item'] as String;
+        if (account.values.first.startsWith('000')) {
+          return json({'status': 'invalid', 'account': account.values.first});
+        }
+        return json({
+          'status': 'valid',
+          'name': item.startsWith('steam')
+              ? ''
+              : account.values.first == '7788990011'
+              ? 'Noor.FF'
+              : 'ShadowFox_LY',
+          'account': account.values.join(' · '),
+        });
       case ('GET', '/v1/customers/payment-methods'):
         return json({
           'methods': [
@@ -303,6 +553,7 @@ http.Client fixtureRelay({
       case ('GET', '/v1/customers/orders'):
         return json({
           'orders': [
+            if (topUps) fixtureTopUpOrder(createdAt: '2026-10-24T12:00:00Z'),
             fixtureOrder(
               id: 'order-2',
               status: 'fulfilling',
@@ -351,12 +602,14 @@ http.Client fixtureRelay({
       case ('POST', '/v1/customers/orders'):
         final body = jsonDecode(request.body) as Map<String, dynamic>;
         final hosted = body['method'] == 'dafa_moamalat';
+        final account = (body['account'] as Map?)?.cast<String, String>();
         return json({
           'order': fixtureOrder(
-            id: 'order-new',
+            id: account == null ? 'order-new' : 'topup-new',
             status: 'awaiting_payment',
             item: body['item'] as String,
             nextAction: hosted ? 'hosted_page' : 'otp',
+            account: account,
           ),
         }, 201);
       case ('POST', '/v1/customers/auth/otp'):
@@ -369,6 +622,23 @@ http.Client fixtureRelay({
               .toUtc()
               .toIso8601String(),
         });
+    }
+    // Campaigns: UNI1 (the university flyers) gives 5 LYD; anything else
+    // is unknown. Answering where one heard of the app is always taken.
+    if (path.startsWith('/v1/customers/campaigns/')) {
+      final code = path.split('/')[4];
+      if (code != 'UNI1') {
+        return json({'code': 'unknown_campaign', 'error': 'no such code'}, 404);
+      }
+      return json({'campaign': fixtureCampaign});
+    }
+    if (request.method == 'PUT' && path == '/v1/customers/me/attribution') {
+      final sent = jsonDecode(request.body) as Map<String, dynamic>;
+      return json({
+        'attribution': {'heard_from': sent['heard_from'] ?? ''},
+        'code_accepted': sent['code'] == 'UNI1',
+        if (sent['code'] == 'UNI1') 'reward': fixtureReward(),
+      });
     }
     // Bank cards in the app's own form: the session Dafa signed, then the
     // receipt passed back.
@@ -394,18 +664,48 @@ http.Client fixtureRelay({
       });
     }
     if (request.method == 'POST' && path.endsWith('/confirm')) {
+      final id = path.split('/')[4];
       return json({
-        'order': fixtureOrder(id: 'order-new', status: confirmStatus),
+        'order': id.startsWith('topup')
+            ? fixtureTopUpOrder(id: id, status: confirmStatus)
+            : fixtureOrder(id: 'order-new', status: confirmStatus),
       });
     }
     if (request.method == 'GET' && path.startsWith('/v1/customers/orders/')) {
+      final id = path.split('/').last;
       return json({
-        'order': fixtureOrder(id: path.split('/').last, status: orderStatus),
+        'order': id.startsWith('topup')
+            ? fixtureTopUpOrder(id: id, status: orderStatus)
+            : fixtureOrder(id: id, status: orderStatus),
       });
     }
     return json({'code': 'not_found'}, 404);
   });
 }
+
+/// A campaign as the app sees it: the flyers on the university's walls.
+const Map<String, Object> fixtureCampaign = {
+  'code': 'UNI1',
+  'kind': 'flyer',
+  'display_name': 'ملصق جامعة مصراتة',
+  'landing': '/',
+  'reward': '5.000',
+};
+
+/// The credit a campaign just gave, as the relay says it: [kind] and [via]
+/// pick the reason the sheet gives.
+Map<String, Object> fixtureReward({
+  String kind = 'flyer',
+  String via = 'link',
+  String name = 'ملصق جامعة مصراتة',
+  String code = 'UNI1',
+}) => {
+  'amount': '5.000',
+  'code': code,
+  'kind': kind,
+  'display_name': name,
+  'via': via,
+};
 
 /// A checkout as the relay hands it over: Moamalat's published test
 /// merchant, 10.21 LYD.
@@ -475,6 +775,8 @@ CardsDependencies fixtureDependencies({
   Analytics? analytics,
   Push? push,
   String channel = 'apk',
+  bool topUps = false,
+  Duration lookUpTakes = Duration.zero,
 }) {
   final sessions = MemorySessionStore(signedIn ? fixtureSession : null);
   final base = shelfRelay ?? Uri.parse('https://relay.preview');
@@ -486,6 +788,8 @@ CardsDependencies fixtureDependencies({
         fixtureRelay(
           shelf: shelfRelay == null ? null : http.Client(),
           scripted: scenarios == null ? null : ScriptedOrders(scenarios),
+          topUps: topUps,
+          lookUpTakes: lookUpTakes,
         ),
   );
   final auth = AuthRepository(

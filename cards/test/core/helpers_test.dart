@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pointy_cards/src/core/arabic_search.dart';
 import 'package:pointy_cards/src/core/phone.dart';
-import 'package:pointy_cards/src/core/redeem.dart';
 
 void main() {
   test('search folds how Arabic is typed', () {
@@ -28,17 +27,5 @@ void main() {
     expect(LibyanPhone.national('0212345678'), isNull);
     expect(LibyanPhone.national('09123'), isNull);
     expect(LibyanPhone.display('912345678'), '091 234 5678');
-  });
-
-  test('the dial string comes only from a hint that spells it out', () {
-    expect(
-      rechargeDialString('اطلب *112* ثم الرقم السري ثم #', '1234 5678'),
-      '*112*12345678#',
-    );
-    expect(
-      rechargeDialString('اتصل بالرقم 120 متبوعاً بالرقم السري', '1234'),
-      isNull,
-    );
-    expect(rechargeDialString('', '1234'), isNull);
   });
 }

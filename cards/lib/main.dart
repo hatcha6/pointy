@@ -19,11 +19,14 @@ Future<void> main() async {
   final dependencies = CardsDependencies.live(CardsConfig.fromEnvironment());
   // The system's splash covers all of it; none waits on another.
   // The customer's language and theme are known before the first frame.
-  final (_, _, opening) = await (
+  final (_, _, _, opening) = await (
     dependencies.settings.load(),
     dependencies.auth.restore(),
+    dependencies.attribution.load(),
     _opening(),
   ).wait;
+  // A campaign code an earlier run could not hand over goes now.
+  unawaited(dependencies.attribution.flush());
   // After the settings: a customer who turned sharing off sends nothing,
   // not even the app opening.
   await dependencies.analytics.start(share: dependencies.settings.shareUsage);

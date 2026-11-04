@@ -29,6 +29,7 @@ import '../shell/cards_tab_bar.dart';
 import 'home_reset.dart';
 import 'native_category_chips.dart';
 import 'shelf_reveal.dart';
+import '../../shared/name_text.dart';
 
 /// The shelf, the way the best storefronts lay one out: a large title, search
 /// and the categories pinned under the thumb, the most-wanted cards as a wide
@@ -224,6 +225,7 @@ class _HomePageState extends State<HomePage>
                               focus: _searchFocus,
                               column: column,
                               onCategory: _pickCategory,
+                              textScaler: MediaQuery.textScalerOf(context),
                             ),
                     ),
                   for (final sliver in _content(context, width - centre * 2))
@@ -463,6 +465,7 @@ class _SearchAndCategories extends SliverPersistentHeaderDelegate {
     required this.focus,
     required this.column,
     required this.onCategory,
+    required this.textScaler,
   });
 
   final ShelfModel shelf;
@@ -471,8 +474,16 @@ class _SearchAndCategories extends SliverPersistentHeaderDelegate {
   final EdgeInsets column;
   final ValueChanged<String?> onCategory;
 
-  static const double _searchHeight = 72;
-  static const double _barHeight = 72;
+  /// The phone's text size: a pinned header has to be told its height, and
+  /// its rows grow with their text.
+  final TextScaler textScaler;
+
+  double get _searchHeight => 72 + _grown(16);
+  double get _barHeight => 72 + _grown(12);
+
+  /// How much taller a line of [fontSize] text has grown.
+  double _grown(double fontSize) =>
+      (textScaler.scale(fontSize) - fontSize) * 1.5;
 
   bool get _showBar => !shelf.searching && shelf.shelf.categories.length > 1;
 
@@ -719,7 +730,7 @@ class _FeaturedCarouselState extends State<_FeaturedCarousel> {
     }
     final cardWidth = width * fraction - CardsSpace.md;
     return SizedBox(
-      height: cardWidth / kCardAspect + 64,
+      height: cardWidth / kCardAspect + 64 + _tileTextGrowth(context),
       child: PageView.builder(
         controller: _pages,
         padEnds: false,
@@ -773,7 +784,7 @@ class _BrandShelf extends StatelessWidget {
     final width = MediaQuery.sizeOf(context).width;
     final tileWidth = width < 600 ? 164.0 : 200.0;
     return SizedBox(
-      height: tileWidth / kCardAspect + 58,
+      height: tileWidth / kCardAspect + 58 + _tileTextGrowth(context),
       child: ColumnBleed(
         builder: (extra) => ListView.separated(
           scrollDirection: Axis.horizontal,
@@ -789,6 +800,14 @@ class _BrandShelf extends StatelessWidget {
       ),
     );
   }
+}
+
+/// How much taller a tile's name and price have grown at the phone's text size,
+/// for a shelf that has to be told its height.
+double _tileTextGrowth(BuildContext context) {
+  final scaler = MediaQuery.textScalerOf(context);
+  double grown(double fontSize) => (scaler.scale(fontSize) - fontSize) * 1.5;
+  return grown(16) + grown(12);
 }
 
 class _BrandTile extends StatelessWidget {
@@ -835,10 +854,19 @@ class _BrandTile extends StatelessWidget {
                   start: CardsSpace.sm,
                   child: badge,
                 ),
+              // Across from the badge: a game's name alone does not say
+              // where it is played. Beside another badge, only its logo:
+              // two names do not fit side by side on a phone's tile.
+              if (brand.gamePlatform case final platform?)
+                PositionedDirectional(
+                  top: CardsSpace.sm,
+                  end: CardsSpace.sm,
+                  child: PlatformPill(platform, compact: badge != null),
+                ),
             ],
           ),
           SizedBox(height: large ? CardsSpace.md : CardsSpace.sm),
-          Text(
+          NameText(
             brand.name,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -931,7 +959,7 @@ class _BuyAgainShelf extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
+                NameText(
                   entry.item.label.isNotEmpty
                       ? entry.item.label
                       : entry.brand.name,

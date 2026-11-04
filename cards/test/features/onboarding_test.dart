@@ -5,8 +5,10 @@ import 'package:pointy_cards/src/app.dart';
 import 'package:pointy_cards/src/core/push/push.dart';
 import 'package:pointy_cards/src/data/settings/app_settings.dart';
 import 'package:pointy_cards/src/dependencies.dart';
+import 'package:pointy_cards/src/features/attribution/heard_from_form.dart';
 import 'package:pointy_cards/src/features/links/cards_link.dart';
 import 'package:pointy_cards/src/features/links/link_inbox.dart';
+import 'package:pointy_cards/src/features/onboarding/onboarding_art.dart';
 import 'package:pointy_cards/src/features/onboarding/onboarding_page.dart';
 import 'package:pointy_cards/src/features/splash/splash_overlay.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -56,41 +58,71 @@ Future<void> toNotifications(WidgetTester tester) async {
   }
 }
 
+/// On «من أين سمعت عنا؟», the onboarding's last step: skipped, so the app
+/// opens. Pumped, not settled: the bell may still be ringing behind it.
+Future<void> skipQuestion(WidgetTester tester) async {
+  expect(find.byType(HeardFromForm), findsOneWidget);
+  await tester.tap(find.text('تخطَّ'));
+  await tester.pump();
+  await tester.pump(const Duration(seconds: 1));
+}
+
 void main() {
-  testWidgets('a first run walks three steps, then the shelf, once', (
-    tester,
-  ) async {
-    await phone(tester);
-    final dependencies = await firstRun();
-    await tester.pumpWidget(CardsApp(dependencies: dependencies));
-    await tester.pumpAndSettle();
+  testWidgets(
+    'a first run walks three steps, asks where they heard of us, then the shelf, once',
+    (tester) async {
+      await phone(tester);
+      final dependencies = await firstRun();
+      await tester.pumpWidget(CardsApp(dependencies: dependencies));
+      await tester.pumpAndSettle();
 
-    expect(find.byType(OnboardingPage), findsOneWidget);
-    expect(find.text('كل كروتك في مكان واحد'), findsOneWidget);
-    expect(find.bySemanticsLabel('الخطوة 1 من 3'), findsOneWidget);
+      expect(find.byType(OnboardingPage), findsOneWidget);
+      expect(find.text('كل كروتك في مكان واحد'), findsOneWidget);
+      // Three steps and the question.
+      expect(find.bySemanticsLabel('الخطوة 1 من 4'), findsOneWidget);
 
-    await tester.tap(find.text('التالي'));
-    await tester.pumpAndSettle();
-    expect(find.text('ادفع، ويصلك الرقم فوراً'), findsOneWidget);
+      await tester.tap(find.text('التالي'));
+      await tester.pumpAndSettle();
+      expect(find.text('ادفع، ويصلك الرقم فوراً'), findsOneWidget);
 
-    // Swiping works as well as the button (right to left: the next step is
-    // to the left).
-    await tester.drag(find.byType(PageView), const Offset(300, 0));
-    await tester.pumpAndSettle();
-    expect(find.text('كروتك محفوظة بأمان'), findsOneWidget);
-    expect(find.text('تخطَّ'), findsOneWidget); // faded, not tappable
-    await tester.tap(find.text('ابدأ الآن'));
-    await tester.pumpAndSettle();
+      // Swiping works as well as the button (right to left: the next step is
+      // to the left).
+      await tester.drag(find.byType(PageView), const Offset(300, 0));
+      await tester.pumpAndSettle();
+      expect(find.text('كروتك محفوظة بأمان'), findsOneWidget);
+      expect(find.bySemanticsLabel('الخطوة 3 من 4'), findsOneWidget);
 
-    expect(find.byType(OnboardingPage), findsNothing);
-    expect(find.text('ليبيانا'), findsWidgets);
-    expect(dependencies.settings.onboarded, isTrue);
+      // A question follows, so the last picture's button goes on rather
+      // than starting: «من أين سمعت عنا؟» is the onboarding's own last step.
+      expect(find.text('ابدأ الآن'), findsNothing);
+      await tester.tap(find.text('التالي'));
+      await tester.pumpAndSettle();
+      expect(find.byType(HeardFromForm), findsOneWidget);
+      expect(find.bySemanticsLabel('الخطوة 4 من 4'), findsOneWidget);
+      expect(find.text('كروتك محفوظة بأمان'), findsNothing);
+      // Nothing chosen yet: nothing to send.
+      FilledButton next() => tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'متابعة'),
+      );
+      expect(next().onPressed, isNull);
+      await tester.tap(find.text('صديق أو قريب'));
+      await tester.pump();
+      expect(next().onPressed, isNotNull);
+      await tester.tap(find.text('متابعة'));
+      await tester.pumpAndSettle();
+      expect(find.byType(OnboardingPage), findsNothing);
+      expect(dependencies.settings.onboarded, isTrue);
+      expect(find.text('ليبيانا'), findsWidgets);
+      expect(dependencies.attribution.asked, isTrue);
+      // Signed out: the answer waits for the sign-in.
+      expect(dependencies.attribution.pending.heardFrom, 'friend');
 
-    // Kept: the next start goes straight to the shelf.
-    final again = AppSettings(preferences: SharedPreferencesAsync());
-    await again.load();
-    expect(again.onboarded, isTrue);
-  });
+      // Kept: the next start goes straight to the shelf.
+      final again = AppSettings(preferences: SharedPreferencesAsync());
+      await again.load();
+      expect(again.onboarded, isTrue);
+    },
+  );
 
   testWidgets('the opening hands its tile to the first step', (tester) async {
     await phone(tester);
@@ -130,14 +162,21 @@ void main() {
     expect(shown.opacity, 1);
   });
 
-  testWidgets('skip goes straight to the shelf', (tester) async {
+  testWidgets('skip goes to the question, and skipping it to the shelf', (
+    tester,
+  ) async {
     await phone(tester);
     final dependencies = await firstRun();
     await tester.pumpWidget(CardsApp(dependencies: dependencies));
     await tester.pumpAndSettle();
     await tester.tap(find.text('تخطَّ'));
     await tester.pumpAndSettle();
+    expect(find.bySemanticsLabel('الخطوة 4 من 4'), findsOneWidget);
+    await skipQuestion(tester);
+    await tester.pumpAndSettle();
     expect(find.byType(OnboardingPage), findsNothing);
+    // Skipped: not asked again.
+    expect(dependencies.attribution.asked, isTrue);
     expect(dependencies.settings.onboarded, isTrue);
   });
 
@@ -177,6 +216,51 @@ void main() {
     expect(art.top, lessThan(title.bottom));
     expect(art.bottom, greaterThan(title.top));
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('side by side, the question keeps the picture in its column', (
+    tester,
+  ) async {
+    final picture = find.byWidgetPredicate(
+      (widget) =>
+          widget is CustomPaint && widget.painter is OnboardingArtPainter,
+    );
+    for (final size in const [Size(926, 428), Size(1180, 820)]) {
+      // A phone on its side, an iPad in landscape.
+      await phone(tester, size: size);
+      await tester.pumpWidget(
+        CardsApp(
+          dependencies: fixtureDependencies(),
+          home: OnboardingPage(
+            // A new page for each screen, not the last one's state.
+            key: ValueKey(size),
+            askHeardFrom: true,
+            onDone: () {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull, reason: 'the steps at $size');
+      final before = tester.getRect(picture);
+      await tester.tap(find.text('تخطَّ'));
+      await tester.pump();
+      // Midway: smaller already, and still in its column.
+      await tester.pump(const Duration(milliseconds: 400));
+      final midway = tester.getRect(picture);
+      expect(midway.center.dx, moreOrLessEquals(before.center.dx, epsilon: 1));
+      expect(midway.width, lessThan(before.width));
+      await tester.pumpAndSettle();
+      final after = tester.getRect(picture);
+      final title = tester.getRect(find.text('من أين سمعت عن دفتر كروت؟'));
+      // Same column, a little smaller, beside the question (right to left:
+      // the picture on the right).
+      expect(after.center.dx, moreOrLessEquals(before.center.dx, epsilon: 1));
+      expect(after.width, moreOrLessEquals(before.width * 0.8, epsilon: 1));
+      expect(after.left, greaterThan(title.right));
+      // Shown, not just built: the first answer can be tapped.
+      expect(find.text('فيسبوك').hitTestable(), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    }
   });
 
   testWidgets('turning the screen mid-onboarding keeps the step, no crash', (
@@ -236,7 +320,7 @@ void main() {
     final dependencies = await firstRun(push: push);
     await tester.pumpWidget(CardsApp(dependencies: dependencies));
     await tester.pumpAndSettle();
-    expect(find.bySemanticsLabel('الخطوة 1 من 4'), findsOneWidget);
+    expect(find.bySemanticsLabel('الخطوة 1 من 5'), findsOneWidget);
 
     await toNotifications(tester);
     expect(find.text('العروض تصلك أولاً'), findsOneWidget);
@@ -246,6 +330,7 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
 
     expect(push.enabled, isTrue);
+    await skipQuestion(tester);
     expect(find.byType(OnboardingPage), findsNothing);
     expect(dependencies.settings.onboarded, isTrue);
   });
@@ -263,6 +348,7 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
 
     expect(push.enabled, isFalse);
+    await skipQuestion(tester);
     expect(find.byType(OnboardingPage), findsNothing);
   });
 
@@ -275,18 +361,19 @@ void main() {
     final dependencies = await firstRun(push: push);
     await tester.pumpWidget(CardsApp(dependencies: dependencies));
     await tester.pumpAndSettle();
-    expect(find.bySemanticsLabel('الخطوة 1 من 4'), findsOneWidget);
+    expect(find.bySemanticsLabel('الخطوة 1 من 5'), findsOneWidget);
 
     await toNotifications(tester);
     expect(find.text('العروض تصلك أولاً'), findsOneWidget);
     expect(find.textContaining('الإشعارات مفعّلة'), findsOneWidget);
     expect(find.text('تفعيل الإشعارات'), findsNothing);
     expect(find.text('ليس الآن'), findsNothing);
-    await tester.tap(find.text('ابدأ الآن'));
+    await tester.tap(find.text('التالي'));
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
 
     expect(push.enabled, isTrue);
+    await skipQuestion(tester);
     expect(find.byType(OnboardingPage), findsNothing);
     expect(dependencies.settings.onboarded, isTrue);
   });

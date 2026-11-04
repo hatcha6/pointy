@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../core/result.dart';
 import '../../shared/cards_scope.dart';
 import '../../shared/side_back.dart';
 import '../account/account_page.dart';
@@ -122,6 +125,10 @@ class _CardsShellState extends State<CardsShell> {
       return;
     }
     links.take();
+    if (link is OrderLink && CardsScope.of(context).push.showing(link.order)) {
+      // The order is already on screen, and its page brings the news itself.
+      return;
+    }
     // Whatever is open closes first, so links never pile pages up. A step
     // that must not be left (a card being charged) keeps the link out.
     final navigator = Navigator.of(context);
@@ -164,6 +171,9 @@ class _CardsShellState extends State<CardsShell> {
         BrandPage.open(context, brand, item: item);
       case TabLink(:final tab):
         _go(tab.index);
+      case OrderLink(:final order):
+        _go(CardsTab.myCards.index);
+        unawaited(_openOrder(order));
       case PageLink(:final page):
         _go(CardsTab.account.index);
         switch (page) {
@@ -174,6 +184,18 @@ class _CardsShellState extends State<CardsShell> {
           case LinkedPage.about:
             AboutPage.open(context);
         }
+    }
+  }
+
+  /// Opens one order over «كروتي», as reading it now finds it. One that
+  /// cannot be read leaves «كروتي» on screen, the order in its list.
+  Future<void> _openOrder(String id) async {
+    final result = await CardsScope.of(context).orders.order(id);
+    if (!mounted) {
+      return;
+    }
+    if (result case Ok(:final value)) {
+      await openCardOrder(context, value);
     }
   }
 

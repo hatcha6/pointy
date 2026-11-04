@@ -9,6 +9,7 @@ import '../../core/result.dart';
 import '../api/relay_api.dart';
 import '../models/customer.dart';
 import '../session/session_store.dart';
+import 'attribution_repository.dart';
 
 /// Phone sign-in and the device's session.
 ///
@@ -19,6 +20,7 @@ class AuthRepository {
     required this.api,
     required this.sessions,
     this.preferences,
+    this.attribution,
     Analytics? analytics,
   }) : analytics = analytics ?? NoAnalytics() {
     api.onSignedOut = () => session.value = null;
@@ -30,6 +32,9 @@ class AuthRepository {
   final Analytics analytics;
   final SessionStore sessions;
   final SharedPreferencesAsync? preferences;
+
+  /// Where the customer came from: it rides on the sign-in.
+  final AttributionRepository? attribution;
   final ValueNotifier<CustomerSession?> session = ValueNotifier(null);
 
   /// Reads the saved session at launch.
@@ -80,11 +85,13 @@ class AuthRepository {
               'name': _deviceName(),
               'platform': kIsWeb ? 'web' : defaultTargetPlatform.name,
             },
+            'attribution': ?attribution?.forSignIn,
           },
         );
         final signedIn = CustomerSession.fromSignIn(answer);
         await sessions.write(signedIn);
         session.value = signedIn;
+        attribution?.signedIn(answer);
         return Customer.fromJson(
           answer['customer'] as Map<String, dynamic>? ?? const {},
         );

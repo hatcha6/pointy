@@ -2,8 +2,14 @@
 // entrypoint, never imported by lib/main.dart, so it does not ship.
 //
 //   make cards-preview, then ?screen=board | home | brand | brand-itunes |
-//   sign-in | sign-in-code | checkout | wallet-code | preparing | refunded |
-//   reveal | my-cards | account | signed-out | splash ; add &theme=dark for dark
+//   sign-in | sign-in-code | checkout | wallet-code | preparing |
+//   preparing-slow | refunded | reveal | my-cards | account | signed-out |
+//   notice | splash ; top-ups by ID: topup (a game the relay looks up) |
+//   topup-saved | topup-zone | topup-server | topup-telegram | topup-steam |
+//   topup-gift | topup-checkout | topup-preparing | topup-done |
+//   topup-receipt | topup-refunded | topup-board ;
+//   add &theme=dark for dark, &channel=ios|play for a store
+//   build's shelf
 //   and &lang=en or &lang=fr for English or French (only while
 //   AppSettings.languageChoice is on).
 //
@@ -19,9 +25,11 @@
 // (cards_fixtures.dart). The board lays the main ones out in phone frames.
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 
 import '../src/app.dart';
+import '../src/core/push/push.dart';
 import '../src/data/models/catalog.dart';
 import '../src/data/models/customer.dart';
 import '../src/data/models/order.dart';
@@ -37,20 +45,27 @@ import '../src/features/onboarding/onboarding_page.dart';
 import '../src/features/orders/order_progress_page.dart';
 import '../src/features/orders/order_watcher.dart';
 import '../src/features/reveal/reveal_page.dart';
+import '../src/data/models/campaign.dart';
+import '../src/features/attribution/reward_sheet.dart';
 import '../src/features/shell/cards_shell.dart';
 import '../src/features/sign_in/sign_in_sheet.dart';
+import '../src/features/topup/account_form_model.dart';
+import '../src/features/topup/topup_done_page.dart';
+import '../src/dependencies.dart';
 import '../src/shared/cards_scope.dart';
 import 'cards_fixtures.dart';
 import 'preview_scenarios.dart';
 import 'scenario_chip.dart';
 import 'splash_lab.dart';
 
-void main() {
+Future<void> main() async {
   // Plain addresses like the real web build. The path opens like a tapped
   // cards.dftr.ly link: /category/gaming?screen=home, /brand/pubg?screen=home.
   usePathUrlStrategy();
   final query = Uri.base.queryParameters;
   final screen = query['screen'] ?? 'board';
+  // `&slow=8`: every animation eight times slower, to look at a transition.
+  timeDilation = double.tryParse(query['slow'] ?? '') ?? 1;
   final dark = query['theme'] == 'dark';
   // `&platform=ios` or `android`: the page as that phone's browser has it
   // (the web «get the app» bar). A desktop browser's phone emulation still
@@ -64,8 +79,24 @@ void main() {
   // The whole app plays scripted purchases: each one ends the next way.
   final scenarios = screen == 'home' ? PreviewScenarios() : null;
   final dependencies = fixtureDependencies(
-    signedIn: screen != 'signed-out' && !screen.startsWith('sign-in'),
+    signedIn:
+        screen != 'signed-out' &&
+        !screen.startsWith('sign-in') &&
+        !screen.startsWith('heard-from'),
     shelfRelay: shelfRelay.isEmpty ? null : Uri.parse(shelfRelay),
+    // A late card stays late however often the page asks.
+    client: switch (screen) {
+      'preparing-slow' => fixtureRelay(orderStatus: 'fulfilling'),
+      'topup-preparing' => fixtureRelay(
+        orderStatus: 'fulfilling',
+        topUps: true,
+      ),
+      _ => null,
+    },
+    // The shelf has the cards sent to an account too, and their look-ups
+    // take as long as a game's do.
+    topUps: true,
+    lookUpTakes: const Duration(milliseconds: 900),
     scenarios: scenarios,
     // The card form's Moamalat: `&card=verify` has the bank ask for its
     // code, `&card=decline` refuses the card.
@@ -73,8 +104,40 @@ void main() {
       verify: query['card'] == 'verify',
       decline: query['card'] == 'decline',
     ),
+    // `&channel=ios` or `play`: the shelf as a store build has it (games and
+    // gift cards «على الموقع» while the console says so).
+    channel: query['channel'] ?? 'apk',
   );
   dependencies.settings.setLanguage(query['lang'] ?? 'ar');
+  if (screen != 'topup') {
+    // Two Free Fire players this phone topped up before.
+    await dependencies.accounts.remember('tu-free-fire', {
+      'player_id': '7788990011',
+    }, name: 'Noor.FF');
+    await dependencies.accounts.remember('tu-free-fire', {
+      'player_id': '5123456789',
+    }, name: 'ShadowFox_LY');
+  }
+  if (screen == 'heard-from-link') {
+    // As if the app had opened cards.dftr.ly/go/UNI1.
+    dependencies.attribution
+      ..openedLink(Uri.parse('https://cards.dftr.ly/go/UNI1'))
+      ..offer = CampaignOffer.fromJson(fixtureCampaign);
+  }
+  if (screen == 'notice') {
+    Future.delayed(const Duration(seconds: 2), () {
+      dependencies.push.arrived(
+        PushNotice(
+          title: 'رمز بطاقتك جاهز',
+          body: 'ليبيانا · 10 دينار: اضغط لعرض الرمز.',
+          order: 'order-1',
+          onOpen: () => dependencies.links.open(
+            Uri.parse('https://cards.dftr.ly/my-cards/order-1'),
+          ),
+        ),
+      );
+    });
+  }
   runApp(
     CardsApp(
       dependencies: dependencies,
@@ -110,6 +173,20 @@ final CardBrand _libyana = CardBrand.fromJson(
 final CardBrand _itunes = CardBrand.fromJson(
   (fixtureCatalog['brands'] as List)[4] as Map<String, dynamic>,
 );
+CardBrand _topUp(int index) => CardBrand.fromJson(fixtureTopUpBrands[index]);
+
+/// The Free Fire account typed in, for the checkout to send to.
+AccountFormModel _typedAccount(CardsDependencies dependencies) {
+  final brand = _topUp(0);
+  return AccountFormModel(
+      brand: brand,
+      orders: dependencies.orders,
+      accounts: dependencies.accounts,
+      signedIn: () => true,
+    )
+    ..itemKey = brand.items[2].key
+    ..controllerOf('player_id').text = '5123456789';
+}
 
 /// One screen or sheet by name; sheets open over a blank page on load.
 class PreviewSurface extends StatelessWidget {
@@ -126,6 +203,47 @@ class PreviewSurface extends StatelessWidget {
       'account' => const CardsShell(initialTab: 2),
       'brand' => BrandPage(brand: _libyana),
       'brand-itunes' => BrandPage(brand: _itunes),
+      'topup' || 'topup-saved' => BrandPage(brand: _topUp(0)),
+      'topup-zone' => BrandPage(brand: _topUp(1)),
+      'topup-server' => BrandPage(brand: _topUp(2)),
+      'topup-telegram' => BrandPage(brand: _topUp(3)),
+      'topup-steam' => BrandPage(brand: _topUp(4)),
+      'topup-gift' => BrandPage(brand: _topUp(5)),
+      'topup-checkout' => _SheetHost(
+        sheet: CheckoutSheet(
+          model: CheckoutModel(
+            orders: dependencies.orders,
+            brand: _topUp(0),
+            item: _topUp(0).items[2],
+            account: _typedAccount(dependencies),
+          )..load(),
+        ),
+      ),
+      'topup-preparing' => OrderProgressPage(
+        brand: _topUp(0),
+        openPaymentPage: false,
+        watcher: OrderWatcher(
+          orders: dependencies.orders,
+          vault: dependencies.vault,
+          order: CardOrder.fromJson(
+            fixtureTopUpOrder(id: 'topup-2', status: 'fulfilling'),
+          ),
+        )..start(),
+      ),
+      'topup-done' || 'topup-receipt' => TopUpDonePage(
+        order: CardOrder.fromJson(fixtureTopUpOrder()),
+        brand: _topUp(0),
+        fromHistory: screen == 'topup-receipt',
+      ),
+      'topup-refunded' => OrderProgressPage(
+        brand: _topUp(0),
+        watcher: OrderWatcher(
+          orders: dependencies.orders,
+          vault: dependencies.vault,
+          order: CardOrder.fromJson(fixtureTopUpOrder(status: 'refunded')),
+        ),
+      ),
+      'topup-board' => const _Board(topUps: true),
       'sign-in' => const _SheetHost(sheet: SignInSheet()),
       'sign-in-code' => _SheetHost(
         sheet: SignInSheet(
@@ -171,6 +289,23 @@ class PreviewSurface extends StatelessWidget {
           order: CardOrder.fromJson(fixtureOrder(status: 'fulfilling')),
         ),
       ),
+      // Paid four minutes ago and still waiting: the page says to go.
+      'preparing-slow' => OrderProgressPage(
+        brand: _libyana,
+        openPaymentPage: false,
+        watcher: OrderWatcher(
+          orders: dependencies.orders,
+          vault: dependencies.vault,
+          order: CardOrder.fromJson(
+            fixtureOrder(status: 'fulfilling')
+              ..['paid_at'] = DateTime.now()
+                  .subtract(const Duration(minutes: 4))
+                  .toIso8601String(),
+          ),
+        ),
+      ),
+      // The shelf, and two seconds later a late card's message drops in.
+      'notice' => const CardsShell(),
       'refunded' => OrderProgressPage(
         brand: _libyana,
         watcher: OrderWatcher(
@@ -195,6 +330,40 @@ class PreviewSurface extends StatelessWidget {
       ),
       'about' => const AboutPage(),
       'onboarding' => OnboardingPage(onDone: () {}),
+      // The onboarding ending on «من أين سمعت عنا؟»: `onboarding-question`
+      // walks there (tap through to see the step into it; `&slow=8` plays
+      // it eight times slower), `heard-from` opens on it, `heard-from-link`
+      // with a code the app holds from a followed flyer link.
+      'onboarding-question' => OnboardingPage(
+        askHeardFrom: true,
+        onDone: () {},
+      ),
+      'heard-from' || 'heard-from-link' => OnboardingPage(
+        askHeardFrom: true,
+        startAsking: true,
+        onDone: () {},
+      ),
+      // The same question in the sign-in sheet, for a new customer.
+      'sign-in-heard-from' => const _SheetHost(
+        sheet: SignInSheet(askFirst: true),
+      ),
+      // The credit a campaign gave: `&kind=creator|flyer|billboard|referral|ad`
+      // and `&via=code|link` choose the reason.
+      'reward' => _RewardHost(
+        reward: CampaignReward.fromJson(
+          fixtureReward(
+            kind: Uri.base.queryParameters['kind'] ?? 'flyer',
+            via: Uri.base.queryParameters['via'] ?? 'link',
+            name:
+                Uri.base.queryParameters['name'] ??
+                switch (Uri.base.queryParameters['kind']) {
+                  'creator' => 'أحمد',
+                  'referral' || 'ad' => '',
+                  _ => 'ملصق جامعة مصراتة',
+                },
+          ),
+        ),
+      ),
       'privacy' => const LegalPage(document: LegalDocument.privacy),
       'terms' => const LegalPage(document: LegalDocument.terms),
       _ => const CardsShell(),
@@ -229,12 +398,52 @@ class _SheetHostState extends State<_SheetHost> {
   Widget build(BuildContext context) => const CardsShell();
 }
 
+class _RewardHost extends StatefulWidget {
+  const _RewardHost({required this.reward});
+
+  final CampaignReward reward;
+
+  @override
+  State<_RewardHost> createState() => _RewardHostState();
+}
+
+class _RewardHostState extends State<_RewardHost> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => showRewardSheet(context, widget.reward),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => const CardsShell();
+}
+
 class _Board extends StatelessWidget {
-  const _Board();
+  const _Board({this.topUps = false});
+
+  /// The top-up's own screens instead of the app's main ones.
+  final bool topUps;
 
   @override
   Widget build(BuildContext context) {
-    const frames = <(String, String, bool)>[
+    const topUpFrames = <(String, String, bool)>[
+      ('حسابات محفوظة', 'topup-saved', false),
+      ('معرّف ومنطقة', 'topup-zone', false),
+      ('معرّف وخادم', 'topup-server', false),
+      ('تيليجرام', 'topup-telegram', false),
+      ('ستيم', 'topup-steam', false),
+      ('هدية ستيم', 'topup-gift', false),
+      ('الدفع', 'topup-checkout', false),
+      ('نشحن الحساب', 'topup-preparing', false),
+      ('تمّ الشحن', 'topup-done', false),
+      ('الإيصال', 'topup-receipt', false),
+      ('لم يكتمل', 'topup-refunded', false),
+      ('شحن · داكن', 'topup-saved', true),
+      ('تمّ الشحن · داكن', 'topup-done', true),
+    ];
+    const appFrames = <(String, String, bool)>[
       ('الرئيسية', 'home', false),
       ('الكرت', 'brand', false),
       ('الشراء', 'checkout', false),
@@ -246,6 +455,7 @@ class _Board extends StatelessWidget {
       ('الرئيسية · داكن', 'home', true),
       ('الكرت جاهز · داكن', 'reveal', true),
     ];
+    final frames = topUps ? topUpFrames : appFrames;
     return Scaffold(
       backgroundColor: const Color(0xFFE9ECEA),
       body: SingleChildScrollView(

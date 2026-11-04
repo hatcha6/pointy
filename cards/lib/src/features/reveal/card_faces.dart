@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:pointy_brand/pointy_brand.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../../l10n/generated/app_localizations.dart';
 import '../../data/models/catalog.dart';
@@ -9,11 +8,12 @@ import '../../shared/art_palette.dart';
 import '../../shared/card_art.dart';
 import '../../shared/pill.dart';
 import '../../core/analytics/analytics.dart';
+import '../../shared/name_text.dart';
+import 'card_qr.dart';
+import 'holo_foil.dart';
+import 'scratch_off.dart';
 
-/// The back of a bought card, in the brand's own colours: its name at the
-/// top and the faces' content beneath. Both of the card's backs (the code,
-/// and the code as a QR) are built on it, so they turn into each other as
-/// the same card.
+/// The surface of a bought card's back, in the brand's own colours.
 class _BrandBack extends StatelessWidget {
   const _BrandBack({required this.palette, required this.child, this.onTap});
 
@@ -54,11 +54,10 @@ class _BrandBack extends StatelessWidget {
 
 /// The code itself: left to right, one line, the card's own figures.
 class _CodeText extends StatelessWidget {
-  const _CodeText({required this.code, required this.used, this.style});
+  const _CodeText({required this.code, required this.used});
 
   final String code;
   final bool used;
-  final TextStyle? style;
 
   @override
   Widget build(BuildContext context) {
@@ -73,21 +72,20 @@ class _CodeText extends StatelessWidget {
         child: Text(
           code,
           maxLines: 1,
-          style:
-              PointyTypography.numeric(style ?? theme.textTheme.headlineMedium!)
-                  .copyWith(
-                    color: Colors.white,
-                    letterSpacing: 2,
-                    decoration: used ? TextDecoration.lineThrough : null,
-                    decorationColor: Colors.white70,
-                  ),
+          style: PointyTypography.numeric(theme.textTheme.headlineMedium!)
+              .copyWith(
+                color: Colors.white,
+                letterSpacing: 2,
+                decoration: used ? TextDecoration.lineThrough : null,
+                decorationColor: Colors.white70,
+              ),
         ),
       ),
     );
   }
 }
 
-/// The brand's name across the top of a back, and the used mark.
+/// The brand's name across the top of the back, and the used mark.
 class _BackTitle extends StatelessWidget {
   const _BackTitle({required this.brand, required this.used});
 
@@ -100,7 +98,7 @@ class _BackTitle extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: Text(
+          child: NameText(
             brand.name,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
@@ -126,7 +124,12 @@ const _amberBar = SizedBox(
   child: ColoredBox(color: PointyColors.accentAmber),
 );
 
-/// The card's back with its code: the code's one home, large, tap to copy.
+/// The card's back, the only design it has, on the page and on the pass
+/// alike: the QR under its foil, the name beside it, and the code in full
+/// across the bottom, large enough to read out and type.
+///
+/// [qrScratched] is the foil's scratch, as [ScratchOff] takes it: 0 whole, 1
+/// the QR bare.
 class CodeCardFace extends StatelessWidget {
   const CodeCardFace({
     super.key,
@@ -134,6 +137,7 @@ class CodeCardFace extends StatelessWidget {
     required this.palette,
     required this.code,
     required this.used,
+    required this.qrScratched,
     this.onTap,
   });
 
@@ -143,12 +147,14 @@ class CodeCardFace extends StatelessWidget {
   final ArtPalette palette;
   final String code;
   final bool used;
+  final Animation<double> qrScratched;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // The code itself never shows in a session replay.
+    final l10n = AppLocalizations.of(context);
+    // The code itself never shows in a session replay, nor does its QR.
     return Sensitive(
       child: _BrandBack(
         palette: palette,
@@ -156,18 +162,71 @@ class CodeCardFace extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _BackTitle(brand: brand, used: used),
-            const Spacer(),
-            Text(
-              AppLocalizations.of(context).secretCode,
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: Colors.white70,
+            Expanded(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  AspectRatio(
+                    aspectRatio: 1,
+                    child: ScratchOff(
+                      progress: qrScratched,
+                      radius: CardsRadii.tile,
+                      cover: HoloFoil(
+                        radius: CardsRadii.tile,
+                        label: l10n.showQr,
+                      ),
+                      child: _QrTile(
+                        brand: brand,
+                        ink: palette.dark,
+                        code: code,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: CardsSpace.lg),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _BackTitle(brand: brand, used: used),
+                        const SizedBox(height: CardsSpace.xs),
+                        _amberBar,
+                        Expanded(
+                          // What to do with the foil, then what to do with
+                          // what was under it.
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              FadeTransition(
+                                opacity: qrScratched.drive(
+                                  Tween<double>(begin: 1, end: 0).chain(
+                                    CurveTween(curve: const Interval(0, 0.2)),
+                                  ),
+                                ),
+                                child: _ScanHint(text: l10n.qrRevealHint),
+                              ),
+                              FadeTransition(
+                                opacity: qrScratched.drive(
+                                  CurveTween(curve: const Interval(0.7, 1)),
+                                ),
+                                child: _ScanHint(text: l10n.qrScanHint),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Text(
+                          l10n.secretCode,
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: Colors.white70,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 2),
+            const SizedBox(height: CardsSpace.xs),
             _CodeText(code: code, used: used),
-            const SizedBox(height: CardsSpace.sm),
-            _amberBar,
           ],
         ),
       ),
@@ -175,129 +234,64 @@ class CodeCardFace extends StatelessWidget {
   }
 }
 
-/// The card's back with its code as a QR, for a camera to read: on a white
-/// tile (a scanner wants dark on light), its dots in the brand's own deep
-/// colour with the brand's art at the centre, and the code written beside it
-/// for anyone without a camera.
-class QrCardFace extends StatelessWidget {
-  const QrCardFace({
-    super.key,
-    required this.brand,
-    required this.palette,
-    required this.code,
-    required this.used,
-    this.onCopy,
-  });
+/// How to use the QR, in as many whole lines as the room left on the back.
+class _ScanHint extends StatelessWidget {
+  const _ScanHint({required this.text});
 
-  final CardBrand brand;
-  final ArtPalette palette;
-  final String code;
-  final bool used;
-  final VoidCallback? onCopy;
-
-  /// The brand mark's share of the QR's width. With the highest error
-  /// correction (it survives about 30% of the code lost) this covers a
-  /// small fraction of it, well clear of what scanners tolerate.
-  static const double _markShare = 0.24;
+  final String text;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final l10n = AppLocalizations.of(context);
-    final ink = palette.dark;
-    // Nor does its QR, which is the code too.
-    return Sensitive(
-      child: _BrandBack(
-        palette: palette,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            AspectRatio(
-              aspectRatio: 1,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(CardsRadii.tile),
-                ),
-                child: Padding(
-                  // The quiet margin a scanner finds the code's edge by.
-                  padding: const EdgeInsets.all(CardsSpace.sm + 2),
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final mark = constraints.maxWidth * _markShare;
-                      return Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          QrImageView(
-                            data: code,
-                            padding: EdgeInsets.zero,
-                            backgroundColor: Colors.white,
-                            errorCorrectionLevel: QrErrorCorrectLevel.H,
-                            semanticsLabel: l10n.showQr,
-                            eyeStyle: QrEyeStyle(
-                              eyeShape: QrEyeShape.square,
-                              color: ink,
-                            ),
-                            dataModuleStyle: QrDataModuleStyle(
-                              dataModuleShape: QrDataModuleShape.circle,
-                              color: ink,
-                            ),
-                          ),
-                          Container(
-                            width: mark,
-                            height: mark,
-                            padding: const EdgeInsets.all(2.5),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(mark * 0.28),
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(mark * 0.22),
-                              child: CardArtImage(brand: brand),
-                            ),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: CardsSpace.lg),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _BackTitle(brand: brand, used: used),
-                  const SizedBox(height: CardsSpace.xs),
-                  Text(
-                    l10n.qrScanHint,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: Colors.white70,
-                    ),
-                  ),
-                  const Spacer(),
-                  Semantics(
-                    button: onCopy != null,
-                    label: l10n.copyAction,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: onCopy,
-                      child: _CodeText(
-                        code: code,
-                        used: used,
-                        style: theme.textTheme.titleLarge,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: CardsSpace.sm),
-                  _amberBar,
-                ],
-              ),
-            ),
-          ],
+    final style = Theme.of(context).textTheme.bodySmall
+        ?.copyWith(color: Colors.white70);
+    final line =
+        MediaQuery.textScalerOf(context).scale(style?.fontSize ?? 12) *
+        (style?.height ?? 1.4);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final room = constraints.maxHeight - CardsSpace.xs;
+        final lines = (room / line).floor().clamp(0, 3);
+        if (lines == 0) {
+          return const SizedBox.shrink();
+        }
+        return Padding(
+          padding: const EdgeInsets.only(top: CardsSpace.xs),
+          child: Text(
+            text,
+            maxLines: lines,
+            overflow: TextOverflow.ellipsis,
+            style: style,
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// The code for a camera to read: a white tile, as a scanner wants dark on
+/// light.
+class _QrTile extends StatelessWidget {
+  const _QrTile({required this.brand, required this.ink, required this.code});
+
+  final CardBrand brand;
+  final Color ink;
+  final String code;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(CardsRadii.tile),
+      ),
+      child: Padding(
+        // The quiet margin a scanner finds the code's edge by.
+        padding: const EdgeInsets.all(CardsSpace.sm + 2),
+        child: CardQr(
+          brand: brand,
+          ink: ink,
+          code: code,
+          label: AppLocalizations.of(context).showQr,
         ),
       ),
     );

@@ -8,6 +8,8 @@ import 'package:pointy_cards/src/features/brand/brand_page.dart';
 import 'package:pointy_cards/src/features/legal/legal_page.dart';
 import 'package:pointy_cards/src/features/links/cards_link.dart';
 import 'package:pointy_cards/src/features/links/link_inbox.dart';
+import 'package:pointy_cards/src/features/my_cards/my_cards_page.dart';
+import 'package:pointy_cards/src/features/reveal/reveal_page.dart';
 
 Future<void> phone(WidgetTester tester) async {
   tester.view.physicalSize = const Size(390 * 3, 844 * 3);
@@ -54,6 +56,7 @@ void main() {
         '/brand/pubg': BrandLink('pubg'),
         '/brand/pubg?item=pubg-325': BrandLink('pubg', item: 'pubg-325'),
         '/my-cards': TabLink(CardsTab.myCards),
+        '/my-cards/order-1': OrderLink('order-1'),
         '/account': TabLink(CardsTab.account),
         '/privacy': PageLink(LinkedPage.privacy),
         '/terms': PageLink(LinkedPage.terms),
@@ -184,9 +187,61 @@ void main() {
     expect(find.byType(AccountPage), findsOneWidget);
   });
 
+  testWidgets('a notification about a card opens it over «كروتي»', (
+    tester,
+  ) async {
+    await openApp(tester);
+    await tapLink(tester, 'https://cards.dftr.ly/my-cards/order-1');
+    expect(
+      tester.widget<RevealPage>(find.byType(RevealPage)).order.id,
+      'order-1',
+    );
+    // Back from the card is «كروتي», where it is kept.
+    await goBack(tester);
+    expect(find.byType(MyCardsPage), findsOneWidget);
+  });
+
   testWidgets('a brand no longer sold opens the shelf', (tester) async {
     await openApp(tester, '/brand/gone');
     expect(find.byType(BrandPage), findsNothing);
     expect(find.text('ليبيانا'), findsWidgets);
+  });
+
+  group('campaign links', () {
+    testWidgets('the app started by cards.dftr.ly/go/CODE holds the code', (
+      tester,
+    ) async {
+      // What iOS and Android hand Flutter when a tapped Universal Link or
+      // App Link starts the app: its address as the first route.
+      tester.binding.platformDispatcher.defaultRouteNameTestValue = '/go/uni1';
+      addTearDown(
+        tester.binding.platformDispatcher.clearDefaultRouteNameTestValue,
+      );
+      await phone(tester);
+      final dependencies = fixtureDependencies(signedIn: false);
+      await tester.pumpWidget(CardsApp(dependencies: dependencies));
+      await tester.pumpAndSettle();
+      expect(dependencies.attribution.pending.code, 'UNI1');
+      expect(dependencies.attribution.pending.via, 'link');
+      // The relay was asked where it leads (and counted the open).
+      expect(dependencies.attribution.offer?.code, 'UNI1');
+      expect(find.text('ليبيانا'), findsWidgets);
+    });
+
+    testWidgets('a campaign link tapped while the app runs holds its code', (
+      tester,
+    ) async {
+      await phone(tester);
+      final dependencies = fixtureDependencies(signedIn: false);
+      await tester.pumpWidget(CardsApp(dependencies: dependencies));
+      await tester.pumpAndSettle();
+      expect(dependencies.attribution.pending.code, isEmpty);
+      await tapLink(tester, 'https://cards.dftr.ly/go/UNI1');
+      expect(dependencies.attribution.pending.code, 'UNI1');
+      // A second campaign's link does not replace the first.
+      await tapLink(tester, 'https://cards.dftr.ly/brand/pubg?c=AHMED');
+      expect(dependencies.attribution.pending.code, 'UNI1');
+      expect(find.byType(BrandPage), findsOneWidget);
+    });
   });
 }

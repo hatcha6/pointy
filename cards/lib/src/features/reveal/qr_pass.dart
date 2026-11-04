@@ -12,12 +12,13 @@ import '../../shared/card_art.dart';
 import '../../shared/haptics.dart';
 import '../../shared/tilt_card.dart';
 import 'card_faces.dart';
+import 'scratch_off.dart';
 import '../../core/analytics/analytics.dart';
 
-/// The code as a QR, shown the way a wallet shows a pass: the card lifts out
-/// of the page into the middle of the screen and turns over, its back now
-/// the QR, while the page dims away behind it and the screen brightens for
-/// the scanner. Closing turns it back and sets it down where it was.
+/// The card held up for a scanner, the way a wallet shows a pass: it lifts out
+/// of the page into the middle of the screen, as it is, while the page dims
+/// away behind it and the screen brightens. The first time, the foil over its
+/// QR is scratched off once it lands. Closing sets it back down.
 class QrPass {
   const QrPass._();
 
@@ -31,7 +32,8 @@ class QrPass {
   );
 
   /// Opens the pass from the card at [from] (its box on screen), and
-  /// completes once it is set back down.
+  /// completes once it is set back down. [scratch] is whether its QR is still
+  /// under the foil.
   static Future<void> open(
     BuildContext context, {
     required Rect from,
@@ -40,6 +42,7 @@ class QrPass {
     required String code,
     required bool used,
     required VoidCallback onCopy,
+    required bool scratch,
   }) {
     Haptics.tap();
     return Navigator.of(context).push(
@@ -48,8 +51,8 @@ class QrPass {
         opaque: false,
         barrierDismissible: true,
         barrierLabel: AppLocalizations.of(context).closeAction,
-        transitionDuration: const Duration(milliseconds: 620),
-        reverseTransitionDuration: const Duration(milliseconds: 460),
+        transitionDuration: const Duration(milliseconds: 460),
+        reverseTransitionDuration: const Duration(milliseconds: 340),
         pageBuilder: (context, animation, _) => _QrPassPage(
           animation: animation,
           from: from,
@@ -58,6 +61,7 @@ class QrPass {
           code: code,
           used: used,
           onCopy: onCopy,
+          scratch: scratch,
         ),
       ),
     );
@@ -73,6 +77,7 @@ class _QrPassPage extends StatefulWidget {
     required this.code,
     required this.used,
     required this.onCopy,
+    required this.scratch,
   });
 
   final Animation<double> animation;
@@ -82,12 +87,37 @@ class _QrPassPage extends StatefulWidget {
   final String code;
   final bool used;
   final VoidCallback onCopy;
+  final bool scratch;
 
   @override
   State<_QrPassPage> createState() => _QrPassPageState();
 }
 
-class _QrPassPageState extends State<_QrPassPage> {
+class _QrPassPageState extends State<_QrPassPage>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _scratch =
+      AnimationController(
+        vsync: this,
+        duration: ScratchOff.duration,
+        value: widget.scratch ? 0 : 1,
+      )..addListener(() {
+        if (!_scratch.isAnimating) {
+          return;
+        }
+        // A tick as the hand turns back at each stroke's end, and the
+        // system's own "it worked" as the last of the foil goes.
+        final stroke = ScratchOff.strokeAt(_scratch.value).floor();
+        if (stroke != _stroke) {
+          _stroke = stroke;
+          if (stroke == ScratchOff.strokes) {
+            Haptics.success();
+          } else {
+            Haptics.select();
+          }
+        }
+      });
+  int _stroke = 0;
+
   bool _bright = false;
 
   /// How far a downward drag has pulled the card, in points.
@@ -103,13 +133,20 @@ class _QrPassPageState extends State<_QrPassPage> {
   @override
   void dispose() {
     widget.animation.removeStatusListener(_status);
+    _scratch.dispose();
     _brighten(false);
     super.dispose();
   }
 
-  /// The phone's own brightness comes back as soon as the card starts down.
+  /// The foil comes off once the card has landed. The phone's own brightness
+  /// comes back as soon as the card starts down, by when the foil is gone: the
+  /// page's card, which it lands back on, has none left.
   void _status(AnimationStatus status) {
+    if (status == AnimationStatus.completed && _scratch.value == 0) {
+      _scratch.forward();
+    }
     if (status == AnimationStatus.reverse) {
+      _scratch.value = 1;
       _brighten(false);
     }
   }
@@ -158,51 +195,34 @@ class _QrPassPageState extends State<_QrPassPage> {
       height: size.height,
     );
     final ArtPalette(:dark) = widget.palette;
-    final face = QrCardFace(
+    // Outside the builder: its QR is not worked out again every frame.
+    final face = CodeCardFace(
       brand: widget.brand,
       palette: widget.palette,
       code: widget.code,
       used: widget.used,
-      onCopy: widget.onCopy,
+      onTap: widget.onCopy,
+      qrScratched: still ? kAlwaysCompleteAnimation : _scratch,
     );
     return AnimatedBuilder(
-      animation: widget.animation,
+      animation: Listenable.merge([widget.animation, _scratch]),
       builder: (context, _) {
         final raw = widget.animation.value;
         final t = Curves.easeInOutCubic.transform(raw);
-        // The turn runs a little behind the lift, so the card is clear of
-        // the page before its face goes edge-on.
-        final turn = still
-            ? 1.0
-            : Curves.easeInOutBack.transform(
-                ((raw - 0.12) / 0.88).clamp(0.0, 1.0),
-              );
         final rect = still
             ? to
             : Rect.lerp(widget.from, to, t)!.shift(Offset(0, _drag));
-        final angle = turn.clamp(0.0, 1.0) * math.pi;
-        final showQr = angle > math.pi / 2;
-        // Lifted off the page: a touch larger at mid-turn, as a card raised
-        // toward the eye.
-        final lift = still ? 1.0 : 1 + 0.06 * math.sin(t * math.pi);
-        final card = showQr
-            ? Transform(
-                alignment: Alignment.center,
-                transform: Matrix4.rotationY(math.pi),
-                // The card answers the phone's tilt, gently: enough to catch
-                // the light, not enough to skew the code for the scanner.
-                child: TiltCard(
-                  radius: CardsRadii.tile,
-                  strength: _HalfOf(widget.animation),
-                  child: face,
-                ),
-              )
-            : CodeCardFace(
-                brand: widget.brand,
-                palette: widget.palette,
-                code: widget.code,
-                used: widget.used,
-              );
+        // Lifted off the page: a touch larger on the way, as a card raised
+        // toward the eye, and it answers the coin's last stroke with a small
+        // lift of its own.
+        final answer =
+            ((_scratch.value - ScratchOff.clearAt) / (1 - ScratchOff.clearAt))
+                .clamp(0.0, 1.0);
+        final lift = still
+            ? 1.0
+            : 1 +
+                  0.04 * math.sin(t * math.pi) +
+                  0.018 * math.sin(answer * math.pi);
         final dim = (still ? raw : t) * (1 - (_drag / 400).clamp(0.0, 1.0));
         return Stack(
           children: [
@@ -236,17 +256,22 @@ class _QrPassPageState extends State<_QrPassPage> {
                     setState(() => _drag = 0);
                   }
                 },
-                child: Transform(
-                  alignment: Alignment.center,
-                  transform: Matrix4.identity()
-                    ..setEntry(3, 2, 0.0012)
-                    ..scaleByDouble(lift, lift, 1, 1)
-                    ..rotateY(angle),
+                child: Transform.scale(
+                  scale: lift,
                   child: FittedBox(
+                    // Laid out as it is on the page and scaled up as a whole:
+                    // the same card, held closer, not a new layout of it.
                     child: SizedBox(
-                      width: size.width,
-                      height: size.height,
-                      child: card,
+                      width: widget.from.width,
+                      height: widget.from.height,
+                      // The card answers the phone's tilt, gently: enough to
+                      // catch the light, not enough to skew the code for the
+                      // scanner.
+                      child: TiltCard(
+                        radius: CardsRadii.tile,
+                        strength: _HalfOf(widget.animation),
+                        child: face,
+                      ),
                     ),
                   ),
                 ),

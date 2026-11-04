@@ -27,6 +27,11 @@ enum OnboardingScene {
   /// Told first: the cards flatten into a stack of notifications, the badge
   /// a ringing bell.
   notify,
+
+  /// Heard of us: the cards become a conversation, the message about the
+  /// app in front, the badge a megaphone. Not a step of its own: the
+  /// question that closes the first run ([OnboardingArtPainter.heard]).
+  heard,
 }
 
 /// Where one card stands in a scene, and what it wears.
@@ -84,11 +89,21 @@ class _Pose {
 }
 
 class OnboardingArtPainter extends CustomPainter {
-  OnboardingArtPainter({required this.position, this.intro = 1, this.ring = 0});
+  OnboardingArtPainter({
+    required this.position,
+    this.intro = 1,
+    this.ring = 0,
+    this.heard = 0,
+  });
 
   /// Where the steps are: 0 the shelf, 1 the instant code, 2 the vault, 3
   /// notifications, and anything between while a swipe is under way.
   final double position;
+
+  /// 0 to 1: whatever step is shown turning into the conversation of
+  /// «من أين سمعت عنا؟», straight from where it is (never through the steps
+  /// between).
+  final double heard;
 
   /// 0 to 1, over and over while notifications are shown: the bell's swing
   /// and the rings going out from it.
@@ -246,6 +261,36 @@ class OnboardingArtPainter extends CustomPainter {
     ],
   ];
 
+  // Heard of us: a conversation, the message about the app in front; the
+  // others an answer and the one before it.
+  static const _heardScene = [
+    _Pose(
+      centre: Offset(440, 330),
+      width: 520,
+      degrees: 0,
+      color: LogoGeometry.cardsBackSheet,
+      opacity: 0.8,
+      aspect: 0.22,
+    ),
+    _Pose(
+      centre: Offset(580, 510),
+      width: 560,
+      degrees: 0,
+      color: LogoGeometry.cardsBackSheet,
+      aspect: 0.22,
+    ),
+    _Pose(
+      centre: Offset(470, 705),
+      width: 680,
+      degrees: 0,
+      color: LogoGeometry.cardsSheet,
+      aspect: 0.25,
+      banner: 1,
+    ),
+  ];
+  static const Offset _heardBadge = Offset(770, 250);
+  static const double _heardRadius = 104;
+
   // The amber badge: none on the shelf, the check on the code's card, the
   // lock on the pocket, the bell on the newest notification.
   static const _badgeAt = [
@@ -282,9 +327,12 @@ class OnboardingArtPainter extends CustomPainter {
     final p = position.clamp(0.0, _scenes.length - 1.0);
     final from = p.floor().clamp(0, _scenes.length - 2);
     final t = Curves.easeInOutCubic.transform(p - from);
-    final instant = _weight(1);
-    final vault = _weight(2);
-    final notify = _weight(3);
+    final h = Curves.easeInOutCubic.transform(heard.clamp(0.0, 1.0));
+    // Each step's own touches give way to the conversation's.
+    final stay = 1 - h;
+    final instant = _weight(1) * stay;
+    final vault = _weight(2) * stay;
+    final notify = _weight(3) * stay;
 
     _speedLines(canvas, instant);
     for (var card = 0; card < 3; card++) {
@@ -292,18 +340,28 @@ class OnboardingArtPainter extends CustomPainter {
       if (from == 0) {
         a = _Pose.lerp(_mark[card], a, opened);
       }
-      _posed(canvas, _Pose.lerp(a, _scenes[from + 1][card], t));
+      final pose = _Pose.lerp(a, _scenes[from + 1][card], t);
+      _posed(canvas, h == 0 ? pose : _Pose.lerp(pose, _heardScene[card], h));
     }
     _pocket(canvas, vault);
-    final badge = Offset.lerp(_badgeAt[from], _badgeAt[from + 1], t)!;
-    final radius = lerpDouble(_badgeRadius[from], _badgeRadius[from + 1], t)!;
-    _badge(canvas, badge, radius * (from == 0 ? opened : 1));
+    final badge = Offset.lerp(
+      Offset.lerp(_badgeAt[from], _badgeAt[from + 1], t)!,
+      _heardBadge,
+      h,
+    )!;
+    final radius = lerpDouble(
+      lerpDouble(_badgeRadius[from], _badgeRadius[from + 1], t)!,
+      _heardRadius,
+      h,
+    )!;
+    _badge(canvas, badge, radius * (from == 0 && h == 0 ? opened : 1));
     _check(canvas, badge, radius / 92, instant);
     _lock(canvas, badge, radius / 112, vault);
     _rings(canvas, badge, radius, notify);
     _bell(canvas, badge, radius / 100, notify);
+    _megaphone(canvas, badge, radius / _heardRadius, h);
 
-    final shelf = _weight(0) * opened;
+    final shelf = _weight(0) * opened * stay;
     _sparkle(canvas, const Offset(225, 270), 26 * shelf, LogoGeometry.amber);
     _sparkle(
       canvas,
@@ -330,7 +388,64 @@ class OnboardingArtPainter extends CustomPainter {
       16 * notify,
       LogoGeometry.cardsSheet,
     );
+    _sparkle(canvas, const Offset(190, 520), 22 * h, LogoGeometry.amber);
+    _dot(canvas, const Offset(860, 420), 12 * h, LogoGeometry.cardsSheet);
+    _dot(canvas, const Offset(200, 840), 10 * h, LogoGeometry.cardsSheet);
     canvas.restore();
+  }
+
+  /// A megaphone on the badge, calling out: its bell flaring right, a
+  /// handle under it, and two arcs of sound.
+  void _megaphone(Canvas canvas, Offset centre, double scale, double shown) {
+    if (shown <= 0 || scale <= 0) {
+      return;
+    }
+    final s = scale * shown;
+    final white = _white.withValues(alpha: shown);
+    final c = centre + Offset(-12 * s, 0);
+    // The body: narrow at the mouthpiece, flaring to the bell.
+    final body = Path()
+      ..moveTo(c.dx - 44 * s, c.dy - 14 * s)
+      ..lineTo(c.dx + 22 * s, c.dy - 40 * s)
+      ..lineTo(c.dx + 22 * s, c.dy + 40 * s)
+      ..lineTo(c.dx - 44 * s, c.dy + 14 * s)
+      ..close();
+    canvas.drawPath(
+      body,
+      Paint()
+        ..color = white
+        ..style = PaintingStyle.fill
+        ..strokeJoin = StrokeJoin.round,
+    );
+    canvas.drawPath(
+      body,
+      Paint()
+        ..color = white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 12 * s
+        ..strokeJoin = StrokeJoin.round,
+    );
+    final stroke = Paint()
+      ..color = white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 11 * s
+      ..strokeCap = StrokeCap.round;
+    // The handle.
+    canvas.drawLine(
+      c + Offset(-26 * s, 16 * s),
+      c + Offset(-18 * s, 46 * s),
+      stroke,
+    );
+    // The sound going out.
+    for (final r in [52.0, 74.0]) {
+      canvas.drawArc(
+        Rect.fromCircle(center: c + Offset(16 * s, 0), radius: r * s),
+        -0.55,
+        1.1,
+        false,
+        stroke..color = white.withValues(alpha: shown * (r == 52 ? 1 : 0.7)),
+      );
+    }
   }
 
   void _tile(Canvas canvas, double light) {
@@ -814,7 +929,8 @@ class OnboardingArtPainter extends CustomPainter {
   bool shouldRepaint(OnboardingArtPainter oldDelegate) =>
       oldDelegate.position != position ||
       oldDelegate.intro != intro ||
-      oldDelegate.ring != ring;
+      oldDelegate.ring != ring ||
+      oldDelegate.heard != heard;
 
   /// How amber [color] is, from the mint sheet (0) to the amber (1).
   static double _amberness(Color color) {

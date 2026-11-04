@@ -6,6 +6,7 @@ import '../data/models/catalog.dart';
 import '../design/cards_tokens.dart';
 import 'art_cache.dart';
 import 'cards_scope.dart';
+import 'name_text.dart';
 
 /// Card art is 16:10, like a gift card on a rack.
 const double kCardAspect = 16 / 10;
@@ -130,7 +131,7 @@ class DrawnCard extends StatelessWidget {
                 start: width * 0.07,
                 end: width * 0.07,
                 bottom: width * 0.08,
-                child: Text(
+                child: NameText(
                   brand.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,

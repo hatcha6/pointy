@@ -1,7 +1,11 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:pointy_cards/dev/cards_fixtures.dart';
 import 'package:pointy_cards/src/app.dart';
 import 'package:pointy_cards/src/data/models/catalog.dart';
@@ -11,8 +15,12 @@ import 'package:pointy_cards/src/dependencies.dart';
 import 'package:pointy_cards/src/features/brand/brand_page.dart';
 import 'package:pointy_cards/src/features/home/shelf_reveal.dart';
 import 'package:pointy_cards/src/features/reveal/reveal_page.dart';
+import 'package:pointy_cards/src/features/shell/cards_shell.dart';
+import 'package:pointy_cards/src/features/search/search_result_row.dart';
+import 'package:pointy_cards/src/features/shelf/shelf_model.dart';
 import 'package:pointy_cards/src/features/sign_in/sign_in_sheet.dart';
 import 'package:pointy_cards/src/shared/card_art.dart';
+import 'package:pointy_cards/src/shared/pill.dart';
 
 CardBrand brandAt(int index) => CardBrand.fromJson(
   (fixtureCatalog['brands'] as List)[index] as Map<String, dynamic>,
@@ -370,6 +378,94 @@ void main() {
     );
   });
 
+  testWidgets('a game key says where it is played, and only a game key', (
+    tester,
+  ) async {
+    await phone(tester);
+    CardBrand on(String platform) => CardBrand.fromJson(
+      Map<String, dynamic>.of(
+        (fixtureCatalog['brands'] as List)[0] as Map<String, dynamic>,
+      )..['platform'] = platform,
+    );
+    expect(brandAt(0).gamePlatform, isNull);
+    // A store this build has no badge for shows the game without one.
+    expect(on('epic').gamePlatform, isNull);
+    for (final (platform, label) in [
+      ('steam', 'ستيم'),
+      ('xbox', 'إكس بوكس'),
+      ('ea', 'EA'),
+      ('rockstar', 'روكستار'),
+    ]) {
+      final brand = on(platform);
+      expect(brand.gamePlatform?.name, platform);
+      await tester.pumpWidget(
+        CardsApp(
+          dependencies: fixtureDependencies(),
+          home: BrandPage(brand: brand),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text(label), findsOneWidget, reason: platform);
+      expect(find.byType(PlatformPill), findsOneWidget);
+    }
+
+    // Beside another badge on a tile: the logo alone, the name still read out.
+    final semantics = tester.ensureSemantics();
+    await tester.pumpWidget(
+      CardsApp(
+        dependencies: fixtureDependencies(),
+        home: const Scaffold(
+          body: Center(child: PlatformPill(GamePlatform.xbox, compact: true)),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('إكس بوكس'), findsNothing);
+    expect(find.bySemanticsLabel('إكس بوكس'), findsOneWidget);
+    semantics.dispose();
+  });
+
+  testWidgets('a store-build game key fits its search row on the narrowest '
+      'phone', (tester) async {
+    tester.view.physicalSize = const Size(320 * 3, 640 * 3);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+    final dependencies = fixtureDependencies();
+    final brand = CardBrand.fromJson(
+      Map<String, dynamic>.of(
+          (fixtureCatalog['brands'] as List)[0] as Map<String, dynamic>,
+        )
+        ..['name'] = 'Grand Theft Auto V'
+        ..['platform'] = 'rockstar'
+        ..['web_only'] = true,
+    );
+    await tester.pumpWidget(
+      CardsApp(
+        dependencies: dependencies,
+        home: Scaffold(
+          body: SearchResultRow(
+            brand: brand,
+            shelf: ShelfModel(
+              catalog: dependencies.catalog,
+              orders: dependencies.orders,
+              auth: dependencies.auth,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('روكستار'), findsOneWidget);
+    expect(find.text('على الموقع'), findsOneWidget);
+    // The price sits under the name, not beside it.
+    expect(
+      tester.getTopLeft(find.textContaining('من ')).dy,
+      // (The fixture card has no logo: its art prints the name too.)
+      greaterThan(tester.getTopLeft(find.text('Grand Theft Auto V').last).dy),
+    );
+  });
+
   testWidgets(
     'buying: payer details after pay, the wallet code, then the card',
     (tester) async {
@@ -421,7 +517,7 @@ void main() {
     },
   );
 
-  testWidgets('the reveal: copy, and dialing only where the hint spells it', (
+  testWidgets('the reveal: copy, and dialing only where the catalog says', (
     tester,
   ) async {
     await phone(tester);
@@ -458,12 +554,65 @@ void main() {
         dependencies: fixtureDependencies(),
         home: RevealPage(
           order: CardOrder.fromJson(fixtureOrder()),
-          brand: brandAt(0),
+          brand: brandAt(2),
         ),
       ),
     );
     await tester.pumpAndSettle();
     expect(find.text('اشحن الآن'), findsNothing);
+  });
+
+  testWidgets('a code the supplier is still sending turns up on its own', (
+    tester,
+  ) async {
+    await phone(tester);
+    var reads = 0;
+    final relay = MockClient((request) async {
+      if (request.method != 'GET' ||
+          request.url.path != '/v1/customers/orders/order-1') {
+        return http.Response('{"error":"not here"}', 404);
+      }
+      reads++;
+      final order = reads < 3
+          ? (fixtureOrder(status: 'paid', withCodes: false)
+              ..['codes_pending'] = true)
+          : fixtureOrder();
+      return http.Response(
+        jsonEncode({'order': order}),
+        200,
+        headers: {'content-type': 'application/json; charset=utf-8'},
+      );
+    });
+    await tester.pumpWidget(
+      CardsApp(
+        dependencies: fixtureDependencies(client: relay),
+        home: RevealPage(
+          order: CardOrder.fromJson(
+            fixtureOrder(status: 'paid', withCodes: false)
+              ..['codes_pending'] = true,
+          ),
+          brand: brandAt(1),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('نقرأ الرمز من المورّد…'), findsOneWidget);
+    expect(reads, 1);
+
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pump(const Duration(seconds: 1));
+    expect(reads, 2);
+    expect(find.text('4827 1930 5561 2208'), findsNothing);
+
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+    expect(reads, 3);
+    expect(find.text('4827 1930 5561 2208'), findsOneWidget);
+
+    // Delivered: it stops asking.
+    await tester.pump(const Duration(seconds: 20));
+    expect(reads, 3);
   });
 
   testWidgets(
@@ -547,6 +696,26 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('رموزك محمية'), findsNothing);
     expect(code, findsOneWidget);
+  });
+
+  testWidgets('the credit card grows to fit its text on a narrow phone', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(314, 844);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+    addTearDown(tester.view.reset);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await tester.pumpWidget(
+      CardsApp(
+        dependencies: fixtureDependencies(),
+        home: const CardsShell(initialTab: 2),
+      ),
+    );
+    await tester.pumpAndSettle();
+    // An overflow fails the test; everything on the card still shows.
+    expect(find.text('رصيدك'), findsOneWidget);
+    expect(find.text('يُستخدم في طلباتك القادمة.'), findsOneWidget);
   });
 
   testWidgets('my cards and the account', (tester) async {

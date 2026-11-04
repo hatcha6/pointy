@@ -42,6 +42,7 @@ sealed class CardsLink {
         second()!,
         item: (query['item'] ?? '').isEmpty ? null : query['item'],
       ),
+      'my-cards' when second() != null => OrderLink(second()!),
       'my-cards' => const TabLink(CardsTab.myCards),
       'account' => const TabLink(CardsTab.account),
       'privacy' => const PageLink(LinkedPage.privacy),
@@ -128,6 +129,23 @@ final class TabLink extends CardsLink {
 
   @override
   int get hashCode => tab.hashCode;
+}
+
+/// One order in «كروتي»: its card's code, or the order still on its way.
+/// The relay's notification about a late card opens this.
+final class OrderLink extends CardsLink {
+  const OrderLink(this.order);
+
+  final String order;
+
+  @override
+  String get location => '/my-cards/${Uri.encodeComponent(order)}';
+
+  @override
+  bool operator ==(Object other) => other is OrderLink && other.order == order;
+
+  @override
+  int get hashCode => order.hashCode;
 }
 
 enum LinkedPage { privacy, terms, about }

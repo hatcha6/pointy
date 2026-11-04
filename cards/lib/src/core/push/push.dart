@@ -6,7 +6,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../l10n/generated/app_localizations.dart';
 import '../../features/links/link_inbox.dart';
 import '../analytics/analytics.dart';
 import '../analytics/events.dart';
@@ -22,14 +21,53 @@ import 'firebase_options.dart';
 /// opens that place when tapped, as the link itself would; `campaign` names
 /// the message in analytics.
 ///
+/// The relay also tells a customer how an order ended that they walked away
+/// from (a card a supplier delivered minutes late, or one refunded): `order`
+/// names it, and `link` opens it in «كروتي».
+///
 /// The phone's own question is asked once, after the customer's first card
 /// is revealed: by then a notification is worth something to them. The
 /// account page has the switch.
 class Push extends ChangeNotifier {
   Push();
 
-  /// Shows what arrives while the app is open, where the phone would not.
+  /// The app's messenger, for the pages' own notes along the bottom.
   final GlobalKey<ScaffoldMessengerState> messenger = GlobalKey();
+
+  /// A message that arrived while the app is open, shown by the app itself
+  /// along the top ([InAppNotices]); null when none is up.
+  final ValueNotifier<PushNotice?> notice = ValueNotifier(null);
+
+  final Map<String, List<bool Function()>> _showing = {};
+
+  /// A page showing [order] says so while it is up: the order's own message
+  /// then stays quiet, since the page already has what it says. [onScreen]
+  /// answers whether the page is the one in front right now. The returned
+  /// call stops.
+  VoidCallback watch(String order, bool Function() onScreen) {
+    _showing.putIfAbsent(order, () => []).add(onScreen);
+    return () {
+      final pages = _showing[order];
+      pages?.remove(onScreen);
+      if (pages != null && pages.isEmpty) {
+        _showing.remove(order);
+      }
+    };
+  }
+
+  /// Whether a page in front is showing [order].
+  bool showing(String order) =>
+      order.isNotEmpty &&
+      (_showing[order]?.any((onScreen) => onScreen()) ?? false);
+
+  /// Puts up a message that arrived while the app is open, unless it is
+  /// about an order already on screen.
+  void arrived(PushNotice message) {
+    if (showing(message.order)) {
+      return;
+    }
+    notice.value = message;
+  }
 
   /// Whether this build has notifications at all (not the web, not tests).
   bool get available => false;
@@ -52,6 +90,25 @@ class Push extends ChangeNotifier {
 
   /// A new token, when Firebase replaces this device's.
   Stream<String> get tokenChanges => const Stream.empty();
+}
+
+/// A message to show inside the app.
+class PushNotice {
+  const PushNotice({
+    required this.title,
+    required this.body,
+    this.order = '',
+    this.onOpen,
+  });
+
+  final String title;
+  final String body;
+
+  /// The order it is about, if any.
+  final String order;
+
+  /// Opens what it is about; null when it opens nothing.
+  final VoidCallback? onOpen;
 }
 
 /// No notifications: the web build, tests and the preview harness.
@@ -113,11 +170,12 @@ class FirebasePush extends Push {
       await Firebase.initializeApp(options: options);
       _on = await preferences?.getBool(_onKey) ?? true;
       final messaging = FirebaseMessaging.instance;
-      // An iPhone shows a message that arrives while the app is open, too.
+      // A message that arrives while the app is open is the app's to show:
+      // it knows when the customer is already looking at what it says.
       await messaging.setForegroundNotificationPresentationOptions(
-        alert: true,
+        alert: false,
         badge: true,
-        sound: true,
+        sound: false,
       );
       FirebaseMessaging.onMessageOpenedApp.listen(_opened);
       FirebaseMessaging.onMessage.listen(_arrived);
@@ -268,32 +326,21 @@ class FirebasePush extends Push {
     }
   }
 
-  /// A message while the app is open: an iPhone shows it itself; Android
-  /// leaves it to the app, which shows it along the bottom.
+  /// A message while the app is open, on either phone: the app shows it.
   void _arrived(RemoteMessage message) {
     final notification = message.notification;
-    final state = messenger.currentState;
-    if (defaultTargetPlatform == TargetPlatform.iOS ||
-        notification == null ||
-        state == null) {
+    if (notification == null) {
       return;
     }
-    final l10n = AppLocalizations.of(state.context);
     final link = Uri.tryParse(message.data['link']?.toString() ?? '');
-    state.showSnackBar(
-      SnackBar(
-        content: Text(
-          [
-            notification.title,
-            notification.body,
-          ].whereType<String>().where((s) => s.isNotEmpty).join('\n'),
-        ),
-        action: link == null || !link.hasAbsolutePath
+    arrived(
+      PushNotice(
+        title: notification.title ?? '',
+        body: notification.body ?? '',
+        order: message.data['order']?.toString() ?? '',
+        onOpen: link == null || !link.hasAbsolutePath
             ? null
-            : SnackBarAction(
-                label: l10n.notificationOpenAction,
-                onPressed: () => _opened(message),
-              ),
+            : () => _opened(message),
       ),
     );
   }

@@ -6,6 +6,7 @@ import '../../core/money.dart';
 import '../../core/result.dart';
 import '../api/relay_api.dart';
 import '../../features/card_payment/moamalat_client.dart';
+import '../models/account_target.dart';
 import '../models/order.dart';
 
 /// What the checkout sends to place an order.
@@ -19,6 +20,7 @@ class OrderRequest {
     this.method = '',
     this.payerIdentifier = '',
     this.birthYear = '',
+    this.account = const {},
   });
 
   final String itemKey;
@@ -33,6 +35,9 @@ class OrderRequest {
   final String method;
   final String payerIdentifier;
   final String birthYear;
+
+  /// The account a top-up is sent to, by the brand's target fields.
+  final Map<String, String> account;
 }
 
 /// Orders, payment and the customer's credit.
@@ -79,6 +84,7 @@ class OrdersRepository {
             if (request.payerIdentifier.isNotEmpty)
               'user_identifier': request.payerIdentifier,
             if (request.birthYear.isNotEmpty) 'birth_year': request.birthYear,
+            if (request.account.isNotEmpty) 'account': request.account,
           },
         );
         changes.value++;
@@ -87,6 +93,21 @@ class OrdersRepository {
         _placed[order.id] = OrderStatus.awaitingPayment;
         return _track(order);
       });
+
+  /// Looks up the account a top-up would go to, before anything is paid:
+  /// the player's name when the game gives it. Nothing is ordered.
+  Future<Result<AccountCheck>> checkAccount(
+    String itemKey,
+    Map<String, String> account,
+  ) => Result.guard(() async {
+    return AccountCheck.fromJson(
+      await api.post(
+        '/v1/customers/accounts/check',
+        signedIn: true,
+        body: {'item': itemKey, 'account': account},
+      ),
+    );
+  });
 
   Future<Result<CardOrder>> confirm(String orderId, String otp) =>
       Result.guard(() async {

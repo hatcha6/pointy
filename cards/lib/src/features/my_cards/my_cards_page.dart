@@ -19,10 +19,13 @@ import '../../shared/relay_error_text.dart';
 import '../../shared/skeleton.dart';
 import '../orders/order_progress_page.dart';
 import '../reveal/reveal_page.dart';
+import '../topup/topup_done_page.dart';
+import '../topup/topup_text.dart';
 import '../sign_in/sign_in_sheet.dart';
 import '../../shared/haptics.dart';
 import '../shell/cards_tab_bar.dart';
 import '../../core/analytics/analytics.dart';
+import '../../shared/name_text.dart';
 
 /// What the list shows. «الكل» is the cards themselves: purchases that did
 /// not go through only clutter it, so they wait under their own filter.
@@ -107,7 +110,12 @@ class _MyCardsPageState extends State<MyCardsPage> {
     });
   }
 
+  /// Nothing of it is left to use: every code marked used, or a top-up
+  /// already on its account.
   bool _allUsed(CardOrder order) {
+    if (order.toAccount) {
+      return true;
+    }
     final codes = _saved[order.id];
     return codes != null &&
         codes.isNotEmpty &&
@@ -115,18 +123,7 @@ class _MyCardsPageState extends State<MyCardsPage> {
   }
 
   Future<void> _open(CardOrder order) async {
-    final brand = CardsScope.of(context).catalog.brandOf(order.brandKey);
-    if (order.status == OrderStatus.delivered) {
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          settings: screenSettings('card'),
-          builder: (_) =>
-              RevealPage(order: order, brand: brand, fromHistory: true),
-        ),
-      );
-    } else {
-      await OrderProgressPage.open(context, order: order, brand: brand);
-    }
+    await openCardOrder(context, order);
     if (mounted) {
       await _load();
     }
@@ -379,11 +376,20 @@ class _OrderRow extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final brand = CardsScope.of(context).catalog.brandOf(order.brandKey);
+    final kind = kindKey(brand?.target?.kind);
     final (status, tone) = switch (order.status) {
+      OrderStatus.delivered when order.toAccount => (
+        l10n.statusToppedUp(kind),
+        PillTone.success,
+      ),
       OrderStatus.delivered => (used ? l10n.usedBadge : null, PillTone.muted),
       OrderStatus.awaitingPayment => (
         l10n.statusAwaitingPayment,
         PillTone.warning,
+      ),
+      OrderStatus.paid || OrderStatus.fulfilling when order.toAccount => (
+        l10n.statusToppingUp,
+        PillTone.info,
       ),
       OrderStatus.paid ||
       OrderStatus.fulfilling => (l10n.statusPreparing, PillTone.info),
@@ -414,7 +420,8 @@ class _OrderRow extends StatelessWidget {
                       brand: brand,
                       radius: 10,
                       shadow: false,
-                      muted: used,
+                      // A top-up on its account is done, not spent.
+                      muted: used && !order.toAccount,
                     ),
             ),
             const SizedBox(width: CardsSpace.md),
@@ -422,7 +429,7 @@ class _OrderRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
+                  NameText(
                     order.name,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -432,14 +439,24 @@ class _OrderRow extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '${l10n.cardCount(order.quantity)} · ${formatMoney(l10n, order.total)}',
+                    order.toAccount && order.account.isNotEmpty
+                        ? '${l10n.orderTo(isolated(accountShown(order.account)))} · ${formatMoney(l10n, order.total)}'
+                        : '${l10n.cardCount(order.quantity)} · ${formatMoney(l10n, order.total)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
                   if (status != null) ...[
                     const SizedBox(height: CardsSpace.sm),
-                    Pill(text: status, tone: tone),
+                    // Smaller rather than cut off in a narrow row at a large
+                    // text size.
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: AlignmentDirectional.centerStart,
+                      child: Pill(text: status, tone: tone),
+                    ),
                   ],
                 ],
               ),
@@ -452,5 +469,30 @@ class _OrderRow extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Opens one order as «كروتي» does: a delivered card shows its code (behind
+/// the phone's lock, when the customer set one), and an order still on its
+/// way shows how it is going.
+Future<void> openCardOrder(BuildContext context, CardOrder order) async {
+  final brand = CardsScope.of(context).catalog.brandOf(order.brandKey);
+  if (order.toppedUp) {
+    await TopUpDonePage.open(
+      context,
+      order: order,
+      brand: brand,
+      fromHistory: true,
+    );
+  } else if (order.status == OrderStatus.delivered) {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        settings: screenSettings('card'),
+        builder: (_) =>
+            RevealPage(order: order, brand: brand, fromHistory: true),
+      ),
+    );
+  } else {
+    await OrderProgressPage.open(context, order: order, brand: brand);
   }
 }

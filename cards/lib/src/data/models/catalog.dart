@@ -1,4 +1,5 @@
 import '../../core/money.dart';
+import 'account_target.dart';
 import 'json.dart';
 
 /// The card shelf as the relay shows this app build (`GET
@@ -24,7 +25,14 @@ class CardCatalog {
     countries: [
       for (final c in readList(json, 'countries')) CardCountry.fromJson(c),
     ],
-    brands: [for (final b in readList(json, 'brands')) CardBrand.fromJson(b)],
+    brands: [
+      for (final b in readList(json, 'brands'))
+        // A card sent to an account this build cannot ask for is left off,
+        // never sold without its account.
+        if (b['target'] == null ||
+            AccountTarget.fromJson(readMap(b, 'target')) != null)
+          CardBrand.fromJson(b),
+    ],
   );
 
   static const empty = CardCatalog(
@@ -101,9 +109,12 @@ class CardBrand {
     required this.featured,
     required this.badge,
     required this.redeemHint,
+    this.redeem,
     required this.logo,
     required this.items,
     this.webOnly = false,
+    this.platform = '',
+    this.target,
   });
 
   factory CardBrand.fromJson(Map<String, dynamic> json) => CardBrand(
@@ -118,9 +129,14 @@ class CardBrand {
     featured: readBool(json, 'featured'),
     badge: readString(json, 'badge'),
     redeemHint: readString(json, 'redeem_hint'),
+    redeem: CardRedeem.fromJson(json['redeem']),
     logo: readString(json, 'logo'),
     items: [for (final i in readList(json, 'items')) CardItem.fromJson(i)],
     webOnly: readBool(json, 'web_only'),
+    platform: readString(json, 'platform'),
+    target: json['target'] is Map<String, dynamic>
+        ? AccountTarget.fromJson(json['target'] as Map<String, dynamic>)
+        : null,
   );
 
   final String key;
@@ -132,6 +148,9 @@ class CardBrand {
   final String badge;
   final String redeemHint;
 
+  /// What the app does with a bought code; null where only the hint is known.
+  final CardRedeem? redeem;
+
   /// The card art reference, or empty when the brand has none.
   final String logo;
   final List<CardItem> items;
@@ -140,6 +159,22 @@ class CardBrand {
   /// build may not sell gift cards (guideline 3.1.1), so it lists them with
   /// their prices and no way to pay.
   final bool webOnly;
+
+  /// The store a game is played on ("steam", "xbox", "ea", "rockstar");
+  /// empty for every other card.
+  final String platform;
+
+  /// The store a game key (or a Steam gift) is played on, which its tile
+  /// names; null for every other card, and for a store this build has no
+  /// badge for.
+  GamePlatform? get gamePlatform => GamePlatform.parse(platform);
+
+  /// What the buyer types for a card sent straight to an account (a game's
+  /// player ID, a Telegram username); null for a card that is a code.
+  final AccountTarget? target;
+
+  /// Credit sent to an account, bought one at a time, with no code.
+  bool get toAccount => target != null;
 
   bool get anyAvailable => items.any((item) => item.available);
 
@@ -203,4 +238,73 @@ class CardItem {
 
 extension on Money {
   bool operator >(Money other) => compareTo(other) > 0;
+}
+
+/// The stores the relay names a game's platform by, each with its mark.
+enum GamePlatform {
+  steam('assets/brands/steam.png'),
+  xbox('assets/brands/xbox.png'),
+  ea('assets/brands/ea.png'),
+  rockstar('assets/brands/rockstar.png');
+
+  const GamePlatform(this.mark);
+
+  /// The store's own logo, in its colours.
+  final String mark;
+
+  static GamePlatform? parse(String raw) =>
+      values.where((p) => p.name == raw.trim()).firstOrNull;
+}
+
+/// How a brand's code is redeemed from the phone: what it dials, or the
+/// issuer's page (`core/redeem.dart` turns it into a step for one code).
+class CardRedeem {
+  const CardRedeem({
+    required this.kind,
+    required this.template,
+    this.byCountry = const {},
+    this.pattern,
+  });
+
+  /// Null for anything that is not a usable redeem: one wrong entry in the
+  /// catalog costs a button, not the shelf.
+  static CardRedeem? fromJson(Object? json) {
+    if (json is! Map<String, dynamic>) {
+      return null;
+    }
+    final kind = readString(json, 'kind');
+    final template = readString(json, 'template');
+    if (kind.isEmpty || template.isEmpty) {
+      return null;
+    }
+    RegExp? pattern;
+    final source = readString(json, 'pattern');
+    if (source.isNotEmpty) {
+      try {
+        pattern = RegExp('^(?:$source)\$');
+      } on FormatException {
+        return null;
+      }
+    }
+    return CardRedeem(
+      kind: kind,
+      template: template,
+      byCountry: {
+        for (final MapEntry(:key, :value) in readMap(
+          json,
+          'by_country',
+        ).entries)
+          if (value is String) key: value,
+      },
+      pattern: pattern,
+    );
+  }
+
+  /// Stands for the code in a template.
+  static const String placeholder = '{code}';
+
+  final String kind;
+  final String template;
+  final Map<String, String> byCountry;
+  final RegExp? pattern;
 }

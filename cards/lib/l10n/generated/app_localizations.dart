@@ -622,6 +622,36 @@ abstract class AppLocalizations {
   /// **'عادةً خلال ثوانٍ. يمكنك إغلاق التطبيق، وسيُحفظ الكرت في «كروتي».'**
   String get preparingBody;
 
+  /// Order paid, the card still not here after a few minutes.
+  ///
+  /// In ar, this message translates to:
+  /// **'يتأخر المورّد هذه المرة'**
+  String get preparingSlowTitle;
+
+  /// Slow order, notifications on: the customer may leave.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا داعي للانتظار هنا: حين يجهز طلبك نرسل لك إشعاراً يفتحه مباشرةً في «كروتي».'**
+  String get preparingSlowNotify;
+
+  /// Slow order, notifications off: offer to turn them on.
+  ///
+  /// In ar, this message translates to:
+  /// **'فعّل الإشعارات ونخبرك حين يجهز طلبك، أو عُد إليه لاحقاً في «كروتي».'**
+  String get preparingSlowAsk;
+
+  /// Slow order, no notifications on this device.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا داعي للانتظار هنا: تجد طلبك في «كروتي» حين يجهز.'**
+  String get preparingSlowLater;
+
+  /// Leave the waiting screen for the My cards tab.
+  ///
+  /// In ar, this message translates to:
+  /// **'اذهب إلى «كروتي»'**
+  String get goToMyCards;
+
   /// Paid but no card: refunded to credit.
   ///
   /// In ar, this message translates to:
@@ -700,6 +730,24 @@ abstract class AppLocalizations {
   /// **'تم نسخ الرابط'**
   String get linkCopiedNotice;
 
+  /// No description provided for @redeemAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'استرداد'**
+  String get redeemAction;
+
+  /// No description provided for @dialCopiedNotice.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم نسخ كود الشحن. الصقه في تطبيق الهاتف ثم اضغط اتصال.'**
+  String get dialCopiedNotice;
+
+  /// No description provided for @redeemCopiedNotice.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم نسخ الرقم السري. إن لم يظهر في الصفحة فالصقه هناك.'**
+  String get redeemCopiedNotice;
+
   /// Open the dialer with the recharge code.
   ///
   /// In ar, this message translates to:
@@ -711,6 +759,12 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'رمز QR'**
   String get showQr;
+
+  /// No description provided for @qrRevealHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'المس الكرت لإظهار رمز QR'**
+  String get qrRevealHint;
 
   /// Beside the QR on the card's back: what the QR is for.
   ///
@@ -1594,7 +1648,7 @@ abstract class AppLocalizations {
   /// **'لم تكتمل'**
   String get filterIncomplete;
 
-  /// Badge on a card the iPhone app lists but cannot sell: it is bought on the website.
+  /// Badge on a card a store build (iPhone, Google Play) lists but cannot sell: it is bought on the website.
   ///
   /// In ar, this message translates to:
   /// **'على الموقع'**
@@ -1609,8 +1663,524 @@ abstract class AppLocalizations {
   /// Brand page: where a website-only card is bought.
   ///
   /// In ar, this message translates to:
-  /// **'هذه البطاقة لا تُشترى من تطبيق الآيفون. تجدها على موقعنا cards.dftr.ly'**
+  /// **'هذه البطاقة لا تُشترى من هذا التطبيق. تجدها على موقعنا cards.dftr.ly'**
   String get webOnlyBody;
+
+  /// Badge, with Steam's logo, on a game played on Steam: a Steam key or a game sent as a Steam gift.
+  ///
+  /// In ar, this message translates to:
+  /// **'ستيم'**
+  String get steamBadge;
+
+  /// Badge, with Xbox's logo, on a game key activated on Xbox or the Microsoft Store.
+  ///
+  /// In ar, this message translates to:
+  /// **'إكس بوكس'**
+  String get xboxBadge;
+
+  /// Badge, with EA's logo, on a game key activated in the EA app. EA is the brand's own name.
+  ///
+  /// In ar, this message translates to:
+  /// **'EA'**
+  String get eaBadge;
+
+  /// Badge, with Rockstar Games' logo, on a game key activated with a Rockstar Games account.
+  ///
+  /// In ar, this message translates to:
+  /// **'روكستار'**
+  String get rockstarBadge;
+
+  /// First-run question: how the customer found the app.
+  ///
+  /// In ar, this message translates to:
+  /// **'من أين سمعت عن دفتر كروت؟'**
+  String get heardFromTitle;
+
+  /// No description provided for @heardFromBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر جواباً واحداً، يساعدنا على الوصول لمن يحتاج التطبيق.'**
+  String get heardFromBody;
+
+  /// No description provided for @heardFromFacebook.
+  ///
+  /// In ar, this message translates to:
+  /// **'فيسبوك'**
+  String get heardFromFacebook;
+
+  /// No description provided for @heardFromInstagram.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنستغرام'**
+  String get heardFromInstagram;
+
+  /// No description provided for @heardFromTiktok.
+  ///
+  /// In ar, this message translates to:
+  /// **'تيك توك'**
+  String get heardFromTiktok;
+
+  /// No description provided for @heardFromWhatsapp.
+  ///
+  /// In ar, this message translates to:
+  /// **'واتساب'**
+  String get heardFromWhatsapp;
+
+  /// No description provided for @heardFromFriend.
+  ///
+  /// In ar, this message translates to:
+  /// **'صديق أو قريب'**
+  String get heardFromFriend;
+
+  /// No description provided for @heardFromShop.
+  ///
+  /// In ar, this message translates to:
+  /// **'محل'**
+  String get heardFromShop;
+
+  /// No description provided for @heardFromBillboard.
+  ///
+  /// In ar, this message translates to:
+  /// **'لوحة إعلانية'**
+  String get heardFromBillboard;
+
+  /// No description provided for @heardFromStoreSearch.
+  ///
+  /// In ar, this message translates to:
+  /// **'البحث في المتجر'**
+  String get heardFromStoreSearch;
+
+  /// No description provided for @heardFromOther.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير ذلك'**
+  String get heardFromOther;
+
+  /// Field for a campaign code.
+  ///
+  /// In ar, this message translates to:
+  /// **'عندك رمز من إعلان أو صديق؟'**
+  String get campaignCodeLabel;
+
+  /// No description provided for @campaignCodeHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثل UNI1'**
+  String get campaignCodeHint;
+
+  /// No description provided for @campaignCodeCheck.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحقّق'**
+  String get campaignCodeCheck;
+
+  /// No description provided for @campaignCodeUnknown.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا الرمز غير معروف أو انتهى.'**
+  String get campaignCodeUnknown;
+
+  /// No description provided for @campaignCodeValid.
+  ///
+  /// In ar, this message translates to:
+  /// **'رمز صحيح، شكراً لك.'**
+  String get campaignCodeValid;
+
+  /// A valid code with a reward, before sign-in.
+  ///
+  /// In ar, this message translates to:
+  /// **'رمز صحيح: يُضاف {amount} إلى رصيدك حين تسجّل الدخول.'**
+  String campaignCodeRewardLater(String amount);
+
+  /// A valid code with a reward, signed in.
+  ///
+  /// In ar, this message translates to:
+  /// **'رمز صحيح: يُضاف {amount} إلى رصيدك.'**
+  String campaignCodeRewardNow(String amount);
+
+  /// A followed campaign link with a reward, shown in the question.
+  ///
+  /// In ar, this message translates to:
+  /// **'وصلت برمز {code}: يُضاف {amount} إلى رصيدك حين تسجّل الدخول.'**
+  String campaignLinkReward(String code, String amount);
+
+  /// After sign-in: a campaign's credit landed.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُضيف {amount} إلى رصيدك'**
+  String rewardTitle(String amount);
+
+  /// No description provided for @rewardBecauseCode.
+  ///
+  /// In ar, this message translates to:
+  /// **'لأنك استخدمت الرمز {code}.'**
+  String rewardBecauseCode(String code);
+
+  /// No description provided for @rewardBecauseCreator.
+  ///
+  /// In ar, this message translates to:
+  /// **'لأنك جئت عن طريق {name}.'**
+  String rewardBecauseCreator(String name);
+
+  /// No description provided for @rewardBecauseCreatorUnnamed.
+  ///
+  /// In ar, this message translates to:
+  /// **'لأنك جئت عن طريق صانع محتوى نتعاون معه.'**
+  String get rewardBecauseCreatorUnnamed;
+
+  /// No description provided for @rewardBecauseFlyer.
+  ///
+  /// In ar, this message translates to:
+  /// **'لأنك مسحت رمز {name}.'**
+  String rewardBecauseFlyer(String name);
+
+  /// No description provided for @rewardBecauseFlyerUnnamed.
+  ///
+  /// In ar, this message translates to:
+  /// **'لأنك مسحت رمز الملصق.'**
+  String get rewardBecauseFlyerUnnamed;
+
+  /// No description provided for @rewardBecauseBillboardUnnamed.
+  ///
+  /// In ar, this message translates to:
+  /// **'لأنك مسحت رمز اللوحة الإعلانية.'**
+  String get rewardBecauseBillboardUnnamed;
+
+  /// No description provided for @rewardBecauseInvite.
+  ///
+  /// In ar, this message translates to:
+  /// **'لأنك جئت بدعوة من {name}.'**
+  String rewardBecauseInvite(String name);
+
+  /// No description provided for @rewardBecauseInviteUnnamed.
+  ///
+  /// In ar, this message translates to:
+  /// **'لأنك جئت بدعوة صديق.'**
+  String get rewardBecauseInviteUnnamed;
+
+  /// No description provided for @rewardBecauseAd.
+  ///
+  /// In ar, this message translates to:
+  /// **'لأنك جئت من إعلاننا.'**
+  String get rewardBecauseAd;
+
+  /// No description provided for @rewardBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُخصم تلقائياً من سعر كرتك القادم، دون أي رسوم.'**
+  String get rewardBody;
+
+  /// No description provided for @rewardAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسوّق الآن'**
+  String get rewardAction;
+
+  /// Brand page pill: credit sent straight to an account, no code.
+  ///
+  /// In ar, this message translates to:
+  /// **'{kind, select, invite{هدية على حسابك} other{شحن مباشر}}'**
+  String topUpPill(String kind);
+
+  /// Brand page: heading of the account a top-up goes to.
+  ///
+  /// In ar, this message translates to:
+  /// **'{kind, select, telegram{حساب تيليجرام} steam{حساب ستيم} invite{حساب ستيم} other{حساب اللاعب}}'**
+  String topUpAccountTitle(String kind);
+
+  /// Brand page: how a top-up arrives.
+  ///
+  /// In ar, this message translates to:
+  /// **'{kind, select, telegram{تصل مباشرة إلى الحساب، دون رمز تُدخله.} steam{يُضاف الرصيد مباشرة إلى محفظتك في ستيم.} invite{تصلك اللعبة هدية على حسابك في ستيم، دون رمز تُدخله.} other{يصل الشحن مباشرة إلى حسابك في اللعبة، دون رمز تُدخله.}}'**
+  String topUpAccountBody(String kind);
+
+  /// Brand page: opens the help on finding the account.
+  ///
+  /// In ar, this message translates to:
+  /// **'{kind, select, telegram{أين أجد اسم المستخدم؟} steam{ما اسم الدخول؟} invite{كيف أحصل على الرابط؟} other{أين أجد المعرّف؟}}'**
+  String topUpHintTitle(String kind);
+
+  /// Brand page heading for a top-up's amounts.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر الكمية'**
+  String get chooseAmount;
+
+  /// Accounts this phone topped up before.
+  ///
+  /// In ar, this message translates to:
+  /// **'حساباتك'**
+  String get savedAccounts;
+
+  /// Start typing an account not used before.
+  ///
+  /// In ar, this message translates to:
+  /// **'حساب آخر'**
+  String get otherAccount;
+
+  /// Removes a saved account (screen readers).
+  ///
+  /// In ar, this message translates to:
+  /// **'انسَ {account}'**
+  String forgetAccount(String account);
+
+  /// Paste from the clipboard.
+  ///
+  /// In ar, this message translates to:
+  /// **'لصق'**
+  String get pasteAction;
+
+  /// Placeholder of a choice field.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر'**
+  String get chooseOption;
+
+  /// A typed account field is empty.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل {field}'**
+  String accountRequired(String field);
+
+  /// A choice field is empty.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر {field}'**
+  String accountChoose(String field);
+
+  /// An account field is too long.
+  ///
+  /// In ar, this message translates to:
+  /// **'أطول مما يجب.'**
+  String get accountTooLong;
+
+  /// Not a Telegram username.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم المستخدم من 5 إلى 32 حرفاً إنجليزياً أو رقماً أو _، ويبدأ بحرف.'**
+  String get accountNotTelegram;
+
+  /// Not a Steam login.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم الدخول حروف إنجليزية وأرقام و _ فقط، دون مسافات.'**
+  String get accountNotSteamLogin;
+
+  /// Not a Steam friend invite link.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا ليس رابط دعوة من ستيم. انسخ «رابط الدعوة السريعة» من ستيم كما هو والصقه هنا.'**
+  String get accountNotInvite;
+
+  /// The account is being looked up.
+  ///
+  /// In ar, this message translates to:
+  /// **'نتحقق من الحساب…'**
+  String get accountChecking;
+
+  /// The game found the account under this name.
+  ///
+  /// In ar, this message translates to:
+  /// **'اللاعب: {name}'**
+  String accountPlayer(String name);
+
+  /// The account exists (no name given).
+  ///
+  /// In ar, this message translates to:
+  /// **'{kind, select, steam{يمكن شحن هذا الحساب} other{وجدنا الحساب}}'**
+  String accountFound(String kind);
+
+  /// The game has no such account.
+  ///
+  /// In ar, this message translates to:
+  /// **'{kind, select, steam{لا يمكن شحن حساب ستيم هذا. تأكد من اسم الدخول.} other{لا يوجد حساب بهذا المعرّف. تأكد منه في ملفك داخل اللعبة.}}'**
+  String accountNotFound(String kind);
+
+  /// The look-up could not tell.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر التأكد من الحساب الآن. راجعه جيداً قبل الدفع.'**
+  String get accountUnconfirmed;
+
+  /// Checkout: the account cannot be looked up, so check it.
+  ///
+  /// In ar, this message translates to:
+  /// **'{kind, select, invite{تأكد من الرابط: تُرسل الهدية إلى صاحبه.} telegram{تأكد من اسم المستخدم: تُرسل إليه مباشرة ولا تُسترجع.} other{تأكد من المعرّف: يصل الشحن إليه مباشرة ولا يُسترجع.}}'**
+  String accountUnchecked(String kind);
+
+  /// Brand page buy button for a card sent to an account.
+  ///
+  /// In ar, this message translates to:
+  /// **'{kind, select, invite{اشترِ} telegram{اشترِ} other{اشحن}}'**
+  String topUpAction(String kind);
+
+  /// Buy bar: where the top-up goes.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلى {account}'**
+  String buyBarTo(String account);
+
+  /// Buy bar: the account is still to be typed.
+  ///
+  /// In ar, this message translates to:
+  /// **'{kind, select, telegram{أدخل اسم المستخدم} steam{أدخل اسم الدخول} invite{الصق رابط الدعوة} other{أدخل المعرّف}}'**
+  String buyBarNeedsAccount(String kind);
+
+  /// Checkout: label of the account row.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلى'**
+  String get sendToLabel;
+
+  /// Edit what was typed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعديل'**
+  String get editAction;
+
+  /// Order paid, the top-up on its way.
+  ///
+  /// In ar, this message translates to:
+  /// **'{kind, select, invite{نرسل لك الهدية…} other{نشحن الحساب…}}'**
+  String topUpPreparingTitle(String kind);
+
+  /// Order paid, the top-up on its way.
+  ///
+  /// In ar, this message translates to:
+  /// **'{kind, select, invite{يصلك من ستيم طلب صداقة ثم الهدية: اقبلهما حين يصلان.} other{نرسل {item} إلى {account}. يصل عادةً خلال دقيقة أو دقيقتين.}}'**
+  String topUpPreparingBody(String kind, String item, String account);
+
+  /// Top-up paid, still not arrived after a few minutes.
+  ///
+  /// In ar, this message translates to:
+  /// **'يتأخر الشحن هذه المرة'**
+  String get topUpSlowTitle;
+
+  /// Paid but the top-up failed: refunded to credit.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يكتمل الشحن'**
+  String get topUpRefundedTitle;
+
+  /// Refund of a failed top-up.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يصل الشحن إلى الحساب، فأعدنا {amount} إلى رصيدك. تأكد من الحساب ثم حاول مجدداً.'**
+  String topUpRefundedBody(String amount);
+
+  /// A top-up arrived.
+  ///
+  /// In ar, this message translates to:
+  /// **'{kind, select, invite{أُرسلت الهدية} other{تمّ الشحن}}'**
+  String toppedUpTitle(String kind);
+
+  /// Receipt row: the account.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلى'**
+  String get receiptTo;
+
+  /// Receipt row: the player's name.
+  ///
+  /// In ar, this message translates to:
+  /// **'اللاعب'**
+  String get receiptPlayer;
+
+  /// Receipt row: what was paid.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ'**
+  String get receiptPaid;
+
+  /// Receipt row: when.
+  ///
+  /// In ar, this message translates to:
+  /// **'الوقت'**
+  String get receiptWhen;
+
+  /// Receipt row: the order's number.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم الطلب'**
+  String get receiptOrder;
+
+  /// Receipt: what to do now.
+  ///
+  /// In ar, this message translates to:
+  /// **'ماذا بعد؟'**
+  String get whatNextTitle;
+
+  /// Receipt: what to do after a top-up.
+  ///
+  /// In ar, this message translates to:
+  /// **'{kind, select, telegram{افتح تيليجرام: تجدها في حسابك خلال دقائق.} steam{افتح ستيم: يظهر الرصيد في محفظتك خلال دقائق.} invite{من ستيم: اقبل طلب الصداقة الذي يصلك، ثم الهدية من الإشعارات. تصل الهدية بعد قبول الصداقة بدقائق.} other{افتح اللعبة: يظهر الرصيد في حسابك خلال دقائق. إن لم يظهر، أغلق اللعبة وافتحها من جديد.}}'**
+  String topUpNext(String kind);
+
+  /// Receipt: buy the same again.
+  ///
+  /// In ar, this message translates to:
+  /// **'{kind, select, invite{اشترِ هدية أخرى} other{اشحن مجدداً}}'**
+  String topUpAgain(String kind);
+
+  /// Receipt: support link.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يصلك؟ راسلنا على واتساب'**
+  String get topUpHelp;
+
+  /// Prefilled support message.
+  ///
+  /// In ar, this message translates to:
+  /// **'مرحباً، الطلب رقم {order} لم يصل إلى الحساب.'**
+  String topUpHelpMessage(String order);
+
+  /// Snackbar after copying the order number.
+  ///
+  /// In ar, this message translates to:
+  /// **'نُسخ رقم الطلب'**
+  String get orderIdCopied;
+
+  /// Order status chip: sent to the account.
+  ///
+  /// In ar, this message translates to:
+  /// **'{kind, select, invite{أُرسلت الهدية} other{تمّ الشحن}}'**
+  String statusToppedUp(String kind);
+
+  /// Order status chip: top-up on its way.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيد الشحن'**
+  String get statusToppingUp;
+
+  /// My cards row: where a top-up went.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلى {account}'**
+  String orderTo(String account);
+
+  /// Swipe action: forget a saved account.
+  ///
+  /// In ar, this message translates to:
+  /// **'إزالة'**
+  String get removeAccount;
+
+  /// Snackbar after forgetting a saved account.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُزيل {account} من هذا الهاتف'**
+  String accountRemoved(String account);
+
+  /// Undo the last step.
+  ///
+  /// In ar, this message translates to:
+  /// **'تراجع'**
+  String get undoAction;
+
+  /// Brand page heading for a game's editions.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر الإصدار'**
+  String get chooseEdition;
 }
 
 class _AppLocalizationsDelegate

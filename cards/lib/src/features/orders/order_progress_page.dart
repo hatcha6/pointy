@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -13,7 +15,11 @@ import '../../shared/cards_scope.dart';
 import '../../shared/haptics.dart';
 import '../../shared/money_text.dart';
 import '../card_payment/card_payment_page.dart';
+import '../links/cards_link.dart';
 import '../reveal/reveal_page.dart';
+import '../topup/topup_done_page.dart';
+import '../topup/account_line.dart';
+import '../topup/topup_text.dart';
 import '../../shared/side_back.dart';
 import 'order_outcome_panel.dart';
 import 'order_watcher.dart';
@@ -38,12 +44,19 @@ class OrderProgressPage extends StatefulWidget {
   /// order.
   final bool openPaymentPage;
 
+  /// Past this a card is late (most come in seconds), and the page says the
+  /// customer need not wait for it.
+  static const slowAfter = Duration(minutes: 3);
+
   static Future<void> open(
     BuildContext context, {
     required CardOrder order,
     CardBrand? brand,
   }) {
     final dependencies = CardsScope.of(context);
+    if (order.toppedUp) {
+      return TopUpDonePage.open(context, order: order, brand: brand);
+    }
     if (order.status == OrderStatus.delivered && order.codes.isNotEmpty) {
       dependencies.vault.keep(order.id, order.codes);
       return Navigator.of(context).push(
@@ -90,12 +103,30 @@ class _OrderProgressPageState extends State<OrderProgressPage>
   /// Calling the order off after the customer closed the card form.
   bool _cancelling = false;
 
+  /// Stops telling the app this order is on screen.
+  VoidCallback? _unwatch;
+
+  /// The order and the push switch, which changes what a late card's panel
+  /// says. Built once: a new one each build would subscribe again, even to
+  /// a watcher disposed while the page animates away.
+  Listenable? _changes;
+
+  /// The card is taking long enough that the customer is told they need
+  /// not wait for it here.
+  bool _slow = false;
+  Timer? _slowTimer;
+
+  /// When this page first saw the card on its way, for an order whose
+  /// payment time is not known.
+  DateTime? _preparingSince;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _lastOutcome = _outcomeOf(widget.watcher.order);
     widget.watcher.addListener(_onChange);
+    _followSlowness();
     final order = widget.watcher.order;
     if (widget.openPaymentPage &&
         order.status == OrderStatus.awaitingPayment &&
@@ -105,11 +136,56 @@ class _OrderProgressPageState extends State<OrderProgressPage>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // The order's own notification stays quiet while this page is in front:
+    // the page turns into the card itself.
+    final push = CardsScope.of(context).push;
+    _unwatch ??= push.watch(
+      widget.watcher.order.id,
+      () => mounted && (ModalRoute.of(context)?.isCurrent ?? false),
+    );
+    _changes ??= Listenable.merge([widget.watcher, push]);
+  }
+
+  @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     widget.watcher.removeListener(_onChange);
+    _unwatch?.call();
+    _slowTimer?.cancel();
     super.dispose();
   }
+
+  /// Starts the clock on a card on its way, and stops it once it is not.
+  void _followSlowness() {
+    final order = widget.watcher.order;
+    if (_outcomeOf(order) != 'preparing') {
+      _slowTimer?.cancel();
+      _slowTimer = null;
+      return;
+    }
+    if (_slow || _slowTimer != null) {
+      return;
+    }
+    final now = DateTime.now();
+    _preparingSince ??= now;
+    final since = order.paidAt ?? _preparingSince!;
+    final left = OrderProgressPage.slowAfter - now.difference(since);
+    _slowTimer = Timer(left.isNegative ? Duration.zero : left, () {
+      if (mounted && _outcomeOf(widget.watcher.order) == 'preparing') {
+        setState(() => _slow = true);
+      }
+    });
+  }
+
+  Future<void> _turnOnNotifications() async {
+    await CardsScope.of(context).push.setEnabled(true);
+  }
+
+  /// Leaves the wait for «كروتي», where the card lands.
+  void _toMyCards() =>
+      CardsScope.of(context).links.deliver(const TabLink(CardsTab.myCards));
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
@@ -120,6 +196,7 @@ class _OrderProgressPageState extends State<OrderProgressPage>
   }
 
   void _onChange() {
+    _followSlowness();
     final order = widget.watcher.order;
     final outcome = _outcomeOf(order);
     if (outcome != _lastOutcome) {
@@ -132,6 +209,17 @@ class _OrderProgressPageState extends State<OrderProgressPage>
     }
     if (_paymentPageOpen && order.status != OrderStatus.awaitingPayment) {
       _closePaymentPage();
+    }
+    if (!_revealed && order.toppedUp) {
+      // On the account: the receipt takes this page's place.
+      _revealed = true;
+      TopUpDonePage.open(
+        context,
+        order: order,
+        brand: widget.brand,
+        replace: true,
+      );
+      return;
     }
     if (!_revealed &&
         order.status == OrderStatus.delivered &&
@@ -250,8 +338,30 @@ class _OrderProgressPageState extends State<OrderProgressPage>
   void _backToShop() =>
       Navigator.of(context).popUntil((route) => route.isFirst);
 
+  /// The brand's account kind, for an order sent to an account: its copy
+  /// speaks of a top-up, not a card.
+  ({String kind, String item, Widget? account})? _topUp(
+    BuildContext context,
+    CardOrder order,
+  ) {
+    final brand =
+        widget.brand ?? CardsScope.of(context).catalog.brandOf(order.brandKey);
+    if (!order.toAccount && brand?.target == null) {
+      return null;
+    }
+    final item = brand?.items.where((i) => i.key == order.itemKey).firstOrNull;
+    return (
+      kind: kindKey(brand?.target?.kind),
+      item: item == null || item.label.isEmpty ? order.name : item.label,
+      account: order.account.isEmpty
+          ? null
+          : AccountLine(kind: brand?.target?.kind, account: order.account),
+    );
+  }
+
   Widget _panel(BuildContext context, CardOrder order) {
     final l10n = AppLocalizations.of(context);
+    final topUp = _topUp(context, order);
     return switch (_outcomeOf(order)) {
       // Paying on Dafa's page: only the relay can tell when it is done.
       'paying' when _usedPaymentPage => OrderOutcomePanel(
@@ -276,6 +386,19 @@ class _OrderProgressPageState extends State<OrderProgressPage>
         secondaryLabel: _cancelling ? null : l10n.cancelOrder,
         onSecondary: _cancel,
       ),
+      'preparing' when _slow => _slowPanel(context, topUp != null),
+      'preparing' when topUp != null => OrderOutcomePanel(
+        brand: widget.brand,
+        busy: true,
+        icon: Icons.bolt_rounded,
+        title: l10n.topUpPreparingTitle(topUp.kind),
+        body: l10n.topUpPreparingBody(
+          topUp.kind,
+          isolatedName(topUp.item),
+          isolated(accountShown(order.account)),
+        ),
+        detail: topUp.account,
+      ),
       'preparing' => OrderOutcomePanel(
         brand: widget.brand,
         busy: true,
@@ -287,8 +410,11 @@ class _OrderProgressPageState extends State<OrderProgressPage>
         brand: widget.brand,
         tone: OutcomeTone.safe,
         icon: Icons.verified_user_rounded,
-        title: l10n.refundedTitle,
-        body: l10n.refundedBody(formatMoney(l10n, order.total)),
+        title: topUp == null ? l10n.refundedTitle : l10n.topUpRefundedTitle,
+        body: topUp == null
+            ? l10n.refundedBody(formatMoney(l10n, order.total))
+            : l10n.topUpRefundedBody(formatMoney(l10n, order.total)),
+        detail: topUp?.account,
         credited: order.total,
         primaryLabel: l10n.backToShop,
         onPrimary: _backToShop,
@@ -315,6 +441,28 @@ class _OrderProgressPageState extends State<OrderProgressPage>
     };
   }
 
+  /// A card running late: the customer may go, and hears when it lands.
+  Widget _slowPanel(BuildContext context, bool topUp) {
+    final l10n = AppLocalizations.of(context);
+    final push = CardsScope.of(context).push;
+    final ask = push.available && !push.enabled;
+    return OrderOutcomePanel(
+      brand: widget.brand,
+      busy: true,
+      icon: Icons.schedule_rounded,
+      title: topUp ? l10n.topUpSlowTitle : l10n.preparingSlowTitle,
+      body: push.enabled
+          ? l10n.preparingSlowNotify
+          : ask
+          ? l10n.preparingSlowAsk
+          : l10n.preparingSlowLater,
+      primaryLabel: ask ? l10n.onboardingNotifyAllow : null,
+      onPrimary: ask ? _turnOnNotifications : null,
+      secondaryLabel: l10n.goToMyCards,
+      onSecondary: _toMyCards,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return SideBack(
@@ -326,7 +474,7 @@ class _OrderProgressPageState extends State<OrderProgressPage>
           automaticallyImplyLeading: !SideBack.active(context),
         ),
         body: ListenableBuilder(
-          listenable: widget.watcher,
+          listenable: _changes!,
           builder: (context, _) {
             final order = widget.watcher.order;
             final theme = Theme.of(context);
@@ -370,7 +518,9 @@ class _OrderProgressPageState extends State<OrderProgressPage>
                                 ),
                               ),
                           child: KeyedSubtree(
-                            key: ValueKey(_outcomeOf(order)),
+                            key: ValueKey(
+                              '${_outcomeOf(order)}${_slow ? '-slow' : ''}',
+                            ),
                             child: _panel(context, order),
                           ),
                         ),

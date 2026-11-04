@@ -179,6 +179,7 @@ class _SignedInState extends State<_SignedIn> {
     await dependencies.auth.signOut();
     await dependencies.vault.clear();
     await dependencies.cards.clear();
+    await dependencies.accounts.clear();
   }
 
   Future<void> _delete() async {
@@ -214,6 +215,7 @@ class _SignedInState extends State<_SignedIn> {
     if (result is Ok) {
       await dependencies.vault.clear();
       await dependencies.cards.clear();
+      await dependencies.accounts.clear();
       messenger.showSnackBar(SnackBar(content: Text(l10n.accountDeleted)));
     } else {
       messenger.showSnackBar(
@@ -426,78 +428,84 @@ class _CreditHero extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    return AspectRatio(
-      aspectRatio: 2.1,
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(CardsRadii.card),
-          gradient: const LinearGradient(
-            begin: AlignmentDirectional.topStart,
-            end: AlignmentDirectional.bottomEnd,
-            colors: [PointyColors.primary, PointyColors.primaryDark],
+    // A card's proportions where its text fits them, taller where it does not:
+    // on a narrow phone or at a large text size, the text comes first.
+    return LayoutBuilder(
+      builder: (context, constraints) => ConstrainedBox(
+        constraints: BoxConstraints(minHeight: constraints.maxWidth / 2.1),
+        child: IntrinsicHeight(
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(CardsRadii.card),
+              gradient: const LinearGradient(
+                begin: AlignmentDirectional.topStart,
+                end: AlignmentDirectional.bottomEnd,
+                colors: [PointyColors.primary, PointyColors.primaryDark],
+              ),
+              boxShadow: CardsShadows.hero,
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Stack(
+              children: [
+                PositionedDirectional(
+                  end: -40,
+                  top: -50,
+                  child: Container(
+                    width: 180,
+                    height: 180,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withValues(alpha: 0.07),
+                    ),
+                  ),
+                ),
+                PositionedDirectional(
+                  end: 40,
+                  bottom: -70,
+                  child: Container(
+                    width: 160,
+                    height: 160,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withValues(alpha: 0.05),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(CardsSpace.xl),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l10n.creditTitle,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: Colors.white70,
+                        ),
+                      ),
+                      const Spacer(),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: AlignmentDirectional.centerStart,
+                        child: Text(
+                          balance ?? '—',
+                          style: PointyTypography.numeric(
+                            theme.textTheme.headlineLarge!,
+                          ).copyWith(color: Colors.white, fontSize: 36),
+                        ),
+                      ),
+                      const SizedBox(height: CardsSpace.xs),
+                      Text(
+                        l10n.creditBody,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: Colors.white70,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
-          boxShadow: CardsShadows.hero,
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Stack(
-          children: [
-            PositionedDirectional(
-              end: -40,
-              top: -50,
-              child: Container(
-                width: 180,
-                height: 180,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withValues(alpha: 0.07),
-                ),
-              ),
-            ),
-            PositionedDirectional(
-              end: 40,
-              bottom: -70,
-              child: Container(
-                width: 160,
-                height: 160,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withValues(alpha: 0.05),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(CardsSpace.xl),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    l10n.creditTitle,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: Colors.white70,
-                    ),
-                  ),
-                  const Spacer(),
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: AlignmentDirectional.centerStart,
-                    child: Text(
-                      balance ?? '—',
-                      style: PointyTypography.numeric(
-                        theme.textTheme.headlineLarge!,
-                      ).copyWith(color: Colors.white, fontSize: 36),
-                    ),
-                  ),
-                  const SizedBox(height: CardsSpace.xs),
-                  Text(
-                    l10n.creditBody,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: Colors.white70,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
         ),
       ),
     );

@@ -33,6 +33,7 @@ class OrderOutcomePanel extends StatelessWidget {
     this.brand,
     this.busy = false,
     this.credited,
+    this.detail,
     this.primaryLabel,
     this.onPrimary,
     this.secondaryLabel,
@@ -48,6 +49,9 @@ class OrderOutcomePanel extends StatelessWidget {
 
   /// Money put back in the customer's credit, shown as its own line.
   final Money? credited;
+
+  /// Under the sentence: what the order is about (a top-up's account).
+  final Widget? detail;
   final String? primaryLabel;
   final VoidCallback? onPrimary;
   final String? secondaryLabel;
@@ -98,6 +102,7 @@ class OrderOutcomePanel extends StatelessWidget {
             color: theme.colorScheme.onSurfaceVariant,
           ),
         ),
+        if (detail != null) ...[const SizedBox(height: CardsSpace.lg), detail!],
         if (credited != null) ...[
           const SizedBox(height: CardsSpace.lg),
           Center(

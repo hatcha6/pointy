@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+2
+version: 1.1.0+3
 
 environment:
   sdk: ^3.13.5
@@ -56,6 +56,7 @@ dependencies:
   screen_brightness: ^2.1.11
   posthog_flutter: ^5.57.1
   share_plus: ^13.3.1
+  flutter_svg: ^2.3.0
   firebase_core: ^5.1.0
   firebase_messaging: ^17.0.1
 
@@ -93,9 +94,15 @@ flutter:
     # The Daftar mark the opening starts from (512 px of
     # shared/pointy_brand/assets/branding/daftar_logo.png).
     - assets/branding/daftar_mark.png
+    # «من أين سمعت عنا؟»'s brand marks, one colour each (Simple Icons,
+    # CC0 1.0), tinted like the chip's words.
+    - assets/heard_from/
     # The privacy policy and terms of use, one file per language
     # (features/legal/legal_document.dart).
     - assets/legal/
+    # Steam's symbol (Valve's mark, from ops/catalog/source/marks/steam.svg)
+    # for the «ستيم» pill on games played there (shared/pill.dart).
+    - assets/brands/
 
   # The pinned headers' glass (shared/glass_edge.dart).
   shaders:

@@ -66,3 +66,9 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // Google Play's install referrer: the campaign a Play install came from
+    // (MainActivity's "ly.dftr.cards/install" channel).
+    implementation("com.android.installreferrer:installreferrer:2.2")
+}

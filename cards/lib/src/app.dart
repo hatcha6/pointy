@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import '../l10n/generated/app_localizations.dart';
+import 'core/push/in_app_notices.dart';
 import 'dependencies.dart';
 import 'design/cards_theme.dart';
 import 'features/links/link_inbox.dart';
@@ -75,6 +76,7 @@ class CardsApp extends StatelessWidget {
                   app = overlay!(context, app);
                 }
                 app = GetAppBanner(child: app);
+                app = InAppNotices(push: dependencies.push, child: app);
                 if (splash != null) {
                   app = _WithSplash(opening: splash!, child: app);
                 }

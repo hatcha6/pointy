@@ -418,6 +418,26 @@
   "@preparingBody": {
     "description": "Order progress reassurance."
   },
+  "preparingSlowTitle": "يتأخر المورّد هذه المرة",
+  "@preparingSlowTitle": {
+    "description": "Order paid, the card still not here after a few minutes."
+  },
+  "preparingSlowNotify": "لا داعي للانتظار هنا: حين يجهز طلبك نرسل لك إشعاراً يفتحه مباشرةً في «كروتي».",
+  "@preparingSlowNotify": {
+    "description": "Slow order, notifications on: the customer may leave."
+  },
+  "preparingSlowAsk": "فعّل الإشعارات ونخبرك حين يجهز طلبك، أو عُد إليه لاحقاً في «كروتي».",
+  "@preparingSlowAsk": {
+    "description": "Slow order, notifications off: offer to turn them on."
+  },
+  "preparingSlowLater": "لا داعي للانتظار هنا: تجد طلبك في «كروتي» حين يجهز.",
+  "@preparingSlowLater": {
+    "description": "Slow order, no notifications on this device."
+  },
+  "goToMyCards": "اذهب إلى «كروتي»",
+  "@goToMyCards": {
+    "description": "Leave the waiting screen for the My cards tab."
+  },
   "refundedTitle": "لم نتمكن من شراء الكرت",
   "@refundedTitle": {
     "description": "Paid but no card: refunded to credit."
@@ -474,6 +494,9 @@
   "@copiedNotice": {
     "description": "Snackbar after copying."
   },
+  "redeemAction": "استرداد",
+  "dialCopiedNotice": "تم نسخ كود الشحن. الصقه في تطبيق الهاتف ثم اضغط اتصال.",
+  "redeemCopiedNotice": "تم نسخ الرقم السري. إن لم يظهر في الصفحة فالصقه هناك.",
   "rechargeNow": "اشحن الآن",
   "@rechargeNow": {
     "description": "Open the dialer with the recharge code."
@@ -482,6 +505,7 @@
   "@showQr": {
     "description": "Show the code as a QR."
   },
+  "qrRevealHint": "المس الكرت لإظهار رمز QR",
   "qrScanHint": "امسحه بالكاميرا لقراءة الرقم السري",
   "@qrScanHint": {
     "description": "Beside the QR on the card's back: what the QR is for."
@@ -888,14 +912,460 @@
   },
   "webOnlyBadge": "على الموقع",
   "@webOnlyBadge": {
-    "description": "Badge on a card the iPhone app lists but cannot sell: it is bought on the website."
+    "description": "Badge on a card a store build (iPhone, Google Play) lists but cannot sell: it is bought on the website."
   },
   "webOnlyTitle": "متوفرة على الموقع",
   "@webOnlyTitle": {
     "description": "Brand page, in place of the buy button, on a card bought on the website only."
   },
-  "webOnlyBody": "هذه البطاقة لا تُشترى من تطبيق الآيفون. تجدها على موقعنا cards.dftr.ly",
+  "webOnlyBody": "هذه البطاقة لا تُشترى من هذا التطبيق. تجدها على موقعنا cards.dftr.ly",
   "@webOnlyBody": {
     "description": "Brand page: where a website-only card is bought."
+  },
+  "steamBadge": "ستيم",
+  "@steamBadge": {
+    "description": "Badge, with Steam's logo, on a game played on Steam: a Steam key or a game sent as a Steam gift."
+  },
+  "xboxBadge": "إكس بوكس",
+  "@xboxBadge": {
+    "description": "Badge, with Xbox's logo, on a game key activated on Xbox or the Microsoft Store."
+  },
+  "eaBadge": "EA",
+  "@eaBadge": {
+    "description": "Badge, with EA's logo, on a game key activated in the EA app. EA is the brand's own name."
+  },
+  "rockstarBadge": "روكستار",
+  "@rockstarBadge": {
+    "description": "Badge, with Rockstar Games' logo, on a game key activated with a Rockstar Games account."
+  },
+  "heardFromTitle": "من أين سمعت عن دفتر كروت؟",
+  "@heardFromTitle": {
+    "description": "First-run question: how the customer found the app."
+  },
+  "heardFromBody": "اختر جواباً واحداً، يساعدنا على الوصول لمن يحتاج التطبيق.",
+  "heardFromFacebook": "فيسبوك",
+  "heardFromInstagram": "إنستغرام",
+  "heardFromTiktok": "تيك توك",
+  "heardFromWhatsapp": "واتساب",
+  "heardFromFriend": "صديق أو قريب",
+  "heardFromShop": "محل",
+  "heardFromBillboard": "لوحة إعلانية",
+  "heardFromStoreSearch": "البحث في المتجر",
+  "heardFromOther": "غير ذلك",
+  "campaignCodeLabel": "عندك رمز من إعلان أو صديق؟",
+  "@campaignCodeLabel": {
+    "description": "Field for a campaign code."
+  },
+  "campaignCodeHint": "مثل UNI1",
+  "campaignCodeCheck": "تحقّق",
+  "campaignCodeUnknown": "هذا الرمز غير معروف أو انتهى.",
+  "campaignCodeValid": "رمز صحيح، شكراً لك.",
+  "campaignCodeRewardLater": "رمز صحيح: يُضاف {amount} إلى رصيدك حين تسجّل الدخول.",
+  "@campaignCodeRewardLater": {
+    "description": "A valid code with a reward, before sign-in.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "campaignCodeRewardNow": "رمز صحيح: يُضاف {amount} إلى رصيدك.",
+  "@campaignCodeRewardNow": {
+    "description": "A valid code with a reward, signed in.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "campaignLinkReward": "وصلت برمز {code}: يُضاف {amount} إلى رصيدك حين تسجّل الدخول.",
+  "@campaignLinkReward": {
+    "description": "A followed campaign link with a reward, shown in the question.",
+    "placeholders": {
+      "code": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "rewardTitle": "أُضيف {amount} إلى رصيدك",
+  "@rewardTitle": {
+    "description": "After sign-in: a campaign's credit landed.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "rewardBecauseCode": "لأنك استخدمت الرمز {code}.",
+  "@rewardBecauseCode": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "rewardBecauseCreator": "لأنك جئت عن طريق {name}.",
+  "@rewardBecauseCreator": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "rewardBecauseCreatorUnnamed": "لأنك جئت عن طريق صانع محتوى نتعاون معه.",
+  "rewardBecauseFlyer": "لأنك مسحت رمز {name}.",
+  "@rewardBecauseFlyer": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "rewardBecauseFlyerUnnamed": "لأنك مسحت رمز الملصق.",
+  "rewardBecauseBillboardUnnamed": "لأنك مسحت رمز اللوحة الإعلانية.",
+  "rewardBecauseInvite": "لأنك جئت بدعوة من {name}.",
+  "@rewardBecauseInvite": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "rewardBecauseInviteUnnamed": "لأنك جئت بدعوة صديق.",
+  "rewardBecauseAd": "لأنك جئت من إعلاننا.",
+  "rewardBody": "يُخصم تلقائياً من سعر كرتك القادم، دون أي رسوم.",
+  "rewardAction": "تسوّق الآن",
+  "topUpPill": "{kind, select, invite{هدية على حسابك} other{شحن مباشر}}",
+  "@topUpPill": {
+    "description": "Brand page pill: credit sent straight to an account, no code.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "topUpAccountTitle": "{kind, select, telegram{حساب تيليجرام} steam{حساب ستيم} invite{حساب ستيم} other{حساب اللاعب}}",
+  "@topUpAccountTitle": {
+    "description": "Brand page: heading of the account a top-up goes to.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "topUpAccountBody": "{kind, select, telegram{تصل مباشرة إلى الحساب، دون رمز تُدخله.} steam{يُضاف الرصيد مباشرة إلى محفظتك في ستيم.} invite{تصلك اللعبة هدية على حسابك في ستيم، دون رمز تُدخله.} other{يصل الشحن مباشرة إلى حسابك في اللعبة، دون رمز تُدخله.}}",
+  "@topUpAccountBody": {
+    "description": "Brand page: how a top-up arrives.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "topUpHintTitle": "{kind, select, telegram{أين أجد اسم المستخدم؟} steam{ما اسم الدخول؟} invite{كيف أحصل على الرابط؟} other{أين أجد المعرّف؟}}",
+  "@topUpHintTitle": {
+    "description": "Brand page: opens the help on finding the account.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "chooseAmount": "اختر الكمية",
+  "@chooseAmount": {
+    "description": "Brand page heading for a top-up's amounts."
+  },
+  "savedAccounts": "حساباتك",
+  "@savedAccounts": {
+    "description": "Accounts this phone topped up before."
+  },
+  "otherAccount": "حساب آخر",
+  "@otherAccount": {
+    "description": "Start typing an account not used before."
+  },
+  "forgetAccount": "انسَ {account}",
+  "@forgetAccount": {
+    "description": "Removes a saved account (screen readers).",
+    "placeholders": {
+      "account": {
+        "type": "String"
+      }
+    }
+  },
+  "pasteAction": "لصق",
+  "@pasteAction": {
+    "description": "Paste from the clipboard."
+  },
+  "chooseOption": "اختر",
+  "@chooseOption": {
+    "description": "Placeholder of a choice field."
+  },
+  "accountRequired": "أدخل {field}",
+  "@accountRequired": {
+    "description": "A typed account field is empty.",
+    "placeholders": {
+      "field": {
+        "type": "String"
+      }
+    }
+  },
+  "accountChoose": "اختر {field}",
+  "@accountChoose": {
+    "description": "A choice field is empty.",
+    "placeholders": {
+      "field": {
+        "type": "String"
+      }
+    }
+  },
+  "accountTooLong": "أطول مما يجب.",
+  "@accountTooLong": {
+    "description": "An account field is too long."
+  },
+  "accountNotTelegram": "اسم المستخدم من 5 إلى 32 حرفاً إنجليزياً أو رقماً أو _، ويبدأ بحرف.",
+  "@accountNotTelegram": {
+    "description": "Not a Telegram username."
+  },
+  "accountNotSteamLogin": "اسم الدخول حروف إنجليزية وأرقام و _ فقط، دون مسافات.",
+  "@accountNotSteamLogin": {
+    "description": "Not a Steam login."
+  },
+  "accountNotInvite": "هذا ليس رابط دعوة من ستيم. انسخ «رابط الدعوة السريعة» من ستيم كما هو والصقه هنا.",
+  "@accountNotInvite": {
+    "description": "Not a Steam friend invite link."
+  },
+  "accountChecking": "نتحقق من الحساب…",
+  "@accountChecking": {
+    "description": "The account is being looked up."
+  },
+  "accountPlayer": "اللاعب: {name}",
+  "@accountPlayer": {
+    "description": "The game found the account under this name.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "accountFound": "{kind, select, steam{يمكن شحن هذا الحساب} other{وجدنا الحساب}}",
+  "@accountFound": {
+    "description": "The account exists (no name given).",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "accountNotFound": "{kind, select, steam{لا يمكن شحن حساب ستيم هذا. تأكد من اسم الدخول.} other{لا يوجد حساب بهذا المعرّف. تأكد منه في ملفك داخل اللعبة.}}",
+  "@accountNotFound": {
+    "description": "The game has no such account.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "accountUnconfirmed": "تعذّر التأكد من الحساب الآن. راجعه جيداً قبل الدفع.",
+  "@accountUnconfirmed": {
+    "description": "The look-up could not tell."
+  },
+  "accountUnchecked": "{kind, select, invite{تأكد من الرابط: تُرسل الهدية إلى صاحبه.} telegram{تأكد من اسم المستخدم: تُرسل إليه مباشرة ولا تُسترجع.} other{تأكد من المعرّف: يصل الشحن إليه مباشرة ولا يُسترجع.}}",
+  "@accountUnchecked": {
+    "description": "Checkout: the account cannot be looked up, so check it.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "topUpAction": "{kind, select, invite{اشترِ} telegram{اشترِ} other{اشحن}}",
+  "@topUpAction": {
+    "description": "Brand page buy button for a card sent to an account.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "buyBarTo": "إلى {account}",
+  "@buyBarTo": {
+    "description": "Buy bar: where the top-up goes.",
+    "placeholders": {
+      "account": {
+        "type": "String"
+      }
+    }
+  },
+  "buyBarNeedsAccount": "{kind, select, telegram{أدخل اسم المستخدم} steam{أدخل اسم الدخول} invite{الصق رابط الدعوة} other{أدخل المعرّف}}",
+  "@buyBarNeedsAccount": {
+    "description": "Buy bar: the account is still to be typed.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "sendToLabel": "إلى",
+  "@sendToLabel": {
+    "description": "Checkout: label of the account row."
+  },
+  "editAction": "تعديل",
+  "@editAction": {
+    "description": "Edit what was typed."
+  },
+  "topUpPreparingTitle": "{kind, select, invite{نرسل لك الهدية…} other{نشحن الحساب…}}",
+  "@topUpPreparingTitle": {
+    "description": "Order paid, the top-up on its way.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "topUpPreparingBody": "{kind, select, invite{يصلك من ستيم طلب صداقة ثم الهدية: اقبلهما حين يصلان.} other{نرسل {item} إلى {account}. يصل عادةً خلال دقيقة أو دقيقتين.}}",
+  "@topUpPreparingBody": {
+    "description": "Order paid, the top-up on its way.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      },
+      "item": {
+        "type": "String"
+      },
+      "account": {
+        "type": "String"
+      }
+    }
+  },
+  "topUpSlowTitle": "يتأخر الشحن هذه المرة",
+  "@topUpSlowTitle": {
+    "description": "Top-up paid, still not arrived after a few minutes."
+  },
+  "topUpRefundedTitle": "لم يكتمل الشحن",
+  "@topUpRefundedTitle": {
+    "description": "Paid but the top-up failed: refunded to credit."
+  },
+  "topUpRefundedBody": "لم يصل الشحن إلى الحساب، فأعدنا {amount} إلى رصيدك. تأكد من الحساب ثم حاول مجدداً.",
+  "@topUpRefundedBody": {
+    "description": "Refund of a failed top-up.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "toppedUpTitle": "{kind, select, invite{أُرسلت الهدية} other{تمّ الشحن}}",
+  "@toppedUpTitle": {
+    "description": "A top-up arrived.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "receiptTo": "إلى",
+  "@receiptTo": {
+    "description": "Receipt row: the account."
+  },
+  "receiptPlayer": "اللاعب",
+  "@receiptPlayer": {
+    "description": "Receipt row: the player's name."
+  },
+  "receiptPaid": "المبلغ",
+  "@receiptPaid": {
+    "description": "Receipt row: what was paid."
+  },
+  "receiptWhen": "الوقت",
+  "@receiptWhen": {
+    "description": "Receipt row: when."
+  },
+  "receiptOrder": "رقم الطلب",
+  "@receiptOrder": {
+    "description": "Receipt row: the order's number."
+  },
+  "whatNextTitle": "ماذا بعد؟",
+  "@whatNextTitle": {
+    "description": "Receipt: what to do now."
+  },
+  "topUpNext": "{kind, select, telegram{افتح تيليجرام: تجدها في حسابك خلال دقائق.} steam{افتح ستيم: يظهر الرصيد في محفظتك خلال دقائق.} invite{من ستيم: اقبل طلب الصداقة الذي يصلك، ثم الهدية من الإشعارات. تصل الهدية بعد قبول الصداقة بدقائق.} other{افتح اللعبة: يظهر الرصيد في حسابك خلال دقائق. إن لم يظهر، أغلق اللعبة وافتحها من جديد.}}",
+  "@topUpNext": {
+    "description": "Receipt: what to do after a top-up.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "topUpAgain": "{kind, select, invite{اشترِ هدية أخرى} other{اشحن مجدداً}}",
+  "@topUpAgain": {
+    "description": "Receipt: buy the same again.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "topUpHelp": "لم يصلك؟ راسلنا على واتساب",
+  "@topUpHelp": {
+    "description": "Receipt: support link."
+  },
+  "topUpHelpMessage": "مرحباً، الطلب رقم {order} لم يصل إلى الحساب.",
+  "@topUpHelpMessage": {
+    "description": "Prefilled support message.",
+    "placeholders": {
+      "order": {
+        "type": "String"
+      }
+    }
+  },
+  "orderIdCopied": "نُسخ رقم الطلب",
+  "@orderIdCopied": {
+    "description": "Snackbar after copying the order number."
+  },
+  "statusToppedUp": "{kind, select, invite{أُرسلت الهدية} other{تمّ الشحن}}",
+  "@statusToppedUp": {
+    "description": "Order status chip: sent to the account.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "statusToppingUp": "قيد الشحن",
+  "@statusToppingUp": {
+    "description": "Order status chip: top-up on its way."
+  },
+  "orderTo": "إلى {account}",
+  "@orderTo": {
+    "description": "My cards row: where a top-up went.",
+    "placeholders": {
+      "account": {
+        "type": "String"
+      }
+    }
+  },
+  "removeAccount": "إزالة",
+  "@removeAccount": {
+    "description": "Swipe action: forget a saved account."
+  },
+  "accountRemoved": "أُزيل {account} من هذا الهاتف",
+  "@accountRemoved": {
+    "description": "Snackbar after forgetting a saved account.",
+    "placeholders": {
+      "account": {
+        "type": "String"
+      }
+    }
+  },
+  "undoAction": "تراجع",
+  "@undoAction": {
+    "description": "Undo the last step."
+  },
+  "chooseEdition": "اختر الإصدار",
+  "@chooseEdition": {
+    "description": "Brand page heading for a game's editions."
   }
 }

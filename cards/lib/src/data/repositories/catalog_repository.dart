@@ -51,7 +51,9 @@ class CatalogRepository {
         : await preferences?.getString(_etagKey);
     final response = await api.getRaw(
       '/v1/customers/catalog',
-      query: {'channel': channel},
+      // This build asks for the account a top-up is sent to, so it is shown
+      // those cards too.
+      query: {'channel': channel, 'accounts': '1'},
       headers: {
         'Accept': 'application/json',
         if (etag != null && cachedShelf != null) 'If-None-Match': etag,
