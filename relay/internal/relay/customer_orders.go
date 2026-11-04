@@ -72,6 +72,9 @@ type customerOrderRequest struct {
 	Channel   string `json:"channel"`
 	UseCredit bool   `json:"use_credit"`
 	Method    string `json:"method"`
+	// Account is what the customer typed for a card sent to an account (a
+	// player ID, a username), by the brand's target fields.
+	Account map[string]string `json:"account"`
 	// UserIdentifier and BirthYear are the payer's, as the wallet's top-up
 	// takes them.
 	UserIdentifier string `json:"user_identifier"`
@@ -117,7 +120,8 @@ func (s HTTPServer) handleCustomerOrderCreate(w http.ResponseWriter, r *http.Req
 
 	// A replay answers with the order as it stands, whatever the catalog says now.
 	if existing, found := s.findCustomerOrderByKey(ctx, orders, customer.ID, request.IdempotencyKey); found {
-		if existing.ItemKey != request.Item || existing.Quantity != request.Quantity {
+		if existing.ItemKey != request.Item || existing.Quantity != request.Quantity ||
+			!sameAccountTyped(existing.Account, request.Account) {
 			writeCustomerError(w, http.StatusConflict, "idempotency_key_reused", "this key was used for another order", nil)
 			return
 		}
@@ -137,12 +141,18 @@ func (s HTTPServer) handleCustomerOrderCreate(w http.ResponseWriter, r *http.Req
 		writeCustomerError(w, status, failure, "this card cannot be bought right now", nil)
 		return
 	}
-	if _, sell := s.Customers.shelf(request.Channel, located.Brand.Category, s.iosGiftCards(ctx)); !sell {
+	brand := shelfBrand{Key: located.Brand.Key, Category: located.Brand.Category, Target: located.Brand.Target}
+	if _, sell := s.Customers.shelf(request.Channel, brand, s.mobileGiftCards(ctx)); !sell {
 		writeCustomerError(w, http.StatusNotFound, "unknown_item", "this card is not sold in this app", nil)
 		return
 	}
 	if reason, _ := ranking.unavailable(); reason != "" {
 		writeCustomerError(w, http.StatusConflict, "item_unavailable", "this card cannot be bought right now", nil)
+		return
+	}
+	account, refusal := readPurchaseAccount(located, request.Account, request.Quantity)
+	if refusal != nil {
+		refusal.writeCustomer(w)
 		return
 	}
 	now := s.clock().Now()
@@ -203,6 +213,7 @@ func (s HTTPServer) handleCustomerOrderCreate(w http.ResponseWriter, r *http.Req
 		BrandKey:       located.Brand.Key,
 		ItemName:       located.Name(),
 		Quantity:       request.Quantity,
+		Account:        account,
 		UnitPrice:      control.FormatWalletAmount(price),
 		Method:         method.Key,
 		PayerHint:      payer.hint,
@@ -244,7 +255,7 @@ func (s HTTPServer) handleCustomerOrderCreate(w http.ResponseWriter, r *http.Req
 		return
 	}
 	// The credit paid for everything: buy the card now.
-	order, codes, pending := s.advanceCustomerOrder(detached, orders, cards, order)
+	order, codes, pending := s.advanceCustomerOrder(detached, orders, cards, order, true)
 	writeJSON(w, http.StatusCreated, map[string]any{"order": customerOrderPayload(order, codes, pending)})
 }
 
@@ -345,11 +356,16 @@ func (s HTTPServer) findCustomerOrderByKey(ctx context.Context, orders control.C
 // advanceCustomerOrder takes a paid order as far as it can go now: claims and
 // buys its card, or reads how its purchase ended. The codes come back for a
 // delivered order (pending when the supplier cannot be read right now).
+//
+// watching is whether the answer goes back to the customer's app, which is
+// asking about this order: an order that ends any other way (a sweep, a
+// supplier's webhook, Dafa's) is told to the customer's phones.
 func (s HTTPServer) advanceCustomerOrder(
 	ctx context.Context,
 	orders control.CustomerOrderStore,
 	cards control.VoucherStore,
 	order control.CustomerOrder,
+	watching bool,
 ) (control.CustomerOrder, []vouchers.Code, bool) {
 	var codes []vouchers.Code
 	if order.Status == control.CustomerOrderPaid {
@@ -395,6 +411,9 @@ func (s HTTPServer) advanceCustomerOrder(
 		}
 		if applied {
 			s.logger().Info("customer order delivered", "order_id", order.ID, "purchase_id", purchase.ID)
+			if !watching {
+				s.tellCustomerOrderEnded(ctx, finished, accountPurchase(purchase))
+			}
 		}
 		if len(codes) > 0 {
 			return finished, codes, false
@@ -410,6 +429,9 @@ func (s HTTPServer) advanceCustomerOrder(
 		if applied {
 			s.logger().Warn("customer order refunded to credit", "order_id", order.ID, "total", finished.Total,
 				"code", purchase.ErrorCode)
+			if !watching {
+				s.tellCustomerOrderEnded(ctx, finished, accountPurchase(purchase))
+			}
 		}
 		return finished, nil, false
 	}
@@ -463,6 +485,8 @@ func (s HTTPServer) claimCustomerPurchase(
 		TestMode: s.Vouchers.MarksTest() || order.TestMode,
 		Purpose:  control.VoucherPurposeCustomer,
 		Note:     order.ID,
+		Target:   maskedAccount(located, vouchers.Account(order.Account)),
+		Details:  accountDetails(located),
 	})
 	if err != nil {
 		s.logger().Error("customer purchase claim failed", "order_id", order.ID, "error", err)
@@ -471,7 +495,12 @@ func (s HTTPServer) claimCustomerPurchase(
 	if !created {
 		return claim, nil, true
 	}
-	finished, codes := s.buyClaimedCards(ctx, cards, claim, ranking, order.Quantity)
+	// The app's order page follows the order from here, asking every few
+	// seconds: a supplier that would wait for the order to finish (FazerCards,
+	// up to 12 s) answers at once, so the customer leaves the payment step
+	// as soon as their card is ordered.
+	finished, codes := s.buyClaimedCards(vouchers.WithoutSettling(ctx), cards, claim, ranking, order.Quantity,
+		vouchers.Account(order.Account))
 	return finished, codes, true
 }
 
@@ -573,7 +602,7 @@ func (s HTTPServer) answerCustomerOrder(w http.ResponseWriter, r *http.Request, 
 			}
 		}
 		if order.Status == control.CustomerOrderPaid || order.Status == control.CustomerOrderFulfilling || order.Status == control.CustomerOrderDelivered {
-			order, codes, pending = s.advanceCustomerOrder(ctx, orders, cards, order)
+			order, codes, pending = s.advanceCustomerOrder(ctx, orders, cards, order, true)
 		}
 	}
 	writeJSON(w, status, map[string]any{"order": customerOrderPayload(order, codes, pending)})
@@ -609,9 +638,16 @@ func customerOrderPayload(order control.CustomerOrder, codes []vouchers.Code, co
 		"test_mode":     order.TestMode && !order.Review,
 		"codes":         codes,
 		"codes_pending": codesPending,
-		"created_at":    order.CreatedAt,
-		"paid_at":       order.PaidAt,
-		"completed_at":  order.CompletedAt,
+		// account is whose account a card sent to one went to, as the
+		// customer typed it: their own data, shown back to them.
+		"account": customerAccountLine(order.Account),
+		// account_values is the same account by field, so the app can show
+		// each part under its own label, in the brand's order.
+		"account_values": customerAccountValues(order.Account),
+		"delivery":       customerOrderDelivery(order),
+		"created_at":     order.CreatedAt,
+		"paid_at":        order.PaidAt,
+		"completed_at":   order.CompletedAt,
 	}
 	if order.Status == control.CustomerOrderAwaitingPayment {
 		if method, ok := lookupWalletMethod(order.Method); ok {
@@ -748,7 +784,7 @@ func (s HTTPServer) handleCustomerOrderConfirm(w http.ResponseWriter, r *http.Re
 			})
 			return
 		}
-		paid, codes, pending := s.advanceCustomerOrder(ctx, orders, cards, paid)
+		paid, codes, pending := s.advanceCustomerOrder(ctx, orders, cards, paid, true)
 		writeJSON(w, http.StatusOK, map[string]any{"order": customerOrderPayload(paid, codes, pending)})
 		return
 	}
@@ -786,7 +822,7 @@ func (s HTTPServer) handleCustomerOrderConfirm(w http.ResponseWriter, r *http.Re
 	// No usable answer: the payment may have gone through. Read it back.
 	verified, verifyErr := s.verifyCustomerPayment(ctx, orders, order, "confirm_recovery")
 	if verifyErr == nil && verified.Status != control.CustomerOrderAwaitingPayment {
-		verified, codes, pending := s.advanceCustomerOrder(ctx, orders, cards, verified)
+		verified, codes, pending := s.advanceCustomerOrder(ctx, orders, cards, verified, true)
 		writeJSON(w, http.StatusOK, map[string]any{"order": customerOrderPayload(verified, codes, pending)})
 		return
 	}
@@ -934,7 +970,8 @@ func (s HTTPServer) handleCustomerDafaWebhook(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if cards, ok := s.voucherStore(); ok && verified.Status == control.CustomerOrderPaid {
-		verified, _, _ = s.advanceCustomerOrder(ctx, orders, cards, verified)
+		// Dafa's server is asking, not the customer.
+		verified, _, _ = s.advanceCustomerOrder(ctx, orders, cards, verified, false)
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": verified.Status})
 }

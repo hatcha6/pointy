@@ -131,6 +131,9 @@ func (s HTTPServer) forwardToTunnelNode(
 		removeHopHeaders(request.Header)
 		request.Header.Set(NodeProxyMarkerHeader, "1")
 		request.Header.Set(NodeProxyTokenHeader, strings.TrimSpace(s.NodeProxyToken))
+		// The next node sees this one as the caller: hand it the real one.
+		request.Header.Set(RelayClientIPHeader, s.customerClientIP(r))
+		request.Header.Del(RelayDeviceHeader)
 		replayable := r.Body == nil || r.Body == http.NoBody
 		if r.GetBody != nil {
 			body, err := r.GetBody()

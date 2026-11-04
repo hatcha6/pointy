@@ -19,6 +19,7 @@ func TestFileStoreCustomerOrders(t *testing.T) {
 	}
 	exerciseCustomerOrderStore(t, store, store, clock)
 	exerciseReviewOrderFlag(t, store, store)
+	exerciseOrderAccount(t, store, store)
 }
 
 func TestCachedStoreKeepsCustomerOrderCapability(t *testing.T) {
@@ -57,6 +58,7 @@ func TestPostgresStoreCustomerOrders(t *testing.T) {
 	store := &PostgresStore{pool: pool, clock: clock}
 	exerciseCustomerOrderStore(t, store, store, clock)
 	exerciseReviewOrderFlag(t, store, store)
+	exerciseOrderAccount(t, store, store)
 }
 
 // exerciseReviewOrderFlag: a review order stays one when it is read back and
@@ -89,6 +91,57 @@ func exerciseReviewOrderFlag(t *testing.T, customers CustomerStore, store Custom
 	read, err := store.GetCustomerOrder(ctx, order.ID)
 	if err != nil || !read.Review || !read.TestMode {
 		t.Fatalf("read back = %+v err=%v", read, err)
+	}
+}
+
+// exerciseOrderAccount: a card sent to an account keeps the account until it
+// is bought, a replay for another account is another order, and a closed
+// order forgets it when its customer deletes their account.
+func exerciseOrderAccount(t *testing.T, customers CustomerStore, store CustomerOrderStore) {
+	t.Helper()
+	ctx := context.Background()
+	phone := "218910000002"
+	if _, err := customers.IssueCustomerOTP(ctx, CustomerOTPRequest{Phone: phone, CodeHash: CustomerOTPCodeHash(phone, "135790"), TTL: time.Minute}); err != nil {
+		t.Fatal(err)
+	}
+	customer, _, err := customers.VerifyCustomerOTP(ctx, phone, CustomerOTPCodeHash(phone, "135790"), 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	place := func(key string, account map[string]string) (CustomerOrder, bool, error) {
+		return store.BeginCustomerOrder(ctx, CustomerOrder{
+			CustomerID: customer.ID, IdempotencyKey: key, Channel: "apk", ItemKey: "pubg-60",
+			Quantity: 1, UnitPrice: "11", Method: "dafa_sadad", Account: account,
+		}, false)
+	}
+	open, created, err := place("acct-1", map[string]string{"player_id": " 5123456789 ", "zone": ""})
+	if err != nil || !created || open.Account["player_id"] != "5123456789" || len(open.Account) != 1 {
+		t.Fatalf("order = %+v created=%v err=%v", open, created, err)
+	}
+	if _, _, err := place("acct-1", map[string]string{"player_id": "999"}); !errors.Is(err, ErrCustomerOrderKeyReused) {
+		t.Fatalf("a key reused for another account: %v", err)
+	}
+	if again, created, err := place("acct-1", map[string]string{"player_id": "5123456789"}); err != nil || created || again.ID != open.ID {
+		t.Fatalf("a replay: %+v created=%v err=%v", again, created, err)
+	}
+	closed, _, err := place("acct-2", map[string]string{"player_id": "777"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := store.CloseCustomerOrder(ctx, closed.ID, CustomerOrderCancelled, "cancelled", ""); err != nil {
+		t.Fatal(err)
+	}
+	if read, err := store.GetCustomerOrder(ctx, open.ID); err != nil || read.Account["player_id"] != "5123456789" {
+		t.Fatalf("read back = %+v err=%v", read, err)
+	}
+	if err := customers.DeleteCustomer(ctx, customer.ID); err != nil {
+		t.Fatal(err)
+	}
+	if read, _ := store.GetCustomerOrder(ctx, closed.ID); len(read.Account) != 0 {
+		t.Fatalf("a closed order keeps the account of a deleted customer: %+v", read.Account)
+	}
+	if read, _ := store.GetCustomerOrder(ctx, open.ID); read.Account["player_id"] != "5123456789" {
+		t.Fatalf("an open order lost the account it is still to be bought for: %+v", read.Account)
 	}
 }
 

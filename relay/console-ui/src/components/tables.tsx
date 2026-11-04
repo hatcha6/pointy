@@ -7,7 +7,7 @@ import {
   entryKind,
   label,
   method as methodLabels,
-  purchaseKind,
+  purchaseKindLabel,
   purchaseStatus,
   service as serviceLabels,
   supplier as supplierLabels,
@@ -210,7 +210,9 @@ export function PurchasesTable({ purchases, loading, showShop = true, columnsBef
       cell: (p) => (
         <Stacked
           title={`${p.name}${p.quantity > 1 ? ` × ${p.quantity}` : ""}`}
-          sub={`${label(purchaseKind, p.kind)}${p.target ? ` · ${p.target}` : ""}`}
+          // The account (a masked number or ID) in its own left-to-right isolate: in an
+          // Arabic line "51•••••789" would otherwise read "789•••••51".
+          sub={`${purchaseKindLabel(p)}${p.target ? ` · \u2066${p.target}\u2069` : ""}`}
         />
       ),
     },

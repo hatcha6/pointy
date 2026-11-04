@@ -406,5 +406,13 @@ func (s *PostgresStore) DeleteCustomer(ctx context.Context, customerID string) e
 	if _, err := tx.Exec(ctx, `DELETE FROM relay_customer_sessions WHERE customer_id = $1`, customerID); err != nil {
 		return err
 	}
+	// The accounts their finished orders were sent to go with them; an open
+	// order keeps its own until it is bought.
+	if _, err := tx.Exec(ctx,
+		`UPDATE relay_customer_orders SET account = '{}'::jsonb
+		WHERE customer_id = $1 AND account <> '{}'::jsonb
+			AND status NOT IN ('awaiting_payment', 'paid', 'fulfilling')`, customerID); err != nil {
+		return err
+	}
 	return tx.Commit(ctx)
 }

@@ -246,6 +246,10 @@ func (s HTTPServer) handleCustomerRoutes(w http.ResponseWriter, r *http.Request)
 		})
 	case strings.HasPrefix(path, "/v1/customers/orders/"):
 		s.routeCustomerOrder(w, r, store, strings.TrimPrefix(path, "/v1/customers/orders/"))
+	case path == "/v1/customers/accounts/check" && r.Method == http.MethodPost:
+		s.withCustomer(w, r, store, func(customer control.Customer, _ control.CustomerSession) {
+			s.handleCustomerAccountCheck(w, r, customer)
+		})
 	case path == "/v1/customers/credit" && r.Method == http.MethodGet:
 		s.withCustomer(w, r, store, func(customer control.Customer, _ control.CustomerSession) {
 			s.handleCustomerCredit(w, r, customer)
@@ -276,6 +280,15 @@ func (s HTTPServer) handleCustomerRoutes(w http.ResponseWriter, r *http.Request)
 			}
 			s.logger().Info("customer deleted their account", "customer_id", customer.ID)
 			w.WriteHeader(http.StatusNoContent)
+		})
+	case strings.HasPrefix(path, "/v1/customers/campaigns/") && r.Method == http.MethodGet:
+		s.handleCustomerCampaign(w, r, strings.TrimPrefix(path, "/v1/customers/campaigns/"), false)
+	case strings.HasPrefix(path, "/v1/customers/campaigns/") && strings.HasSuffix(path, "/open") && r.Method == http.MethodPost:
+		s.handleCustomerCampaign(w, r,
+			strings.TrimSuffix(strings.TrimPrefix(path, "/v1/customers/campaigns/"), "/open"), true)
+	case path == "/v1/customers/me/attribution" && r.Method == http.MethodPut:
+		s.withCustomer(w, r, store, func(customer control.Customer, _ control.CustomerSession) {
+			s.handleCustomerAttribution(w, r, customer)
 		})
 	case path == "/v1/customers/me/push" && r.Method == http.MethodPut:
 		s.withCustomer(w, r, store, func(customer control.Customer, session control.CustomerSession) {
@@ -455,6 +468,9 @@ type customerVerifyRequest struct {
 	Phone  string         `json:"phone"`
 	Code   string         `json:"code"`
 	Device customerDevice `json:"device"`
+	// Attribution is where the customer came from, as the app held it
+	// before they signed in.
+	Attribution *customerAttributionRequest `json:"attribution"`
 }
 
 func (s HTTPServer) handleCustomerVerify(w http.ResponseWriter, r *http.Request, store control.CustomerStore) {
@@ -519,6 +535,13 @@ func (s HTTPServer) handleCustomerVerify(w http.ResponseWriter, r *http.Request,
 	body := customerTokensView(pair, session)
 	body["customer"] = customerView(customer)
 	body["created"] = created
+	if attributed := s.attributeSignedIn(r.Context(), customer.ID, request.Attribution); attributed != nil {
+		body["attribution"] = attributed.Attribution
+		body["code_accepted"] = attributed.Accepted
+		if attributed.Reward != nil {
+			body["reward"] = attributed.Reward
+		}
+	}
 	writeJSON(w, http.StatusOK, body)
 }
 

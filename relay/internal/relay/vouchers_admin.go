@@ -41,6 +41,8 @@ import (
 //	.../v1/vouchers/admin/company/...              the company buying for itself (vouchers_company.go)
 //	GET  /v1/vouchers/admin/bnplus/{wallets|groups|companies|cards|orders|order}
 //	GET  /v1/vouchers/admin/reloadly/balance      the company's gift card balance at Reloadly (USD)
+//	GET  /v1/vouchers/admin/fazer/account         the company's FazerCards account: balance (USD) and plan
+//	POST /v1/vouchers/admin/accounts/check        look up an account a card is sent to {item, account}
 //	.../v1/vouchers/admin/stock...                 the company's own card stock (vouchers_stock.go)
 
 const (
@@ -103,6 +105,12 @@ func (s HTTPServer) handleVoucherAdminRoutes(w http.ResponseWriter, r *http.Requ
 		s.handleVoucherAdminBNPlus(w, r, strings.TrimPrefix(path, "/bnplus/"))
 	case strings.HasPrefix(path, "/reloadly/") && r.Method == http.MethodGet:
 		s.handleVoucherAdminReloadly(w, r, strings.TrimPrefix(path, "/reloadly/"))
+	case path == "/fazer/account" && r.Method == http.MethodGet:
+		s.handleVoucherAdminFazer(w, r)
+	case path == "/fazer/webhook" && (r.Method == http.MethodGet || r.Method == http.MethodPost):
+		s.handleVoucherAdminFazerWebhook(w, r)
+	case path == "/accounts/check" && r.Method == http.MethodPost:
+		s.handleVoucherAdminAccountCheck(w, r, store)
 	default:
 		writeNotFound(w)
 	}
@@ -122,19 +130,23 @@ func (s HTTPServer) handleVoucherAdminConfig(w http.ResponseWriter, _ *http.Requ
 		"bnplus":           s.Vouchers.BNPlus != nil,
 		"reloadly":         s.Vouchers.Reloadly != nil,
 		"reloadly_sandbox": s.Vouchers.Reloadly != nil && s.Vouchers.Reloadly.Sandbox(),
-		"rate_limit":       s.Vouchers.RateLimit.String(),
-		"request_timeout":  s.Vouchers.requestTimeout().String(),
-		"sync_interval":    s.Vouchers.SyncInterval.String(),
-		"offers_max_age":   s.Vouchers.offersMaxAge().String(),
-		"promotion_grace":  vouchers.PromotionGrace.String(),
-		"stale_after":      s.Vouchers.staleAfter().String(),
-		"absent_after":     voucherAbsentAfter.String(),
-		"operator_after":   voucherOperatorAfter.String(),
-		"price_decimals":   2,
-		"currency":         vouchers.Currency,
-		"max_quantity":     maxVoucherQuantity,
-		"max_image_bytes":  maxVoucherImageBytes,
-		"max_catalog_size": maxVoucherCatalogBytes,
+		"fazer":            s.Vouchers.Fazer != nil,
+		// Empty while the plan's Steam fee is unknown: Steam top-ups are then
+		// listed out of stock.
+		"fazer_steam_fee_percent": s.Vouchers.FazerSteamFeePercent,
+		"rate_limit":              s.Vouchers.RateLimit.String(),
+		"request_timeout":         s.Vouchers.requestTimeout().String(),
+		"sync_interval":           s.Vouchers.SyncInterval.String(),
+		"offers_max_age":          s.Vouchers.offersMaxAge().String(),
+		"promotion_grace":         vouchers.PromotionGrace.String(),
+		"stale_after":             s.Vouchers.staleAfter().String(),
+		"absent_after":            voucherAbsentAfter.String(),
+		"operator_after":          voucherOperatorAfter.String(),
+		"price_decimals":          2,
+		"currency":                vouchers.Currency,
+		"max_quantity":            maxVoucherQuantity,
+		"max_image_bytes":         maxVoucherImageBytes,
+		"max_catalog_size":        maxVoucherCatalogBytes,
 	})
 }
 
@@ -583,6 +595,36 @@ func (s HTTPServer) handleVoucherAdminReloadly(w http.ResponseWriter, r *http.Re
 	default:
 		writeNotFound(w)
 	}
+}
+
+// handleVoucherAdminFazer answers the operator's read of the company's
+// FazerCards account: what is left on it, and whether its paid plan (which
+// every order needs) is still active and until when.
+func (s HTTPServer) handleVoucherAdminFazer(w http.ResponseWriter, r *http.Request) {
+	client := s.Vouchers.Fazer
+	if client == nil {
+		writeSMSError(w, http.StatusServiceUnavailable, "supplier_unconfigured", "FazerCards is not configured on this relay", nil)
+		return
+	}
+	ctx := r.Context()
+	balance, err := client.Balance(ctx)
+	if err != nil {
+		writeSMSError(w, http.StatusBadGateway, "supplier_error", err.Error(), nil)
+		return
+	}
+	account, err := client.Me(ctx)
+	if err != nil {
+		writeSMSError(w, http.StatusBadGateway, "supplier_error", err.Error(), nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"balance":             balance.Amount,
+		"currency":            balance.Currency,
+		"plan":                account.Plan,
+		"plan_expires_at":     account.PlanExpiresAt,
+		"subscription_active": account.SubscriptionActive,
+		"steam_fee_percent":   s.Vouchers.FazerSteamFeePercent,
+	})
 }
 
 // handleVoucherAdminBNPlus answers the operator's discovery reads from BN

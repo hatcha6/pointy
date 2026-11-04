@@ -35,9 +35,14 @@ import (
 )
 
 const (
-	AccessTokenHeader     = "X-Pointy-Relay-Token"
-	RefreshTokenHeader    = "X-Pointy-Relay-Refresh-Token"
-	RelayedRequestHeader  = "X-Pointy-Relayed-Request"
+	AccessTokenHeader    = "X-Pointy-Relay-Token"
+	RefreshTokenHeader   = "X-Pointy-Relay-Refresh-Token"
+	RelayedRequestHeader = "X-Pointy-Relayed-Request"
+	// RelayClientIPHeader and RelayDeviceHeader tell the shop who is calling
+	// through the relay: the caller's address, and the device a ticket was
+	// minted for. Set by the relay only; whatever a caller sends is dropped.
+	RelayClientIPHeader   = "X-Pointy-Relay-Client-IP"
+	RelayDeviceHeader     = "X-Pointy-Relay-Device"
 	NodeProxyTokenHeader  = "X-Pointy-Relay-Node-Token"
 	NodeProxyMarkerHeader = "X-Pointy-Relay-Node-Proxy"
 	EnrollmentTokenHeader = "X-Pointy-Enrollment-Token"
@@ -345,6 +350,12 @@ func (s HTTPServer) route(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.handleIssueRelayTicket(w, r)
+	case r.URL.Path == "/v1/relay-tickets/revoke" && r.Method == http.MethodPost:
+		if !s.RouteMode.allowsPublic() {
+			writeNotFound(w)
+			return
+		}
+		s.handleRevokeRelayTickets(w, r)
 	case r.URL.Path == "/v1/relay-ticket-refresh" && r.Method == http.MethodPost:
 		if !s.RouteMode.allowsPublic() {
 			writeNotFound(w)
@@ -691,6 +702,7 @@ func (s HTTPServer) handleIssueRelayTicket(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	request.ChainStartedAt = time.Time{}
 	issued, err := s.Tickets.IssueTicket(
 		r.Context(),
 		installation,
@@ -698,6 +710,10 @@ func (s HTTPServer) handleIssueRelayTicket(w http.ResponseWriter, r *http.Reques
 		s.relayTicketTTL(),
 		s.relayRefreshTTL(),
 	)
+	if errors.Is(err, control.ErrTicketNotAfterPassed) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "not_after has passed"})
+		return
+	}
 	if err != nil {
 		s.metrics().RecordTicketIssueFailed()
 		s.logger().Error("relay ticket issue failed", "installation_id", installation.ID, "error", err)
@@ -706,6 +722,41 @@ func (s HTTPServer) handleIssueRelayTicket(w http.ResponseWriter, r *http.Reques
 	}
 	s.metrics().RecordTicketIssued()
 	writeJSON(w, http.StatusCreated, issued)
+}
+
+// handleRevokeRelayTickets is the shop ending one device's remote access:
+// its backend, on the installation's access token, names the device.
+func (s HTTPServer) handleRevokeRelayTickets(w http.ResponseWriter, r *http.Request) {
+	if s.Tickets == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "relay ticket service unavailable"})
+		return
+	}
+	rawToken := strings.TrimSpace(r.Header.Get(AccessTokenHeader))
+	if rawToken == "" {
+		s.metrics().RecordCredentialRejected()
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "relay token required"})
+		return
+	}
+	var request struct {
+		DeviceID string `json:"device_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil || strings.TrimSpace(request.DeviceID) == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "device_id required"})
+		return
+	}
+	installation, err := s.Store.ValidateAccessToken(r.Context(), rawToken)
+	if err != nil {
+		s.recordCredentialError(err)
+		writeRelayCredentialError(w, err)
+		return
+	}
+	keepFor := max(s.relayRefreshTTL(), s.relayTicketTTL())
+	if err := s.Tickets.RevokeDevice(r.Context(), installation.ID, request.DeviceID, s.clock().Now(), keepFor); err != nil {
+		s.logger().Error("relay ticket revoke failed", "installation_id", installation.ID, "error", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "relay ticket revoke failed"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"revoked": true})
 }
 
 func (s HTTPServer) handleRefreshRelayTicket(w http.ResponseWriter, r *http.Request) {
@@ -786,10 +837,7 @@ func (s HTTPServer) handleRefreshRelayTicket(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	issueRequest := control.RelayTicketRequest{
-		DeviceID:   refresh.DeviceID,
-		DeviceName: refresh.DeviceName,
-	}
+	issueRequest := refresh.NextRequest()
 	if issueRequest.DeviceID == "" {
 		issueRequest.DeviceID = requestDeviceID
 	}
@@ -803,6 +851,13 @@ func (s HTTPServer) handleRefreshRelayTicket(w http.ResponseWriter, r *http.Requ
 		s.relayTicketTTL(),
 		s.relayRefreshTTL(),
 	)
+	if errors.Is(err, control.ErrTicketNotAfterPassed) || errors.Is(err, control.ErrRelayRefreshTokenNotFound) {
+		// The sign-in this device's tickets belonged to has ended, or the
+		// device was revoked while its refresh was on the way.
+		s.recordCredentialError(control.ErrRelayRefreshTokenNotFound)
+		writeRelayCredentialError(w, control.ErrRelayRefreshTokenNotFound)
+		return
+	}
 	if err != nil {
 		s.metrics().RecordTicketIssueFailed()
 		s.logger().Error("relay ticket refresh failed", "installation_id", installation.ID, "error", err)
@@ -854,6 +909,7 @@ func (s HTTPServer) handleNodeRelay(w http.ResponseWriter, r *http.Request) {
 		}
 		s.handleRelayWithOptions(w, r, "", targetPath, relayOptions{
 			SignInInstallationID: installationID,
+			ClientIP:             nodeHopClientIP(r),
 		})
 		return
 	}
@@ -869,7 +925,18 @@ func (s HTTPServer) handleNodeRelay(w http.ResponseWriter, r *http.Request) {
 	}
 	s.handleRelayWithOptions(w, r, rawToken, targetPath, relayOptions{
 		AllowNodeProxy: false,
+		ClientIP:       nodeHopClientIP(r),
 	})
+}
+
+// nodeHopClientIP is the caller's address as the node that took the request
+// wrote it. Only read behind withNodeProxy, where the sender is a node.
+func nodeHopClientIP(r *http.Request) string {
+	raw := strings.TrimSpace(r.Header.Get(RelayClientIPHeader))
+	if net.ParseIP(raw) == nil {
+		return ""
+	}
+	return raw
 }
 
 func (s HTTPServer) handlePublicInvoice(w http.ResponseWriter, r *http.Request) {
@@ -2335,6 +2402,9 @@ func (s HTTPServer) handleIssueConnectorCertificate(
 
 type relayOptions struct {
 	AllowNodeProxy bool
+	// ClientIP is the caller's address as the node that took the request
+	// saw it, when this node got it on a hop from that one.
+	ClientIP string
 	// SignInInstallationID makes this a sign-in route request: the
 	// installation it names stands in for a ticket. See remote_sign_in.go.
 	SignInInstallationID string
@@ -2370,11 +2440,12 @@ func (s HTTPServer) handleRelayWithOptions(
 	}()
 
 	var installation control.Installation
+	var deviceID string
 	var err error
 	if options.SignInInstallationID != "" {
 		installation, err = s.validateSignInInstallation(r.Context(), options.SignInInstallationID)
 	} else {
-		installation, err = s.validateRelayCredential(r.Context(), rawToken)
+		installation, deviceID, err = s.validateRelayCredential(r.Context(), rawToken)
 	}
 	if err != nil {
 		statusCode = relayCredentialStatusCode(err)
@@ -2446,8 +2517,23 @@ func (s HTTPServer) handleRelayWithOptions(
 	defer stopDeadlineCloser()
 
 	request := outboundRequest(relayRequest, targetPath)
+	// Who is calling, for the shop's list of remote sign-ins: the address
+	// the caller reached the relay from (handed on by the node that took
+	// it, on a hop between nodes), and the device its ticket names.
+	clientIP := options.ClientIP
+	if clientIP == "" {
+		clientIP = s.customerClientIP(r)
+	}
+	request.Header.Set(RelayClientIPHeader, clientIP)
+	if deviceID != "" {
+		request.Header.Set(RelayDeviceHeader, deviceID)
+	}
 	if options.SignInInstallationID != "" {
 		request.Header.Set(SignInRouteHeader, "1")
+		// The sign-in route signs in through the shop's login form and
+		// nothing else: a credential in the header would be checked by the
+		// backend with none of the form's switch, manager check or throttles.
+		request.Header.Del("Authorization")
 	}
 	if maxBytes := s.MaxRelayedRequestBodyBytes; maxBytes > 0 && request.Body != nil {
 		request.Body = http.MaxBytesReader(w, request.Body, maxBytes)
@@ -2818,30 +2904,32 @@ func retryAfterSeconds(resetAt time.Time, now time.Time) string {
 	return strconv.FormatInt(seconds, 10)
 }
 
+// validateRelayCredential reads an access token or a device's ticket, and
+// answers the installation and, for a ticket, the device it was minted for.
 func (s HTTPServer) validateRelayCredential(
 	ctx context.Context,
 	rawToken string,
-) (control.Installation, error) {
+) (control.Installation, string, error) {
 	installation, err := s.Store.ValidateAccessToken(ctx, rawToken)
 	if err == nil {
-		return installation, nil
+		return installation, "", nil
 	}
 	if s.Tickets == nil || !errors.Is(err, control.ErrWrongPurpose) {
-		return control.Installation{}, err
+		return control.Installation{}, "", err
 	}
 
 	ticket, ticketErr := s.Tickets.ValidateTicket(ctx, rawToken, s.clock().Now())
 	if ticketErr != nil {
-		return control.Installation{}, ticketErr
+		return control.Installation{}, "", ticketErr
 	}
 	installation, err = s.Store.GetInstallation(ctx, ticket.InstallationID)
 	if err != nil {
-		return control.Installation{}, err
+		return control.Installation{}, "", err
 	}
 	if !installation.RelayActive(s.clock().Now()) {
-		return control.Installation{}, control.ErrSubscriptionInactive
+		return control.Installation{}, "", control.ErrSubscriptionInactive
 	}
-	return installation, nil
+	return installation, ticket.DeviceID, nil
 }
 
 func (s HTTPServer) withAdmin(
@@ -2904,6 +2992,9 @@ func outboundRequest(in *http.Request, targetPath string) *http.Request {
 	request.Header.Del(SignInRouteHeader)
 	request.Header.Del(NodeProxyTokenHeader)
 	request.Header.Del(NodeProxyMarkerHeader)
+	// Only the relay says who called and on which device's ticket.
+	request.Header.Del(RelayClientIPHeader)
+	request.Header.Del(RelayDeviceHeader)
 	removeHopHeaders(request.Header)
 	request.Header.Set("Connection", "close")
 	request.Header.Set(RelayedRequestHeader, "1")
@@ -3020,13 +3111,20 @@ func readResponseBodyWithinLimit(body io.Reader, maxBytes int64) ([]byte, bool, 
 // response body. Streamed/bulk media are exempt: the AI chat SSE stream is
 // open-ended by design (buffering it froze token streaming entirely), and
 // zip exports (tracking/diagnostics pulls) legitimately exceed any fixed cap
-// on large shops. The flushing copy holds only one chunk in memory whatever
-// the body size, so the cap's original memory rationale no longer applies to
+// on large shops. Camera media is the same shape: a live MJPEG view
+// (multipart/x-mixed-replace) runs until the viewer leaves — at a few hundred
+// KB/s the 50 MB default cut a remote camera off after about three minutes —
+// and a listen (audio/*) or a clip export (video/mp4) is open-ended or large
+// by nature. The flushing copy holds only one chunk in memory whatever the
+// body size, so the cap's original memory rationale no longer applies to
 // them; it remains as an abuse guard on ordinary (JSON) bodies.
 func (s HTTPServer) relayedBodyByteLimit(header http.Header) int64 {
-	contentType := header.Get("Content-Type")
+	contentType := strings.ToLower(header.Get("Content-Type"))
 	if strings.HasPrefix(contentType, "text/event-stream") ||
-		strings.HasPrefix(contentType, "application/zip") {
+		strings.HasPrefix(contentType, "application/zip") ||
+		strings.HasPrefix(contentType, "multipart/x-mixed-replace") ||
+		strings.HasPrefix(contentType, "audio/") ||
+		strings.HasPrefix(contentType, "video/") {
 		return 0
 	}
 	return s.MaxRelayedResponseBodyBytes

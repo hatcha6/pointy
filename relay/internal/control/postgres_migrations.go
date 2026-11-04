@@ -1228,6 +1228,71 @@ CREATE TABLE IF NOT EXISTS relay_customer_shelf_settings (
 );
 `,
 	},
+	{
+		version: 39,
+		name:    "daftar cards: campaigns and where customers came from",
+		sql: `
+-- What the operator does to bring customers (an ad, a creator, a billboard),
+-- each with the code its link carries and customers type.
+CREATE TABLE IF NOT EXISTS relay_customer_campaigns (
+	id text PRIMARY KEY,
+	code text NOT NULL,
+	name text NOT NULL,
+	display_name text NOT NULL DEFAULT '',
+	kind text NOT NULL CHECK (kind IN ('ad', 'creator', 'billboard', 'flyer', 'referral', 'other')),
+	note text NOT NULL DEFAULT '',
+	landing text NOT NULL DEFAULT '/',
+	active boolean NOT NULL DEFAULT true,
+	-- The credit each new customer it brings gets, to at most reward_limit
+	-- of them (0: no cap), until reward_until (null: no end).
+	reward numeric(14, 3) NOT NULL DEFAULT 0 CHECK (reward >= 0 AND reward <= 100),
+	reward_limit integer NOT NULL DEFAULT 0 CHECK (reward_limit >= 0),
+	reward_until timestamptz,
+	created_by text NOT NULL DEFAULT '',
+	created_at timestamptz NOT NULL,
+	updated_at timestamptz NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS relay_customer_campaigns_code_idx ON relay_customer_campaigns (code);
+
+-- Opens of a campaign's link, per Libyan day and platform.
+CREATE TABLE IF NOT EXISTS relay_customer_campaign_clicks (
+	campaign_id text NOT NULL REFERENCES relay_customer_campaigns (id),
+	day date NOT NULL,
+	platform text NOT NULL,
+	clicks integer NOT NULL DEFAULT 0,
+	PRIMARY KEY (campaign_id, day, platform)
+);
+
+-- The campaign that brought each customer (the first one named, while new)
+-- and their answer to «من أين سمعت عنا؟». Additive: older relays ignore them.
+ALTER TABLE relay_customers ADD COLUMN IF NOT EXISTS campaign_code text NOT NULL DEFAULT '';
+ALTER TABLE relay_customers ADD COLUMN IF NOT EXISTS campaign_via text NOT NULL DEFAULT '';
+ALTER TABLE relay_customers ADD COLUMN IF NOT EXISTS campaign_at timestamptz;
+ALTER TABLE relay_customers ADD COLUMN IF NOT EXISTS heard_from text NOT NULL DEFAULT '';
+ALTER TABLE relay_customers ADD COLUMN IF NOT EXISTS heard_from_at timestamptz;
+
+-- A campaign's reward to a customer it brought: one per customer and
+-- campaign (reference 'campaign:<id>', unique per customer already).
+ALTER TABLE relay_customer_credit_entries DROP CONSTRAINT IF EXISTS relay_customer_credit_entries_kind_valid;
+ALTER TABLE relay_customer_credit_entries ADD CONSTRAINT relay_customer_credit_entries_kind_valid CHECK (
+	(kind = 'order' AND amount < 0)
+	OR (kind IN ('release', 'refund', 'late_payment') AND amount > 0)
+	OR (kind = 'campaign' AND amount > 0 AND reference <> '')
+	OR (kind = 'adjustment' AND amount <> 0 AND note <> ''));
+CREATE INDEX IF NOT EXISTS relay_customer_credit_entries_campaign_idx
+	ON relay_customer_credit_entries (reference) WHERE kind = 'campaign';
+`,
+	},
+	{
+		version: 40,
+		name:    "daftar cards: orders sent to an account (a player ID, a username)",
+		sql: `
+-- What the customer typed for a card sent to an account, kept until it is
+-- bought (after the payment). Additive with a default: older relays never
+-- write it, and a code card's order keeps '{}'.
+ALTER TABLE relay_customer_orders ADD COLUMN IF NOT EXISTS account jsonb NOT NULL DEFAULT '{}'::jsonb;
+`,
+	},
 }
 
 // migrationsAdvisoryLockKey serializes concurrent migrators (e.g. autoscaled

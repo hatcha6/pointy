@@ -34,16 +34,22 @@ type Config struct {
 	// Previews is the catalog link previews name brands from; nil gives
 	// every page the shelf's own preview.
 	Previews Source
-	Logger   *slog.Logger
+	// Campaigns answers cards.dftr.ly/go/CODE (campaign.go); nil sends
+	// those links to the shelf.
+	Campaigns Campaigns
+	Stores    StoreLinks
+	Logger    *slog.Logger
 }
 
 // Handler serves the web build for its hosts and hands everything else on.
 type Handler struct {
-	hosts    map[string]bool
-	files    fs.FS
-	next     http.Handler
-	index    []byte
-	previews *previews
+	hosts     map[string]bool
+	files     fs.FS
+	next      http.Handler
+	index     []byte
+	previews  *previews
+	campaigns Campaigns
+	stores    StoreLinks
 }
 
 // Wrap puts the web app in front of next for cfg's hosts.
@@ -67,11 +73,13 @@ func Wrap(next http.Handler, cfg Config) (*Handler, error) {
 		hosts[host] = true
 	}
 	return &Handler{
-		hosts:    hosts,
-		files:    cfg.Files,
-		next:     next,
-		index:    index,
-		previews: newPreviews(cfg.Previews, cfg.Logger),
+		hosts:     hosts,
+		files:     cfg.Files,
+		next:      next,
+		index:     index,
+		previews:  newPreviews(cfg.Previews, cfg.Logger),
+		campaigns: cfg.Campaigns,
+		stores:    cfg.Stores,
 	}, nil
 }
 
@@ -103,6 +111,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if name == ".well-known/apple-app-site-association" {
 		// Apple reads it only as JSON, and the file has no extension.
 		header.Set("Content-Type", "application/json")
+	}
+	if code, ok := strings.CutPrefix(name, campaignPrefix); ok && code != "" && !strings.Contains(code, "/") {
+		h.serveCampaign(w, r, code)
+		return
 	}
 	if strings.HasPrefix(name, "og/") {
 		h.servePicture(w, r, name)

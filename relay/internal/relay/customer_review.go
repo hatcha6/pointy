@@ -78,7 +78,7 @@ func (s HTTPServer) confirmReviewPayment(
 		return
 	}
 	s.logger().Info("review order paid (simulated)", "order_id", order.ID)
-	paid, codes, pending := s.advanceCustomerOrder(ctx, orders, cards, paid)
+	paid, codes, pending := s.advanceCustomerOrder(ctx, orders, cards, paid, true)
 	writeJSON(w, http.StatusOK, map[string]any{"order": customerOrderPayload(paid, codes, pending)})
 }
 

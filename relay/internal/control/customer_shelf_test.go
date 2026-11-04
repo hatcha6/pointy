@@ -14,18 +14,18 @@ import (
 func checkCustomerShelf(t *testing.T, store CustomerShelfStore) {
 	t.Helper()
 	ctx := context.Background()
-	if settings, err := store.CustomerShelfSettings(ctx); err != nil || settings.IOSGiftCards != IOSGiftCardsWebOnly {
+	if settings, err := store.CustomerShelfSettings(ctx); err != nil || settings.MobileGiftCards != MobileGiftCardsWebOnly {
 		t.Fatalf("default %+v %v", settings, err)
 	}
-	if _, err := store.SetCustomerShelfSettings(ctx, CustomerShelfSettings{IOSGiftCards: "all"}); !errors.Is(err, ErrInvalidCustomerShelf) {
+	if _, err := store.SetCustomerShelfSettings(ctx, CustomerShelfSettings{MobileGiftCards: "all"}); !errors.Is(err, ErrInvalidCustomerShelf) {
 		t.Fatalf("unknown mode: %v", err)
 	}
-	for _, mode := range []string{IOSGiftCardsSell, IOSGiftCardsHidden} {
-		if _, err := store.SetCustomerShelfSettings(ctx, CustomerShelfSettings{IOSGiftCards: mode, Actor: "ops"}); err != nil {
+	for _, mode := range []string{MobileGiftCardsSell, MobileGiftCardsHidden} {
+		if _, err := store.SetCustomerShelfSettings(ctx, CustomerShelfSettings{MobileGiftCards: mode, Actor: "ops"}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if settings, _ := store.CustomerShelfSettings(ctx); settings.IOSGiftCards != IOSGiftCardsHidden || settings.Actor != "ops" || settings.UpdatedAt.IsZero() {
+	if settings, _ := store.CustomerShelfSettings(ctx); settings.MobileGiftCards != MobileGiftCardsHidden || settings.Actor != "ops" || settings.UpdatedAt.IsZero() {
 		t.Fatalf("settings %+v", settings)
 	}
 }

@@ -73,7 +73,7 @@ func (c *CustomerOrderReconciler) Round(ctx context.Context) int {
 			order = verified
 		}
 		if hasCards && (order.Status == control.CustomerOrderPaid || order.Status == control.CustomerOrderFulfilling) {
-			order, _, _ = c.Server.advanceCustomerOrder(ctx, orders, cards, order)
+			order, _, _ = c.Server.advanceCustomerOrder(ctx, orders, cards, order, false)
 		}
 		if order.Status != before {
 			moved++

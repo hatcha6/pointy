@@ -106,8 +106,18 @@ export type CardNotification = {
   created_at: string;
 };
 
+/** Where one customer came from: the campaign that brought them, their answer. */
+export type CardAttribution = {
+  campaign_code?: string;
+  campaign_via?: string;
+  campaign_at?: string;
+  heard_from?: string;
+  heard_from_at?: string;
+};
+
 export type CardCustomerDetail = {
   customer: CardCustomer;
+  attribution?: CardAttribution | null;
   sessions: CardDevice[];
   credit: { balance: string; entries: CardCreditEntry[] };
   orders: CardOrder[];
@@ -124,6 +134,7 @@ export const cardKeys = {
   customer: (id: string) => ["cards", "customer", id],
   orders: (filter: Record<string, string>) => ["cards", "orders", filter],
   notifications: (filter: Record<string, string>) => ["cards", "notifications", filter],
+  campaigns: ["cards", "campaigns"],
 };
 
 export function useCardSummary() {
@@ -166,10 +177,11 @@ export function useCardNotifications(filter: Record<string, string>) {
   });
 }
 
-/** What the iPhone app does with the cards Apple reserves for in-app purchase. */
-export type CardIOSGiftCards = "hidden" | "web_only" | "sell";
+/** What the store builds (iPhone, Google Play) do with the cards the stores reserve for their own billing. */
+export type CardMobileGiftCards = "hidden" | "web_only" | "sell";
 
-export type CardShelf = { ios_gift_cards: CardIOSGiftCards; actor?: string; updated_at?: string };
+/** `ios_gift_cards` keeps its name from when only the iPhone followed it. */
+export type CardShelf = { ios_gift_cards: CardMobileGiftCards; actor?: string; updated_at?: string };
 
 export function useCardShelf() {
   return useQuery({
@@ -211,6 +223,7 @@ export const cardCreditKind: Record<string, string> = {
   refund: "استرداد طلب",
   late_payment: "دفعة متأخرة",
   adjustment: "تعديل يدوي",
+  campaign: "مكافأة حملة",
 };
 
 export const cardPlatform: Record<string, string> = {
@@ -225,3 +238,82 @@ export function libyanPhone(stored: string | undefined): string {
   const national = stored.startsWith("218") ? "0" + stored.slice(3) : stored;
   return national.length === 10 ? `${national.slice(0, 3)} ${national.slice(3, 6)} ${national.slice(6)}` : national;
 }
+
+/** Customers a campaign or an answer brought, and what they bought. */
+export type CardAcquisition = { customers: number; buyers: number; spent: string };
+
+export type CardCampaignKind = "ad" | "creator" | "billboard" | "flyer" | "referral" | "other";
+
+export type CardCampaign = CardAcquisition & {
+  id: string;
+  code: string;
+  name: string;
+  /** What customers read, when set («أحمد», «ملصق الجامعة»). */
+  display_name?: string;
+  kind: CardCampaignKind;
+  note?: string;
+  landing: string;
+  active: boolean;
+  /** Credit each new customer it brings gets ("0.000": none), to at most reward_limit (0: no cap), until reward_until. */
+  reward: string;
+  reward_limit: number;
+  reward_until?: string;
+  rewarded: number;
+  rewards_given: string;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+  /** Link opens by platform: ios, android, web, app. */
+  clicks: Record<string, number>;
+};
+
+export type CardCampaignReport = {
+  campaigns: CardCampaign[];
+  no_campaign: CardAcquisition;
+  heard_from: (CardAcquisition & { answer: string })[];
+  unanswered: CardAcquisition;
+  generated_at: string;
+};
+
+export function useCardCampaigns() {
+  return useQuery({
+    queryKey: cardKeys.campaigns,
+    queryFn: () => api.get<{ report: CardCampaignReport }>(`${BASE}/campaigns`),
+    refetchInterval: 60_000,
+  });
+}
+
+/** A campaign's link: what the ad, the post or the QR code points at. */
+export function campaignLink(code: string): string {
+  return `https://cards.dftr.ly/go/${code}`;
+}
+
+export const cardCampaignKind: Record<CardCampaignKind, string> = {
+  ad: "إعلان ممول",
+  creator: "صانع محتوى",
+  billboard: "لوحة إعلانية",
+  flyer: "ملصق أو منشور",
+  referral: "دعوة صديق",
+  other: "أخرى",
+};
+
+/** The answers the app offers to «من أين سمعت عن دفتر كروت؟», as it words them. */
+export const cardHeardFrom: Record<string, string> = {
+  facebook: "فيسبوك",
+  instagram: "إنستغرام",
+  tiktok: "تيك توك",
+  whatsapp: "واتساب",
+  friend: "صديق أو قريب",
+  shop: "محل",
+  billboard: "لوحة إعلانية",
+  store_search: "البحث في المتجر",
+  other: "غير ذلك",
+};
+
+/** How a campaign's code reached the customer. */
+export const cardAttributionVia: Record<string, string> = {
+  link: "فتح الرابط",
+  code: "كتب الرمز",
+  referrer: "رابط جوجل بلاي",
+  web: "رابط الموقع",
+};

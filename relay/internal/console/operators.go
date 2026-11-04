@@ -166,7 +166,7 @@ const maxBundleBytes = 4 << 30
 var (
 	artifactUpload = regexp.MustCompile(`^/v1/artifacts/[^/]+$`)
 	auditedRead    = regexp.MustCompile(`^/v1/installations/[^/]+/diagnostics-analytics$`)
-	quietWrite     = regexp.MustCompile(`^/v1/vouchers/admin/(settings/preview|stock/validate)$`)
+	quietWrite     = regexp.MustCompile(`^/v1/vouchers/admin/(settings/preview|stock/validate|accounts/check)$`)
 )
 
 // withActor names the operator in a JSON object body, replacing any actor

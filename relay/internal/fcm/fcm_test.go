@@ -137,6 +137,20 @@ func TestATopicAndADeviceAreSentTo(t *testing.T) {
 	}
 }
 
+func TestAnOrderMessageReplacesTheLastOne(t *testing.T) {
+	client, google := testClient(t)
+	if err := client.SendToken(context.Background(), "live-token", Message{Title: "t", Body: "b", Order: "ord-1"}); err != nil {
+		t.Fatal(err)
+	}
+	sent := google.messages[0]
+	data := sent["data"].(map[string]any)
+	tag := sent["android"].(map[string]any)["notification"].(map[string]any)["tag"]
+	collapse := sent["apns"].(map[string]any)["headers"].(map[string]any)["apns-collapse-id"]
+	if data["order"] != "ord-1" || tag != "order-ord-1" || collapse != "order-ord-1" {
+		t.Fatalf("order message = %v", sent)
+	}
+}
+
 func TestAnExpiringTokenIsReplaced(t *testing.T) {
 	client, google := testClient(t)
 	now := time.Date(2026, 10, 27, 9, 0, 0, 0, time.UTC)

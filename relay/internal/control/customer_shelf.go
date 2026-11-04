@@ -9,28 +9,33 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// How the App Store build of «دفتر كروت» treats the cards Apple says only
-// in-app purchase may sell (games, gift cards): an operator's choice, kept in
-// the store so it changes from the console without a new build or redeploy.
+// How the store builds of «دفتر كروت» (App Store and Google Play) treat what
+// each store says only its own billing may sell: an operator's choice, kept in
+// the store so it changes from the console without a new build or redeploy. On
+// the App Store that is every game and gift card; on Play, top-ups sent straight
+// to an account in a game or an app. Our own APK and the website sell them.
 const (
-	// IOSGiftCardsHidden leaves them off the iPhone shelf.
-	IOSGiftCardsHidden = "hidden"
-	// IOSGiftCardsWebOnly lists them with their prices, bought on the website
-	// («على الموقع»). The default.
-	IOSGiftCardsWebOnly = "web_only"
-	// IOSGiftCardsSell sells them in the iPhone app like any other card,
-	// against guideline 3.1.1: the operator takes the App Store's risk.
-	IOSGiftCardsSell = "sell"
+	// MobileGiftCardsHidden leaves them off the store builds' shelf.
+	MobileGiftCardsHidden = "hidden"
+	// MobileGiftCardsWebOnly lists them with their prices, bought on the
+	// website («على الموقع»). The default.
+	MobileGiftCardsWebOnly = "web_only"
+	// MobileGiftCardsSell sells them in the store builds like any other card,
+	// against App Store guideline 3.1.1 and Play's Payments policy §2: the
+	// operator takes the stores' risk.
+	MobileGiftCardsSell = "sell"
 )
 
 // ErrInvalidCustomerShelf is a mode the app does not know.
 var ErrInvalidCustomerShelf = errors.New("invalid customer shelf setting")
 
-// CustomerShelfSettings is the operator's shelf choice, and who made it.
+// CustomerShelfSettings is the operator's shelf choice, and who made it. The
+// stored column and the JSON name keep "ios" from when only the iPhone
+// followed it.
 type CustomerShelfSettings struct {
-	IOSGiftCards string    `json:"ios_gift_cards"`
-	Actor        string    `json:"actor,omitempty"`
-	UpdatedAt    time.Time `json:"updated_at,omitempty"`
+	MobileGiftCards string    `json:"ios_gift_cards"`
+	Actor           string    `json:"actor,omitempty"`
+	UpdatedAt       time.Time `json:"updated_at,omitempty"`
 }
 
 // CustomerShelfStore is an optional store capability (type-asserted, like
@@ -49,13 +54,13 @@ var (
 )
 
 func defaultCustomerShelf() CustomerShelfSettings {
-	return CustomerShelfSettings{IOSGiftCards: IOSGiftCardsWebOnly}
+	return CustomerShelfSettings{MobileGiftCards: MobileGiftCardsWebOnly}
 }
 
 func normalizeCustomerShelf(settings CustomerShelfSettings, now time.Time) (CustomerShelfSettings, error) {
-	settings.IOSGiftCards = strings.TrimSpace(settings.IOSGiftCards)
-	switch settings.IOSGiftCards {
-	case IOSGiftCardsHidden, IOSGiftCardsWebOnly, IOSGiftCardsSell:
+	settings.MobileGiftCards = strings.TrimSpace(settings.MobileGiftCards)
+	switch settings.MobileGiftCards {
+	case MobileGiftCardsHidden, MobileGiftCardsWebOnly, MobileGiftCardsSell:
 	default:
 		return CustomerShelfSettings{}, ErrInvalidCustomerShelf
 	}
@@ -97,7 +102,7 @@ func (s *PostgresStore) CustomerShelfSettings(ctx context.Context) (CustomerShel
 	var settings CustomerShelfSettings
 	err := s.pool.QueryRow(ctx,
 		`SELECT ios_gift_cards, actor, updated_at FROM relay_customer_shelf_settings WHERE id = 1`,
-	).Scan(&settings.IOSGiftCards, &settings.Actor, &settings.UpdatedAt)
+	).Scan(&settings.MobileGiftCards, &settings.Actor, &settings.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return defaultCustomerShelf(), nil
 	}
@@ -116,7 +121,7 @@ func (s *PostgresStore) SetCustomerShelfSettings(ctx context.Context, settings C
 			ios_gift_cards = EXCLUDED.ios_gift_cards,
 			actor = EXCLUDED.actor,
 			updated_at = EXCLUDED.updated_at`,
-		settings.IOSGiftCards, settings.Actor, settings.UpdatedAt,
+		settings.MobileGiftCards, settings.Actor, settings.UpdatedAt,
 	)
 	if err != nil {
 		return CustomerShelfSettings{}, err

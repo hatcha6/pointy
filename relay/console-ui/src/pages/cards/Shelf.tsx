@@ -1,34 +1,34 @@
 import { useEffect, useState } from "react";
 import { Globe, ShieldAlert, Smartphone } from "lucide-react";
-import { cardKeys, useCardShelf, type CardIOSGiftCards } from "../../lib/cards";
+import { cardKeys, useCardShelf, type CardMobileGiftCards } from "../../lib/cards";
 import { dateTime } from "../../lib/format";
 import { Button, Card, Notice, Segmented } from "../../components/ui";
 import { Dialog } from "../../components/dialog";
 import { PasskeyHint, useAction } from "../../components/guarded";
 import { Unavailable } from "../../components/Unavailable";
 
-const modes: Record<CardIOSGiftCards, { label: string; hint: string }> = {
+const modes: Record<CardMobileGiftCards, { label: string; hint: string }> = {
   web_only: {
     label: "على الموقع",
-    hint: "تظهر بأسعارها وعليها شارة «على الموقع»، ومكان زر الشراء ملاحظة بأنها تُشترى من cards.dftr.ly. لا تُباع داخل تطبيق الآيفون.",
+    hint: "تظهر بأسعارها وعليها شارة «على الموقع»، ومكان زر الشراء ملاحظة بأنها تُشترى من cards.dftr.ly. لا تُباع داخل تطبيقي الآيفون وجوجل بلاي.",
   },
   hidden: {
     label: "مخفية",
-    hint: "لا تظهر في تطبيق الآيفون أصلاً: يبقى فيه رف الاتصالات والإنترنت والخدمات وحده.",
+    hint: "لا تظهر في تطبيقي الآيفون وجوجل بلاي أصلاً: يبقى في الآيفون رف الاتصالات والإنترنت والخدمات، ويبقى معه في جوجل بلاي بطاقات الهدايا وأكواد الألعاب ومفاتيحها وهدايا ستيم.",
   },
   sell: {
     label: "تُباع في التطبيق",
-    hint: "تظهر وتُباع في تطبيق الآيفون مثل أي كرت آخر، بالدفع المحلي.",
+    hint: "تظهر وتُباع في تطبيقي الآيفون وجوجل بلاي مثل أي كرت آخر، بالدفع المحلي.",
   },
 };
 
-/** What the iPhone app does with games and gift cards: an operator's choice. */
+/** What the store builds (iPhone, Google Play) do with what each store keeps for its own billing: an operator's choice. */
 export function Shelf() {
   const shelf = useCardShelf();
   const saved = shelf.data?.shelf.ios_gift_cards;
-  const [mode, setMode] = useState<CardIOSGiftCards>("web_only");
+  const [mode, setMode] = useState<CardMobileGiftCards>("web_only");
   const [confirming, setConfirming] = useState(false);
-  const save = useAction({ invalidate: [cardKeys.shelf], success: "تغيّر رف الآيفون", passkey: true });
+  const save = useAction({ invalidate: [cardKeys.shelf], success: "تغيّر رف تطبيقات الهاتف", passkey: true });
 
   useEffect(() => {
     if (saved) setMode(saved);
@@ -43,10 +43,12 @@ export function Shelf() {
     <>
       <div className="page-head">
         <div className="titles">
-          <h1>رف الآيفون</h1>
+          <h1>رف تطبيقات الهاتف</h1>
           <p>
-            قواعد آبل (3.1.1) لا تسمح ببيع الألعاب وبطاقات الهدايا في تطبيق الآيفون إلا بالشراء داخل التطبيق. هنا تختار ما يفعله
-            التطبيق بها. أندرويد والموقع يبيعانها دائماً.
+            قواعد آبل (3.1.1) لا تسمح ببيع الألعاب وبطاقات الهدايا في تطبيق الآيفون إلا بنظام الدفع الخاص بها. أما جوجل بلاي فتعفي
+            بطاقات الهدايا وما يُستخدم خارج تطبيقاتها، فيبيعها تطبيقها دائماً بالدفع المحلي، ولا يبقى تحت هذا الخيار فيه إلا الشحن
+            المباشر بالمعرّف (الألعاب وتيليجرام وتطبيقات البث) وبايننس وماستركارد. نسخة أندرويد المثبّتة من موقعنا والموقع نفسه
+            يبيعان كل شيء دائماً.
           </p>
         </div>
       </div>
@@ -56,9 +58,9 @@ export function Shelf() {
           <Unavailable feature="customers" error={shelf.error} onRetry={() => void shelf.refetch()} />
         </Card>
       ) : (
-        <Card title="الألعاب وبطاقات الهدايا في تطبيق الآيفون">
+        <Card title="ما تقيّده المتاجر في تطبيقي الآيفون وجوجل بلاي">
           <div className="form" style={{ marginBottom: 16 }}>
-            <Segmented<CardIOSGiftCards>
+            <Segmented<CardMobileGiftCards>
               value={mode}
               onChange={setMode}
               options={[
@@ -72,8 +74,8 @@ export function Shelf() {
           {mode === "sell" && (
             <div style={{ marginBottom: 16 }}>
               <Notice tone="danger" icon={<ShieldAlert />}>
-                هذا يخالف قواعد آبل. إن لاحظته آبل فقد ترفض التحديث القادم أو تحذف التطبيق من المتجر، وقد تغلق حساب المطوّر كله.
-                يسري التغيير على كل أجهزة الآيفون عند فتح التطبيق التالي، دون تحديث.
+                هذا يخالف قواعد آبل وجوجل بلاي. إن لاحظه أحد المتجرين فقد يرفض التحديث القادم أو يحذف التطبيق من المتجر، وقد يغلق
+                حساب المطوّر كله. يسري التغيير على تطبيقي الآيفون وجوجل بلاي عند فتح التطبيق التالي، دون تحديث.
               </Notice>
             </div>
           )}
@@ -102,7 +104,7 @@ export function Shelf() {
         onClose={() => setConfirming(false)}
         busy={save.busy}
         icon={mode === "sell" ? <ShieldAlert /> : <Globe />}
-        title={`الألعاب وبطاقات الهدايا في الآيفون: ${modes[mode].label}؟`}
+        title={`ما تقيّده المتاجر في تطبيقات الهاتف: ${modes[mode].label}؟`}
         footer={
           <>
             <Button variant={mode === "sell" ? "danger" : "primary"} size="lg" onClick={() => void submit()} loading={save.busy}>

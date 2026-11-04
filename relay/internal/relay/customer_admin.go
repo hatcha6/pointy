@@ -31,6 +31,9 @@ import (
 //	POST   /v1/customers/admin/notifications            {audience, customer_id, title, body, link, campaign}
 //	GET    /v1/customers/admin/shelf
 //	PUT    /v1/customers/admin/shelf                    {ios_gift_cards}
+//	GET    /v1/customers/admin/campaigns                (customer_campaigns.go)
+//	POST   /v1/customers/admin/campaigns                {code, name, kind, note, landing}
+//	PATCH  /v1/customers/admin/campaigns/{id}           {name, note, landing, active}
 
 // CustomerPusher sends a notification to a topic or to one device (fcm).
 type CustomerPusher interface {
@@ -88,6 +91,12 @@ func (s HTTPServer) handleCustomerAdminRoutes(w http.ResponseWriter, r *http.Req
 		return
 	case route == "notifications" && r.Method == http.MethodPost:
 		s.handleCustomerAdminNotify(w, r, store)
+	case route == "campaigns" && r.Method == http.MethodGet:
+		s.handleCustomerAdminCampaigns(w, r)
+	case route == "campaigns" && r.Method == http.MethodPost:
+		s.handleCustomerAdminCreateCampaign(w, r)
+	case len(parts) == 2 && parts[0] == "campaigns" && r.Method == http.MethodPatch:
+		s.handleCustomerAdminUpdateCampaign(w, r, parts[1])
 	default:
 		writeNotFound(w)
 	}
@@ -174,8 +183,18 @@ func (s HTTPServer) handleCustomerAdminDetail(w http.ResponseWriter, r *http.Req
 		s.customerInternalError(w, "customer notifications failed", err)
 		return
 	}
+	var attribution *control.CustomerAttribution
+	if campaigns, ok := s.Store.(control.CustomerCampaignStore); ok {
+		found, err := campaigns.CustomerAttribution(ctx, id)
+		if err != nil {
+			s.customerInternalError(w, "customer attribution failed", err)
+			return
+		}
+		attribution = &found
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"customer":      summary,
+		"attribution":   attribution,
 		"sessions":      devices,
 		"credit":        map[string]any{"balance": balance, "entries": entries},
 		"orders":        orders,
@@ -521,8 +540,8 @@ func (s HTTPServer) handleCustomerAdminShelf(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusOK, map[string]any{"shelf": settings})
 }
 
-// handleCustomerAdminSetShelf changes what the iPhone app does with the cards
-// Apple reserves for in-app purchase. Every shelf read after it sees the new
+// handleCustomerAdminSetShelf changes what the store builds (iPhone, Play) do
+// with the cards the stores reserve for their own billing. Every shelf read after it sees the new
 // choice: the catalog's version names it, so the app's cached shelf is stale.
 func (s HTTPServer) handleCustomerAdminSetShelf(w http.ResponseWriter, r *http.Request) {
 	store, ok := s.customerShelfStore(w)
@@ -530,14 +549,14 @@ func (s HTTPServer) handleCustomerAdminSetShelf(w http.ResponseWriter, r *http.R
 		return
 	}
 	var request struct {
-		IOSGiftCards string `json:"ios_gift_cards"`
-		Actor        string `json:"actor"`
+		MobileGiftCards string `json:"ios_gift_cards"`
+		Actor           string `json:"actor"`
 	}
 	if !decodeCustomerBody(w, r, &request) {
 		return
 	}
 	settings, err := store.SetCustomerShelfSettings(r.Context(), control.CustomerShelfSettings{
-		IOSGiftCards: request.IOSGiftCards, Actor: adminActor(r, request.Actor),
+		MobileGiftCards: request.MobileGiftCards, Actor: adminActor(r, request.Actor),
 	})
 	if errors.Is(err, control.ErrInvalidCustomerShelf) {
 		writeCustomerError(w, http.StatusBadRequest, "invalid_shelf",
@@ -548,7 +567,7 @@ func (s HTTPServer) handleCustomerAdminSetShelf(w http.ResponseWriter, r *http.R
 		s.customerInternalError(w, "customer shelf write failed", err)
 		return
 	}
-	s.logger().Warn("operator changed the iPhone shelf's gift cards",
-		"ios_gift_cards", settings.IOSGiftCards, "actor", settings.Actor)
+	s.logger().Warn("operator changed the store builds' gift cards",
+		"ios_gift_cards", settings.MobileGiftCards, "actor", settings.Actor)
 	writeJSON(w, http.StatusOK, map[string]any{"shelf": settings})
 }

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Ban, BellRing, UserRound, ChevronLeft, CreditCard, History, LogOut, MonitorSmartphone, ReceiptText, ShieldCheck, Trash2, Wallet as WalletIcon } from "lucide-react";
 import { Link, useRouter, useSearchParam } from "../../lib/router";
-import { cardAudience, cardCreditKind, cardPlatform, useCardCustomer, type CardCreditEntry, type CardDevice, type CardNotification } from "../../lib/cards";
+import { cardAttributionVia, cardAudience, cardCreditKind, cardHeardFrom, cardPlatform, useCardCustomer, type CardCreditEntry, type CardDevice, type CardNotification } from "../../lib/cards";
 import { count, date } from "../../lib/format";
 import { label } from "../../lib/labels";
 import { Badge, Button, Card, CopyText, Empty, Money, Skeleton, Tabs, TimeAgo } from "../../components/ui";
@@ -64,6 +64,15 @@ export function CustomerDetail({ id }: { id: string }) {
             </h1>
             <div className="row" style={{ marginTop: 4 }}>
               <span className="muted">انضم {date(customer.created_at)}</span>
+              {detail.data.attribution?.campaign_code && (
+                <Badge tone="info">
+                  من حملة {detail.data.attribution.campaign_code}
+                  {detail.data.attribution.campaign_via ? ` (${label(cardAttributionVia, detail.data.attribution.campaign_via)})` : ""}
+                </Badge>
+              )}
+              {detail.data.attribution?.heard_from && (
+                <span className="muted">سمع عنا من: {label(cardHeardFrom, detail.data.attribution.heard_from)}</span>
+              )}
               <CopyText value={customer.id} />
             </div>
           </div>

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Unavailable } from "../../components/Unavailable";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeftRight, Landmark, RefreshCw, Search, Settings2, Telescope, Trophy, Truck } from "lucide-react";
+import { ArrowLeftRight, CalendarClock, Landmark, RefreshCw, Search, Settings2, Telescope, TriangleAlert, Trophy, Truck, Wallet } from "lucide-react";
 import { api, qs } from "../../lib/api";
 import { useSearchParam } from "../../lib/router";
 import { matches } from "../../lib/search";
@@ -134,6 +134,7 @@ function OffersTab() {
             { id: "", label: "كل الموردين" },
             { id: "bnplus", label: "BN Plus" },
             { id: "reloadly", label: "Reloadly" },
+            { id: "fazer", label: "FazerCards" },
           ]}
         />
         <Segmented
@@ -405,7 +406,17 @@ function boughtDearer(r: Compared): boolean {
   return !!r.winner && !!r.cheapest && r.winner !== r.cheapest;
 }
 
+type FazerAccount = {
+  balance: string;
+  currency: string;
+  plan: string;
+  plan_expires_at: string;
+  subscription_active: boolean;
+  steam_fee_percent: string;
+};
+
 function BalancesTab() {
+  const fazer = useQuery({ queryKey: ["vouchers", "fazer"], queryFn: () => api.get<FazerAccount>("/v1/vouchers/admin/fazer/account"), retry: false });
   const reloadly = useQuery({ queryKey: ["vouchers", "reloadly"], queryFn: () => api.get<{ reloadly: Record<string, unknown>; sandbox: boolean }>("/v1/vouchers/admin/reloadly/balance"), retry: false });
   const services = useQuery({ queryKey: ["services", "balance"], queryFn: () => api.get<{ balances: Record<string, unknown>[] }>("/v1/services/admin/balance"), retry: false });
   const bnplus = useQuery({ queryKey: ["vouchers", "bnplus", "wallets"], queryFn: () => api.get<{ bnplus: unknown }>("/v1/vouchers/admin/bnplus/wallets"), retry: false });
@@ -418,6 +429,14 @@ function BalancesTab() {
       </Card>
       <Card title="Reloadly — بطاقات الهدايا" actions={reloadly.data?.sandbox ? <Badge tone="warning">تجريبي</Badge> : undefined}>
         {block(reloadly, () => <ConfigList data={reloadly.data?.reloadly} fields={{ balance: { label: "الرصيد" }, currency: { label: "العملة" } }} />)}
+      </Card>
+      <Card
+        title="FazerCards"
+        hint="بطاقات، مفاتيح ألعاب، وشحن إلى حساب"
+        actions={fazer.data ? (fazer.data.subscription_active ? <Badge tone="success">الاشتراك فعّال</Badge> : <Badge tone="danger">الاشتراك منتهٍ</Badge>) : undefined}
+      >
+        {block(fazer, () => <FazerAccountView account={fazer.data!} />)}
+        {fazer.data && <FazerWebhookView />}
       </Card>
       <Card title="Reloadly — الشحن والفواتير">
         {block(services, () => (
@@ -436,6 +455,125 @@ function BalancesTab() {
     </div>
   );
 }
+
+/** The company's FazerCards account: its dollar balance, and the paid plan every order needs. */
+function FazerAccountView({ account }: { account: FazerAccount }) {
+  const expires = account.plan_expires_at ? new Date(account.plan_expires_at) : null;
+  const daysLeft = expires ? Math.ceil((expires.getTime() - Date.now()) / 86_400_000) : null;
+  const empty = Number(account.balance) <= 0;
+  return (
+    <div className="stack">
+      <dl className="facts">
+        <div className="fact">
+          <dt>الرصيد</dt>
+          <dd>
+            <span className="num" dir="ltr">{supplierPrice(account.balance)} {account.currency}</span>
+          </dd>
+        </div>
+        <div className="fact">
+          <dt>الخطة</dt>
+          <dd>{planLabels[account.plan] ?? account.plan}</dd>
+        </div>
+        <div className="fact">
+          <dt>تنتهي</dt>
+          <dd>
+            {expires ? expires.toLocaleDateString("ar-LY-u-nu-latn") : "—"}
+            {daysLeft !== null && daysLeft >= 0 && <span className="faint"> · بعد {count(daysLeft)} يوم</span>}
+          </dd>
+        </div>
+        <div className="fact">
+          <dt>رسوم شحن ستيم</dt>
+          <dd>{account.steam_fee_percent ? `${account.steam_fee_percent}٪` : <span className="faint">غير مضبوطة: شحن ستيم غير معروض</span>}</dd>
+        </div>
+      </dl>
+      {!account.subscription_active && (
+        <Notice tone="danger" icon={<TriangleAlert />}>الاشتراك منتهٍ: لا يقبل FazerCards أي طلب حتى يُجدَّد من لوحته.</Notice>
+      )}
+      {account.subscription_active && daysLeft !== null && daysLeft <= 3 && (
+        <Notice tone="warning" icon={<CalendarClock />}>الاشتراك ينتهي خلال {count(Math.max(daysLeft, 0))} يوم: جدّده من لوحة FazerCards قبل أن تتوقف الطلبات.</Notice>
+      )}
+      {empty && <Notice tone="warning" icon={<Wallet />}>لا رصيد لدى FazerCards: كل طلب منه يُرفض ويُشترى من غيره إن أمكن.</Notice>}
+    </div>
+  );
+}
+
+type FazerWebhook = {
+  set: boolean;
+  expected_url: string;
+  url?: string;
+  ours?: boolean;
+  enabled?: boolean;
+  consecutive_failures?: number;
+  last_success_at?: string;
+  last_failure_at?: string;
+  last_failure_reason?: string;
+  test?: { delivered: boolean; status: number; error: string };
+};
+
+/**
+ * FazerCards' webhook: the moment an order finishes, FazerCards tells the relay,
+ * which then reads the order back itself. Without it a slow code waits for the
+ * next check, up to a minute after FazerCards has it.
+ */
+function FazerWebhookView() {
+  const key = ["vouchers", "fazer", "webhook"];
+  const hook = useQuery({ queryKey: key, queryFn: () => api.get<FazerWebhook>("/v1/vouchers/admin/fazer/webhook"), retry: false });
+  const point = useAction<FazerWebhook>({ invalidate: [key] });
+  const toast = useToast();
+  if (hook.isLoading) return <Skeleton height={40} />;
+  if (hook.isError || !hook.data) return null;
+  const h = hook.data;
+  const working = h.set && h.ours && h.enabled;
+  async function connect() {
+    const result = await point.run("POST", "/v1/vouchers/admin/fazer/webhook");
+    if (!result?.test) return;
+    if (result.test.delivered) toast.success("وصل إشعار FazerCards التجريبي إلى الريلاي.");
+    else toast.error("لم يصل الإشعار التجريبي", result.test.error || (result.test.status ? `ردّ الريلاي ${result.test.status}` : undefined));
+  }
+  return (
+    <div className="stack">
+      <dl className="facts">
+        <div className="fact">
+          <dt>إشعارات الطلبات</dt>
+          <dd>
+            {working ? (
+              <Badge tone="success">مفعّلة</Badge>
+            ) : h.set && !h.ours ? (
+              <Badge tone="warning">تشير إلى عنوان آخر</Badge>
+            ) : h.set ? (
+              <Badge tone="warning">متوقفة</Badge>
+            ) : (
+              <Badge tone="neutral">غير مفعّلة</Badge>
+            )}
+            {working && h.last_success_at && (
+              <span className="faint">
+                {" "}
+                · آخر إشعار <TimeAgo value={h.last_success_at} />
+              </span>
+            )}
+          </dd>
+        </div>
+      </dl>
+      {working && (h.consecutive_failures ?? 0) > 0 && (
+        <Notice tone="warning" icon={<TriangleAlert />}>
+          فشلت {count(h.consecutive_failures ?? 0)} محاولة إشعار متتالية{h.last_failure_reason ? `: ${h.last_failure_reason}` : ""}. الطلبات تُتابَع كل دقيقة على أي حال.
+        </Notice>
+      )}
+      {!working &&
+        (h.expected_url ? (
+          <div>
+            <Button icon={<RefreshCw />} loading={point.busy} onClick={connect}>
+              وجّه إشعارات FazerCards إلى الريلاي
+            </Button>
+          </div>
+        ) : (
+          <span className="faint">لا عنوان عام بـ https لهذا الريلاي يصل إليه FazerCards.</span>
+        ))}
+    </div>
+  );
+}
+
+const planLabels: Record<string, string> = { trial: "تجريبية", bronze: "برونزية", silver: "فضية", gold: "ذهبية" };
 
 type BNPlusWhat = "wallets" | "groups" | "companies" | "cards" | "orders" | "order";
 
@@ -533,6 +671,8 @@ function ConfigTab() {
             bnplus: { label: "BN Plus", render: yesNo },
             reloadly: { label: "Reloadly", render: yesNo },
             reloadly_sandbox: { label: "Reloadly تجريبي", render: yesNo },
+            fazer: { label: "FazerCards", render: yesNo },
+            fazer_steam_fee_percent: { label: "رسوم شحن ستيم (FazerCards)" },
             sync_interval: { label: "قراءة العروض كل" },
             offers_max_age: { label: "أقصى عمر للعرض" },
             rate_limit: { label: "حد الشراء لكل متجر" },

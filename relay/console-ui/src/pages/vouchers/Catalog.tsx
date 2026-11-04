@@ -7,7 +7,7 @@ import { useSearchParam } from "../../lib/router";
 import { matches } from "../../lib/search";
 import { count, dateTime } from "../../lib/format";
 import { saveText, useVoucherImage } from "../../lib/files";
-import { label, supplier as supplierLabels } from "../../lib/labels";
+import { accountKind, label, supplier as supplierLabels } from "../../lib/labels";
 import { ProfitCell } from "../../components/profit";
 import { reasonText, splitOf, type CatalogAnswer, type CatalogRecord, type ShopBrand, type ShopItem, type Supply } from "../../lib/vouchers";
 import { Badge, Button, Card, CopyText, Empty, Money, Segmented, Skeleton, TimeAgo } from "../../components/ui";
@@ -207,11 +207,17 @@ function BrandCard({ brand, supplyOf }: { brand: ShopBrand; supplyOf: Map<string
         <span className="brand-head">
           <BrandLogo refId={brand.logo} name={brand.name} />
           <span>
-            {brand.name} {brand.featured && <Badge tone="info">مميّزة</Badge>} {brand.badge && <Badge tone="money">{brand.badge}</Badge>}
+            {brand.name} {brand.featured && <Badge tone="info">مميّزة</Badge>} {brand.badge && <Badge tone="money">{brand.badge}</Badge>}{" "}
+            {brand.target && <Badge tone="outline">يُشحن إلى {label(accountKind, brand.target.kind)}</Badge>}{" "}
+            {brand.platform === "steam" && <Badge tone="outline">ستيم</Badge>}
           </span>
         </span>
       }
-      hint={`${brand.items.length} صنف`}
+      hint={
+        brand.target
+          ? `${brand.items.length} صنف · يُطلب: ${brand.target.fields.map((f) => f.label).join(" و")}${brand.target.check ? " · يُتحقق من الحساب قبل البيع" : ""}`
+          : `${brand.items.length} صنف`
+      }
     >
       <DataTable rows={brand.items} columns={columns} rowKey={(i) => i.key} />
     </Card>

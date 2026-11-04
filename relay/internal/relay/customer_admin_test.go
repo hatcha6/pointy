@@ -226,11 +226,15 @@ func TestConsoleWritesCarryTheOperator(t *testing.T) {
 	}
 }
 
-func TestTheConsoleChoosesWhatTheIPhoneDoesWithGiftCards(t *testing.T) {
+func TestTheConsoleChoosesWhatTheStoreBuildsDoWithGiftCards(t *testing.T) {
 	h := newOrderHarness(t)
 	token := h.customer("0911111111")
-	iosShelf := func() (map[string]any, map[string]bool) {
-		_, catalog := h.do(http.MethodGet, "/v1/customers/catalog?channel=ios", "", nil)
+	// Google Play leaves gift cards out of its billing, so only the App Store
+	// build follows the choice for them; TestGooglePlaySellsWhatItsPolicyLeavesOpen
+	// has the rest of Play's rule.
+	storeBuilds := []string{"ios"}
+	shelfOf := func(channel string) (map[string]any, map[string]bool) {
+		_, catalog := h.do(http.MethodGet, "/v1/customers/catalog?channel="+channel, "", nil)
 		webOnly := map[string]bool{}
 		for _, raw := range catalog["brands"].([]any) {
 			brand := raw.(map[string]any)
@@ -238,18 +242,35 @@ func TestTheConsoleChoosesWhatTheIPhoneDoesWithGiftCards(t *testing.T) {
 		}
 		return catalog, webOnly
 	}
-	iosOrder := func(key string) (int, map[string]any) {
+	orderFrom := func(channel, key string) (int, map[string]any) {
 		order := sadadOrder("itunes-us-10", "60.00", key, 1)
-		order["channel"] = "ios"
+		order["channel"] = channel
 		return h.do(http.MethodPost, "/v1/customers/orders", token, order)
 	}
 
 	if _, body := h.do(http.MethodGet, "/v1/customers/admin/shelf", "admin-token", nil); body["shelf"].(map[string]any)["ios_gift_cards"] != "web_only" {
 		t.Fatalf("default: %v", body)
 	}
-	listed, shelf := iosShelf()
-	if !shelf["itunes"] || shelf["libyana"] {
-		t.Fatalf("web only: %v", shelf)
+	playSells := func(mode string) {
+		t.Helper()
+		if _, shelf := shelfOf("play"); len(shelf) != 2 || shelf["itunes"] || shelf["libyana"] {
+			t.Fatalf("play under %s: %v", mode, shelf)
+		}
+		if status, body := orderFrom("play", "play-"+mode); status != http.StatusCreated {
+			t.Fatalf("play under %s did not sell a gift card: %d %v", mode, status, body)
+		}
+	}
+	playSells("web_only")
+	listed := map[string]any{}
+	for _, channel := range storeBuilds {
+		catalog, shelf := shelfOf(channel)
+		if !shelf["itunes"] || shelf["libyana"] {
+			t.Fatalf("%s web only: %v", channel, shelf)
+		}
+		if status, _ := orderFrom(channel, channel+"-web-only"); status != http.StatusNotFound {
+			t.Fatalf("%s sold a web-only gift card: %d", channel, status)
+		}
+		listed[channel] = catalog["version"]
 	}
 
 	if status, body := h.do(http.MethodPut, "/v1/customers/admin/shelf", "admin-token",
@@ -257,22 +278,27 @@ func TestTheConsoleChoosesWhatTheIPhoneDoesWithGiftCards(t *testing.T) {
 		body["shelf"].(map[string]any)["actor"] != "Omar" {
 		t.Fatalf("sell: %d %v", status, body)
 	}
-	sold, shelf := iosShelf()
-	if shelf["itunes"] || sold["version"] == listed["version"] {
-		t.Fatalf("sold: %v (version %v)", shelf, sold["version"])
-	}
-	if status, body := iosOrder("ios-sell"); status != http.StatusCreated {
-		t.Fatalf("a gift card the iPhone now sells: %d %v", status, body)
+	for _, channel := range storeBuilds {
+		sold, shelf := shelfOf(channel)
+		if shelf["itunes"] || sold["version"] == listed[channel] {
+			t.Fatalf("%s sold: %v (version %v)", channel, shelf, sold["version"])
+		}
+		if status, body := orderFrom(channel, channel+"-sell"); status != http.StatusCreated {
+			t.Fatalf("a gift card %s now sells: %d %v", channel, status, body)
+		}
 	}
 
 	h.do(http.MethodPut, "/v1/customers/admin/shelf", "admin-token", map[string]any{"ios_gift_cards": "hidden"})
-	if _, shelf := iosShelf(); len(shelf) != 1 || shelf["libyana"] {
-		t.Fatalf("hidden: %v", shelf)
+	for _, channel := range storeBuilds {
+		if _, shelf := shelfOf(channel); len(shelf) != 1 || shelf["libyana"] {
+			t.Fatalf("%s hidden: %v", channel, shelf)
+		}
+		if status, _ := orderFrom(channel, channel+"-hidden"); status != http.StatusNotFound {
+			t.Fatalf("%s sold a hidden gift card: %d", channel, status)
+		}
 	}
-	if status, _ := iosOrder("ios-hidden"); status != http.StatusNotFound {
-		t.Fatalf("a hidden gift card sold: %d", status)
-	}
-	// Android never follows the iPhone's choice.
+	playSells("hidden")
+	// Our own APK is no store build: it never follows the choice.
 	if _, apk := h.do(http.MethodGet, "/v1/customers/catalog?channel=apk", "", nil); len(apk["brands"].([]any)) != 2 {
 		t.Fatalf("apk: %v", apk)
 	}

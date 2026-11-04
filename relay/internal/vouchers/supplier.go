@@ -58,6 +58,7 @@ var refParsers = map[string]refParser{
 	SupplierReloadly: parseReloadlyRef,
 	SupplierTest:     parseTestRef,
 	SupplierStock:    parseStockRef,
+	SupplierFazer:    parseFazerRef,
 }
 
 // SupplierKeys lists the suppliers a catalog may name.

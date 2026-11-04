@@ -28,6 +28,8 @@ const messages: Record<string, string> = {
   gateway_unauthorized: "بوابة الدفع رفضت مفتاح الشركة.",
   vouchers_unavailable: "متجر البطاقات غير متاح على هذا الخادم.",
   wallet_unavailable: "المحافظ غير متاحة على هذا الخادم.",
+  code_taken: "هذا الرمز لحملة أخرى. اختر رمزاً غيره.",
+  invalid_campaign: "الحملة تحتاج اسماً ونوعاً ورمزاً من 3 إلى 24 حرفاً (أحرف إنجليزية وأرقام و - و _).",
 };
 
 /** One Arabic line for an error; the server's own words go in the detail. */

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"strings"
 	"time"
 
@@ -55,8 +56,23 @@ func (s *RedisRelayTicketService) IssueTicket(
 	}
 
 	now := s.clock.Now()
-	expiresAt := now.Add(ticketTTL)
-	refreshExpiresAt := now.Add(refreshTTL)
+	expiresAt, refreshExpiresAt, err := TicketLifetimes(now, request, ticketTTL, refreshTTL)
+	if err != nil {
+		return IssuedRelayTicket{}, err
+	}
+	chainStartedAt := request.ChainStartedAt
+	if chainStartedAt.IsZero() {
+		chainStartedAt = now
+	} else if request.DeviceID != "" {
+		// A refresh: the device may have been revoked since its token was read.
+		revokedAt, err := s.deviceRevokedAt(ctx, installation.ID, strings.TrimSpace(request.DeviceID))
+		if err != nil {
+			return IssuedRelayTicket{}, err
+		}
+		if !revokedAt.IsZero() && !chainStartedAt.After(revokedAt) {
+			return IssuedRelayTicket{}, ErrRelayRefreshTokenNotFound
+		}
+	}
 	ticket := RelayTicket{
 		InstallationID: installation.ID,
 		DeviceID:       strings.TrimSpace(request.DeviceID),
@@ -72,6 +88,8 @@ func (s *RedisRelayTicketService) IssueTicket(
 		TokenHash:      TokenHash(refreshToken),
 		IssuedAt:       now,
 		ExpiresAt:      refreshExpiresAt,
+		NotAfter:       request.NotAfter,
+		ChainStartedAt: chainStartedAt,
 	}
 	content, err := json.Marshal(ticket)
 	if err != nil {
@@ -81,12 +99,18 @@ func (s *RedisRelayTicketService) IssueTicket(
 	if err != nil {
 		return IssuedRelayTicket{}, err
 	}
-	if err := s.client.Set(ctx, s.ticketKey(ticket.TokenHash), content, ticketTTL).Err(); err != nil {
+	if err := s.client.Set(ctx, s.ticketKey(ticket.TokenHash), content, expiresAt.Sub(now)).Err(); err != nil {
 		return IssuedRelayTicket{}, err
 	}
-	if err := s.client.Set(ctx, s.refreshKey(refresh.TokenHash), refreshContent, refreshTTL).Err(); err != nil {
+	if err := s.client.Set(ctx, s.refreshKey(refresh.TokenHash), refreshContent, refreshExpiresAt.Sub(now)).Err(); err != nil {
 		_ = s.client.Del(ctx, s.ticketKey(ticket.TokenHash)).Err()
 		return IssuedRelayTicket{}, err
+	}
+	if ticket.DeviceID != "" {
+		if err := s.indexDeviceTokens(ctx, ticket, refresh, now); err != nil {
+			_ = s.client.Del(ctx, s.ticketKey(ticket.TokenHash), s.refreshKey(refresh.TokenHash)).Err()
+			return IssuedRelayTicket{}, err
+		}
 	}
 
 	return IssuedRelayTicket{
@@ -194,7 +218,97 @@ func (s *RedisRelayTicketService) readRefreshToken(
 	if !now.Before(refresh.ExpiresAt) {
 		return RelayRefreshToken{}, ErrRelayRefreshTokenNotFound
 	}
+	if refresh.DeviceID != "" {
+		revokedAt, err := s.deviceRevokedAt(ctx, refresh.InstallationID, refresh.DeviceID)
+		if err != nil {
+			return RelayRefreshToken{}, err
+		}
+		if !revokedAt.IsZero() && !refresh.ChainStart().After(revokedAt) {
+			_ = s.client.Del(ctx, s.refreshKey(tokenHash)).Err()
+			return RelayRefreshToken{}, ErrRelayRefreshTokenNotFound
+		}
+	}
 	return refresh, nil
+}
+
+// RevokeDevice drops the device's live tokens through its index, then marks
+// its chains revoked: the marker catches a refresh that was mid-exchange
+// while the index was read, at that token's next refresh.
+func (s *RedisRelayTicketService) RevokeDevice(
+	ctx context.Context,
+	installationID string,
+	deviceID string,
+	now time.Time,
+	keepFor time.Duration,
+) error {
+	installationID = strings.TrimSpace(installationID)
+	deviceID = strings.TrimSpace(deviceID)
+	if installationID == "" || deviceID == "" {
+		return ErrInvalidToken
+	}
+	if keepFor <= 0 {
+		keepFor = normalizeRefreshTTL(0)
+	}
+	marker := now.UTC().Format(time.RFC3339Nano)
+	if err := s.client.Set(ctx, s.deviceRevokedKey(installationID, deviceID), marker, keepFor).Err(); err != nil {
+		return err
+	}
+	indexKey := s.deviceIndexKey(installationID, deviceID)
+	keys, err := s.client.ZRange(ctx, indexKey, 0, -1).Result()
+	if err != nil {
+		return err
+	}
+	return s.client.Del(ctx, append(keys, indexKey)...).Err()
+}
+
+func (s *RedisRelayTicketService) indexDeviceTokens(
+	ctx context.Context,
+	ticket RelayTicket,
+	refresh RelayRefreshToken,
+	now time.Time,
+) error {
+	indexKey := s.deviceIndexKey(ticket.InstallationID, ticket.DeviceID)
+	pipe := s.client.TxPipeline()
+	// Expired members go as new ones come, so the index holds only what
+	// is live: two tokens per refresh would otherwise pile up for a week.
+	pipe.ZRemRangeByScore(ctx, indexKey, "-inf", strconv.FormatInt(now.Unix(), 10))
+	pipe.ZAdd(
+		ctx,
+		indexKey,
+		redis.Z{Score: float64(ticket.ExpiresAt.Unix()), Member: s.ticketKey(ticket.TokenHash)},
+		redis.Z{Score: float64(refresh.ExpiresAt.Unix()), Member: s.refreshKey(refresh.TokenHash)},
+	)
+	pipe.ExpireAt(ctx, indexKey, refresh.ExpiresAt)
+	_, err := pipe.Exec(ctx)
+	return err
+}
+
+func (s *RedisRelayTicketService) deviceRevokedAt(
+	ctx context.Context,
+	installationID string,
+	deviceID string,
+) (time.Time, error) {
+	raw, err := s.client.Get(ctx, s.deviceRevokedKey(installationID, deviceID)).Result()
+	if errors.Is(err, redis.Nil) {
+		return time.Time{}, nil
+	}
+	if err != nil {
+		return time.Time{}, err
+	}
+	revokedAt, err := time.Parse(time.RFC3339Nano, raw)
+	if err != nil {
+		// Unreadable: refuse rather than let a revoked device back in.
+		return time.Now().UTC(), nil
+	}
+	return revokedAt, nil
+}
+
+func (s *RedisRelayTicketService) deviceIndexKey(installationID, deviceID string) string {
+	return s.keyPrefix + ":device-tokens:" + installationID + ":" + TokenHash(deviceID)
+}
+
+func (s *RedisRelayTicketService) deviceRevokedKey(installationID, deviceID string) string {
+	return s.keyPrefix + ":device-revoked:" + installationID + ":" + TokenHash(deviceID)
 }
 
 func (s *RedisRelayTicketService) ticketKey(tokenHash string) string {

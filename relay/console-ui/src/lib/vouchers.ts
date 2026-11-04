@@ -18,6 +18,10 @@ export type ShopItem = {
   rank: number;
 };
 
+/** What the buyer types for a brand whose cards are credit sent to an account. */
+export type TargetField = { key: string; label: string; type?: "" | "text" | "select"; options?: { value: string; label: string }[] };
+export type Target = { kind: string; fields: TargetField[]; check?: string; hint?: string };
+
 export type ShopBrand = {
   key: string;
   name: string;
@@ -27,6 +31,10 @@ export type ShopBrand = {
   badge?: string;
   logo?: string;
   print_logo?: string;
+  /** Set for a brand sent to an account (a game by player ID, Telegram, Steam). */
+  target?: Target | null;
+  /** The store a game is played on ("steam"), named on its tile in the app. */
+  platform?: string;
   items: ShopItem[];
 };
 
@@ -93,6 +101,9 @@ const reasonPrefixes: [string, string][] = [
   ["test mode buys from nobody", "الوضع التجريبي لا يشتري من أحد"],
   ["the relay does not buy from", "الخادم غير مضبوط للشراء من هذا المورّد"],
   ["the price at Reloadly is not known", "سعر Reloadly غير معروف بعد"],
+  ["the price at FazerCards is not known", "سعر FazerCards غير معروف بعد"],
+  ["this card is sent to an account", "هذه البطاقة تُشحن إلى حساب وتحتاج إليه"],
+  ["credit is sent to an account one at a time", "الشحن إلى حساب واحدة في كل مرة"],
   ["the supplier no longer sells this card", "المورّد لم يعد يبيع هذه البطاقة"],
   ["the supplier is out of stock", "نفدت لدى المورّد"],
   ["no code left in the company's stock", "نفد مخزوننا من هذه البطاقة"],

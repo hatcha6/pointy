@@ -651,6 +651,7 @@ type fileStoreData struct {
 	Console                          *fileConsoleData                          `json:"console,omitempty"`
 	Customers                        *fileCustomerData                         `json:"customers,omitempty"`
 	CustomerOrders                   *fileCustomerOrderData                    `json:"customer_orders,omitempty"`
+	CustomerCampaigns                *fileCustomerCampaignData                 `json:"customer_campaigns,omitempty"`
 	WalletBank                       *fileWalletBankData                       `json:"wallet_bank,omitempty"`
 	FinanceEntries                   map[string]FinanceEntry                   `json:"finance_entries,omitempty"`
 	FinanceRecurring                 map[string]FinanceRecurring               `json:"finance_recurring,omitempty"`

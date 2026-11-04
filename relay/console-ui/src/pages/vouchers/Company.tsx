@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Banknote, CreditCard, Eye, FlaskConical, Info, Search, ShoppingBag, Smartphone, TriangleAlert } from "lucide-react";
+import { Banknote, CreditCard, Eye, FlaskConical, Info, Search, ShoppingBag, Smartphone, TriangleAlert, UserCheck, UserSearch } from "lucide-react";
 import { api, qs } from "../../lib/api";
 import { idempotencyKey } from "../../lib/stepup";
 import { useSearchParam } from "../../lib/router";
@@ -36,7 +36,12 @@ const purposes: { id: Purpose; label: string }[] = [
 ];
 
 type Code = { code: string; serial?: string };
-type CompanyAnswer = { purchase: Purchase & { codes?: Code[]; codes_pending?: boolean; receipt?: Record<string, string>; receipt_pending?: boolean }; receipt?: Record<string, string>; receipt_pending?: boolean };
+type CompanyAnswer = {
+  purchase: Purchase & { codes?: Code[]; codes_pending?: boolean; receipt?: Record<string, string>; receipt_pending?: boolean; delivery?: string };
+  receipt?: Record<string, string>;
+  receipt_pending?: boolean;
+};
+type AccountCheck = { status: "valid" | "invalid" | "unconfirmed" | "unchecked"; name?: string; region?: string; account: string };
 
 const companyKey = ["vouchers", "purchases", { buyer: "company" }];
 
@@ -160,9 +165,14 @@ export function Company() {
               actions={(p) =>
                 p.status === "succeeded" ? (
                   <div className="row">
-                    <Button size="sm" icon={<Eye />} onClick={() => setRevealing(p)}>
-                      {p.kind === "card" ? "الأكواد" : "الإيصال"}
-                    </Button>
+                    {p.kind === "card" && p.target ? (
+                      // Sent to an account: there is no code to reveal.
+                      <Badge tone="money">شُحنت إلى الحساب</Badge>
+                    ) : (
+                      <Button size="sm" icon={<Eye />} onClick={() => setRevealing(p)}>
+                        {p.kind === "card" ? "الأكواد" : "الإيصال"}
+                      </Button>
+                    )}
                     {p.purpose === "resale" && !p.test_mode && !soldFor.has(p.id) && (
                       <Button
                         size="sm"
@@ -233,7 +243,10 @@ function BuyCardDialog({ onClose }: { onClose: () => void }) {
   const [note, setNote] = useState("");
   const [key] = useState(idempotencyKey);
   const [result, setResult] = useState<CompanyAnswer | null>(null);
+  const [account, setAccount] = useState<Record<string, string>>({});
+  const [checked, setChecked] = useState<AccountCheck | null>(null);
   const action = useAction<CompanyAnswer>({ passkey: true, invalidate: [["vouchers"], financeKeys.all] });
+  const check = useAction<AccountCheck>({});
 
   const options = useMemo<ComboOption[]>(
     () =>
@@ -252,6 +265,15 @@ function BuyCardDialog({ onClose }: { onClose: () => void }) {
   const shopPrice = catalog.data?.view?.brands.flatMap((b) => b.items).find((i) => i.key === item)?.unit_price;
   const each = winner?.cost_lyd ?? shopPrice;
   const testMode = !!catalog.data?.view?.test_mode;
+  // A card sent to an account (a game by player ID, Telegram, Steam) asks for it.
+  const target = catalog.data?.view?.brands.find((b) => b.items.some((i) => i.key === item))?.target ?? null;
+  const accountReady = !target || target.fields.every((f) => (account[f.key] ?? "").trim() !== "");
+  const pick = (next: string) => {
+    setItem(next);
+    setAccount({});
+    setChecked(null);
+    setQuantity(1);
+  };
 
   if (result) {
     return (
@@ -275,14 +297,15 @@ function BuyCardDialog({ onClose }: { onClose: () => void }) {
             variant="money"
             size="lg"
             loading={action.busy}
-            disabled={!item}
+            disabled={!item || !accountReady}
             onClick={async () => {
               const answer = await action.run("POST", "/v1/vouchers/admin/company/cards", {
                 item,
-                quantity,
+                quantity: target ? 1 : quantity,
                 idempotency_key: key,
                 purpose,
                 note: note.trim(),
+                ...(target ? { account } : {}),
               });
               if (answer) setResult(answer);
             }}
@@ -302,16 +325,65 @@ function BuyCardDialog({ onClose }: { onClose: () => void }) {
           </Notice>
         )}
         <Field label="البطاقة" htmlFor="company-item">
-          {catalog.isLoading ? <Skeleton height={38} /> : <Combobox id="company-item" value={item} options={options} onChange={setItem} />}
+          {catalog.isLoading ? <Skeleton height={38} /> : <Combobox id="company-item" value={item} options={options} onChange={pick} />}
         </Field>
+        {target && (
+          <>
+            {target.fields.map((f) => (
+              <Field key={f.key} label={f.label} htmlFor={`company-account-${f.key}`}>
+                {f.type === "select" ? (
+                  <select
+                    id={`company-account-${f.key}`}
+                    className="input"
+                    value={account[f.key] ?? ""}
+                    onChange={(e) => (setAccount({ ...account, [f.key]: e.target.value }), setChecked(null))}
+                  >
+                    <option value="">اختر</option>
+                    {(f.options ?? []).map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    id={`company-account-${f.key}`}
+                    className="input num"
+                    dir="ltr"
+                    value={account[f.key] ?? ""}
+                    onChange={(e) => (setAccount({ ...account, [f.key]: e.target.value }), setChecked(null))}
+                  />
+                )}
+              </Field>
+            ))}
+            {target.hint && <p className="faint">{target.hint}</p>}
+            {/* A Telegram username and a Steam invite link have no check. */}
+            {target.kind !== "telegram_username" && target.kind !== "steam_invite" && (
+              <div className="row" style={{ gap: 8 }}>
+                <Button
+                  size="sm"
+                  icon={<UserSearch />}
+                  disabled={!accountReady}
+                  loading={check.busy}
+                  onClick={async () => setChecked((await check.run("POST", "/v1/vouchers/admin/accounts/check", { item, account })) ?? null)}
+                >
+                  تحقق من الحساب
+                </Button>
+                {checked && <AccountCheckBadge check={checked} />}
+              </div>
+            )}
+          </>
+        )}
         {supply && !supply.available && (
           <Notice tone="danger" icon={<TriangleAlert />}>
             غير متاحة الآن: {reasonText(supply.reason)}
           </Notice>
         )}
-        <Field label="العدد">
-          <Segmented<string> value={String(quantity)} onChange={(v) => setQuantity(Number(v))} options={[1, 2, 3, 5, 10].map((n) => ({ id: String(n), label: count(n) }))} />
-        </Field>
+        {!target && (
+          <Field label="العدد">
+            <Segmented<string> value={String(quantity)} onChange={(v) => setQuantity(Number(v))} options={[1, 2, 3, 5, 10].map((n) => ({ id: String(n), label: count(n) }))} />
+          </Field>
+        )}
         <PurposeFields purpose={purpose} setPurpose={setPurpose} note={note} setNote={setNote} />
         {item && (
           <Notice tone="info" icon={<Info />}>
@@ -571,6 +643,20 @@ const receiptLabels: Record<string, string> = {
 };
 
 /** The codes of a card, or the receipt of a top-up or bill, as just bought or revealed. */
+/** What an account check found, in a word: the player's name when the game gave it. */
+function AccountCheckBadge({ check }: { check: AccountCheck }) {
+  switch (check.status) {
+    case "valid":
+      return <Badge tone="success">موجود{check.name ? `: ${check.name}` : ""}{check.region ? ` · ${check.region}` : ""}</Badge>;
+    case "invalid":
+      return <Badge tone="danger">لا يوجد حساب بهذا المعرّف</Badge>;
+    case "unconfirmed":
+      return <Badge tone="warning">تعذّر التأكد منه</Badge>;
+    default:
+      return <Badge tone="neutral">لا تحقق لهذه البطاقة</Badge>;
+  }
+}
+
 function PurchaseOutcome({ answer }: { answer: CompanyAnswer }) {
   const p = answer.purchase;
   const codes = p.codes ?? [];
@@ -582,6 +668,11 @@ function PurchaseOutcome({ answer }: { answer: CompanyAnswer }) {
       {p.test_mode && (
         <Notice tone="warning" icon={<FlaskConical />}>
           عملية تجريبية: لا قيمة لها.
+        </Notice>
+      )}
+      {p.status === "succeeded" && (p.delivery === "account" || (p.kind === "card" && !!p.target)) && (
+        <Notice tone="money" icon={<UserCheck />}>
+          شُحنت إلى الحساب <span className="mono" dir="ltr">{p.target}</span> مباشرة، ولا كود لها.
         </Notice>
       )}
       {codes.length > 0 && (
@@ -607,7 +698,7 @@ function PurchaseOutcome({ answer }: { answer: CompanyAnswer }) {
           ))}
         </dl>
       )}
-      {p.status === "succeeded" && pending && codes.length === 0 && Object.keys(receipt).length === 0 && (
+      {p.status === "succeeded" && pending && codes.length === 0 && Object.keys(receipt).length === 0 && !p.target && (
         <Notice tone="warning" icon={<TriangleAlert />}>
           تمّت العملية لكن تعذّرت قراءة {p.kind === "card" ? "الأكواد" : "الإيصال"} من المورّد الآن. افتحها من القائمة بعد قليل.
         </Notice>

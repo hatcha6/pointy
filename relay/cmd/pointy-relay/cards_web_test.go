@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"pointy/relay/internal/cardsweb"
 )
 
 func TestCardsWebHostsMayCallTheCustomerRoutes(t *testing.T) {
@@ -31,7 +33,7 @@ func TestCardsWebServesTheBuildOnItsHostOnly(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	relay := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = io.WriteString(w, "relay") })
 
-	same, err := buildCardsWeb(relay, nil, "/nowhere", nil, logger)
+	same, err := buildCardsWeb(relay, nil, "/nowhere", nil, cardsweb.StoreLinks{}, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +43,7 @@ func TestCardsWebServesTheBuildOnItsHostOnly(t *testing.T) {
 		t.Fatal("served a web app nobody asked for")
 	}
 
-	if _, err := buildCardsWeb(relay, []string{"cards.dftr.ly"}, t.TempDir(), nil, logger); err == nil {
+	if _, err := buildCardsWeb(relay, []string{"cards.dftr.ly"}, t.TempDir(), nil, cardsweb.StoreLinks{}, logger); err == nil {
 		t.Fatal("started without a web build")
 	}
 
@@ -49,7 +51,7 @@ func TestCardsWebServesTheBuildOnItsHostOnly(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("cards"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	handler, err := buildCardsWeb(relay, []string{"cards.dftr.ly"}, dir, nil, logger)
+	handler, err := buildCardsWeb(relay, []string{"cards.dftr.ly"}, dir, nil, cardsweb.StoreLinks{}, logger)
 	if err != nil {
 		t.Fatal(err)
 	}

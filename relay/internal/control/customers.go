@@ -580,6 +580,16 @@ func (s *FileStore) DeleteCustomer(_ context.Context, customerID string) error {
 			delete(c.Sessions, id)
 		}
 	}
+	// The accounts their finished orders were sent to go with them; an open
+	// order keeps its own until it is bought.
+	if orders := s.data.CustomerOrders; orders != nil {
+		for id, order := range orders.Orders {
+			if order.CustomerID == customerID && len(order.Account) > 0 && !CustomerOrderOpen(order.Status) {
+				order.Account = nil
+				orders.Orders[id] = order
+			}
+		}
+	}
 	return s.saveLocked()
 }
 

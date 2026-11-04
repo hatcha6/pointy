@@ -152,6 +152,34 @@ func TestValidationFindsEveryProblem(t *testing.T) {
 	}
 }
 
+func TestABrandNamesItsPlatformForTheShop(t *testing.T) {
+	document := sampleDocument()
+	document.Brands[1].Platform = "epic"
+	problems := Validate(document, ValidateOptions{})
+	if len(problems) != 1 || problems[0].Path != "brands[1].platform" {
+		t.Fatalf("a store the apps have no badge for is refused: %v", problems)
+	}
+	for _, platform := range Platforms {
+		document.Brands[1].Platform = platform
+		if problems := Validate(document, ValidateOptions{}); len(problems) > 0 {
+			t.Fatalf("%s: %v", platform, problems)
+		}
+	}
+	document.Brands[1].Platform = " steam "
+	if problems := Validate(document, ValidateOptions{}); len(problems) > 0 {
+		t.Fatal(problems)
+	}
+	now := time.Date(2026, 10, 7, 12, 0, 0, 0, time.UTC)
+	before := Shop(Normalize(sampleDocument()), "sha", now, false, nil)
+	view := Shop(Normalize(document), "sha", now, false, nil)
+	if view.Brands[0].Key != "itunes" || view.Brands[0].Platform != PlatformSteam || view.Brands[1].Platform != "" {
+		t.Fatalf("platforms: %+v", view.Brands)
+	}
+	if view.Version == before.Version {
+		t.Fatal("a brand's platform is part of what the shop sees: the version must change")
+	}
+}
+
 func TestAPathIsAcceptedOnlyWhenAllowed(t *testing.T) {
 	document := sampleDocument()
 	document.Brands[1].Logo.Display = "logos/itunes.png"

@@ -86,6 +86,11 @@ type CustomerOrder struct {
 	BrandKey string `json:"brand"`
 	ItemName string `json:"name"`
 	Quantity int    `json:"quantity"`
+	// Account is what the customer typed for a card sent to an account (a
+	// player ID, a username), whole: the card is bought after the payment, so
+	// it must be kept until then. Empty for a code card. Closed orders forget
+	// it when the customer deletes their account.
+	Account map[string]string `json:"account,omitempty"`
 	// UnitPrice and Total are what the customer pays, in dinars. CreditUsed
 	// is the part their credit paid; AmountDue the part Dafa collects.
 	UnitPrice  string `json:"unit_price"`
@@ -225,6 +230,10 @@ func normalizeCustomerOrder(order CustomerOrder) (CustomerOrder, *big.Rat, error
 	order.IdempotencyKey = strings.TrimSpace(order.IdempotencyKey)
 	order.ItemKey = strings.TrimSpace(order.ItemKey)
 	order.Method = strings.TrimSpace(order.Method)
+	order.Account = normalizeCustomerAccount(order.Account)
+	if len(order.Account) > maxCustomerAccountFields {
+		return CustomerOrder{}, nil, fmt.Errorf("customer order account has more than %d fields", maxCustomerAccountFields)
+	}
 	if order.CustomerID == "" || order.ItemKey == "" || order.IdempotencyKey == "" ||
 		len(order.IdempotencyKey) > maxCustomerOrderKey || order.Quantity < 1 {
 		return CustomerOrder{}, nil, errors.New("customer order needs a customer, an item, a quantity and an idempotency key")
@@ -249,7 +258,41 @@ func normalizeCustomerOrder(order CustomerOrder) (CustomerOrder, *big.Rat, error
 // sameCustomerOrder reports whether a replayed request asks for the order the
 // key already names.
 func sameCustomerOrder(existing, requested CustomerOrder) bool {
-	return existing.ItemKey == requested.ItemKey && existing.Quantity == requested.Quantity
+	return existing.ItemKey == requested.ItemKey && existing.Quantity == requested.Quantity &&
+		sameCustomerAccount(existing.Account, requested.Account)
+}
+
+// maxCustomerAccountFields bounds an order's account: a game asks for a
+// player ID and a server at most, a username or a login is one field.
+const maxCustomerAccountFields = 4
+
+// normalizeCustomerAccount trims an account and drops its empty fields; nil
+// for nothing.
+func normalizeCustomerAccount(account map[string]string) map[string]string {
+	out := map[string]string{}
+	for key, value := range account {
+		key, value = strings.TrimSpace(key), strings.TrimSpace(value)
+		if key != "" && value != "" {
+			out[key] = value
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func sameCustomerAccount(a, b map[string]string) bool {
+	a, b = normalizeCustomerAccount(a), normalizeCustomerAccount(b)
+	if len(a) != len(b) {
+		return false
+	}
+	for key, value := range a {
+		if b[key] != value {
+			return false
+		}
+	}
+	return true
 }
 
 // placeCustomerOrder fills in what the customer's credit pays. It returns the

@@ -21,6 +21,7 @@ import (
 type signInShop struct {
 	server       HTTPServer
 	installation string
+	accessToken  string
 	mu           sync.Mutex
 	seen         []*http.Request
 }
@@ -64,6 +65,7 @@ func newSignInShop(t *testing.T) *signInShop {
 	waitUntil(t, time.Second, func() bool { return hub.IsOnline(provisioned.Installation.ID) })
 	shop.server = HTTPServer{Store: store, Hub: hub, Logger: logger}
 	shop.installation = provisioned.Installation.ID
+	shop.accessToken = provisioned.AccessToken
 	return shop
 }
 
@@ -177,5 +179,47 @@ func TestRemoteSignInIsRateLimitedPerCaller(t *testing.T) {
 	other.Body.Close()
 	if other.StatusCode != http.StatusOK {
 		t.Fatalf("another caller keeps its own budget, got %d", other.StatusCode)
+	}
+}
+
+func TestRemoteSignInDropsTheAuthorizationHeader(t *testing.T) {
+	shop := newSignInShop(t)
+	response := shop.send(t, http.MethodGet, "/api/auth/me/", shop.installation, func(r *http.Request) {
+		r.SetBasicAuth("owner", "1234")
+		r.Header.Set("Cookie", "sessionid=abc")
+	})
+	response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", response.StatusCode)
+	}
+	reached := shop.reached()
+	if len(reached) != 1 {
+		t.Fatalf("expected 1 request at the backend, got %d", len(reached))
+	}
+	if got := reached[0].Header.Get("Authorization"); got != "" {
+		t.Fatalf("the sign-in route must not pass a credential header on, got %q", got)
+	}
+	if got := reached[0].Header.Get("Cookie"); got != "sessionid=abc" {
+		t.Fatalf("the signed-in session still reaches the shop, got %q", got)
+	}
+}
+
+func TestNodeRelayedSignInDropsTheAuthorizationHeader(t *testing.T) {
+	shop := newSignInShop(t)
+	shop.server.NodeProxyToken = "node-token"
+	response := shop.send(t, http.MethodGet, "/v1/node/relay/api/auth/me/", shop.installation, func(r *http.Request) {
+		r.Header.Set(NodeProxyTokenHeader, "node-token")
+		r.SetBasicAuth("owner", "1234")
+	})
+	response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", response.StatusCode)
+	}
+	reached := shop.reached()
+	if len(reached) != 1 {
+		t.Fatalf("expected 1 request at the backend, got %d", len(reached))
+	}
+	if got := reached[0].Header.Get("Authorization"); got != "" {
+		t.Fatalf("a node-relayed sign-in must not pass a credential header on, got %q", got)
 	}
 }

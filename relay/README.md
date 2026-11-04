@@ -1648,8 +1648,24 @@ Settings:
 
 - `POINTY_RELAY_CUSTOMER_CHANNEL_CATEGORIES` — a JSON object, channel → the
   categories it may sell. Example: `{"ios":["telecom","internet"]}`. A channel
-  left out sells everything, except `ios`, which defaults to the service
-  categories.
+  left out sells everything, with two exceptions by default. `ios` sells the
+  service categories (`telecom`, `intl_topup`, `internet`): App Store 3.1.1
+  keeps digital gift cards for Apple's in-app purchase. `play` sells everything
+  but top-ups sent straight to an account in a game or an app (player IDs,
+  Telegram) and the Binance and Mastercard cards. Play's
+  [Payments policy FAQ](https://support.google.com/googleplay/android-developer/answer/10281818)
+  exempts gift cards and goods used only outside apps on Play, which covers
+  game codes, game keys, Steam gifts and Steam wallet top-ups; its §2 names
+  virtual currencies and subscriptions, and those are spent inside apps that
+  are on Play. Binance and Mastercard are held for Play's financial and crypto
+  policies (the app declares no financial features), not its billing. A list
+  given for `play` stands as written. What a store build may not sell follows
+  the console's «رف تطبيقات الهاتف» switch (`PUT /v1/customers/admin/shelf`,
+  stored as `ios_gift_cards`, a name from when only iOS followed it): listed
+  «على الموقع» (the default), hidden, or sold. Play's §4 also names in-app
+  "messaging" that leads to another way to pay, so the «على الموقع» listing is
+  a risk the operator took on Play; «مخفية» hides them on both builds. The APK
+  and the web sell everything.
 - `POINTY_RELAY_CUSTOMER_ORDER_TTL` (`30m`).
 - `POINTY_RELAY_FCM_SERVICE_ACCOUNT` — the «دفتر كروت» Firebase project's
   service account key (Firebase console → Project settings → Service
@@ -1664,6 +1680,28 @@ Settings:
   notifications sent. A credit adjustment, stopping an account and erasing
   one each need a passkey tap. A stopped account is signed out everywhere
   and its phone refused at sign-in (`account_blocked`) until restarted.
+- Console, «الحملات» (`/v1/customers/admin/campaigns`): where customers come
+  from. Each campaign (an ad, a creator, a billboard, a flyer, a friend) has
+  a code and a link, `cards.dftr.ly/go/<CODE>`. A customer is credited to the
+  first campaign that reaches them within their first week, for good; its
+  optional reward (0–100 LYD of credit, to the first N customers, until a
+  last day) lands in the same write and is never given twice. After the
+  reward's last day the code still counts customers, it just stops paying.
+  Creating or changing a campaign needs a passkey tap. The page also shows
+  every customer's answer to «من أين سمعت عنا؟». The app sends the code with
+  the sign-in (`attribution` on `/v1/customers/auth/verify`) or on its own
+  (`PUT /v1/customers/me/attribution`); `GET /v1/customers/campaigns/<CODE>`
+  checks a typed one. Rewards are customer credit like an operator's grant:
+  the company books do not show them as a separate expense.
+- `POINTY_RELAY_CARDS_IOS_STORE_URL`, `POINTY_RELAY_CARDS_ANDROID_STORE_URL` —
+  the card app's App Store page (with Apple's provider token,
+  `https://apps.apple.com/app/id…?pt=…&mt=8`) and Google Play page. A
+  campaign link counts the open per platform, then sends an iPhone to the App
+  Store with the code as `ct` (App Store Connect counts its installs), an
+  Android phone to Play with the code in the install referrer (the app reads
+  it on first launch), and anything else, or a phone whose store is unset, to
+  the campaign's page of the web app with `?c=<CODE>`. A phone with the app
+  opens the link in the app itself. Link-preview robots are not counted.
 - `POINTY_RELAY_CARDS_WEB_HOSTS` — hosts the relay serves the card app's
   web build on, comma-separated (`cards.dftr.ly`). Empty serves none.
   - Requests to those hosts get the build; every other host reaches the relay
@@ -1698,6 +1736,19 @@ Settings:
     with `/api/`: behind the connector the backend sees its LAN address, and
     would refuse the app's own origin as a CSRF failure. A foreign origin
     passes untouched. The CSRF token itself is still checked.
+  - One cookie jar per shop: every backend sets `sessionid`/`csrftoken`, so on
+    the shared host they are renamed `p_<installation>_<name>` (Domain
+    dropped) on the way out, and an `/api/` request carries on only the jar of
+    the shop its ticket or sign-in header names, under the original names.
+    Unscoped cookies are never passed on and are expired; the ticket refresh
+    gets none (`relay/internal/appweb/cookies.go`).
+  - The app's pages carry a Content-Security-Policy
+    (`relay/internal/appweb/csp.go`): only the build's own scripts run — its
+    files, the engine from www.gstatic.com, and index.html's inline scripts by
+    hash, read from the build at start-up — and nothing may frame it. WebKit
+    before 16 (any browser on iOS 15) cannot read `'wasm-unsafe-eval'`, so it
+    alone is given `'unsafe-eval'` (`Vary: User-Agent`). Checked in Chromium
+    (WebAssembly and CanvasKit builds) and Mobile Safari.
   - Fingerprinted files are kept for good, the rest `no-cache`, Brotli/gzip
     copies sent when accepted (`relay/internal/webbuild`, shared with
     cards.dftr.ly). `X-Frame-Options: DENY`.
@@ -1716,6 +1767,19 @@ Settings:
   ordinary ticket. `POINTY_RELAY_RATE_LIMIT_REMOTE_SIGN_IN` (60 per window per
   installation) and `POINTY_RELAY_RATE_LIMIT_REMOTE_SIGN_IN_CLIENT` (20 per
   installation and caller address) bound the tries.
+  - The relay drops `Authorization` on this route: a password reaches the
+    shop only through its login form, which judges the switch, the manager and
+    the throttles. The backend drops it too.
+  - Pairing on this route sends `not_after` (the remote session's end) with
+    the ticket request: the ticket, its refresh token and every refresh after
+    are cut at it. A till paired on the LAN keeps the full lifetimes.
+  - `POST /v1/relay-tickets/revoke` (the installation's access token,
+    `{"device_id": …}`) drops a device's live tickets and refresh tokens and
+    refuses any refresh of a chain paired before it. The shop calls it when a
+    remote session is ended (إعداداتي, or the user's page in user management).
+  - Every relayed request tells the shop who is calling, set by the relay and
+    never taken from the caller: `X-Pointy-Relay-Client-IP` (handed on across
+    a node hop) and, on a ticket, `X-Pointy-Relay-Device`.
 - `POINTY_RELAY_CUSTOMER_WEB_ORIGINS` — the card app's web build origins,
   comma-separated (`https://cards.dftr.ly`).
   - Browsers on them get CORS answers on `/v1/customers/*`, preflight included.
@@ -1949,7 +2013,7 @@ pointy-relay wallet refund <installation-id> --amount 150 --service remote_acces
 pointy-relay wallet config                                 # key environment, methods, bounds, webhook base (no key)
 ```
 
-## Company Card Shop (BN Plus and Reloadly)
+## Company Card Shop (BN Plus, Reloadly and FazerCards)
 
 Shops sell the **company's own prepaid cards** — local (Libyana, Almadar, …) and
 international (iTunes, PlayStation, Google Play, …) — bought from a wholesaler
@@ -2146,6 +2210,9 @@ owners may take; cash from a resale is a ledger income line
 | `POINTY_RELAY_BNPLUS_BASE_URL` | `https://portal.bn-plusli.ly` | `/api/merchant` is appended |
 | `POINTY_RELAY_BNPLUS_REQUEST_TIMEOUT` | `45s` | one BN Plus call |
 | `POINTY_RELAY_RELOADLY_CLIENT_ID` / `_CLIENT_SECRET` | empty | the company's Reloadly API pair; both or none (half a set warns and stays off). Turns Reloadly on as a card supplier |
+| `POINTY_RELAY_FAZER_API_KEY` | empty | the company's FazerCards reseller key (`fc_…`). Turns FazerCards on: another supplier of the gift cards it sells identically, and the only one of game keys and of cards sent to an account (below). Its paid plan must be active (a lapsed one answers 403, `supplier_unauthorized`) |
+| `POINTY_RELAY_FAZER_URL` | `https://api.fzr.cards` | `/api/v2` is appended |
+| `POINTY_RELAY_FAZER_STEAM_FEE_PERCENT` | empty | what a Steam wallet top-up costs over its face, as the account's plan charges it. FazerCards publishes no Steam price, so until this is set Steam top-ups are listed out of stock rather than priced blind |
 | `POINTY_RELAY_RELOADLY_SANDBOX` | `false` | `true` uses Reloadly's SANDBOX hosts: fake money, a different catalog, sandbox keys only (the startup log says `SANDBOX` loudly, and everything the relay sells is marked test) |
 | `POINTY_RELAY_RELOADLY_REQUEST_TIMEOUT` | `45s` | one Reloadly purchase call (the relay's per-call limit is the larger of this and the BN Plus one) |
 | `POINTY_RELAY_RELOADLY_DIRECTORY_INTERVAL` | `15m` | how often the countries, operators and billers of direct top-up and bill payments are read from Reloadly again; `0` reads them once |
@@ -2156,6 +2223,107 @@ owners may take; cash from a resale is a ledger income line
 | `POINTY_RELAY_VOUCHER_STOCK_KEY` | empty | base64 key (`pointy-relay gen-stock-key`) that seals the company's own card stock (codes added in the console, sold before any supplier). Empty: no stock is added or sold. A malformed key stops the relay. **Losing it loses every code in stock**: keep it with the other relay secrets and back it up apart from the database |
 | `POINTY_RELAY_MOAMALAT_TOKEN_KEY` | empty | base64 key (`pointy-relay gen-moamalat-key`) that seals the shops' Moamalat merchant tokens the relay keeps warm as the second keepalive behind each shop's backend (`tools/moamalat-capture/TOKEN_CUSTODY_DESIGN.md`). Empty: the relay holds no token and shops keep theirs warm alone. A malformed key stops the relay. Losing it costs each linked shop one re-link (an OTP). `pointy-relay moamalat status` lists every shop's keepalive; `pointy-relay integrations disable moamalat` stops it fleet-wide and deletes every copy |
 | `POINTY_RELAY_MOAMALAT_BASE_URL` | `https://merchant.moamalat.net/api` | Moamalat merchant portal API the keepalive pokes |
+
+### Cards sent to an account (FazerCards)
+
+Some cards are not codes but credit sent to an account: a game topped up by its
+player ID (every game FazerCards tops up by ID; not its *manual* routes, and not
+the ones that log in with the customer's e-mail and password), Telegram Stars and
+Premium by username, a Steam wallet by its login, a Steam game sent as a gift to
+the buyer's friend invite link. Such a brand carries a `target` in the catalog:
+what the buyer types.
+
+```json
+"target": {"kind": "game_account", "check": "pubg_mobile", "hint": "…",
+           "fields": [{"key": "player_id", "label": "معرّف اللاعب (ID)"}]}
+```
+
+`kind` is `game_account` (1–4 fields; a `select` field lists its `options`),
+`telegram_username`, `steam_login` or `steam_invite` (one field each; an invite
+link is read as `https://s.team/p/<code>[/<token>]` and masked to its friend
+code, `s.team/p/gk••••vn`). `check` names the supplier's player check when it
+has one. Every supplier of such a brand's items must send to an account
+(`{"key": "fazer", "product": "topup" | "stars" | "premium" | "steam" |
+"steamgift", …}`), and no other brand's may; the catalog check says so.
+
+A Steam gift is one edition of a game bought in one Steam region:
+`{"key": "fazer", "product": "steamgift", "app_id": 1245620, "sub_id": 440408,
+"region": "MENA"}`, priced from FazerCards' per-region price for that edition
+(out of stock when the edition is no longer sold in the region). The shelf buys
+in MENA, Libya's own Steam region.
+
+A game brand may also say where it is played: `"platform"` is `steam` (a Steam
+key or gift), `xbox`, `ea` or `rockstar` (keys FazerCards sells for the Xbox /
+Microsoft Store, the EA app and the Rockstar Games Launcher). Shops and the app
+get it on the brand, and the app shows a pill with that store's logo («ستيم»,
+«إكس بوكس», «EA», «روكستار») on its tile, its page and in search. An app older
+than a value shows the game without the pill.
+
+- `GET /v1/vouchers/catalog?accounts=1` (and `/v1/customers/catalog?…&accounts=1`)
+  lists them, each brand with its `target`. Without `accounts=1` they are left out
+  (and the version says so), so a backend or app that cannot ask for an account
+  never offers a card it cannot sell.
+- `POST /v1/vouchers/purchases` takes `account: {field: value}` for such a card
+  (one at a time); refusals are `400 account_required`, `invalid_account`
+  (with `field`) and `not_an_account_card`. A success has `delivery: "account"`,
+  no codes, and `target` the account masked (`51•••••789`).
+- `POST /v1/vouchers/accounts/check {item, account}` (shops) and
+  `POST /v1/customers/accounts/check` (the app) look the account up first: `status`
+  `valid` (with the player's `name`), `invalid`, `unconfirmed` or `unchecked` (no
+  check, e.g. Telegram). Buys nothing; 30 checks a minute per shop or customer.
+- A customer order keeps the account until the card is bought (after the
+  payment); finished orders forget it when the customer deletes their account.
+- Operator: `GET /v1/vouchers/admin/fazer/account` (balance, plan, its expiry, the
+  Steam fee in use) and `POST /v1/vouchers/admin/accounts/check`. The console shows
+  both: «الموردون ← الأرصدة» has the FazerCards card, and «شراء بطاقة» for the
+  company asks for the account (and can check it) when the card is sent to one.
+
+Every FazerCards order carries the purchase id as its `Idempotency-Key`, and an
+order that is still processing is read back by its id. FazerCards does not echo
+that key in an order or its history (seen on a real order, 2026-11-03), so an
+order whose answer was lost before its id came back is left to an operator
+(`pointy-relay vouchers resolve`).
+
+A FazerCards code can take minutes: a 1 EGP Amazon card took 2m43s (10 s to be
+taken, 2m32s to fulfil). For a shop the relay waits 12 s; a «دفتر كروت» order
+is answered as soon as FazerCards takes it, since the app's order page follows
+it itself (so the customer leaves the payment step at once). Then the purchase
+is held and read back: on every read by the shop or the app, every 30 s in the
+customer order sweep, and at once on FazerCards' webhook:
+
+- `POST /v1/vouchers/fazer/webhook?token=…` is where FazerCards posts. The token
+  is derived from the API key (rotating the key means registering again). A
+  delivery is only a nudge: its payload is not documented, so the relay reads
+  each held FazerCards purchase back over the API and believes nothing in it.
+- Deliveries are HMAC-signed with the account's `whsec_…` secret, which the
+  relay reads itself over the API (no setting; a rotated secret is read again).
+  FazerCards does not document the scheme, so the relay recognises Standard
+  Webhooks (`webhook-id`/`-timestamp`/`-signature: v1,…`), Stripe's
+  `t=…,v1=…` and a plain HMAC of the body, and refuses timestamps older than
+  5 minutes. Until one delivery verifies, an unverified one is still taken and
+  logged (`fazercards webhook signature not recognised`, headers' names and
+  the signature's shape only); once one has, every delivery must verify or is
+  refused 401. The `fazercards webhook received` log says which scheme verified.
+- `GET /v1/vouchers/admin/fazer/webhook` shows the account's webhook (never its
+  secret); `POST` points it at this relay's public https address
+  (`POINTY_RELAY_PUBLIC_URL`) and has FazerCards send its test event.
+  The console's FazerCards card has the button.
+
+Speed, measured 2026-11-03 from a client: a call on a fresh connection took
+599 ms (476 ms of it DNS, TCP and TLS), the same call warm 108 ms; a player check
+took 2.8 s the first time and 0.6–1 s after (FazerCards asking the game). So the
+relay reads FazerCards' balance once a minute to keep its connection open (the
+console's balance is fresher for it), resumes TLS sessions when it must
+reconnect, and reuses an account check's answer (a player found for 10
+minutes, not found for 2; "could not tell" never). The app looks a saved
+account up as its page opens, so the game's slow first look-up is done by
+checkout.
+
+A «دفتر كروت» order that ends while its app is not asking about it (a late
+code, or a card refunded to credit) is told to the customer's phones: «رمز
+بطاقتك جاهز», opening the order in «كروتي» (`https://cards.dftr.ly/my-cards/{id}`).
+The app keeps quiet about an order it is showing, and shows a message that
+arrives while it is open along its own top edge.
 
 ### Operator CLI
 

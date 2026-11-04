@@ -47,6 +47,7 @@ import (
 	relayserver "pointy/relay/internal/relay"
 	"pointy/relay/internal/resala"
 	"pointy/relay/internal/security"
+	"pointy/relay/internal/vouchers"
 	"pointy/relay/internal/webbuild"
 )
 
@@ -574,6 +575,16 @@ func runServer(args []string) error {
 		envString("POINTY_RELAY_CARDS_WEB_HOSTS", ""),
 		"comma-separated hosts the card app's web build is served on (cards.dftr.ly); their https origins may call the customer routes. Empty serves no web app",
 	)
+	cardsIOSStoreURL := flags.String(
+		"cards-ios-store-url",
+		envString("POINTY_RELAY_CARDS_IOS_STORE_URL", ""),
+		"the card app's App Store page with Apple's provider token (https://apps.apple.com/app/id…?pt=…&mt=8); campaign links send iPhones there with the code as ct. Empty sends them to the web app",
+	)
+	cardsAndroidStoreURL := flags.String(
+		"cards-android-store-url",
+		envString("POINTY_RELAY_CARDS_ANDROID_STORE_URL", ""),
+		"the card app's Google Play page (https://play.google.com/store/apps/details?id=ly.dftr.cards); campaign links send Android phones there with the code in the install referrer. Empty sends them to the web app",
+	)
 	cardsWebDir := flags.String(
 		"cards-web-dir",
 		envString("POINTY_RELAY_CARDS_WEB_DIR", defaultCardsWebDir),
@@ -658,6 +669,21 @@ func runServer(args []string) error {
 		"reloadly-sandbox",
 		envBool("POINTY_RELAY_RELOADLY_SANDBOX", false),
 		"use Reloadly's SANDBOX hosts (fake money, a different catalog): sandbox keys only work there and live keys only on the live hosts",
+	)
+	fazerAPIKey := flags.String(
+		"fazer-api-key",
+		envString("POINTY_RELAY_FAZER_API_KEY", ""),
+		"the company's FazerCards API key (fc_…); turns FazerCards on as a supplier of gift cards, game keys, game top-ups by player ID, Telegram Stars and Premium, and Steam wallet top-ups",
+	)
+	fazerBaseURL := flags.String(
+		"fazer-url",
+		envString("POINTY_RELAY_FAZER_URL", ""),
+		"FazerCards' API host (empty: https://api.fzr.cards)",
+	)
+	fazerSteamFee := flags.String(
+		"fazer-steam-fee-percent",
+		envString("POINTY_RELAY_FAZER_STEAM_FEE_PERCENT", ""),
+		"what a FazerCards Steam wallet top-up costs over its face value, in percent, as the account's plan charges it; empty: Steam top-ups are not sold",
 	)
 	reloadlyRequestTimeout := flags.Duration(
 		"reloadly-request-timeout",
@@ -1031,6 +1057,9 @@ func runServer(args []string) error {
 		ReloadlyClientSecret: *reloadlyClientSecret,
 		ReloadlySandbox:      *reloadlySandbox,
 		ReloadlyTimeout:      *reloadlyRequestTimeout,
+		FazerAPIKey:          *fazerAPIKey,
+		FazerBaseURL:         *fazerBaseURL,
+		FazerSteamFeePercent: *fazerSteamFee,
 		RequestTimeout:       *bnplusRequestTimeout,
 		TestMode:             *vouchersTestMode,
 		SyncInterval:         *vouchersSyncInterval,
@@ -1438,6 +1467,9 @@ func runServer(args []string) error {
 		MaxIdleConnsPerHost: 100,
 		IdleConnTimeout:     90 * time.Second,
 		ForceAttemptHTTP2:   true,
+		// A connection that had to be opened again resumes its TLS session
+		// rather than shaking hands from scratch: one round trip less.
+		TLSClientConfig: &tls.Config{ClientSessionCache: tls.NewLRUClientSessionCache(128)},
 	}
 	aiClientTimeout := *aiRequestTimeout
 	if aiClientTimeout <= 0 {
@@ -1463,6 +1495,11 @@ func runServer(args []string) error {
 	if err := attachReloadlySupplier(&voucherConfig, reloadlyCredentials,
 		&http.Client{Timeout: max(voucherConfig.RequestTimeout, reloadlyCredentials.PurchaseTimeout) + 10*time.Second, Transport: outboundTransport}); err != nil {
 		return err
+	}
+	// FazerCards likewise.
+	for _, warning := range attachFazerSupplier(&voucherConfig, voucherSettingValues,
+		&http.Client{Timeout: voucherConfig.RequestTimeout + 10*time.Second, Transport: outboundTransport}) {
+		logger.Warn(warning)
 	}
 
 	// The company's alert channel; built after the suppliers so their clients
@@ -1639,7 +1676,8 @@ func runServer(args []string) error {
 		}
 	}
 	// cards.dftr.ly: the card app's web build, by host.
-	publicHandler, err = buildCardsWeb(publicHandler, cardsweb.ParseHosts(*cardsWebHosts), *cardsWebDir, baseHTTPHandler, logger)
+	publicHandler, err = buildCardsWeb(publicHandler, cardsweb.ParseHosts(*cardsWebHosts), *cardsWebDir, baseHTTPHandler,
+		cardsweb.StoreLinks{IOS: *cardsIOSStoreURL, Android: *cardsAndroidStoreURL}, logger)
 	if err != nil {
 		return err
 	}
@@ -1834,6 +1872,13 @@ func runServer(args []string) error {
 				Logger:   logger,
 			}
 			go offerSync.Run(ctx)
+		}
+		// FazerCards' connection kept open between customers: see
+		// FazerSupplier.KeepWarm.
+		if warm, ok := voucherConfig.Suppliers[vouchers.SupplierFazer].(interface {
+			KeepWarm(context.Context, time.Duration)
+		}); ok {
+			go warm.KeepWarm(ctx, 0)
 		}
 		suppliers := make([]string, 0, len(voucherConfig.Suppliers))
 		for key := range voucherConfig.Suppliers {

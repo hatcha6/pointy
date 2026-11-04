@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math/big"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -43,7 +44,7 @@ const PromotionGrace = 30 * time.Minute
 
 const (
 	maxCategories        = 50
-	maxBrands            = 500
+	maxBrands            = 1000
 	maxItemsPerBrand     = 100
 	maxCountries         = 250
 	maxAliases           = 10
@@ -107,10 +108,34 @@ type Brand struct {
 	Badge string `json:"badge,omitempty"`
 	// RedeemHint prints under the code on the receipt.
 	RedeemHint string `json:"redeem_hint,omitempty"`
-	Logo       Logo   `json:"logo"`
-	Active     *bool  `json:"active,omitempty"`
-	Items      []Item `json:"items"`
+	// Redeem is what the app does for the customer with a bought code; nil
+	// where only the hint is known (redeem.go).
+	Redeem *Redeem `json:"redeem,omitempty"`
+	// Target makes the brand's cards credit sent to an account (a player ID, a
+	// Telegram username, a Steam login) instead of codes: what the buyer types
+	// (target.go). Every supplier of its items must send to an account.
+	Target *Target `json:"target,omitempty"`
+	// Platform is the store a game brand is played on, named on its tile so
+	// a buyer knows what they are buying: one of Platforms, or empty.
+	Platform string `json:"platform,omitempty"`
+	Logo     Logo   `json:"logo"`
+	Active   *bool  `json:"active,omitempty"`
+	Items    []Item `json:"items"`
 }
+
+// The stores a game key is activated in. Steam is also where a game sent as
+// a Steam gift lands; the others are keys only (FazerCards sells EA app,
+// Rockstar Games Launcher and Xbox / Microsoft Store keys).
+const (
+	PlatformSteam    = "steam"
+	PlatformXbox     = "xbox"
+	PlatformEA       = "ea"
+	PlatformRockstar = "rockstar"
+)
+
+// Platforms are the values a brand's platform may take; an app older than
+// one of them shows the brand without its badge.
+var Platforms = []string{PlatformSteam, PlatformXbox, PlatformEA, PlatformRockstar}
 
 // Logo is the brand's two images: card art for the till, and a monochrome
 // mark for thermal receipts.
@@ -307,6 +332,9 @@ func Validate(document Document, options ValidateOptions) Problems {
 		}
 		checkText(add, path+".badge", brand.Badge, maxBadgeRunes, false)
 		checkText(add, path+".redeem_hint", brand.RedeemHint, maxHintRunes, false)
+		if brand.Redeem != nil {
+			validateRedeem(add, path+".redeem", *brand.Redeem)
+		}
 		checkImage(path+".logo.display", brand.Logo.Display)
 		checkImage(path+".logo.print", brand.Logo.Print)
 		if len(brand.Items) == 0 {
@@ -315,11 +343,44 @@ func Validate(document Document, options ValidateOptions) Problems {
 		if len(brand.Items) > maxItemsPerBrand {
 			add(path+".items", "at most %d items per brand", maxItemsPerBrand)
 		}
+		if brand.Target != nil {
+			brand.Target.normalized().validate(add, path+".target")
+		}
+		if platform := strings.TrimSpace(brand.Platform); platform != "" && !slices.Contains(Platforms, platform) {
+			add(path+".platform", "must be one of %s, or empty", strings.Join(Platforms, ", "))
+		}
 		for j, item := range brand.Items {
-			validateItem(add, fmt.Sprintf("%s.items[%d]", path, j), item, items, countries)
+			itemPath := fmt.Sprintf("%s.items[%d]", path, j)
+			validateItem(add, itemPath, item, items, countries)
+			validateItemDelivery(add, itemPath, item, brand.Target != nil)
 		}
 	}
 	return problems
+}
+
+// validateItemDelivery keeps a brand's cards one kind: every supplier of a
+// target brand's item sends to an account, and no supplier of another brand's
+// does (a code card has nowhere to say whose account it is for).
+func validateItemDelivery(add func(path, format string, args ...any), path string, item Item, toAccount bool) {
+	refs, problems := itemRefs(item)
+	if len(problems) > 0 {
+		return
+	}
+	for i, ref := range refs {
+		if ref.Supplier == SupplierTest {
+			continue
+		}
+		field := "supplier"
+		if item.Suppliers != nil {
+			field = fmt.Sprintf("suppliers[%d]", i)
+		}
+		switch needs := RefNeedsAccount(ref); {
+		case toAccount && !needs:
+			add(path+"."+field, "the brand sends to an account, but %s sells this card as a code", ref.Supplier)
+		case !toAccount && needs:
+			add(path+"."+field, "this card is sent to an account: the brand needs a target")
+		}
+	}
 }
 
 func validateItem(
@@ -474,12 +535,18 @@ func Normalize(document Document) Document {
 			Featured:   brand.Featured,
 			Badge:      strings.TrimSpace(brand.Badge),
 			RedeemHint: strings.TrimSpace(brand.RedeemHint),
+			Redeem:     normalizeRedeem(brand.Redeem),
+			Platform:   strings.TrimSpace(brand.Platform),
 			Logo: Logo{
 				Display: strings.TrimSpace(brand.Logo.Display),
 				Print:   strings.TrimSpace(brand.Logo.Print),
 			},
 			Active: boolPointer(isActive(brand.Active)),
 			Items:  make([]Item, 0, len(brand.Items)),
+		}
+		if brand.Target != nil {
+			target := brand.Target.normalized()
+			normalized.Target = &target
 		}
 		for _, alias := range brand.Aliases {
 			if alias = strings.TrimSpace(alias); alias != "" {
@@ -768,17 +835,26 @@ type ShopCountry struct {
 }
 
 type ShopBrand struct {
-	Key        string     `json:"key"`
-	Name       string     `json:"name"`
-	Aliases    []string   `json:"aliases"`
-	Category   string     `json:"category"`
-	Rank       int        `json:"rank"`
-	Featured   bool       `json:"featured"`
-	Badge      string     `json:"badge"`
-	RedeemHint string     `json:"redeem_hint"`
-	Logo       string     `json:"logo"`
-	PrintLogo  string     `json:"print_logo"`
-	Items      []ShopItem `json:"items"`
+	Key        string   `json:"key"`
+	Name       string   `json:"name"`
+	Aliases    []string `json:"aliases"`
+	Category   string   `json:"category"`
+	Rank       int      `json:"rank"`
+	Featured   bool     `json:"featured"`
+	Badge      string   `json:"badge"`
+	RedeemHint string   `json:"redeem_hint"`
+	// Redeem is what an app does with a bought code; nil where only the hint is
+	// known.
+	Redeem    *Redeem `json:"redeem,omitempty"`
+	Logo      string  `json:"logo"`
+	PrintLogo string  `json:"print_logo"`
+	// Target is what the buyer types for a brand sent to an account; nil for
+	// a brand of codes.
+	Target *Target `json:"target,omitempty"`
+	// Platform is the store a game is played on (one of Platforms); empty for
+	// the rest.
+	Platform string     `json:"platform,omitempty"`
+	Items    []ShopItem `json:"items"`
 }
 
 type ShopItem struct {
@@ -884,9 +960,20 @@ func Shop(document Document, catalogSHA string, now time.Time, testMode bool, av
 			Featured:   brand.Featured,
 			Badge:      brand.Badge,
 			RedeemHint: brand.RedeemHint,
+			Redeem:     brand.Redeem,
 			Logo:       brand.Logo.Display,
 			PrintLogo:  brand.Logo.Print,
+			Target:     brand.Target,
+			Platform:   brand.Platform,
 			Items:      make([]ShopItem, 0, len(ranked.items)),
+		}
+		if brand.Target != nil {
+			// What the buyer types is part of what the shop shows.
+			target, _ := json.Marshal(brand.Target)
+			fmt.Fprintf(fingerprint, "%s|target|%s\n", brand.Key, target)
+		}
+		if brand.Platform != "" {
+			fmt.Fprintf(fingerprint, "%s|platform|%s\n", brand.Key, brand.Platform)
 		}
 		for itemRank, item := range ranked.items {
 			if item.Country != "" {

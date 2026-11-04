@@ -40,6 +40,8 @@ type Handler struct {
 	hosts map[string]bool
 	files fs.FS
 	next  http.Handler
+	// csp is the build's pages' Content-Security-Policy (csp.go).
+	csp pagePolicies
 }
 
 // Wrap puts the web app in front of next for cfg's hosts.
@@ -61,7 +63,11 @@ func Wrap(next http.Handler, cfg Config) (*Handler, error) {
 		}
 		hosts[host] = true
 	}
-	return &Handler{hosts: hosts, files: cfg.Files, next: next}, nil
+	csp, err := contentSecurityPolicy(cfg.Files)
+	if err != nil {
+		return nil, fmt.Errorf("appweb: %w", err)
+	}
+	return &Handler{hosts: hosts, files: cfg.Files, next: next, csp: csp}, nil
 }
 
 // relayPath reports whether a path is the relay's own, not the build's.
@@ -76,8 +82,14 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if relayPath(r.URL.Path) {
-		if strings.EqualFold(strings.TrimRight(r.Header.Get("Origin"), "/"), "https://"+host) {
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			w, r = withShopCookies(w, r)
+		} else {
+			// The relay's own: no shop's cookie is any of its business.
 			r = r.Clone(r.Context())
+			r.Header.Del("Cookie")
+		}
+		if strings.EqualFold(strings.TrimRight(r.Header.Get("Origin"), "/"), "https://"+host) {
 			r.Header.Del("Origin")
 			r.Header.Del("Referer")
 		}
@@ -95,6 +107,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// A shop's books in someone else's frame is a click-jacking page.
 	header.Set("X-Frame-Options", "DENY")
 	name := webbuild.Name(r.URL.Path)
+	if name == "index.html" {
+		h.servePage(w, r)
+		return
+	}
 	if name != "" && webbuild.IsFile(h.files, name) {
 		webbuild.SetCaching(header, name)
 		webbuild.Serve(w, r, h.files, name)
@@ -105,6 +121,15 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	webbuild.SetCaching(header, "index.html")
+	h.servePage(w, r)
+}
+
+// servePage sends index.html, the one document the build has, under the
+// build's Content-Security-Policy.
+func (h *Handler) servePage(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Security-Policy", h.csp.For(r.UserAgent()))
+	// The policy depends on the browser: a cache in between must know.
+	w.Header().Add("Vary", "User-Agent")
+	webbuild.SetCaching(w.Header(), "index.html")
 	webbuild.Serve(w, r, h.files, "index.html")
 }

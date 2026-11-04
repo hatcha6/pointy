@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"pointy/relay/internal/bnplus"
+	"pointy/relay/internal/fazer"
 	"pointy/relay/internal/ratelimit"
 	relayserver "pointy/relay/internal/relay"
 	"pointy/relay/internal/reloadly"
@@ -37,6 +38,13 @@ type voucherSettings struct {
 	ReloadlyClientSecret string
 	ReloadlySandbox      bool
 	ReloadlyTimeout      time.Duration
+	// FazerAPIKey is the company's FazerCards key (fc_…); empty leaves
+	// FazerCards off. FazerBaseURL overrides the API host (tests);
+	// FazerSteamFeePercent is what a Steam top-up costs over its face (empty:
+	// Steam top-ups are not sold, being priced blind).
+	FazerAPIKey          string
+	FazerBaseURL         string
+	FazerSteamFeePercent string
 	RequestTimeout       time.Duration
 	TestMode             bool
 	SyncInterval         time.Duration
@@ -203,6 +211,35 @@ func attachReloadlySupplier(config *relayserver.VoucherConfig, credentials reloa
 	config.Suppliers[vouchers.SupplierReloadly] = &vouchers.ReloadlySupplier{Client: reload}
 	config.RequestTimeout = max(config.RequestTimeout, credentials.PurchaseTimeout)
 	return nil
+}
+
+// attachFazerSupplier builds FazerCards' client and registers it as a supplier
+// of cards, game keys and top-ups sent to an account. A malformed Steam fee
+// only leaves Steam top-ups unsold, with a warning.
+func attachFazerSupplier(config *relayserver.VoucherConfig, settings voucherSettings, client *http.Client) []string {
+	key := strings.TrimSpace(settings.FazerAPIKey)
+	if key == "" {
+		return nil
+	}
+	var warnings []string
+	fee := strings.TrimSpace(settings.FazerSteamFeePercent)
+	if fee != "" {
+		value, ok := new(big.Rat).SetString(fee)
+		if !ok || value.Sign() < 0 || value.Cmp(big.NewRat(100, 1)) > 0 {
+			warnings = append(warnings, fmt.Sprintf(
+				"POINTY_RELAY_FAZER_STEAM_FEE_PERCENT %q is not a percentage from 0 to 100; Steam top-ups are not sold", fee))
+			fee = ""
+		}
+	}
+	if config.Suppliers == nil {
+		config.Suppliers = map[string]vouchers.Supplier{}
+	}
+	fazerClient := fazer.New(fazer.Config{BaseURL: settings.FazerBaseURL, APIKey: key, HTTPClient: withoutRedirects(client)})
+	config.Suppliers[vouchers.SupplierFazer] = &vouchers.FazerSupplier{Client: fazerClient, SteamFeePercent: fee}
+	config.Fazer, config.FazerSteamFeePercent = fazerClient, fee
+	config.FazerWebhookToken = relayserver.FazerWebhookToken(key)
+	config.FazerSigning = &relayserver.FazerSigning{}
+	return warnings
 }
 
 // reloadlyStartupMode is how the startup log says which Reloadly the relay talks
@@ -420,15 +457,29 @@ func runVoucherCatalogPush(args []string) error {
 	}
 	fmt.Printf("Published catalog %s: %d categories, %d brands, %d items. Shops pick it up within five minutes.\n",
 		answer.Catalog.ID, answer.Summary["categories"], answer.Summary["brands"], answer.Summary["items"])
-	if listsReloadly(document) {
-		fmt.Println("Reloadly prices only the cards a catalog names: run `pointy-relay vouchers offers --sync` so the new ones are priced and sell (the relay does it by itself every sync interval).")
+	if named := pricedOnDemand(document); len(named) > 0 {
+		fmt.Printf("%s price only the cards a catalog names: run `pointy-relay vouchers offers --sync` so the new ones are priced and sell (the relay does it by itself every sync interval).\n",
+			strings.Join(named, " and "))
 	}
 	return nil
 }
 
-// listsReloadly reports whether any item of the catalog can be bought from
-// Reloadly.
-func listsReloadly(document vouchers.Document) bool {
+// pricedOnDemand names the suppliers the catalog buys from that price only the
+// cards a catalog names (Reloadly, FazerCards), in that order.
+func pricedOnDemand(document vouchers.Document) []string {
+	var named []string
+	if listsSupplier(document, vouchers.SupplierReloadly) {
+		named = append(named, "Reloadly")
+	}
+	if listsSupplier(document, vouchers.SupplierFazer) {
+		named = append(named, "FazerCards")
+	}
+	return named
+}
+
+// listsSupplier reports whether any item of the catalog can be bought from
+// the supplier.
+func listsSupplier(document vouchers.Document, supplier string) bool {
 	for _, brand := range document.Brands {
 		for _, item := range brand.Items {
 			refs, err := vouchers.ParseRefs(item)
@@ -436,7 +487,7 @@ func listsReloadly(document vouchers.Document) bool {
 				continue
 			}
 			for _, ref := range refs {
-				if ref.Supplier == vouchers.SupplierReloadly {
+				if ref.Supplier == supplier {
 					return true
 				}
 			}

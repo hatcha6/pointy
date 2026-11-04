@@ -2,7 +2,9 @@ package control
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"math/big"
 	"strings"
 	"time"
@@ -13,21 +15,28 @@ import (
 const selectCustomerOrderColumns = `id, customer_id, idempotency_key, channel, item_key, brand_key, item_name,
 	quantity, unit_price::text, total::text, credit_used::text, amount_due::text, fee::text, method, payer_hint,
 	payment_id, checkout_url, otp_attempts, status, error_code, error_detail, purchase_id, late_paid,
-	test_mode, created_at, updated_at, paid_at, completed_at, review`
+	test_mode, created_at, updated_at, paid_at, completed_at, review, account`
 
 func scanCustomerOrder(row pgx.Row) (CustomerOrder, error) {
 	var order CustomerOrder
+	var account []byte
 	if err := row.Scan(
 		&order.ID, &order.CustomerID, &order.IdempotencyKey, &order.Channel, &order.ItemKey, &order.BrandKey,
 		&order.ItemName, &order.Quantity, &order.UnitPrice, &order.Total, &order.CreditUsed, &order.AmountDue,
 		&order.Fee, &order.Method, &order.PayerHint, &order.PaymentID, &order.CheckoutURL, &order.OTPAttempts, &order.Status,
 		&order.ErrorCode, &order.ErrorDetail, &order.PurchaseID, &order.LatePaid, &order.TestMode,
-		&order.CreatedAt, &order.UpdatedAt, &order.PaidAt, &order.CompletedAt, &order.Review,
+		&order.CreatedAt, &order.UpdatedAt, &order.PaidAt, &order.CompletedAt, &order.Review, &account,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return CustomerOrder{}, ErrCustomerOrderNotFound
 		}
 		return CustomerOrder{}, err
+	}
+	if len(account) > 0 {
+		if err := json.Unmarshal(account, &order.Account); err != nil {
+			return CustomerOrder{}, fmt.Errorf("customer order %s account: %w", order.ID, err)
+		}
+		order.Account = normalizeCustomerAccount(order.Account)
 	}
 	order.UnitPrice = NormalizeWalletAmount(order.UnitPrice)
 	order.Total = NormalizeWalletAmount(order.Total)
@@ -136,16 +145,16 @@ func writeCustomerOrderTx(ctx context.Context, tx pgx.Tx, order CustomerOrder, i
 		order.Quantity, order.UnitPrice, order.Total, order.CreditUsed, order.AmountDue, order.Method, order.PayerHint,
 		order.PaymentID, order.CheckoutURL, order.OTPAttempts, order.Status, order.ErrorCode, order.ErrorDetail,
 		order.PurchaseID, order.LatePaid, order.TestMode, order.CreatedAt, order.UpdatedAt, order.PaidAt, order.CompletedAt,
-		order.Fee, order.Review,
+		order.Fee, order.Review, customerAccountJSON(order.Account),
 	}
 	if insert {
 		_, err := tx.Exec(ctx,
 			`INSERT INTO relay_customer_orders (id, customer_id, idempotency_key, channel, item_key, brand_key, item_name,
 				quantity, unit_price, total, credit_used, amount_due, method, payer_hint, payment_id, checkout_url,
 				otp_attempts, status, error_code, error_detail, purchase_id, late_paid, test_mode, created_at,
-				updated_at, paid_at, completed_at, fee, review)
+				updated_at, paid_at, completed_at, fee, review, account)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-				$21, $22, $23, $24, $25, $26, $27, $28, $29)`, args...)
+				$21, $22, $23, $24, $25, $26, $27, $28, $29, $30)`, args...)
 		return err
 	}
 	// Only what a transition may change is written back.
@@ -360,4 +369,17 @@ func (s *PostgresStore) CustomerCredit(ctx context.Context, customerID string, l
 		entries = append(entries, entry)
 	}
 	return NormalizeWalletAmount(balance), entries, rows.Err()
+}
+
+// customerAccountJSON is an order's account as its jsonb column holds it.
+func customerAccountJSON(account map[string]string) []byte {
+	account = normalizeCustomerAccount(account)
+	if account == nil {
+		return []byte("{}")
+	}
+	data, err := json.Marshal(account)
+	if err != nil {
+		return []byte("{}")
+	}
+	return data
 }

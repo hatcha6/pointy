@@ -66,6 +66,21 @@ export const purchaseKind: Record<string, string> = {
   bill: "فاتورة",
 };
 
+/** What a purchase is, as a list names it: a card sent to an account (a row of kind card
+ *  with a target) is a top-up, not a code. */
+export function purchaseKindLabel(p: { kind: string; target?: string }): string {
+  if (p.kind === "card" && p.target) return "شحن إلى حساب";
+  return label(purchaseKind, p.kind);
+}
+
+/** The kind of account a card is sent to. */
+export const accountKind: Record<string, string> = {
+  game_account: "حساب لعبة",
+  telegram_username: "اسم مستخدم تيليجرام",
+  steam_login: "اسم دخول ستيم",
+  steam_invite: "حساب ستيم (هدية)",
+};
+
 /** Why the company bought something for itself. */
 export const purchasePurpose: Record<string, { label: string; tone: Tone }> = {
   own_use: { label: "لاستخدامنا", tone: "info" },
@@ -119,6 +134,7 @@ export const method: Record<string, string> = {
 export const supplier: Record<string, string> = {
   bnplus: "BN Plus",
   reloadly: "Reloadly",
+  fazer: "FazerCards",
   qareeb: "قريب",
   stock: "مخزوننا",
 };

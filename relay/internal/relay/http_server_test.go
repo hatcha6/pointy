@@ -1256,6 +1256,99 @@ func TestHTTPRelayStreamsZipBeyondByteLimit(t *testing.T) {
 	}
 }
 
+// A remote camera view is an open-ended stream: the cap that guards ordinary
+// bodies cut live MJPEG off after a few minutes, and would do the same to a
+// listen or a long clip export.
+func TestHTTPRelayStreamsCameraMediaBeyondByteLimit(t *testing.T) {
+	for _, contentType := range []string{
+		"multipart/x-mixed-replace; boundary=pointyframe",
+		"audio/aac",
+		"audio/mpeg",
+		"video/mp4",
+	} {
+		t.Run(contentType, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			backendURL, err := url.Parse("http://127.0.0.1:8000")
+			if err != nil {
+				t.Fatal(err)
+			}
+			payload := strings.Repeat("f", 256*1024)
+			backendClient := &http.Client{
+				Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+					return &http.Response{
+						StatusCode: http.StatusOK,
+						Status:     "200 OK",
+						Proto:      "HTTP/1.1",
+						ProtoMajor: 1,
+						ProtoMinor: 1,
+						Body:       io.NopCloser(strings.NewReader(payload)),
+						// Unknown length, as a live stream is.
+						ContentLength: -1,
+						Header:        http.Header{"Content-Type": []string{contentType}},
+						Request:       r,
+					}, nil
+				}),
+			}
+			store, provisioned := provisionRelayInstallation(t)
+			hub := NewHub()
+			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+			startInMemoryConnector(t, ctx, hub, provisioned.Installation.ID, connector.Client{
+				BackendURL: backendURL,
+				Logger:     logger,
+				HTTPClient: backendClient,
+			})
+			waitUntil(t, time.Second, func() bool {
+				return hub.IsOnline(provisioned.Installation.ID)
+			})
+
+			server := HTTPServer{
+				Store:                       store,
+				Hub:                         hub,
+				Logger:                      logger,
+				MaxRelayedResponseBodyBytes: 1024,
+			}
+			proxy := httptest.NewServer(server)
+			defer proxy.Close()
+
+			request, err := http.NewRequest(http.MethodGet, proxy.URL+"/api/surveillance/cameras/1/live/", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			request.Header.Set(AccessTokenHeader, provisioned.AccessToken)
+			response, err := proxy.Client().Do(request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer response.Body.Close()
+			if response.StatusCode != http.StatusOK {
+				t.Fatalf("expected 200, got %d", response.StatusCode)
+			}
+			body, err := io.ReadAll(response.Body)
+			if err != nil {
+				t.Fatalf("camera stream cut mid-body: %v", err)
+			}
+			if len(body) != len(payload) {
+				t.Fatalf("expected %d bytes, got %d", len(payload), len(body))
+			}
+		})
+	}
+}
+
+func TestRelayedBodyByteLimitKeepsTheCapForOrdinaryBodies(t *testing.T) {
+	server := HTTPServer{MaxRelayedResponseBodyBytes: 1024}
+	for _, contentType := range []string{"application/json", "text/html; charset=utf-8", "image/jpeg", ""} {
+		if got := server.relayedBodyByteLimit(http.Header{"Content-Type": []string{contentType}}); got != 1024 {
+			t.Fatalf("%q: expected the 1024-byte cap, got %d", contentType, got)
+		}
+	}
+	// Case does not reopen the cap: a header is case-insensitive.
+	if got := server.relayedBodyByteLimit(http.Header{"Content-Type": []string{"Multipart/X-Mixed-Replace; boundary=x"}}); got != 0 {
+		t.Fatalf("expected no cap for a mixed-case MJPEG type, got %d", got)
+	}
+}
+
 func TestHTTPRelayReturnsTooManyRequestsWhenRelayConcurrencyIsExhausted(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -3223,6 +3316,7 @@ type memoryTicketService struct {
 	now       time.Time
 	tickets   map[string]control.RelayTicket
 	refreshes map[string]control.RelayRefreshToken
+	revoked   map[string]time.Time
 }
 
 type stubConnectorCertificateIssuer struct {
@@ -3269,8 +3363,14 @@ func (s *memoryTicketService) IssueTicket(
 	if err != nil {
 		return control.IssuedRelayTicket{}, err
 	}
-	expiresAt := s.now.Add(ticketTTL)
-	refreshExpiresAt := s.now.Add(refreshTTL)
+	expiresAt, refreshExpiresAt, err := control.TicketLifetimes(s.now, request, ticketTTL, refreshTTL)
+	if err != nil {
+		return control.IssuedRelayTicket{}, err
+	}
+	chainStartedAt := request.ChainStartedAt
+	if chainStartedAt.IsZero() {
+		chainStartedAt = s.now
+	}
 	ticket := control.RelayTicket{
 		InstallationID: installation.ID,
 		DeviceID:       request.DeviceID,
@@ -3286,6 +3386,8 @@ func (s *memoryTicketService) IssueTicket(
 		TokenHash:      control.TokenHash(refreshToken),
 		IssuedAt:       s.now,
 		ExpiresAt:      refreshExpiresAt,
+		NotAfter:       request.NotAfter,
+		ChainStartedAt: chainStartedAt,
 	}
 	s.tickets[ticket.TokenHash] = ticket
 	s.refreshes[refresh.TokenHash] = refresh
@@ -3366,7 +3468,35 @@ func (s *memoryTicketService) readRefreshToken(
 	if refresh.InstallationID != parsed.InstallationID {
 		return control.RelayRefreshToken{}, control.ErrInvalidToken
 	}
+	if revokedAt, ok := s.revoked[refresh.InstallationID+"/"+refresh.DeviceID]; ok &&
+		!refresh.ChainStart().After(revokedAt) {
+		return control.RelayRefreshToken{}, control.ErrRelayRefreshTokenNotFound
+	}
 	return refresh, nil
+}
+
+func (s *memoryTicketService) RevokeDevice(
+	_ context.Context,
+	installationID string,
+	deviceID string,
+	now time.Time,
+	_ time.Duration,
+) error {
+	if s.revoked == nil {
+		s.revoked = map[string]time.Time{}
+	}
+	s.revoked[installationID+"/"+deviceID] = now
+	for hash, ticket := range s.tickets {
+		if ticket.InstallationID == installationID && ticket.DeviceID == deviceID {
+			delete(s.tickets, hash)
+		}
+	}
+	for hash, refresh := range s.refreshes {
+		if refresh.InstallationID == installationID && refresh.DeviceID == deviceID {
+			delete(s.refreshes, hash)
+		}
+	}
+	return nil
 }
 
 func TestHTTPAdminDiagnosticsAnalyticsProxiesThroughConnector(t *testing.T) {

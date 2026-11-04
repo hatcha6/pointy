@@ -15,6 +15,7 @@ import (
 
 	"pointy/relay/internal/bnplus"
 	"pointy/relay/internal/control"
+	"pointy/relay/internal/fazer"
 	"pointy/relay/internal/ratelimit"
 	"pointy/relay/internal/reloadly"
 	"pointy/relay/internal/vouchers"
@@ -95,6 +96,17 @@ type VoucherConfig struct {
 	// top-up and bill payments are bought with. Nil when Reloadly is not
 	// configured.
 	Reloadly *reloadly.Client
+	// Fazer is FazerCards' client, for the operator's account read; nil when
+	// FazerCards is not configured. FazerSteamFeePercent is the Steam fee its
+	// supplier prices with ("" while unknown).
+	Fazer                *fazer.Client
+	FazerSteamFeePercent string
+	// FazerWebhookToken is the secret in the URL FazerCards posts its webhook
+	// to (FazerWebhookToken of the API key); empty turns the webhook off.
+	FazerWebhookToken string
+	// FazerSigning checks the deliveries' HMAC signatures, with the secret
+	// read from FazerCards (vouchers_fazer_signature.go); nil checks none.
+	FazerSigning *FazerSigning
 	// TestMode sends every purchase to the built-in test supplier: fake codes,
 	// nothing bought from anyone, the voucher balance still charged.
 	TestMode bool
@@ -344,12 +356,18 @@ func (s HTTPServer) handleVoucherRoutes(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	switch {
+	case path == fazerWebhookPath && r.Method == http.MethodPost:
+		// FazerCards' server, not a shop: the URL's token is the credential,
+		// and the relay believes only the orders it reads back.
+		s.handleFazerWebhook(w, r)
 	case path == "/v1/vouchers/catalog" && r.Method == http.MethodGet:
 		s.handleVoucherCatalog(w, r)
 	case strings.HasPrefix(path, "/v1/vouchers/images/") && r.Method == http.MethodGet:
 		s.handleVoucherImage(w, r, strings.TrimPrefix(path, "/v1/vouchers/images/"))
 	case path == "/v1/vouchers/purchases" && r.Method == http.MethodPost:
 		s.handleVoucherPurchase(w, r)
+	case path == "/v1/vouchers/accounts/check" && r.Method == http.MethodPost:
+		s.handleVoucherAccountCheck(w, r)
 	case strings.HasPrefix(path, "/v1/vouchers/purchases/") && r.Method == http.MethodGet:
 		s.handleVoucherPurchaseRead(w, r, strings.TrimPrefix(path, "/v1/vouchers/purchases/"))
 	default:
@@ -395,6 +413,9 @@ func (s HTTPServer) handleVoucherCatalog(w http.ResponseWriter, r *http.Request)
 		s.logger().Error("voucher catalog read failed", "installation_id", installation.ID, "error", err)
 		writeSMSError(w, http.StatusInternalServerError, voucherCodeInternalError, "relay store failed", nil)
 		return
+	}
+	if !wantsAccountBrands(r) {
+		view = withoutAccountBrands(view)
 	}
 	etag := `"` + view.Version + `"`
 	w.Header().Set("ETag", etag)
@@ -468,7 +489,14 @@ type voucherPurchaseRequest struct {
 	IdempotencyKey string          `json:"idempotency_key"`
 	MaxUnitPrice   json.RawMessage `json:"max_unit_price"`
 	RequestedBy    string          `json:"requested_by"`
-	maxUnitPrice   *big.Rat
+	// Account is what the buyer typed for a card sent to an account (a player
+	// ID, a username), by the brand's target fields; nothing for a code card.
+	Account map[string]string `json:"account"`
+	// NoWait is a buyer that follows the order by itself (a till's requests
+	// panel): a supplier that takes minutes answers as soon as it has taken the
+	// order, pending, and the order is read back as it is asked about.
+	NoWait       bool `json:"no_wait"`
+	maxUnitPrice *big.Rat
 }
 
 func decodeVoucherPurchase(w http.ResponseWriter, r *http.Request) (voucherPurchaseRequest, bool) {
@@ -611,6 +639,11 @@ func (s HTTPServer) placeCardPurchase(
 	}
 	// An auto-priced card is charged at the price the shop was listed.
 	located = s.autoPricedItem(loaded.document, located, offers, settings)
+	account, refusal := readPurchaseAccount(located, request.Account, request.Quantity)
+	if refusal != nil {
+		refusal.write(w)
+		return
+	}
 	ranking := s.Vouchers.rankSuppliers(located, offers, settings)
 	if buyer.company() {
 		// The company's own stock is the company's already: it buys from
@@ -654,6 +687,8 @@ func (s HTTPServer) placeCardPurchase(
 		RequestedBy:    request.RequestedBy,
 		Purpose:        buyer.Purpose,
 		Note:           buyer.Note,
+		Target:         maskedAccount(located, account),
+		Details:        accountDetails(located),
 	})
 	var balanceErr *control.WalletBalanceError
 	switch {
@@ -677,10 +712,13 @@ func (s HTTPServer) placeCardPurchase(
 
 	// --- past this line the supplier may sell the cards, whatever happens ---
 	detached := context.WithoutCancel(ctx)
-	finished, codes := s.buyClaimedCards(detached, store, claim, ranking, request.Quantity)
+	if request.NoWait {
+		detached = vouchers.WithoutSettling(detached)
+	}
+	finished, codes := s.buyClaimedCards(detached, store, claim, ranking, request.Quantity, account)
 	balance := s.voucherBalance(detached, installation.ID)
 	switch {
-	case finished.Status == control.VoucherPurchaseSucceeded && len(codes) > 0:
+	case finished.Status == control.VoucherPurchaseSucceeded && (len(codes) > 0 || accountPurchase(finished)):
 		writeJSON(w, http.StatusCreated, s.voucherPurchaseBody(finished, codes, false, balance, false))
 	case finished.Status == control.VoucherPurchaseFailed:
 		writeJSON(w, http.StatusBadGateway, s.voucherFailureBody(finished, balance, false))
@@ -700,10 +738,11 @@ func (s HTTPServer) buyClaimedCards(
 	claim control.VoucherPurchase,
 	ranking supplierRanking,
 	quantity int,
+	account vouchers.Account,
 ) (control.VoucherPurchase, []vouchers.Code) {
-	attempt := s.buyFromSuppliers(ctx, store, claim, ranking.Candidates, quantity)
+	attempt := s.buyFromSuppliers(ctx, store, claim, ranking.Candidates, quantity, account)
 	claim, buyErr := attempt.Claim, attempt.Err
-	outcome, codes := voucherOutcome(attempt.Bought, buyErr, quantity)
+	outcome, codes := voucherOutcome(attempt.Bought, buyErr, quantity, account.Present())
 	outcome = attempt.withAttempts(outcome)
 	finished, applied, err := store.FinishVoucherPurchase(ctx, claim.ID, outcome)
 	if err != nil {
@@ -727,24 +766,27 @@ func (s HTTPServer) buyClaimedCards(
 }
 
 // voucherOutcome turns a supplier's answer into the ledger's outcome, and the
-// codes to hand the shop.
-func voucherOutcome(bought vouchers.Purchase, err error, quantity int) (control.VoucherPurchaseOutcome, []vouchers.Code) {
+// codes to hand the shop. A card sent to an account succeeds with no code.
+func voucherOutcome(bought vouchers.Purchase, err error, quantity int, toAccount bool) (control.VoucherPurchaseOutcome, []vouchers.Code) {
 	if err == nil {
 		outcome := control.VoucherPurchaseOutcome{
 			SupplierOrderID:  bought.OrderID,
 			SupplierCost:     bought.Cost,
 			SupplierCurrency: bought.Currency,
 		}
-		if bought.Status == vouchers.StatusSucceeded && len(bought.Codes) >= quantity {
+		if bought.Status == vouchers.StatusSucceeded && (toAccount || len(bought.Codes) >= quantity) {
 			outcome.Status = control.VoucherPurchaseSucceeded
 			return outcome, bought.Codes
 		}
-		// Taken, but not every code came back: the order is read back until
-		// it settles.
+		// Taken, but not every code came back (or the account not credited
+		// yet): the order is read back until it settles.
 		outcome.Status = control.VoucherPurchaseFailed
 		outcome.Uncertain = true
 		outcome.ErrorCode = vouchers.FailureUnknown
 		outcome.ErrorDetail = "the supplier took the order without handing back every code"
+		if toAccount {
+			outcome.ErrorDetail = "the supplier took the order and has not finished sending it"
+		}
 		return outcome, nil
 	}
 	var failure *vouchers.Failure
@@ -853,6 +895,10 @@ func (s HTTPServer) voucherCodes(ctx context.Context, purchase control.VoucherPu
 	if purchase.Status != control.VoucherPurchaseSucceeded {
 		return nil, purchase.Status == control.VoucherPurchasePending
 	}
+	if accountPurchase(purchase) {
+		// Sent to an account: there is no code to read.
+		return nil, false
+	}
 	supplier, ok := s.voucherSupplierByKey(purchase.Supplier)
 	if !ok || purchase.SupplierOrderID == "" {
 		return nil, true
@@ -914,6 +960,7 @@ func voucherPurchasePayload(purchase control.VoucherPurchase, codes []vouchers.C
 		"idempotency_key": purchase.IdempotencyKey,
 		"kind":            control.NormalizeVoucherKind(purchase.Kind),
 		"target":          purchase.Target,
+		"delivery":        purchaseDelivery(purchase),
 		"item":            purchase.ItemKey,
 		"brand":           purchase.BrandKey,
 		"name":            purchase.ItemName,
@@ -1048,7 +1095,7 @@ func (s HTTPServer) checkVoucherPurchase(
 			return purchase, "unreadable", err
 		}
 		switch {
-		case order.Status == vouchers.StatusSucceeded && len(order.Codes) >= purchase.Quantity:
+		case order.Status == vouchers.StatusSucceeded && (len(order.Codes) >= purchase.Quantity || accountPurchase(purchase)):
 			return s.resolveVoucherPurchase(ctx, store, purchase, control.VoucherPurchaseResolution{
 				Found:            true,
 				SupplierOrderID:  purchase.SupplierOrderID,

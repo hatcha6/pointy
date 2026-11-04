@@ -283,8 +283,8 @@ func (c VoucherConfig) evaluateSupplier(index int, ref vouchers.Ref, priceFollow
 		// Offers this old say nothing about today's price and stock: they are no
 		// more known than if they had never been read.
 		note := fmt.Sprintf("its offers were last read %s ago (more than %s): price and stock unknown", age.Round(time.Minute), offers.maxAge)
-		if ref.Supplier == vouchers.SupplierReloadly {
-			evaluation.Reason, evaluation.Attention = "the price at Reloadly is not known: "+note, true
+		if name, blind := pricedOnlyFromOffers(ref.Supplier); blind {
+			evaluation.Reason, evaluation.Attention = "the price at "+name+" is not known: "+note, true
 			return evaluation
 		}
 		evaluation.Candidate, evaluation.Note = true, note
@@ -297,9 +297,10 @@ func (c VoucherConfig) evaluateSupplier(index int, ref vouchers.Ref, priceFollow
 	switch {
 	case !known && offers.listed[ref.Supplier]:
 		evaluation.Reason, evaluation.Attention = "the supplier no longer sells this card", true
-	case !known && ref.Supplier == vouchers.SupplierReloadly:
-		// Never priced blind: a Reloadly price is known only from its offers.
-		evaluation.Reason = "the price at Reloadly is not known yet: its offers have not been read"
+	case !known && isPricedOnlyFromOffers(ref.Supplier):
+		// Never priced blind: a dollar supplier's price is known only from its offers.
+		name, _ := pricedOnlyFromOffers(ref.Supplier)
+		evaluation.Reason = "the price at " + name + " is not known yet: its offers have not been read"
 	case !known:
 		// A supplier whose offers were never read is not judged.
 		evaluation.Candidate, evaluation.Note = true, "its offers have not been read: price and stock unknown"
@@ -564,6 +565,7 @@ func (s HTTPServer) buyFromSuppliers(
 	claim control.VoucherPurchase,
 	candidates []supplierEvaluation,
 	quantity int,
+	account vouchers.Account,
 ) supplierPurchase {
 	result := supplierPurchase{Claim: claim}
 	for i, candidate := range candidates {
@@ -577,7 +579,7 @@ func (s HTTPServer) buyFromSuppliers(
 			result.Claim = redirected
 		}
 		callCtx, cancel := context.WithTimeout(ctx, s.Vouchers.requestTimeout())
-		bought, err := candidate.Supplier.Buy(callCtx, candidate.Ref, quantity, claim.ID)
+		bought, err := buyFrom(callCtx, candidate, quantity, claim.ID, account)
 		cancel()
 		result.Bought, result.Err = bought, err
 		result.Attempts = append(result.Attempts, supplierAttempt{
@@ -594,6 +596,42 @@ func (s HTTPServer) buyFromSuppliers(
 		}
 	}
 	return result
+}
+
+// pricedOnlyFromOffers reports whether a supplier's price is only ever known
+// from its offers (it sells in dollars, a card's price varies with it), and its
+// name for a reason.
+func pricedOnlyFromOffers(supplier string) (string, bool) {
+	switch supplier {
+	case vouchers.SupplierReloadly:
+		return "Reloadly", true
+	case vouchers.SupplierFazer:
+		return "FazerCards", true
+	}
+	return "", false
+}
+
+func isPricedOnlyFromOffers(supplier string) bool {
+	_, blind := pricedOnlyFromOffers(supplier)
+	return blind
+}
+
+// buyFrom places one attempt: codes with Buy, credit to an account with BuyFor
+// (one at a time). A supplier that cannot send to an account sells nothing.
+func buyFrom(ctx context.Context, candidate supplierEvaluation, quantity int, clientRef string, account vouchers.Account) (vouchers.Purchase, error) {
+	if !account.Present() {
+		return candidate.Supplier.Buy(ctx, candidate.Ref, quantity, clientRef)
+	}
+	buyer, ok := candidate.Supplier.(vouchers.TargetBuyer)
+	if !ok {
+		return vouchers.Purchase{}, &vouchers.Failure{Code: vouchers.FailureRefused, Definite: true,
+			Detail: candidate.Supplier.Key() + " cannot send credit to an account"}
+	}
+	if quantity != 1 {
+		return vouchers.Purchase{}, &vouchers.Failure{Code: vouchers.FailureRefused, Definite: true,
+			Detail: "credit is sent to an account one at a time"}
+	}
+	return buyer.BuyFor(ctx, candidate.Ref, account, clientRef)
 }
 
 // noteSupplierHealth learns from an attempt: a sale closes the supplier's

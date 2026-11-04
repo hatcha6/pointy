@@ -24,6 +24,14 @@ type TestSupplier struct {
 const (
 	testOrderPrefix   = "test-"
 	reviewOrderPrefix = "review-"
+	// testAccountMark names an order that sent credit to an account: it has
+	// no code to read back.
+	testAccountMark = "acct-"
+)
+
+var (
+	_ TargetBuyer   = TestSupplier{}
+	_ TargetChecker = TestSupplier{}
 )
 
 func (TestSupplier) Key() string { return SupplierTest }
@@ -41,10 +49,40 @@ func (t TestSupplier) Buy(_ context.Context, ref Ref, quantity int, clientRef st
 	return testPurchase(orderID, quantity), nil
 }
 
+// BuyFor "sends" a test top-up: it succeeds with no code, nothing sent.
+func (t TestSupplier) BuyFor(_ context.Context, _ Ref, account Account, clientRef string) (Purchase, error) {
+	if strings.TrimSpace(clientRef) == "" {
+		return Purchase{}, &Failure{Code: FailureRefused, Detail: "a test purchase needs a reference", Definite: true}
+	}
+	if !account.Present() {
+		return Purchase{}, &Failure{Code: FailureRefused, Detail: ErrAccountRequired.Error(), Definite: true}
+	}
+	prefix := testOrderPrefix
+	if t.Plain {
+		prefix = reviewOrderPrefix
+	}
+	return testAccountPurchase(prefix + testAccountMark + testDigest(clientRef)[:12]), nil
+}
+
+// CheckAccount answers every account as valid, under a name that says test
+// (a plain one for the review account).
+func (t TestSupplier) CheckAccount(_ context.Context, _ Ref, _ Target, account Account) (AccountCheck, error) {
+	if !account.Present() {
+		return AccountCheck{Status: AccountInvalid}, nil
+	}
+	if t.Plain {
+		return AccountCheck{Status: AccountValid, Name: "Player"}, nil
+	}
+	return AccountCheck{Status: AccountValid, Name: "TEST PLAYER"}, nil
+}
+
 func (TestSupplier) Lookup(_ context.Context, _ Ref, orderID string) (Purchase, error) {
 	orderID = strings.TrimSpace(orderID)
 	if !strings.HasPrefix(orderID, testOrderPrefix) && !strings.HasPrefix(orderID, reviewOrderPrefix) {
 		return Purchase{}, fmt.Errorf("%q is not a test order", orderID)
+	}
+	if strings.Contains(orderID, testAccountMark) {
+		return testAccountPurchase(orderID), nil
 	}
 	quantity := 1
 	if _, after, ok := strings.Cut(orderID, "x"); ok {
@@ -61,6 +99,10 @@ func (TestSupplier) Find(context.Context, Ref, int, time.Time, time.Time) ([]Pur
 }
 
 func (TestSupplier) Offers(context.Context) ([]Offer, error) { return nil, nil }
+
+func testAccountPurchase(orderID string) Purchase {
+	return Purchase{OrderID: orderID, Status: StatusSucceeded, Cost: "0", Currency: Currency, At: time.Now().UTC()}
+}
 
 func testPurchase(orderID string, quantity int) Purchase {
 	purchase := Purchase{

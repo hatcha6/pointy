@@ -46,6 +46,10 @@ type Message struct {
 	Link string
 	// Campaign names the message in the app's analytics.
 	Campaign string
+	// Order is the customer order the message is about: the app keeps quiet
+	// while it is showing that order, and one message per order replaces the
+	// last on the phone.
+	Order string
 }
 
 // Client sends as one service account.
@@ -135,15 +139,19 @@ func (c *Client) send(ctx context.Context, target map[string]any, m Message) err
 	if m.Campaign != "" {
 		data["campaign"] = m.Campaign
 	}
+	android := map[string]string{"channel_id": "general"}
+	apns := map[string]any{
+		"payload": map[string]any{"aps": map[string]any{"sound": "default"}},
+	}
+	if m.Order != "" {
+		data["order"] = m.Order
+		android["tag"] = "order-" + m.Order
+		apns["headers"] = map[string]string{"apns-collapse-id": "order-" + m.Order}
+	}
 	message := map[string]any{
 		"notification": map[string]string{"title": m.Title, "body": m.Body},
-		"android": map[string]any{
-			"priority":     "high",
-			"notification": map[string]string{"channel_id": "general"},
-		},
-		"apns": map[string]any{
-			"payload": map[string]any{"aps": map[string]any{"sound": "default"}},
-		},
+		"android":      map[string]any{"priority": "high", "notification": android},
+		"apns":         apns,
 	}
 	if len(data) > 0 {
 		message["data"] = data
