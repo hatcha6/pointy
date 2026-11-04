@@ -596,6 +596,45 @@ extension PosCartActions on PosViewModel {
     return true;
   }
 
+  /// A card sent to an account goes in the cart as one line, saying whose
+  /// account: bought only once the invoice is paid. False when the cart is
+  /// frozen. The server reads the account again, and prices the line itself.
+  bool addAccountCard({
+    required ProductVariant variant,
+    required String optionCode,
+    required String optionLabel,
+    required String subscriberRef,
+    required Map<String, String> account,
+    String accountName = '',
+  }) {
+    if (_isCartFrozen) {
+      return false;
+    }
+    final line = CartLine.create(
+      variant: variant,
+      quantity: 1,
+      integration: CartLineIntegration(
+        provider: integrationProviderKeyToJson(IntegrationProviderKey.pointy),
+        subscriberRef: subscriberRef,
+        optionCode: optionCode,
+        optionLabel: optionLabel,
+        accountTarget: account,
+        accountName: accountName,
+      ),
+    );
+    _cart.add(line);
+    _trackCartLineAdded(
+      line,
+      addedQuantity: 1,
+      previousQuantity: 0,
+      source: 'voucher_menu_account',
+    );
+    _touchActiveSaleSession();
+    _notifyChanged();
+    unawaited(refreshDiscountPreview());
+    return true;
+  }
+
   /// Switches the unit a cart line is sold in (used from the cart). Changes the
   /// per-unit price and stock conversion, so the discount preview is refreshed.
   void setCartLineUnit(String lineKey, UnitOption unit) {

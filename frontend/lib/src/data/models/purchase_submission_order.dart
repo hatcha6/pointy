@@ -295,9 +295,14 @@ class PurchaseOrder {
     );
   }
 
-  /// Whether receiving what is still open needs identifiers scanned first.
+  /// Whether receiving what is still open needs identifiers scanned first —
+  /// false for a tracked line whose lots and serials were all typed on the
+  /// order, which the server then takes as given.
   bool get receiptNeedsIdentifiers => lines.any(
-    (line) => line.trackingMode.isTracked && line.receivableQuantity > 0,
+    (line) =>
+        line.trackingMode.isTracked &&
+        line.receivableQuantity > 0 &&
+        !line.planCoversOpenReceipt,
   );
 }
 
@@ -383,6 +388,7 @@ class PurchaseOrderLine {
     this.landedUnitCost,
     this.effectiveUnitCost,
     this.landedLineTotal,
+    this.planned = const ReceiptLineCapture(),
   });
 
   final int id;
@@ -447,7 +453,74 @@ class PurchaseOrderLine {
   final double? effectiveUnitCost;
   final double? landedLineTotal;
 
+  /// The lots, expiry dates and serials typed while the order was entered —
+  /// what the receiving form starts from (`planned_units`/`planned_batches`).
+  final ReceiptLineCapture planned;
+
   double get receivableQuantity => openQuantity < 0 ? 0 : openQuantity;
+
+  /// What the receiving form starts this line from, for a delivery of
+  /// [received] sound and [damaged] damaged (purchase units).
+  ///
+  /// The server's own rule (`planned_receipt_capture`), as far as the client
+  /// can see it: one planned lot covers any delivery; several only the line's
+  /// first, and only when it brings their total. Serials only on the first
+  /// delivery — after that the client cannot tell which ones arrived, so the
+  /// receiver scans. Null when the plan offers nothing.
+  ReceiptLineCapture? plannedCaptureFor({
+    required double received,
+    required double damaged,
+  }) {
+    if (!trackingMode.isTracked || planned.isEmpty) {
+      return null;
+    }
+    final firstDelivery = receivedQuantity + damagedQuantity <= 0;
+    final lotQuantity = toBaseQuantity(received);
+    var batches = const <ReceiptBatchCapture>[];
+    if (trackingMode.tracksLots && planned.batches.isNotEmpty) {
+      if (planned.batches.length == 1) {
+        batches = [planned.batches.single.copyWith(quantity: lotQuantity)];
+      } else if (firstDelivery &&
+          (planned.capturedBatchQuantity - lotQuantity).abs() < 0.0005) {
+        batches = planned.batches;
+      }
+    }
+    final units = trackingMode.tracksUnits && firstDelivery
+        ? planned.units
+        : const <ReceiptUnitCapture>[];
+    if (batches.isEmpty && units.isEmpty) {
+      return null;
+    }
+    return ReceiptLineCapture(units: units, batches: batches);
+  }
+
+  /// Whether receiving everything still open can go straight through on the
+  /// plan alone, with nothing left to scan or type.
+  bool get planCoversOpenReceipt {
+    final capture = plannedCaptureFor(received: receivableQuantity, damaged: 0);
+    if (capture == null) {
+      return false;
+    }
+    final openBase = toBaseQuantity(receivableQuantity);
+    if (trackingMode.tracksLots) {
+      if (capture.batches.isEmpty) {
+        return false;
+      }
+      // A serialised pack's lot is a header; a plain lot must add up.
+      if (!trackingMode.tracksUnits &&
+          (capture.capturedBatchQuantity - openBase).abs() >= 0.0005) {
+        return false;
+      }
+      if (tracksExpiry &&
+          capture.batches.any((batch) => batch.expiryDate == null)) {
+        return false;
+      }
+    }
+    if (trackingMode.tracksUnits && capture.units.length != openBase.round()) {
+      return false;
+    }
+    return true;
+  }
 
   /// One purchase unit in base units, never zero.
   double get baseFactor => unitFactor > 0 ? unitFactor : 1;
@@ -582,6 +655,10 @@ class PurchaseOrderLine {
             json['line_total_with_landed_cost'] ??
             json['effective_line_total'],
       ),
+      planned: ReceiptLineCapture.fromJson(
+        json['planned_units'],
+        json['planned_batches'],
+      ),
     );
   }
 
@@ -629,6 +706,7 @@ class PurchaseOrderLine {
       landedUnitCost: landedUnitCost,
       effectiveUnitCost: effectiveUnitCost,
       landedLineTotal: landedLineTotal,
+      planned: planned,
     );
   }
 }
@@ -686,7 +764,7 @@ class PurchaseReceiveLineDraft {
   final ReceiptLineCapture? capture;
 
   Map<String, Object?> toJson() {
-    final captured = capture?.toJson() ?? const <String, Object?>{};
+    final captured = capture;
     return {
       'purchase_line': purchaseLineId,
       // 3dp strings, matching the backend's decimal quantities.
@@ -695,7 +773,16 @@ class PurchaseReceiveLineDraft {
       if (quantityRejected > 0)
         'quantity_rejected': quantityRejected.toStringAsFixed(3),
       if (expiryDate != null) 'expiry_date': _dateOnlyString(expiryDate!),
-      ...captured,
+      // Both keys, even empty, whenever the receiver captured: an absent key
+      // tells the server to take the order's plan, and "I removed the planned
+      // serials, none of those arrived" must not be read as that.
+      if (captured != null) ...{
+        'units': [for (final unit in captured.units) unit.toJson()],
+        'batches': [
+          for (final batch in captured.batches)
+            if (!batch.isEmpty) batch.toJson(),
+        ],
+      },
     };
   }
 }

@@ -14,6 +14,20 @@ class ScanWedgeTarget extends StatelessWidget {
   Widget build(BuildContext context) => child;
 }
 
+/// Marks a region whose arrow keys move focus between its items — a grid of
+/// catalog results reached with ↓ from the search box. [BarcodeScanListener]
+/// hands arrows pressed in here to the focus system instead of to
+/// [BarcodeScanListener.onArrowKey], which would otherwise turn "move to the
+/// next product" into "cycle the active line's unit".
+class ArrowKeyNavigationRegion extends StatelessWidget {
+  const ArrowKeyNavigationRegion({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => child;
+}
+
 /// Global hardware-keyboard listener for USB/Bluetooth barcode wedges, which
 /// type their payload as a fast key burst ending in Enter/Tab.
 ///
@@ -247,7 +261,10 @@ class _BarcodeScanListenerState extends State<BarcodeScanListener> {
     if (_arrowKeys.contains(event.logicalKey)) {
       // Arrows inside a text field are cursor movement, never a shortcut.
       final onArrowKey = widget.onArrowKey;
-      if (onArrowKey != null && focusedEditable == null && _buffer.isEmpty) {
+      if (onArrowKey != null &&
+          focusedEditable == null &&
+          _buffer.isEmpty &&
+          !_inArrowNavigationRegion()) {
         return onArrowKey(event.logicalKey);
       }
       return false;
@@ -341,6 +358,13 @@ class _BarcodeScanListenerState extends State<BarcodeScanListener> {
   bool _isExemptWedgeTarget() {
     final focusedContext = FocusManager.instance.primaryFocus?.context;
     return focusedContext?.findAncestorWidgetOfExactType<ScanWedgeTarget>() !=
+        null;
+  }
+
+  bool _inArrowNavigationRegion() {
+    final focusedContext = FocusManager.instance.primaryFocus?.context;
+    return focusedContext
+            ?.findAncestorWidgetOfExactType<ArrowKeyNavigationRegion>() !=
         null;
   }
 

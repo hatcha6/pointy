@@ -529,6 +529,7 @@ def _write_brand(account, brand, info: VoucherBrand, *, inline: bool):
             category_rank=info.category_rank,
             redeem_hint=info.redeem_hint or "",
             aliases=list(info.aliases),
+            target=dict(info.target or {}),
         )
     # Another file is another logo: fetch it on the next sweep, not a month
     # after the old one was read (see ``voucher_logos``).

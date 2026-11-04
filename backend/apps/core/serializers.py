@@ -647,7 +647,9 @@ class ShopSettingsSerializer(serializers.ModelSerializer):
             "print_voucher_qr_codes",
             "allow_overselling",
             "prevent_selling_at_loss",
-            "low_stock_threshold",
+            # ``low_stock_threshold`` is retired: the threshold is per variant
+            # (``ProductVariant.low_stock_threshold``). An older client that
+            # still sends it is ignored rather than refused.
             "warn_low_stock_before_sale",
             "inventory_valuation_method",
             # Accounting calendar. The fiscal year anchors the "this year" /

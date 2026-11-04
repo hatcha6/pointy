@@ -64,6 +64,10 @@
   "@commandPaletteActionNewSale": {
     "description": "Quick action: go to the POS to start a new sale."
   },
+  "commandPaletteActionPurchaseOrderWorkspace": "متابعة أمر الشراء الحالي",
+  "@commandPaletteActionPurchaseOrderWorkspace": {
+    "description": "Palette quick action (Ctrl/Cmd+Shift+P): open the purchase order being written, keeping its lines."
+  },
   "commandPaletteActionNewPurchaseOrder": "أمر شراء جديد",
   "@commandPaletteActionNewPurchaseOrder": {
     "description": "Quick action: open a blank purchase order draft."
@@ -1262,7 +1266,19 @@
         "type": "String"
       },
       "reorderLevel": {
+        "type": "String"
+      },
+      "expected": {
         "type": "int"
+      }
+    }
+  },
+  "dashboardStockItemSubtitleUnwatched": "{sku}، بلا حد تنبيه، المتوقع {expected}",
+  "@dashboardStockItemSubtitleUnwatched": {
+    "description": "Stock item secondary information for a variant with no low-stock threshold.",
+    "placeholders": {
+      "sku": {
+        "type": "String"
       },
       "expected": {
         "type": "int"
@@ -2118,6 +2134,114 @@
   "userDetailsRecentPurchasesTitle": "آخر فواتير الموردين",
   "userDetailsRecentSessionsTitle": "آخر جلسات الدرج",
   "userDetailsRecentActivityTitle": "آخر النشاطات",
+  "remoteSessionsTitle": "الجلسات عن بُعد",
+  "remoteSessionsOwnSubtitle": "الأجهزة التي دخلتَ منها إلى المتجر من خارج شبكته عبر دفتر. أنهِ أي جلسة لا تعرفها.",
+  "remoteSessionsUserSubtitle": "الأجهزة التي دخل منها هذا المستخدم إلى المتجر من خارج شبكته عبر دفتر.",
+  "remoteSessionsEmpty": "لا توجد جلسات عن بُعد",
+  "remoteSessionsEmptyDescription": "تظهر هنا كل جلسة دخول من خارج شبكة المتجر، مع جهازها ومكانها.",
+  "remoteSessionsLoadError": "تعذّر تحميل الجلسات عن بُعد.",
+  "remoteSessionsRefreshTooltip": "تحديث الجلسات عن بُعد",
+  "remoteSessionsActiveCount": "النشطة: {count}",
+  "@remoteSessionsActiveCount": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "remoteSessionStatusActive": "نشطة",
+  "remoteSessionStatusExpired": "انتهت مدتها",
+  "remoteSessionStatusRevoked": "أُنهيت",
+  "remoteSessionStatusSignedOut": "سُجِّل الخروج",
+  "remoteSessionStatusDisabled": "أُوقف الدخول عن بُعد",
+  "remoteSessionThisDevice": "هذا الجهاز",
+  "remoteSessionFactAddress": "العنوان",
+  "remoteSessionFactSignedIn": "الدخول",
+  "remoteSessionFactLastSeen": "آخر نشاط",
+  "remoteSessionFactExpires": "تنتهي",
+  "remoteSessionFactEnded": "انتهت",
+  "remoteSessionFactEndedBy": "أنهاها",
+  "remoteSessionJustNow": "الآن",
+  "remoteSessionMinutesAgo": "{count, plural, one{منذ دقيقة} two{منذ دقيقتين} few{منذ {count} دقائق} other{منذ {count} دقيقة}}",
+  "@remoteSessionMinutesAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "remoteSessionHoursAgo": "{count, plural, one{منذ ساعة} two{منذ ساعتين} few{منذ {count} ساعات} other{منذ {count} ساعة}}",
+  "@remoteSessionHoursAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "remoteSessionDaysAgo": "{count, plural, one{منذ يوم} two{منذ يومين} few{منذ {count} أيام} other{منذ {count} يومًا}}",
+  "@remoteSessionDaysAgo": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "remoteSessionInHours": "{count, plural, one{بعد ساعة} two{بعد ساعتين} few{بعد {count} ساعات} other{بعد {count} ساعة}}",
+  "@remoteSessionInHours": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "remoteSessionInDays": "{count, plural, one{بعد يوم} two{بعد يومين} few{بعد {count} أيام} other{بعد {count} يومًا}}",
+  "@remoteSessionInDays": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "remoteSessionDeviceTitle": "{platform} · {browser}",
+  "@remoteSessionDeviceTitle": {
+    "placeholders": {
+      "platform": {
+        "type": "String"
+      },
+      "browser": {
+        "type": "String"
+      }
+    }
+  },
+  "remoteSessionPlatformIphone": "آيفون",
+  "remoteSessionPlatformIpad": "آيباد",
+  "remoteSessionPlatformAndroid": "أندرويد",
+  "remoteSessionPlatformWindows": "ويندوز",
+  "remoteSessionPlatformMac": "ماك",
+  "remoteSessionPlatformChromeOs": "كروم أو إس",
+  "remoteSessionPlatformLinux": "لينكس",
+  "remoteSessionPlatformOther": "جهاز غير معروف",
+  "remoteSessionBrowserSafari": "سفاري",
+  "remoteSessionBrowserChrome": "كروم",
+  "remoteSessionBrowserEdge": "إيدج",
+  "remoteSessionBrowserFirefox": "فايرفوكس",
+  "remoteSessionBrowserSamsung": "متصفح سامسونج",
+  "remoteSessionBrowserOpera": "أوبرا",
+  "remoteSessionRevokeButton": "إنهاء",
+  "remoteSessionRevokeTooltip": "إنهاء هذه الجلسة وتسجيل خروج الجهاز",
+  "remoteSessionRevokeTitle": "إنهاء الجلسة؟",
+  "remoteSessionRevokeMessage": "سيُسجَّل خروج «{device}» فورًا، ولن يدخل إلى المتجر مجددًا إلا بكلمة المرور.",
+  "@remoteSessionRevokeMessage": {
+    "placeholders": {
+      "device": {
+        "type": "String"
+      }
+    }
+  },
+  "remoteSessionRevokeCurrentMessage": "هذه هي الجلسة التي تستخدمها الآن. سيُسجَّل خروجك من هذا الجهاز فورًا.",
+  "remoteSessionRevokeConfirm": "إنهاء الجلسة",
+  "remoteSessionRevokeError": "تعذّر إنهاء الجلسة. حاول مرة أخرى.",
+  "remoteSessionRevoked": "أُنهيت الجلسة وسُجِّل خروج الجهاز.",
   "userActivityNetSalesMetric": "صافي المبيعات",
   "userActivityCustomersMetric": "العملاء",
   "userActivityPurchaseTotalMetric": "قيمة المشتريات",
@@ -3395,13 +3519,10 @@
       }
     }
   },
-  "inventorySettingsSummary": "تنبيه عند {count} قطع أو أقل، البيع فوق المخزون: {oversellStatus}، منع الخسارة: {lossStatus}",
+  "inventorySettingsSummary": "البيع فوق المخزون: {oversellStatus}، منع الخسارة: {lossStatus}",
   "@inventorySettingsSummary": {
     "description": "Summary for inventory settings in the shop settings index.",
     "placeholders": {
-      "count": {
-        "type": "int"
-      },
       "oversellStatus": {
         "type": "String"
       },
@@ -4043,6 +4164,9 @@
   "transferCommissionPercentLabel": "عمولة التحويل (%)",
   "paymentMethodsRequiredError": "فعّل طريقة دفع واحدة على الأقل.",
   "lowStockThresholdLabel": "حد تنبيه المخزون المنخفض",
+  "lowStockThresholdHelper": "ننبّهك عندما يصل مخزون هذا الصنف في كل الفروع إلى هذا العدد أو أقل. اتركه فارغًا لإيقاف التنبيه.",
+  "lowStockThresholdMovedHint": "حد تنبيه المخزون المنخفض يُضبط الآن لكل صنف على حدة من شاشة المنتج، ولا يُنبَّه إلا عن الأصناف التي ضُبط لها حد.",
+  "lowStockThresholdGeneratedHelper": "يُطبَّق على كل صنف مولَّد، ويمكن تعديله لكل صنف لاحقًا. اتركه فارغًا لإيقاف التنبيه.",
   "printerTransportLabel": "طريقة الاتصال",
   "printerTransportSerial": "تسلسلي",
   "printerTransportBluetooth": "بلوتوث",
@@ -5005,6 +5129,7 @@
   "stockVoucherConsignmentIntake": "استلام أمانة",
   "stockVoucherConsignmentReturn": "إرجاع أمانة لصاحبها",
   "stockVoucherRefurbishment": "إصلاح أُضيف إلى التكلفة",
+  "stockVoucherCatalogMerge": "دمج أصناف فرعية",
   "stockVoucherOther": "حركة مخزون",
   "productTrackingModeLabel": "طريقة التتبع",
   "productTrackingWarrantyDays": "{days, plural, one{يوم واحد} two{يومان} few{{days} أيام} many{{days} يومًا} other{{days} يوم}}",
@@ -6408,10 +6533,6 @@
   "@purchaseExchangeReplacementMirrorHint": {
     "description": "Shown in the empty replacement section before anything is chosen to go out."
   },
-  "purchaseAdjustmentUnitsReplacementLotRequired": "البديل صنف مسلسل بدفعة: امسح رقم الدفعة قبل التأكيد.",
-  "@purchaseAdjustmentUnitsReplacementLotRequired": {
-    "description": "Shown when a serial-and-lot replacement has no lot captured."
-  },
   "unitPickSearchHint": "امسح أو اكتب الرقم التسلسلي / IMEI",
   "@unitPickSearchHint": {
     "description": "Hint of the scan/search field in the shared unit pick sheet."
@@ -7720,10 +7841,6 @@
         "type": "int"
       }
     }
-  },
-  "posCashPurchaseLotRequiredError": "هذا الصنف يُشترى برقم دفعة — أدخل رقم الدفعة.",
-  "@posCashPurchaseLotRequiredError": {
-    "description": "Shown when a serial+lot tracked line has no lot captured."
   },
   "posCashPurchaseLotsMismatchError": "كميات الدفعات لا تطابق الكمية المشتراة — عدّل الدفعات.",
   "@posCashPurchaseLotsMismatchError": {
@@ -10448,6 +10565,26 @@
   "@batchCaptureLotCode": {
     "description": "Lot code field label."
   },
+  "batchCaptureLotCodeOptional": "رقم الدفعة (اختياري)",
+  "@batchCaptureLotCodeOptional": {
+    "description": "Lot code field label; the lot number is never required."
+  },
+  "batchCaptureLotCodeGenerated": "يُولَّد رقم تلقائيًا إن تُرك فارغًا",
+  "@batchCaptureLotCodeGenerated": {
+    "description": "Helper under a blank lot code: the server generates one."
+  },
+  "expiryFieldHint": "12/27",
+  "@expiryFieldHint": {
+    "description": "Typed expiry field hint: month/year, as printed on a pack. Latin digits on purpose."
+  },
+  "expiryFieldInvalid": "تاريخ غير مفهوم — اكتب الشهر/السنة مثل 12/27",
+  "@expiryFieldInvalid": {
+    "description": "Typed expiry could not be read."
+  },
+  "expiryFieldPickTooltip": "اختيار من التقويم",
+  "@expiryFieldPickTooltip": {
+    "description": "Calendar button beside a typed expiry field."
+  },
   "batchCaptureQuantity": "الكمية",
   "@batchCaptureQuantity": {
     "description": "Per-lot quantity field label."
@@ -10545,6 +10682,33 @@
   "purchaseLineLotsNoExpiryAtReceipt": "تُسجَّل أرقام الدفعات عند الاستلام.",
   "@purchaseLineLotsNoExpiryAtReceipt": {
     "description": "Hint on a lot-tracked purchase line whose lots do not expire."
+  },
+  "purchaseLineCaptureLotNumber": "رقم الدفعة / تقسيم",
+  "@purchaseLineCaptureLotNumber": {
+    "description": "Purchase-line button opening the lot sheet (lot number, split across lots)."
+  },
+  "purchaseLineCaptureLotCode": "الدفعة {code}",
+  "@purchaseLineCaptureLotCode": {
+    "description": "Purchase-line button naming its one lot.",
+    "placeholders": {"code": {"type": "String"}}
+  },
+  "purchaseLineCaptureLotsCount": "{count, plural, =2{دفعتان} few{{count} دفعات} other{{count} دفعة}}",
+  "@purchaseLineCaptureLotsCount": {
+    "description": "Purchase-line button when the line is split across several lots.",
+    "placeholders": {"count": {"type": "int"}}
+  },
+  "purchaseLineCaptureSerials": "الأرقام التسلسلية {captured}/{expected}",
+  "@purchaseLineCaptureSerials": {
+    "description": "Purchase-line button opening the serial scan loop.",
+    "placeholders": {"captured": {"type": "int"}, "expected": {"type": "int"}}
+  },
+  "purchaseLineCaptureLater": "اختياري — ما لا يُدخل الآن يُطلب عند الاستلام.",
+  "@purchaseLineCaptureLater": {
+    "description": "Under a tracked purchase line's capture row."
+  },
+  "purchaseLineCaptureMismatch": "ما أُدخل أكثر من كمية السطر — عدّل الدفعات أو الأرقام.",
+  "@purchaseLineCaptureMismatch": {
+    "description": "A tracked purchase line's lots or serials exceed its quantity."
   },
   "purchaseLineSerialLotAtReceipt": "تُسجَّل الدفعة وتُمسح الأرقام التسلسلية عند الاستلام.",
   "@purchaseLineSerialLotAtReceipt": {
@@ -10719,10 +10883,6 @@
   "batchCaptureBlockedExpiry": "أدخل تاريخ صلاحية كل دفعة.",
   "@batchCaptureBlockedExpiry": {
     "description": "Why confirm is disabled: a lot is missing its expiry date."
-  },
-  "batchCaptureBlockedCode": "أدخل رقم كل دفعة.",
-  "@batchCaptureBlockedCode": {
-    "description": "Why confirm is disabled: a lot is missing its code."
   },
   "batchCaptureBlockedResidual": "مجموع كميات الدفعات {captured} ويجب أن يساوي {expected}.",
   "@batchCaptureBlockedResidual": {
@@ -13074,6 +13234,8 @@
   "@connectionRemoteFieldHint": {
     "description": "Relay connection form: installation ID field hint (the ID format, left-to-right)."
   },
+  "connectionRemotePasteButton": "لصق",
+  "connectionRemoteClipboardHasNoId": "لا يوجد رقم تثبيت في الحافظة. انسخ الرقم من الإعدادات ← الاشتراك على جهاز المتجر، ثم اضغط «لصق».",
   "connectionRemoteConnectButton": "متابعة",
   "@connectionRemoteConnectButton": {
     "description": "Relay connection form: submit button."
@@ -13980,11 +14142,20 @@
   "purchasingShortcutCycleUnitArrows": "تبديل الوحدة للأمام والخلف",
   "purchasingShortcutOpenPricing": "تسعير المنتج في السطر المحدد",
   "purchasingShortcutDeleteLine": "حذف السطر المحدد (مع التراجع)",
-  "purchasingShortcutTypeQuantity": "اكتب الكمية ثم Enter لتطبيقها",
+  "purchasingShortcutTypeQuantity": "اكتب الكمية ثم Enter للانتقال إلى التكلفة",
   "purchasingShortcutStepQuantity": "زيادة أو إنقاص واحد",
   "purchasingShortcutClearEntry": "مسح ما كُتب ثم إلغاء التحديد",
   "purchasingShortcutOpenSettings": "بيانات المورد والفاتورة والتكاليف",
   "purchasingShortcutSubmit": "حفظ أو تسجيل أمر الشراء",
+  "purchasingShortcutsSectionSearch": "البحث والإضافة",
+  "purchasingShortcutSearchEnter": "باركود ثم Enter يضيف المنتج، والاسم ثم Enter يبحث",
+  "purchasingShortcutResults": "التنقل بين نتائج البحث، وEnter يضيف المنتج المحدد",
+  "purchasingShortcutBackToSearch": "العودة إلى خانة البحث",
+  "purchasingShortcutWalkLine": "إدخال السطر المحدد: الكمية ثم التكلفة ثم الصلاحية",
+  "purchasingShortcutWalkNext": "تأكيد الحقل والانتقال إلى التالي",
+  "purchasingShortcutAdjacentLine": "السطر التالي أو السابق",
+  "purchasingShortcutCaptureLine": "الدفعات وتواريخ الصلاحية والأرقام التسلسلية للسطر",
+  "purchasingShortcutOpenWorkspace": "فتح أمر الشراء الحالي من أي شاشة",
   "purchaseDraftLineRemovedMessage": "تم حذف السطر.",
   "aiUiTableTotalRow": "الإجمالي",
   "aiUiSurfaceFailed": "تعذّر عرض هذه البطاقة.",
@@ -24894,6 +25065,17 @@
   "purchaseResultBackToDraft": "رجوع إلى المسودة",
   "purchaseResultCostTip": "إن كانت الفاتورة تعطيك إجمالي السطر فقط، فاكتبه في «إدخال الإجمالي» بدل سعر الوحدة.",
   "purchaseResultStillOpen": "بقي جزء من الأمر مفتوحًا. استلمه من صفحة الأمر حين يصل.",
+  "purchaseEditUnitsTitle": "أي الوحدات لم تصل؟",
+  "purchaseEditUnitsSubtitle": "أنقصت كمية صنف له أرقام تسلسلية. اختر الوحدات التي ستُحذف من المخزون مع هذا التعديل.",
+  "purchaseEditUnitsPick": "اختر {count} من {product}",
+  "@purchaseEditUnitsPick": {
+    "placeholders": {
+      "count": {"type": "int"},
+      "product": {"type": "String"}
+    }
+  },
+  "purchaseEditUnitsConfirm": "حذف المختارة وحفظ",
+  "purchaseEditUnitsTip": "الوحدات المبيعة لا تظهر هنا: لا يمكن حذفها من أمر الشراء.",
   "bulkPriceEditorTitle": "تعديل الأسعار بالقواعد",
   "bulkPriceEditorMenuAction": "تعديل الأسعار بالقواعد",
   "bulkPriceEditorSelectionAction": "قواعد الأسعار",
@@ -25216,5 +25398,351 @@
       "cost": {"type": "String"},
       "after": {"type": "String"}
     }
+  },
+  "bulkTrackingTitle": "تتبّع الصلاحية بالجملة",
+  "bulkTrackingMenuAction": "تتبّع الصلاحية بالجملة",
+  "bulkTrackingSelectionAction": "تتبّع الصلاحية",
+  "bulkTrackingScopeAllHint": "كل المنتجات غير المؤرشفة. منتجات النظام لا تتغيّر أبدًا.",
+  "bulkTrackingWhatTitle": "ماذا تريد؟",
+  "bulkTrackingTrackingLabel": "التتبّع",
+  "bulkTrackingKeep": "بدون تغيير",
+  "bulkTrackingExpiry": "تتبّع الصلاحية",
+  "bulkTrackingExpiryHint": "يُسجَّل الرصيد في دفعات لها تاريخ انتهاء.",
+  "bulkTrackingLots": "تتبّع الدفعات بلا صلاحية",
+  "bulkTrackingLotsHint": "يُسجَّل الرصيد في دفعات بلا تاريخ انتهاء.",
+  "bulkTrackingReminderLabel": "تذكير الصلاحية",
+  "bulkTrackingReminderSet": "تحديد تاريخ تذكير",
+  "bulkTrackingReminderClear": "مسح التذكير",
+  "bulkTrackingReminderHint": "التذكير تنبيه فقط: لا يمنع البيع ولا ينشئ دفعة.",
+  "bulkTrackingReminderDateLabel": "تاريخ التذكير",
+  "bulkTrackingPreviewTitle": "المعاينة",
+  "bulkTrackingPreviewButton": "معاينة التغيير",
+  "bulkTrackingPreviewRefresh": "تحديث المعاينة",
+  "bulkTrackingPreviewStale": "تغيّرت الخيارات بعد المعاينة. حدّثها قبل التطبيق.",
+  "bulkTrackingPreviewFailed": "تعذّرت المعاينة. تحقّق من الاتصال وحاول مجددًا.",
+  "bulkTrackingNothingChosen": "اختر تغييرًا واحدًا على الأقل: التتبّع أو التذكير.",
+  "bulkTrackingIncomplete": "أكمل شروط التصفية وتاريخ التذكير أولًا.",
+  "bulkTrackingSummaryMatched": "المطابقة",
+  "bulkTrackingSummaryChange": "ستتغيّر",
+  "bulkTrackingSummarySame": "كما هي بالفعل",
+  "bulkTrackingSummaryBlocked": "مرفوضة",
+  "bulkTrackingEmptyView": "لا شيء في هذه القائمة.",
+  "bulkTrackingNoMatch": "لا منتجات تطابق الشروط.",
+  "bulkTrackingRowDetail": "الرصيد {onHand} · {variants} متغيّرًا",
+  "@bulkTrackingRowDetail": {
+    "placeholders": {
+      "onHand": {
+        "type": "String"
+      },
+      "variants": {
+        "type": "int"
+      }
+    }
+  },
+  "bulkTrackingTagEmptyShelf": "بلا رصيد",
+  "bulkTrackingTagUndated": "رصيد بلا تاريخ",
+  "bulkTrackingShowMore": "عرض المزيد",
+  "bulkTrackingWarningsTitle": "{count} تنبيهًا قبل التطبيق",
+  "@bulkTrackingWarningsTitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bulkTrackingEmptyShelfWarning": "{count} صنفًا بلا رصيد مسجَّل: لن يقبل الصندوق بيعها بعد التفعيل حتى تُستلم دفعة. راجع الجرد أولًا أو استثنها",
+  "@bulkTrackingEmptyShelfWarning": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bulkTrackingUndatedWarning": "{count} صنفًا سيدخل رصيدها في دفعة واحدة بلا تاريخ، ولن يصل عنها تنبيه إلا إذا حدّدت تاريخ تذكير",
+  "@bulkTrackingUndatedWarning": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bulkTrackingExcludeEmpty": "استثناء الأصناف بلا رصيد",
+  "bulkTrackingExcludeEmptyHint": "سيُترك {count} صنفًا بلا رصيد كما هو.",
+  "@bulkTrackingExcludeEmptyHint": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bulkTrackingApplyButton": "تطبيق على {count} منتجًا",
+  "@bulkTrackingApplyButton": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bulkTrackingApplyIncomplete": "أكمل الخيارات أولًا",
+  "bulkTrackingApplyWaiting": "اضغط «معاينة التغيير» أولًا",
+  "bulkTrackingApplyNothing": "لا يوجد ما يتغيّر",
+  "bulkTrackingConfirmTitle": "تأكيد التغيير",
+  "bulkTrackingConfirmBody": "سيُغيَّر {count} منتجًا. لا يمكن التراجع عن ذلك بنقرة واحدة: العودة إلى الحالة السابقة تتطلب تعديل المنتجات يدويًا.",
+  "@bulkTrackingConfirmBody": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bulkTrackingConfirmSkipped": "{count} صنفًا بلا رصيد لن يُمسّ.",
+  "@bulkTrackingConfirmSkipped": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bulkTrackingConfirmAction": "نعم، طبّق",
+  "bulkTrackingSending": "جارٍ التطبيق. أبقِ هذه الصفحة مفتوحة.",
+  "bulkTrackingProgress": "تمّ إرسال {sent} من {total}",
+  "@bulkTrackingProgress": {
+    "placeholders": {
+      "sent": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "bulkTrackingInterrupted": "انقطع الاتصال بعد {sent} من {total}. المتبقي {remaining} منتجًا ولم يُرسل بعد.",
+  "@bulkTrackingInterrupted": {
+    "placeholders": {
+      "sent": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      },
+      "remaining": {
+        "type": "int"
+      }
+    }
+  },
+  "bulkTrackingResume": "إكمال الباقي",
+  "bulkTrackingResultTitle": "نتيجة التطبيق",
+  "bulkTrackingResultDone": "تغيّر {count} منتجًا",
+  "@bulkTrackingResultDone": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bulkTrackingResultBlocked": "رُفض {count} منتجًا",
+  "@bulkTrackingResultBlocked": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "bulkTrackingFailuresTitle": "تعذّر تغيير {count} منتجًا",
+  "@bulkTrackingFailuresTitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "expiryReminderTitle": "تذكير انتهاء الصلاحية",
+  "expiryReminderHelp": "تنبيه فقط: يصلك إشعار حين يقترب هذا التاريخ ما دام عند الصنف رصيد بلا تاريخ. لا يمنع البيع ولا ينشئ دفعة.",
+  "expiryReminderNone": "لم يُحدَّد",
+  "expiryReminderSetAction": "تحديد التاريخ",
+  "expiryReminderChangeAction": "تغيير",
+  "expiryReminderClearAction": "مسح التذكير",
+  "expiryReminderSaveFailed": "تعذّر حفظ التذكير. حاول مجددًا.",
+  "reorderDrawerLabel": "إعادة الطلب",
+  "reorderTitle": "إعادة الطلب",
+  "reorderSearchHint": "ابحث بالاسم أو الرمز",
+  "reorderChooseSupplier": "اختر موردًا",
+  "reorderApproachingLabel": "إظهار ما سينخفض قريبًا",
+  "reorderApproachingHint": "يضيف الأصناف التي تزيد على حدها بقطعة أو قطعتين، أو التي ستبلغه خلال أسبوع حسب مبيعاتها. عند الإيقاف يظهر فقط ما بلغ حده أو نزل عنه.",
+  "reorderColumnProduct": "المنتج",
+  "reorderColumnStatus": "الحالة",
+  "reorderColumnOnHand": "المتوفر",
+  "reorderColumnThreshold": "الحد",
+  "reorderColumnExpected": "قيد الطلب",
+  "reorderColumnQuantity": "الكمية",
+  "reorderStatusApproaching": "قريب من الحد",
+  "reorderDaysLeft": "{days, plural, =0{يبلغ الحد خلال أقل من يوم} =1{يبلغ الحد خلال نحو يوم} =2{يبلغ الحد خلال نحو يومين} few{يبلغ الحد خلال نحو {days} أيام} other{يبلغ الحد خلال نحو {days} يومًا}}",
+  "@reorderDaysLeft": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "reorderLastSupplier": "آخر شراء من {supplier}",
+  "@reorderLastSupplier": {
+    "placeholders": {
+      "supplier": {
+        "type": "String"
+      }
+    }
+  },
+  "reorderInDraft": "في مسودة: {quantity}",
+  "@reorderInDraft": {
+    "placeholders": {
+      "quantity": {
+        "type": "String"
+      }
+    }
+  },
+  "reorderEmptyTitle": "لا شيء يحتاج إلى إعادة الطلب الآن",
+  "reorderEmptySupplierTitle": "لا شيء من منتجات هذا المورد يحتاج إلى إعادة الطلب",
+  "reorderEmptyMessage": "تظهر هنا الأصناف التي حددت لها حد مخزون منخفض في صفحة المنتج.",
+  "reorderLoadError": "تعذّر تحميل قائمة إعادة الطلب.",
+  "reorderMoreRowsHidden": "{count, plural, =1{يوجد صنف آخر غير معروض، والأكثر إلحاحًا أولًا.} =2{يوجد صنفان آخران غير معروضين، والأكثر إلحاحًا أولًا.} other{{count} صنفًا آخر غير معروضة، والأكثر إلحاحًا أولًا.}}",
+  "@reorderMoreRowsHidden": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "reorderSupplierRequiredHint": "اختر موردًا لإنشاء أمر شراء",
+  "reorderCreateOrderAction": "إنشاء أمر شراء",
+  "reorderCreateOrderError": "تعذّر إنشاء أمر الشراء. حاول مجددًا.",
+  "posAccountCartSubtitle": "إلى {account} · {item}",
+  "@posAccountCartSubtitle": {"description": "Till: game top-ups by account and the card requests panel.", "placeholders": {"account": {"type": "String"}, "item": {"type": "String"}}},
+  "posVoucherStickerById": "بالمعرّف",
+  "@posVoucherStickerById": {"description": "Till: game top-ups by account and the card requests panel."},
+  "posVoucherStickerTelegram": "إلى تيليجرام",
+  "@posVoucherStickerTelegram": {"description": "Till: game top-ups by account and the card requests panel."},
+  "posVoucherStickerSteamLogin": "إلى حساب ستيم",
+  "@posVoucherStickerSteamLogin": {"description": "Till: game top-ups by account and the card requests panel."},
+  "posVoucherStickerSteamGift": "هدية برابط",
+  "@posVoucherStickerSteamGift": {"description": "Till: game top-ups by account and the card requests panel."},
+  "posShortcutCardRequests": "طلبات الكروت",
+  "@posShortcutCardRequests": {"description": "Till: game top-ups by account and the card requests panel."},
+  "voucherAccountSectionTitle": "حساب الزبون",
+  "@voucherAccountSectionTitle": {"description": "Till: game top-ups by account and the card requests panel."},
+  "voucherAccountPickAmount": "اختر الكمية",
+  "@voucherAccountPickAmount": {"description": "Till: game top-ups by account and the card requests panel."},
+  "voucherAccountSavedTitle": "حسابات سابقة",
+  "@voucherAccountSavedTitle": {"description": "Till: game top-ups by account and the card requests panel."},
+  "voucherAccountSavedForCustomer": "حسابات الزبون أولاً",
+  "@voucherAccountSavedForCustomer": {"description": "Till: game top-ups by account and the card requests panel."},
+  "voucherAccountSavedEmpty": "لا حسابات محفوظة بعد. يُحفظ الحساب تلقائياً بعد أول بيع له.",
+  "@voucherAccountSavedEmpty": {"description": "Till: game top-ups by account and the card requests panel."},
+  "voucherAccountSavedNoMatch": "لا حساب محفوظ بهذا. تابع إن كان حساباً جديداً.",
+  "@voucherAccountSavedNoMatch": {"description": "Till: game top-ups by account and the card requests panel."},
+  "voucherAccountSavedMore": "توجد حسابات أخرى: اكتب المعرّف أو الاسم لتجدها.",
+  "@voucherAccountSavedMore": {"description": "Till: game top-ups by account and the card requests panel."},
+  "voucherAccountSearchHint": "اكتب المعرّف أو ابحث بالاسم",
+  "@voucherAccountSearchHint": {"description": "Till: game top-ups by account and the card requests panel."},
+  "voucherAccountOther": "حساب آخر",
+  "@voucherAccountOther": {"description": "Till: game top-ups by account and the card requests panel."},
+  "voucherAccountRename": "تسمية",
+  "@voucherAccountRename": {"description": "Till: game top-ups by account and the card requests panel."},
+  "voucherAccountRenameTitle": "اسم هذا الحساب عندك",
+  "@voucherAccountRenameTitle": {"description": "Till: game top-ups by account and the card requests panel."},
+  "voucherAccountRenameHint": "مثلاً: أحمد الجار",
+  "@voucherAccountRenameHint": {"description": "Till: game top-ups by account and the card requests panel."},
+  "voucherAccountForget": "حذف من القائمة",
+  "@voucherAccountForget": {"description": "Till: game top-ups by account and the card requests panel."},
+  "voucherAccountSave": "حفظ",
+  "@voucherAccountSave": {"description": "Till: game top-ups by account and the card requests panel."},
+  "voucherAccountCancel": "إلغاء",
+  "@voucherAccountCancel": {"description": "Till: game top-ups by account and the card requests panel."},
+  "voucherAccountUsedTimes": "{count} مرة",
+  "@voucherAccountUsedTimes": {"description": "Till: game top-ups by account and the card requests panel.", "placeholders": {"count": {"type": "int"}}},
+  "voucherAccountChecking": "جارٍ التحقق من الحساب…",
+  "@voucherAccountChecking": {"description": "Till: game top-ups by account and the card requests panel."},
+  "voucherAccountFound": "الحساب: {name}",
+  "@voucherAccountFound": {"description": "Till: game top-ups by account and the card requests panel.", "placeholders": {"name": {"type": "String"}}},
+  "voucherAccountFoundNoName": "الحساب موجود",
+  "@voucherAccountFoundNoName": {"description": "Till: game top-ups by account and the card requests panel."},
+  "voucherAccountNotFound": "لا يوجد حساب بهذا المعرّف. راجعه مع الزبون.",
+  "@voucherAccountNotFound": {"description": "Till: game top-ups by account and the card requests panel."},
+  "voucherAccountCouldNotTell": "تعذّر التحقق الآن. تأكد من المعرّف مع الزبون: لا يُسترجع الشحن من حساب خاطئ.",
+  "@voucherAccountCouldNotTell": {"description": "Till: game top-ups by account and the card requests panel."},
+  "voucherAccountNoCheck": "راجع المعرّف مع الزبون: لا يُسترجع الشحن من حساب خاطئ.",
+  "@voucherAccountNoCheck": {"description": "Till: game top-ups by account and the card requests panel."},
+  "voucherAccountEnterFirst": "أدخل الحساب أولاً",
+  "@voucherAccountEnterFirst": {"description": "Till: game top-ups by account and the card requests panel."},
+  "voucherAccountProblemRequired": "أدخل {label}.",
+  "@voucherAccountProblemRequired": {"description": "Till: game top-ups by account and the card requests panel.", "placeholders": {"label": {"type": "String"}}},
+  "voucherAccountProblemTooLong": "{label} أطول من المسموح.",
+  "@voucherAccountProblemTooLong": {"description": "Till: game top-ups by account and the card requests panel.", "placeholders": {"label": {"type": "String"}}},
+  "voucherAccountProblemChoice": "اختر {label} من القائمة.",
+  "@voucherAccountProblemChoice": {"description": "Till: game top-ups by account and the card requests panel.", "placeholders": {"label": {"type": "String"}}},
+  "voucherAccountProblemTelegram": "اسم مستخدم تيليجرام غير صحيح: من 4 إلى 32 حرفاً إنجليزياً أو رقماً أو _.",
+  "@voucherAccountProblemTelegram": {"description": "Till: game top-ups by account and the card requests panel."},
+  "voucherAccountProblemSteamLogin": "اسم دخول ستيم غير صحيح: حروف إنجليزية وأرقام و _ فقط.",
+  "@voucherAccountProblemSteamLogin": {"description": "Till: game top-ups by account and the card requests panel."},
+  "voucherAccountProblemInvite": "رابط دعوة ستيم غير صحيح: انسخه كما هو، ويبدأ بـ https://s.team/p/",
+  "@voucherAccountProblemInvite": {"description": "Till: game top-ups by account and the card requests panel."},
+  "cardRequestFollowingTitle": "أُرسل الطلب، وما زال قيد التنفيذ",
+  "@cardRequestFollowingTitle": {"description": "Till: game top-ups by account and the card requests panel."},
+  "cardRequestFollowingHint": "لا تنتظر ولا تُعد العملية: تابع البيع، وستصلك النتيجة في لوحة طلبات الكروت.",
+  "@cardRequestFollowingHint": {"description": "Till: game top-ups by account and the card requests panel."},
+  "cardRequestFollowingHintPrint": "لا تنتظر ولا تُعد العملية: تابع البيع. ستصلك النتيجة في لوحة طلبات الكروت، ويُطبع الإيصال عند الاكتمال.",
+  "@cardRequestFollowingHintPrint": {"description": "Till: game top-ups by account and the card requests panel."},
+  "cardRequestDelivered": "تم الشحن",
+  "@cardRequestDelivered": {"description": "Till: game top-ups by account and the card requests panel."},
+  "cardRequestsTitle": "طلبات الكروت",
+  "@cardRequestsTitle": {"description": "Till: game top-ups by account and the card requests panel."},
+  "cardRequestsEmpty": "لا طلبات بعد.",
+  "@cardRequestsEmpty": {"description": "Till: game top-ups by account and the card requests panel."},
+  "cardRequestsClose": "إغلاق",
+  "@cardRequestsClose": {"description": "Till: game top-ups by account and the card requests panel."},
+  "cardRequestsPillIdle": "الطلبات",
+  "@cardRequestsPillIdle": {"description": "Till: game top-ups by account and the card requests panel."},
+  "cardRequestsPillOpen": "{count} قيد التنفيذ",
+  "@cardRequestsPillOpen": {"description": "Till: game top-ups by account and the card requests panel.", "placeholders": {"count": {"type": "int"}}},
+  "cardRequestStateQueued": "لم يُرسل بعد",
+  "@cardRequestStateQueued": {"description": "Till: game top-ups by account and the card requests panel."},
+  "cardRequestStateWorking": "قيد التنفيذ",
+  "@cardRequestStateWorking": {"description": "Till: game top-ups by account and the card requests panel."},
+  "cardRequestStateLate": "متأخر: لا تُعد العملية",
+  "@cardRequestStateLate": {"description": "Till: game top-ups by account and the card requests panel."},
+  "cardRequestStateSucceeded": "تم",
+  "@cardRequestStateSucceeded": {"description": "Till: game top-ups by account and the card requests panel."},
+  "cardRequestStateFailed": "فشل",
+  "@cardRequestStateFailed": {"description": "Till: game top-ups by account and the card requests panel."},
+  "cardRequestStateCancelled": "أُلغي",
+  "@cardRequestStateCancelled": {"description": "Till: game top-ups by account and the card requests panel."},
+  "cardRequestSend": "إرسال الآن",
+  "@cardRequestSend": {"description": "Till: game top-ups by account and the card requests panel."},
+  "cardRequestElapsed": "منذ {time}",
+  "@cardRequestElapsed": {"description": "Till: game top-ups by account and the card requests panel.", "placeholders": {"time": {"type": "String"}}},
+  "cardRequestReceipt": "فاتورة {number}",
+  "@cardRequestReceipt": {"description": "Till: game top-ups by account and the card requests panel.", "placeholders": {"number": {"type": "String"}}},
+  "cardRequestPrint": "طباعة الإيصال",
+  "@cardRequestPrint": {"description": "Till: game top-ups by account and the card requests panel."},
+  "cardRequestCopy": "نسخ",
+  "@cardRequestCopy": {"description": "Till: game top-ups by account and the card requests panel."},
+  "cardRequestCopied": "نُسخ الرمز",
+  "@cardRequestCopied": {"description": "Till: game top-ups by account and the card requests panel."},
+  "cardRequestLateHint": "يتأخر المزوّد أكثر من المعتاد. النتيجة ستظهر هنا؛ لا تبع الطلب مرة أخرى ولا تُرجع المبلغ.",
+  "@cardRequestLateHint": {"description": "Till: game top-ups by account and the card requests panel."},
+  "cardRequestRefunded": "أعد للزبون {amount}: سُجّل الإرجاع في الدرج.",
+  "@cardRequestRefunded": {"description": "Till: game top-ups by account and the card requests panel.", "placeholders": {"amount": {"type": "String"}}},
+  "cardRequestNotRefunded": "لم يُرجع المبلغ تلقائياً (الدرج مغلق أو البيع آجل): راجع الفاتورة.",
+  "@cardRequestNotRefunded": {"description": "Till: game top-ups by account and the card requests panel."},
+  "cardRequestNoticeDone": "تم: {label}",
+  "@cardRequestNoticeDone": {"description": "Till: game top-ups by account and the card requests panel.", "placeholders": {"label": {"type": "String"}}},
+  "cardRequestNoticeFailed": "فشل: {label}",
+  "@cardRequestNoticeFailed": {"description": "Till: game top-ups by account and the card requests panel.", "placeholders": {"label": {"type": "String"}}},
+  "cardRequestNoticeDismiss": "إخفاء",
+  "@cardRequestNoticeDismiss": {"description": "Till: game top-ups by account and the card requests panel."},
+  "cardRequestNoticeOpen": "عرض",
+  "@cardRequestNoticeOpen": {"description": "Till: game top-ups by account and the card requests panel."},
+  "cardRequestReceiptFollows": "يُطبع الإيصال عند اكتمال الطلب",
+  "@cardRequestReceiptFollows": {
+    "description": "Till: the sale's receipt waits for the slow supplier to finish."
   }
 }

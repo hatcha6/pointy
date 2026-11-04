@@ -310,6 +310,13 @@ class IntegrationFulfillment(TimeStampedModel):
 
     # What was bought, in the provider's own vocabulary.
     subscriber_ref = models.CharField(max_length=64, db_index=True)  # the card number
+    #: What the customer typed for a card sent to an account, by its brand's
+    #: target fields (``{"player_id": "5123456789"}``); ``subscriber_ref``
+    #: holds it on one line for the screens. Empty for everything else.
+    account_target = models.JSONField(default=dict, blank=True, db_default={})
+    #: Who the game said that account is («Sniper»), as the till looked it up.
+    #: For the screens and the cashier's panel: never believed for anything.
+    account_name = models.CharField(max_length=120, blank=True, db_default="", default="")
     #: The card's own record, so an invoice can name the customer months
     #: later without matching on a string.
     subscriber = models.ForeignKey(
@@ -535,6 +542,61 @@ class IntegrationSubscriber(TimeStampedModel):
         return bool(self.customer_id or self.display_name)
 
 
+class IntegrationSavedAccount(TimeStampedModel):
+    """A player ID, username or Steam login this shop has topped up before.
+
+    A shop sells to many customers, each with their own accounts, so the book
+    belongs to the shop and is shared by every till: one row per brand and
+    account, however often it is sold. Written by the sale itself
+    (:mod:`.voucher_book`); a Steam invite link is used once and never kept.
+
+    What the customer typed is kept whole here (the cashier fills it back in),
+    so it is read only by those who may sell the cards.
+    """
+
+    account = models.ForeignKey(
+        IntegrationAccount, on_delete=models.CASCADE, related_name="saved_accounts"
+    )
+    #: The brand's own code, not a key to its row: a brand the relay withdrew
+    #: and brought back keeps its book.
+    brand_code = models.CharField(max_length=64)
+    #: The account on one line, as ``voucher_accounts.account_line`` writes it.
+    ref = models.CharField(max_length=64)
+    values = models.JSONField(default=dict)
+    #: The game's own name for the player, as last looked up.
+    player_name = models.CharField(max_length=120, blank=True, default="")
+    #: What the shop calls them («أحمد الجار»), typed at the till.
+    label = models.CharField(max_length=80, blank=True, default="")
+    #: The customer of the last sale to this account, when the sale named one.
+    customer = models.ForeignKey(
+        "customers.Customer",
+        on_delete=models.SET_NULL,
+        related_name="integration_saved_accounts",
+        blank=True,
+        null=True,
+    )
+    use_count = models.PositiveIntegerField(default=1)
+    last_used_at = models.DateTimeField()
+
+    class Meta:
+        ordering = ["-last_used_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["account", "brand_code", "ref"],
+                name="integrations_unique_saved_account",
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=["account", "brand_code", "-last_used_at"],
+                name="integrations_saved_acct_recent",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.brand_code}:{self.ref}"
+
+
 class IntegrationSearch(TimeStampedModel):
     """A search a till ran against a provider and got an answer to.
 
@@ -692,6 +754,11 @@ class IntegrationVoucherBrand(TimeStampedModel):
     #: Other names a cashier may type for the brand ("iTunes", "Apple"); each
     #: becomes an alias of its product, so the search finds «آيتونز».
     aliases = models.JSONField(default=list, blank=True, db_default=[])
+    #: For a brand whose cards are credit sent to an account (a game topped up
+    #: by its player ID, Telegram Stars to a username, a Steam login), what the
+    #: buyer types: the relay's ``target`` (``kind``, ``fields``, ``hint``).
+    #: Empty for a brand of codes.
+    target = models.JSONField(default=dict, blank=True, db_default={})
 
     class Meta:
         ordering = ["name"]

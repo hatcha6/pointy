@@ -41,16 +41,20 @@ from apps.purchasing.models import PurchaseOrder, PurchaseReceipt, Supplier
 from apps.sales.models import Order, OrderLine, RegisterSession
 
 
-def _make_stock(name, sku, qty, reorder_level=5, unit_price="3.00"):
+def _make_stock(name, sku, qty, threshold=5, unit_price="3.00"):
+    """A product on the shelf. ``threshold`` is its variant's low-stock
+    threshold; ``None`` leaves the variant unwatched."""
     product = create_product_with_default_variant(
         name=name,
         sku=sku,
         unit_price=Decimal(unit_price),
     )
+    variant = product.default_variant
+    variant.low_stock_threshold = None if threshold is None else Decimal(str(threshold))
+    variant.save(update_fields=["low_stock_threshold"])
     StockItem.objects.create(
-        variant=product.default_variant,
+        variant=variant,
         quantity_on_hand=Decimal(str(qty)),
-        reorder_level=reorder_level,
     )
     return product
 
@@ -163,7 +167,7 @@ class NotificationGenerationThresholdTests(TestCase):
     # 1. Idempotency (get_or_create) regression
     # ------------------------------------------------------------------ #
     def test_sync_is_idempotent_no_duplicate_rows(self):
-        _make_stock("Coffee", "IDEM-COF", qty=0, reorder_level=5)
+        _make_stock("Coffee", "IDEM-COF", qty=0, threshold=5)
 
         now1 = timezone.now()
         sync_business_notifications(now=now1)
@@ -193,7 +197,7 @@ class NotificationGenerationThresholdTests(TestCase):
         )
 
     def test_resolved_then_reappearing_alert_reactivates_and_counts_occurrence(self):
-        product = _make_stock("Sugar", "IDEM-SUG", qty=0, reorder_level=5)
+        product = _make_stock("Sugar", "IDEM-SUG", qty=0, threshold=5)
         stock = StockItem.objects.get(variant=product.default_variant)
 
         sync_business_notifications()
@@ -218,8 +222,8 @@ class NotificationGenerationThresholdTests(TestCase):
     # ------------------------------------------------------------------ #
     # 2. Low-stock / out-of-stock thresholds
     # ------------------------------------------------------------------ #
-    def test_qty_equal_to_reorder_level_is_low_stock_warning(self):
-        _make_stock("AtThreshold", "LS-EQ", qty=5, reorder_level=5)
+    def test_qty_equal_to_threshold_is_low_stock_warning(self):
+        _make_stock("AtThreshold", "LS-EQ", qty=5, threshold=5)
         sync_business_notifications()
 
         self.assertFalse(_active("inventory.out_of_stock").exists())
@@ -228,8 +232,8 @@ class NotificationGenerationThresholdTests(TestCase):
         self.assertEqual(warning.payload["quantity"], 5)
         self.assertEqual(warning.payload["threshold"], 5)
 
-    def test_qty_one_above_reorder_level_produces_nothing(self):
-        _make_stock("AboveThreshold", "LS-AB", qty=6, reorder_level=5)
+    def test_qty_one_above_threshold_produces_nothing(self):
+        _make_stock("AboveThreshold", "LS-AB", qty=6, threshold=5)
         sync_business_notifications()
 
         self.assertFalse(_active("inventory.low_stock").exists())
@@ -239,8 +243,8 @@ class NotificationGenerationThresholdTests(TestCase):
         # An empty shelf is a normal trading condition. Critical is reserved for
         # money going missing and systems failing; a shop whose every alert is
         # critical has no severity at all.
-        _make_stock("Empty", "LS-ZERO", qty=0, reorder_level=5)
-        _make_stock("Healthy", "LS-OK", qty=50, reorder_level=5)
+        _make_stock("Empty", "LS-ZERO", qty=0, threshold=5)
+        _make_stock("Healthy", "LS-OK", qty=50, threshold=5)
         sync_business_notifications()
 
         self.assertFalse(_active("inventory.low_stock").exists())
@@ -250,10 +254,10 @@ class NotificationGenerationThresholdTests(TestCase):
     def test_negative_quantity_rolls_up_instead_of_alerting_per_variant(self):
         # You cannot sell what you never received: a negative book position is a
         # data problem, and one alert per variant just multiplies the same fact.
-        _make_stock("NegA", "LS-NEG-A", qty=-2, reorder_level=5)
-        _make_stock("NegB", "LS-NEG-B", qty=-9, reorder_level=5)
+        _make_stock("NegA", "LS-NEG-A", qty=-2, threshold=5)
+        _make_stock("NegB", "LS-NEG-B", qty=-9, threshold=5)
         for index in range(8):
-            _make_stock(f"Healthy{index}", f"LS-OK-{index}", qty=50, reorder_level=5)
+            _make_stock(f"Healthy{index}", f"LS-OK-{index}", qty=50, threshold=5)
         sync_business_notifications()
 
         self.assertFalse(_active("inventory.out_of_stock").exists())
@@ -268,8 +272,8 @@ class NotificationGenerationThresholdTests(TestCase):
         # per-variant alert would be derived from the same broken data, so only
         # the roll-up is worth saying.
         for index in range(9):
-            _make_stock(f"Broken{index}", f"LS-BRK-{index}", qty=-3, reorder_level=5)
-        _make_stock("Healthy", "LS-FINE", qty=50, reorder_level=5)
+            _make_stock(f"Broken{index}", f"LS-BRK-{index}", qty=-3, threshold=5)
+        _make_stock("Healthy", "LS-FINE", qty=50, threshold=5)
         sync_business_notifications()
 
         self.assertFalse(_active("inventory.out_of_stock").exists())
@@ -279,9 +283,9 @@ class NotificationGenerationThresholdTests(TestCase):
         self.assertEqual(rollup.payload["non_positive_count"], 9)
 
     def test_position_untrusted_resolves_once_the_negatives_clear(self):
-        product = _make_stock("NegOnly", "LS-NEG-ONE", qty=-4, reorder_level=5)
+        product = _make_stock("NegOnly", "LS-NEG-ONE", qty=-4, threshold=5)
         for index in range(9):
-            _make_stock(f"Fine{index}", f"LS-FINE-{index}", qty=50, reorder_level=5)
+            _make_stock(f"Fine{index}", f"LS-FINE-{index}", qty=50, threshold=5)
         sync_business_notifications()
         rollup = _active("inventory.position_untrusted").get()
 
@@ -303,9 +307,9 @@ class NotificationGenerationThresholdTests(TestCase):
         were never seen. Same proportions, scaled down.
         """
         for index in range(79):
-            _make_stock(f"Neg{index}", f"FIELD-NEG-{index}", qty=-4, reorder_level=5)
+            _make_stock(f"Neg{index}", f"FIELD-NEG-{index}", qty=-4, threshold=5)
         for index in range(21):
-            _make_stock(f"Ok{index}", f"FIELD-OK-{index}", qty=40, reorder_level=5)
+            _make_stock(f"Ok{index}", f"FIELD-OK-{index}", qty=40, threshold=5)
 
         sync_business_notifications()
 
@@ -325,9 +329,9 @@ class NotificationGenerationThresholdTests(TestCase):
     @override_settings(POINTY_INVENTORY_ALERT_MAX_ITEMS=3)
     def test_per_item_alerts_are_capped(self):
         for index in range(6):
-            _make_stock(f"Zero{index}", f"LS-CAP-{index}", qty=0, reorder_level=5)
+            _make_stock(f"Zero{index}", f"LS-CAP-{index}", qty=0, threshold=5)
         for index in range(20):
-            _make_stock(f"Stocked{index}", f"LS-CAPOK-{index}", qty=50, reorder_level=5)
+            _make_stock(f"Stocked{index}", f"LS-CAPOK-{index}", qty=50, threshold=5)
         sync_business_notifications()
 
         self.assertEqual(_active("inventory.out_of_stock").count(), 3)
@@ -519,7 +523,7 @@ class NotificationGenerationThresholdTests(TestCase):
         )
         other_manager.groups.add(Group.objects.get(name=MANAGER_GROUP))
 
-        _make_stock("Shared", "STATE-1", qty=0, reorder_level=5)
+        _make_stock("Shared", "STATE-1", qty=0, threshold=5)
         sync_business_notifications()
         notification = _active("inventory.out_of_stock").get()
 

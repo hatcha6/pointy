@@ -148,6 +148,24 @@ class AuthViewModel extends ChangeNotifier {
     }
   }
 
+  Future<void>? _unauthorizedCheckInFlight;
+
+  /// The backend answered 401 to a request: ask it whether we are still
+  /// signed in, and sign out if not.
+  ///
+  /// A burst of failing requests shares one check, and the 401 that `auth/me`
+  /// itself answers joins the check it belongs to rather than starting
+  /// another. Nothing happens unless we think we are signed in: the login
+  /// screen and a kiosk that never signed in see 401s as a matter of course.
+  Future<void> confirmSessionAfterUnauthorized() {
+    if (_status != AuthStatus.authenticated) {
+      return Future<void>.value();
+    }
+    return _unauthorizedCheckInFlight ??= refreshCurrentUser().whenComplete(
+      () => _unauthorizedCheckInFlight = null,
+    );
+  }
+
   /// Waits between tries of the onboarding probe. One entry per extra attempt.
   static const List<Duration> _onboardingProbeRetryDelays = [
     Duration(milliseconds: 400),

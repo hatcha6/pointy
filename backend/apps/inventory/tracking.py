@@ -844,6 +844,7 @@ def plan_receipt(
             capture_later=capture_later,
             placeholder_key=placeholder_key,
             mode=mode,
+            default_expiry=default_expiry,
         )
     else:
         _plan_lot_receipt(
@@ -861,36 +862,40 @@ def plan_receipt(
     return plan
 
 
-def _lot_for_receipt(
-    *, variant, row, supplier, at, placeholder_key, index=None, required=True
-):
-    code = (row or {}).get("code") if isinstance(row, dict) else None
+def _lot_for_receipt(*, variant, row, supplier, at, placeholder_key, index=None):
+    """The lot a captured row names — or, when it names none, one we mint.
+
+    **A lot code is never required.** A Libyan pharmacy or grocer tracks when a
+    pack goes off and has never been told its lot number — the foil carries a
+    date they read and a code nobody asks about. Refusing the receipt until a
+    number is typed only teaches them to type ``1``, which merges every
+    delivery into one lot and is worse for a recall than an honest blank. So a
+    row without a code gets a generated one, marked ``code_is_generated`` so
+    the UI says «بدون رقم دفعة».
+
+    The generated code is keyed on the arrival *and* the row's expiry date:
+    two unnamed deliveries of one order line are only the same lot when they
+    go off the same day. Keyed on the arrival alone, the second delivery with
+    a fresh date hit the "known lot, different expiry" conflict
+    ``resolve_batch`` raises — a refusal over a number nobody typed.
+    """
+    row = row if isinstance(row, dict) else {}
+    code = row.get("code")
     generated = False
+    expiry_date = _lot_date(row.get("expiry_date"), field_name="expiry_date")
     if not normalize_identifier(code):
-        if required:
-            raise serializers.ValidationError(
-                conflict_error(
-                    [
-                        TrackingConflict(
-                            field="code",
-                            value="",
-                            kind=KIND_PAYLOAD,
-                            message="رقم الدفعة مطلوب لهذا الصنف.",
-                            index=index,
-                        )
-                    ]
-                )
-            )
-        code = generated_lot_code(key=placeholder_key or int(at.timestamp()))
+        base = placeholder_key or int(at.timestamp())
+        dated = expiry_date.strftime("%Y%m%d") if expiry_date else "ND"
+        code = generated_lot_code(key=f"{base}-{dated}")
         generated = True
     batch, _created = resolve_batch(
         variant=variant,
         code=code,
-        expiry_date=(row or {}).get("expiry_date"),
-        manufactured_on=(row or {}).get("manufactured_on"),
+        expiry_date=expiry_date,
+        manufactured_on=row.get("manufactured_on"),
         supplier=supplier,
-        gtin=(row or {}).get("gtin", "") or "",
-        barcode=(row or {}).get("barcode", "") or "",
+        gtin=row.get("gtin", "") or "",
+        barcode=row.get("barcode", "") or "",
         code_is_generated=generated,
         index=index,
     )
@@ -937,7 +942,6 @@ def _plan_lot_receipt(
             at=at,
             placeholder_key=f"{placeholder_key}-{index}" if placeholder_key else "",
             index=index,
-            required=False,
         )
         balance = lock_balance(batch=batch, warehouse=warehouse_id, variant=variant)
         row_rate = _rate(row.get("unit_cost", rate) or rate)
@@ -980,6 +984,7 @@ def _plan_unit_receipt(
     capture_later,
     placeholder_key,
     mode,
+    default_expiry=None,
 ):
     """``serial`` / ``serial_batch``: N identified articles arrive.
 
@@ -998,25 +1003,21 @@ def _plan_unit_receipt(
         )
 
     header_batch = None
-    if requires_lot(mode):
+    if requires_lot(mode) or batch_rows:
+        # ``serial_batch`` articles are born into a lot, so one is always
+        # resolved — minted, with the delivery's date, when the receiver named
+        # none (see ``_lot_for_receipt``). A ``serial`` line takes its first
+        # row as an optional lot header.
+        header_row = dict(batch_rows[0]) if batch_rows else {}
+        if not header_row.get("expiry_date") and default_expiry:
+            header_row["expiry_date"] = default_expiry
         header_batch = _lot_for_receipt(
             variant=variant,
-            row=batch_rows[0] if batch_rows else None,
+            row=header_row,
             supplier=supplier,
             at=at,
             placeholder_key=placeholder_key,
             index=0,
-            required=True,
-        )
-    elif batch_rows:
-        header_batch = _lot_for_receipt(
-            variant=variant,
-            row=batch_rows[0],
-            supplier=supplier,
-            at=at,
-            placeholder_key=placeholder_key,
-            index=0,
-            required=False,
         )
 
     header_balance = None
@@ -2296,7 +2297,14 @@ def units_in_transit(*, variant, quantity, transfer_units=None):
 
 
 def plan_receipt_reversal(
-    *, variant, warehouse, quantity, receipt_lines, voucher_type, voucher_id
+    *,
+    variant,
+    warehouse,
+    quantity,
+    receipt_lines,
+    voucher_type,
+    voucher_id,
+    units=None,
 ):
     """Take back what one receipt put on the shelf.
 
@@ -2310,6 +2318,10 @@ def plan_receipt_reversal(
     created them. A lot line has no such column, so it reverses **this receipt's
     own ``in`` allocations**, newest first — which is the only record of what
     this delivery, as opposed to any other, put into which lot.
+
+    ``units`` names the articles when only some of a line's are leaving — an
+    edit that takes two of five handsets off a delivery must take the two the
+    owner chose, never the two with the lowest ids.
     """
     mode = mode_of(variant)
     if mode == Product.TrackingMode.QUANTITY:
@@ -2325,7 +2337,7 @@ def plan_receipt_reversal(
         return plan
 
     if tracks_units(mode):
-        units = list(
+        rows = (
             # ``of="self"`` because the lot is joined in for its expiry and is
             # nullable: Postgres refuses ``FOR UPDATE`` on the nullable side of
             # an outer join, and the rows being locked are the articles anyway.
@@ -2336,8 +2348,11 @@ def plan_receipt_reversal(
                 status__in=StockUnit.LIVE_STATUSES,
             )
             .select_related("batch")
-            .order_by("pk")[: int(quantity)]
+            .order_by("pk")
         )
+        if units is not None:
+            rows = rows.filter(pk__in=[getattr(unit, "pk", unit) for unit in units])
+        units = list(rows[: int(quantity)])
         for unit in units:
             # An article already on its way to another branch cannot be
             # un-received: the transfer that is carrying it would land on

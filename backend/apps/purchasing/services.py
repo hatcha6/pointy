@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from django.contrib.contenttypes.models import ContentType
@@ -41,6 +41,8 @@ from apps.inventory.services import (
     stock_snapshot,
 )
 from . import documents as purchase_documents
+from . import identified_order_edit
+from .planned_capture import planned_receipt_capture
 from .models import (
     PurchaseLine,
     PurchaseOrder,
@@ -454,6 +456,18 @@ def _receipt_totals_by_line(purchase_order):
     }
 
 
+def line_match_key(variant_id, unit_factor):
+    """Which old line an edited one is, for replaying what it received.
+
+    The product and how many base units one of the line's packs holds — what
+    the goods physically are. Not the unit's *code*: a line saved before units
+    were resolved carries ``""`` where the same line sent back today says
+    ``"piece"``, and matching on the code read that as one line removed and
+    another added.
+    """
+    return (variant_id, Decimal(unit_factor or 1).normalize())
+
+
 def _receiving_snapshots(purchase_order, *, lines):
     """What each line has already had received, taken before its receipts are
     undone. The ordered quantity rides along because that is what says whether
@@ -490,7 +504,7 @@ def _receiving_snapshots(purchase_order, *, lines):
         snapshots.append(
             {
                 "line": line,
-                "key": (line.variant_id, line.unit),
+                "key": line_match_key(line.variant_id, line.unit_factor),
                 "ordered": line.quantity,
                 "accepted": accepted,
                 "damaged": damaged,
@@ -624,15 +638,20 @@ def _reverse_received_stock(purchase_order, *, snapshots, created_by):
         )
     # Expiry cohorts are keyed on the receipt lines that brought them in and
     # PROTECT them, so they go first; the edited order records its own receipt,
-    # cohorts included.
+    # cohorts included. Only the lines being replayed: an identified line is
+    # corrected in place and keeps its receipt rows (``identified_order_edit``),
+    # and a receipt left with no rows is cleared by ``_settle_edited_progress``.
     receipt_lines = list(
-        PurchaseReceiptLine.objects.filter(receipt__purchase_order=purchase_order)
+        PurchaseReceiptLine.objects.filter(
+            receipt__purchase_order=purchase_order,
+            purchase_line__in=[snapshot["line"] for snapshot in snapshots],
+        )
     )
     discard_expiring_stock_batches(receipt_lines=receipt_lines)
     PurchaseReceiptLine.objects.filter(
-        receipt__purchase_order=purchase_order
+        pk__in=[receipt_line.pk for receipt_line in receipt_lines]
     ).delete()
-    purchase_order.receipts.all().delete()
+    purchase_order.receipts.filter(lines__isnull=True).delete()
     # Back to "ordered, nothing arrived" — the caller's save writes it, and
     # _rerecord_receiving puts the delivery back once the edit has settled.
     purchase_order.status = PurchaseOrder.Status.SUBMITTED
@@ -754,19 +773,18 @@ def _replayed_receipt_quantities(snapshot, quantity, *, fully_received):
 EDIT_RECEIPT_NOTE = "إعادة تسجيل الاستلام بعد تعديل أمر الشراء"
 
 
-def _rerecord_receiving(purchase_order, *, snapshots, request):
+def _rerecord_receiving(
+    purchase_order, *, snapshots, request, fully_received, kept_line_ids=()
+):
     """Put the delivery back against the edited lines.
 
     Runs last, once the edit's discounts and landed costs have settled, so the
     stock goes back on the shelf valued at what the corrected order says it
     cost — which is the whole point of letting a received order be edited.
+
+    ``fully_received`` describes the whole order, identified lines included, and
+    the lines in ``kept_line_ids`` were corrected in place and are not replayed.
     """
-    if not any(
-        snapshot["accepted"] or snapshot["damaged"] or snapshot["cancelled"]
-        for snapshot in snapshots
-    ):
-        return
-    fully_received = all(snapshot["outstanding"] <= 0 for snapshot in snapshots)
     pools = {}
     for snapshot in snapshots:
         pools.setdefault(snapshot["key"], []).append(snapshot)
@@ -776,8 +794,14 @@ def _rerecord_receiving(purchase_order, *, snapshots, request):
         "variant",
         "variant__product",
     ).order_by("created_at", "id"):
-        pool = pools.get((line.variant_id, line.unit))
+        if line.pk in kept_line_ids:
+            continue
+        pool = pools.get(line_match_key(line.variant_id, line.unit_factor))
         snapshot = pool.pop(0) if pool else None
+        if snapshot is None and tracking.is_tracked(line.variant):
+            # Nothing identified arrives by edit: a lot or serial line new to a
+            # received order stays outstanding for a receipt to capture.
+            continue
         accepted, damaged, cancelled, over_received = _replayed_receipt_quantities(
             snapshot,
             line.quantity,
@@ -802,6 +826,9 @@ def _rerecord_receiving(purchase_order, *, snapshots, request):
         request=request,
         lines_data=lines_data,
         notes=EDIT_RECEIPT_NOTE,
+        # A replay puts back what already arrived. The plan describes what was
+        # expected, and has no say over a delivery that has happened.
+        use_planned_capture=False,
     )
     purchase_order.refresh_from_db()
 
@@ -809,7 +836,11 @@ def _rerecord_receiving(purchase_order, *, snapshots, request):
 def _add_expected_stock(purchase_order, *, created_by):
     """Register the expected-stock counters for the order's current lines —
     the second half of an edit-while-submitted (mirrors submit). Batched like
-    ``_release_expected_stock``."""
+    ``_release_expected_stock``.
+
+    Only what is still outstanding is expected: a line corrected in place keeps
+    the receipt rows that already turned part of it into stock.
+    """
     lines = list(
         purchase_order.lines.select_related("variant", "variant__product").order_by(
             "variant_id"
@@ -817,6 +848,7 @@ def _add_expected_stock(purchase_order, *, created_by):
     )
     if not lines:
         return
+    totals = _receipt_totals_by_line(purchase_order)
     stock_items = lock_stock_items(
         [line.variant for line in lines], warehouse=purchase_order.warehouse_id
     )
@@ -824,8 +856,15 @@ def _add_expected_stock(purchase_order, *, created_by):
     touched = {}
     for line in lines:
         stock_item = stock_items[line.variant_id]
+        row = totals.get(line.pk) or {}
+        outstanding = line.quantity - sum(
+            (row.get(key) or Decimal("0") for key in ("accepted", "damaged", "cancelled")),
+            Decimal("0"),
+        )
+        if outstanding <= 0:
+            continue
         before = stock_snapshot(stock_item)
-        expected_base = line.to_base_quantity(line.quantity)
+        expected_base = line.to_base_quantity(outstanding)
         stock_item.quantity_expected += expected_base
         touched[stock_item.pk] = stock_item
         movements.append(
@@ -846,19 +885,22 @@ def _add_expected_stock(purchase_order, *, created_by):
 _RECEIPT_CAPTURE_KEYS = frozenset({"units", "batches"})
 
 
-def _seeded_purchase_line(purchase_order, line_data):
+def _line_columns(line_data):
     # ``units`` and ``batches`` are capture payloads, not columns: the counter
     # purchase reads them off the line and hands them to the receipt (see
-    # ``_counter_purchase_receipt_lines``). The API refuses them on any other
-    # order (``PurchaseLineSerializer.validate``); dropped here as well so a
-    # service-level caller that passes one gets an order rather than a
-    # TypeError.
-    line_data = {
+    # ``_counter_purchase_receipt_lines``), and every other order has had the
+    # serializer turn them into ``planned_units``/``planned_batches``. Dropped
+    # here as well so a service-level caller that passes one gets an order
+    # rather than a TypeError.
+    return {
         key: value
         for key, value in line_data.items()
         if key not in _RECEIPT_CAPTURE_KEYS
     }
-    line = PurchaseLine(purchase_order=purchase_order, **line_data)
+
+
+def _seeded_purchase_line(purchase_order, line_data):
+    line = PurchaseLine(purchase_order=purchase_order, **_line_columns(line_data))
     line.net_line_total = line.line_total
     line.net_unit_cost = line.unit_cost
     line.effective_unit_cost = line.unit_cost
@@ -882,7 +924,12 @@ def save_purchase_order_with_lines(
     has not settled, that the period is open and that the user may, and records
     the before/after of every field the rewrite touched — which is what the old
     bare "updated" audit line could never say.
+
+    ``removed_units`` names the identified articles a received order no longer
+    says arrived, when the owner lowered a serial line and had to choose which
+    handsets were never delivered (``identified_order_edit``).
     """
+    removed_unit_ids = order_fields.pop("removed_units", None) or ()
     if (
         purchase_order is not None
         and purchase_order.doc_status == DocumentStatus.SUBMITTED
@@ -906,6 +953,7 @@ def save_purchase_order_with_lines(
                 lines_data=lines_data,
                 landed_cost_entries_data=landed_cost_entries_data,
                 request=request,
+                removed_unit_ids=removed_unit_ids,
                 **order_fields,
             ),
             reason=order_fields.get("notes", "") or "تعديل أمر شراء",
@@ -916,6 +964,7 @@ def save_purchase_order_with_lines(
         lines_data=lines_data,
         landed_cost_entries_data=landed_cost_entries_data,
         request=request,
+        removed_unit_ids=removed_unit_ids,
         **order_fields,
     )
 
@@ -926,11 +975,16 @@ def _write_purchase_order_with_lines(
     lines_data=None,
     landed_cost_entries_data=None,
     request=None,
+    removed_unit_ids=(),
     **order_fields,
 ):
     is_create = purchase_order is None
     rebuild_expected = False
     snapshots = None
+    replayed = []
+    kept = []
+    claimed = {}
+    received_at = None
     on_hand_before = {}
     if purchase_order is None:
         # Tag the PO with the special day(s) active on its creation date (the
@@ -970,35 +1024,39 @@ def _write_purchase_order_with_lines(
         if rebuild_expected:
             if purchase_order.status != PurchaseOrder.Status.SUBMITTED:
                 _require_receiving_permission(request)
-            _refuse_cost_edit_on_identified_stock(purchase_order)
             created_by = purchase_created_by(request)
+            received_at = purchase_order.received_at
             snapshots = _receiving_snapshots(
                 purchase_order,
                 lines=lock_purchase_lines_for_update(purchase_order),
             )
+            # Lots and serials are corrected where they stand; everything else
+            # is taken back and replayed against the corrected lines.
+            kept, replayed, claimed = identified_order_edit.split_received_lines(
+                snapshots, lines_data
+            )
             _release_expected_stock(
                 purchase_order, snapshots=snapshots, created_by=created_by
             )
+            identified_order_edit.unwind_kept_quantities(
+                purchase_order,
+                kept,
+                removed_unit_ids=removed_unit_ids,
+                created_by=created_by,
+            )
             on_hand_before = _reverse_received_stock(
-                purchase_order, snapshots=snapshots, created_by=created_by
+                purchase_order, snapshots=replayed, created_by=created_by
             )
         for field, value in order_fields.items():
             setattr(purchase_order, field, value)
         purchase_order.save()
         if lines_data is not None:
-            purchase_order.lines.all().delete()
+            purchase_order.lines.exclude(
+                pk__in=[item.line.pk for item in claimed.values()]
+            ).delete()
 
     if lines_data is not None:
-        # One INSERT for the order's lines. ``PurchaseLine.save`` seeds the net
-        # and effective figures from the raw ones; ``recalculate`` below
-        # rewrites every one of them for the whole order in one statement, so
-        # the seed only has to be the same starting point save() would give.
-        PurchaseLine.objects.bulk_create(
-            [
-                _seeded_purchase_line(purchase_order, line_data)
-                for line_data in lines_data
-            ]
-        )
+        _write_order_lines(purchase_order, lines_data, claimed=claimed)
 
     if rebuild_expected:
         # The order is already submitted, so the new lines take effect as
@@ -1032,10 +1090,20 @@ def _write_purchase_order_with_lines(
         request=request,
     )
     if snapshots:
-        _rerecord_receiving(purchase_order, snapshots=snapshots, request=request)
+        identified_order_edit.restate_kept_costs(purchase_order, kept)
+        _rerecord_receiving(
+            purchase_order,
+            snapshots=replayed,
+            request=request,
+            fully_received=all(
+                snapshot["outstanding"] <= 0 for snapshot in snapshots
+            ),
+            kept_line_ids={item.line.pk for item in kept},
+        )
         _refuse_edit_that_strands_sold_stock(
             purchase_order, on_hand_before=on_hand_before
         )
+        _settle_edited_progress(purchase_order, received_at=received_at)
     # Editing a committed order rewrites what the shop actually bought, so the
     # suggestion tables have to be rebuilt from the corrected history too.
     if purchase_order.status != PurchaseOrder.Status.DRAFT:
@@ -1044,64 +1112,59 @@ def _write_purchase_order_with_lines(
 
 
 
-def _refuse_cost_edit_on_identified_stock(purchase_order):
-    """Refuse an edit that would un-receive identified stock.
+def _write_order_lines(purchase_order, lines_data, *, claimed):
+    """Write the corrected lines, in the order the owner sent them.
 
-    Editing a received order un-records the whole delivery and re-records it,
-    which is exactly right for a quantity in a bin and exactly wrong for forty
-    handsets: the identifiers were captured at the receiving bay and are not in
-    this payload, so the re-record would either refuse for want of them or
-    invent a second set — and the shop would own eighty units it never bought.
-
-    §5.5 of the plan wants landed cost to *re-stamp* those units and repost
-    rather than recreate them; until it does, this refuses rather than
-    duplicating, and names the units so the owner knows what is in the way.
-    The correction that still works is a purchase return, which moves the
-    articles it names.
+    One INSERT for the new lines. ``PurchaseLine.save`` seeds the net and
+    effective figures from the raw ones; ``recalculate`` rewrites every one of
+    them for the whole order in one statement, so the seed only has to be the
+    same starting point save() would give. A line in ``claimed`` is an
+    identified line kept in place — its receipt rows and articles point at it —
+    so it is updated rather than replaced, and the order is re-stamped so it
+    still sorts where the owner put it.
     """
-    from apps.inventory.models import StockAllocation, StockLedgerEntry, StockUnit
-
-    # Every article this order ever created, live or not. A sold handset still
-    # points at the receipt line the edit is about to delete, and
-    # ``source_receipt_line`` is ``SET_NULL`` — so leaving those out does not
-    # make the edit safe, it makes it quietly destroy the provenance that
-    # answers "where has this IMEI been".
-    units = list(
-        StockUnit.objects.filter(
-            source_receipt_line__receipt__purchase_order=purchase_order,
-        ).values_list("code", flat=True)[:10]
-    )
-    # A lot-tracked order has no units at all, and is the worse case: the
-    # un-record leaves the old lot's balance untouched and the re-record has no
-    # captured codes to work from, so it mints a second lot for the same goods
-    # and the shop's stock value doubles.
-    lots = []
-    if not units:
-        lots = list(
-            StockAllocation.objects.filter(
-                voucher_type=StockLedgerEntry.VoucherType.PURCHASE_RECEIPT,
-                voucher_id=purchase_order.pk,
-                direction=StockAllocation.Direction.IN,
-                batch__isnull=False,
-            )
-            .values_list("batch__code", flat=True)
-            .distinct()[:10]
-        )
-    if not units and not lots:
-        # Nothing identified has been written yet, but the order may still hold
-        # tracked lines that simply have not been received. Those are safe:
-        # there is no article and no balance for the re-record to duplicate.
+    ordered = []
+    fresh = []
+    for index, line_data in enumerate(lines_data):
+        item = claimed.get(index)
+        if item is None:
+            line = _seeded_purchase_line(purchase_order, line_data)
+            fresh.append(line)
+        else:
+            identified_order_edit.apply_kept_line_data(item, _line_columns(line_data))
+            line = item.line
+        ordered.append(line)
+    PurchaseLine.objects.bulk_create(fresh)
+    if not claimed:
         return
-    raise serializers.ValidationError(
-        {
-            "code": "purchase_order_has_identified_stock",
-            "detail": (
-                "لا يمكن تعديل تكلفة هذا الأمر لأن بضاعته مسجّلة بمعرّفات. "
-                "استخدم مرتجع مشتريات بدلًا من ذلك."
-            ),
-            "stock_units": units,
-            "stock_batches": lots,
-        }
+    start = timezone.now()
+    for index, line in enumerate(ordered):
+        line.created_at = start + timedelta(microseconds=index)
+    PurchaseLine.objects.bulk_update(ordered, ["created_at"])
+
+
+def _settle_edited_progress(purchase_order, *, received_at):
+    """Re-derive what the corrected order has received, once everything moved.
+
+    A correction can leave a receipt with no rows, and can leave the order fully
+    received without a replay ever running (every line identified), so neither
+    can be left to the receipt. An order that is still fully received keeps the
+    day its goods arrived.
+    """
+    purchase_order.receipts.filter(lines__isnull=True).delete()
+    lines = lock_purchase_lines_for_update(purchase_order, prime_totals=True)
+    purchase_order.cancelled_total = purchase_order_cancelled_total(
+        purchase_order, lines=lines
+    )
+    purchase_documents.recompute_progress(purchase_order, lines=lines)
+    if purchase_order.status == PurchaseOrder.Status.RECEIVED:
+        purchase_order.received_at = (
+            received_at or purchase_order.received_at or timezone.now()
+        )
+    else:
+        purchase_order.received_at = None
+    purchase_order.save(
+        update_fields=["cancelled_total", "received_at", "updated_at"]
     )
 
 
@@ -1516,9 +1579,13 @@ def fresh_purchase_receipt_lines(locked_order, lines_data, *, locked_lines):
                 # Captured identifiers travel with the line, not beside it: this
                 # function re-reads every quantity off the locked row, and a
                 # payload key it forgets to carry is a payload key the receipt
-                # silently drops.
-                "units": line_data.get("units") or [],
-                "batches": line_data.get("batches") or [],
+                # silently drops. Absent stays absent: see
+                # ``planned_receipt_capture``.
+                **{
+                    key: line_data[key] or []
+                    for key in ("units", "batches")
+                    if key in line_data
+                },
             }
         )
     return fresh_lines
@@ -1703,7 +1770,14 @@ def purchase_order_cancelled_total(purchase_order, *, lines=None):
 
 
 @transaction.atomic
-def receive_purchase_order(purchase_order, *, request=None, lines_data=None, notes=""):
+def receive_purchase_order(
+    purchase_order,
+    *,
+    request=None,
+    lines_data=None,
+    notes="",
+    use_planned_capture=True,
+):
     locked_order = (
         PurchaseOrder.objects.select_for_update()
         .get(pk=purchase_order.pk)
@@ -1768,6 +1842,20 @@ def receive_purchase_order(purchase_order, *, request=None, lines_data=None, not
                 0,
             ),
         )
+        if (
+            use_planned_capture
+            and "units" not in line_data
+            and "batches" not in line_data
+        ):
+            # Nothing named for the line: take what the buyer typed on the
+            # order, where it says unambiguously what arrived.
+            planned = planned_receipt_capture(
+                line,
+                accepted_quantity=accepted_quantity,
+                damaged_quantity=damaged_quantity,
+            )
+            if planned:
+                line_data = {**line_data, **planned}
         expiry_date = receipt_line_expiry(line, line_data, accepted_quantity)
         expected_quantities = receipt_line_expected_quantities(
             line,
@@ -2555,8 +2643,8 @@ def _counter_purchase_receipt_lines(purchase_order, captures):
     receipt files the goods under one generated lot (``LOT-PO…``, marked
     «بدون رقم دفعة») carrying the line's own expiry date, so bread and milk
     bought from the drawer keep selling earliest-expiry-first exactly as
-    before. Only ``serial_batch`` cannot fall back — its lot is required, and
-    the receipt refuses it in Arabic.
+    before. ``serial_batch`` falls back the same way: its articles are born
+    into a minted lot that carries the line's date.
     """
     if not any(units or batches for units, batches in captures):
         return None

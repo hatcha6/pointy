@@ -185,6 +185,21 @@ List<NavCatalogGroup> appNavigationCatalog(AppLocalizations l10n) {
           keywords: const ['catalog', 'products', 'items', 'منتجات', 'أصناف'],
         ),
         NavCatalogEntry(
+          destination: AppNavigationDestination.reorder,
+          icon: Icons.production_quantity_limits_outlined,
+          selectedIcon: Icons.production_quantity_limits,
+          label: l10n.reorderDrawerLabel,
+          keywords: const [
+            'reorder',
+            'replenish',
+            'low stock',
+            'إعادة الطلب',
+            'نواقص',
+            'منخفض',
+            'طلبية',
+          ],
+        ),
+        NavCatalogEntry(
           destination: AppNavigationDestination.categories,
           icon: Icons.category_outlined,
           selectedIcon: Icons.category,

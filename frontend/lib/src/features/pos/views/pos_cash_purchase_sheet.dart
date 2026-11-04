@@ -12,8 +12,7 @@ import '../../../data/models/product_query.dart';
 import '../../../data/models/product_variant.dart';
 import '../../../data/models/purchase_submission.dart';
 import '../../../data/models/receipt_capture.dart';
-import '../../inventory/views/batch_capture_sheet.dart';
-import '../../inventory/views/unit_capture_sheet.dart';
+import '../../inventory/views/tracked_goods_capture.dart';
 import '../../../data/models/shop_settings.dart';
 import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/contact_repository.dart';
@@ -239,49 +238,51 @@ class _PosCashPurchaseSheetState extends State<PosCashPurchaseSheet> {
   /// One widget, several callers: what differs between buying forty handsets
   /// from a distributor and buying one off a walk-in is the paperwork, not the
   /// act of reading a number off a box.
-  Future<void> _captureIdentifiers(PosCashPurchaseLine line) async {
-    final captured = await showUnitCaptureSheet(
-      context,
-      productLabel: line.product.name,
-      // Articles, not packs: a box of three handsets is three numbers, and
-      // the server counts the capture in base units.
-      expectedCount: line.baseUnitCount,
-      // What one article cost, which is what each captured one is stamped with.
-      lineUnitCost: (line.unitCost ?? 0) / line.unit.factorToBase,
-      initial: line.units,
-      // The walk-in's handset gets its condition written down as it is
-      // bought: battery, grade, what came in the box (§6.2).
-      assetTypeId: line.product.assetTypeId,
-      canSetPrice: widget.permissions.canSetPrice,
-      canSetWarranty: widget.permissions.canSetWarranty,
-    );
-    if (captured == null || !mounted) {
-      return;
-    }
-    setState(() => line.units = captured);
-  }
+  Future<void> _captureIdentifiers(PosCashPurchaseLine line) =>
+      _capture(line, lots: false);
 
   /// The receiving bay's own lot sheet, so a lot means the same thing on both
-  /// paths: code, expiry, and quantity in base units. A serialised pack's lot
-  /// is one header over its scan loop, so that line gets a single row.
-  Future<void> _captureLots(PosCashPurchaseLine line) async {
-    final captured = await showBatchCaptureSheet(
+  /// paths: code, expiry, and quantity in base units.
+  Future<void> _captureLots(PosCashPurchaseLine line) =>
+      _capture(line, units: false);
+
+  Future<void> _capture(
+    PosCashPurchaseLine line, {
+    bool lots = true,
+    bool units = true,
+  }) async {
+    final captured = await captureTrackedGoods(
       context,
-      productLabel: line.product.name,
-      expectedQuantity: line.baseQuantity,
-      initial: line.batches,
-      suggestedExpiry: line.expiryDate,
-      singleLot: line.needsIdentifiers,
-      expiryRequired: line.product.expiryRequired,
+      TrackedGoodsCaptureRequest(
+        mode: line.product.trackingMode,
+        productLabel: line.product.name,
+        // Articles, not packs: a box of three handsets is three numbers, and
+        // the server counts the capture in base units.
+        lotQuantity: line.baseQuantity,
+        unitCount: line.baseUnitCount,
+        // What one article cost, which is what each captured one is stamped
+        // with.
+        baseUnitCost: (line.unitCost ?? 0) / line.unit.factorToBase,
+        existing: ReceiptLineCapture(units: line.units, batches: line.batches),
+        suggestedExpiry: line.expiryDate,
+        expiryRequired: line.product.expiryRequired,
+        // The walk-in's handset gets its condition written down as it is
+        // bought: battery, grade, what came in the box (§6.2).
+        assetTypeId: line.product.assetTypeId,
+        permissions: widget.permissions,
+      ),
+      lots: lots,
+      units: units,
     );
     if (captured == null || !mounted) {
       return;
     }
     setState(() {
-      line.batches = captured;
+      line.units = captured.units;
+      line.batches = captured.batches;
       // The lot carries its own date; a line that also asks for one takes the
       // first to expire rather than making the cashier type it twice.
-      line.expiryDate ??= earliestLotExpiry(captured);
+      line.expiryDate ??= earliestLotExpiry(captured.batches);
     });
   }
 
@@ -353,9 +354,7 @@ class _PosCashPurchaseSheetState extends State<PosCashPurchaseSheet> {
         return l10n.posCashPurchaseExpiryRequiredError;
       }
       if (!line.lotsComplete) {
-        return line.batches.isEmpty
-            ? l10n.posCashPurchaseLotRequiredError
-            : l10n.posCashPurchaseLotsMismatchError;
+        return l10n.posCashPurchaseLotsMismatchError;
       }
     }
     if (_overLimit) {

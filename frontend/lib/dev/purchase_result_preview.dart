@@ -348,6 +348,7 @@ class _FakePurchases extends PurchaseRepository {
     String discountCode = '',
     double extraDiscountAmount = 0,
     bool acknowledgeCostWarnings = false,
+    List<int> removedUnitIds = const [],
   }) async {
     await Future<void>.delayed(const Duration(milliseconds: 900));
     return Ok(order('submitted'));

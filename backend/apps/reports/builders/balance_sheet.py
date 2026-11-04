@@ -275,7 +275,11 @@ def opening_stock_recorded(*, start, end):
     from apps.inventory.models import StockLedgerEntry
 
     total = StockLedgerEntry.objects.filter(
-        voucher_type=StockLedgerEntry.VoucherType.OPENING,
+        # A catalog merge restates what a shelf is worth; nothing was traded.
+        voucher_type__in=(
+            StockLedgerEntry.VoucherType.OPENING,
+            StockLedgerEntry.VoucherType.CATALOG_MERGE,
+        ),
         posting_at__gte=day_range_start(start),
         posting_at__lt=day_range_end(end),
     ).aggregate(total=Sum("value_change"))["total"]

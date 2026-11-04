@@ -38,6 +38,7 @@ import 'features/app_updates/view_models/app_update_prompter.dart';
 import 'features/connection/view_models/local_server_host_controller.dart';
 import 'data/repositories/price_checker_repository.dart';
 import 'data/repositories/scales_repository.dart';
+import 'data/repositories/reorder_repository.dart';
 import 'data/repositories/search_miss_repository.dart';
 import 'data/repositories/surveillance_repository.dart';
 import 'features/dashboard/view_models/dashboard_cameras_view_model.dart';
@@ -97,6 +98,7 @@ import 'features/purchasing/view_models/purchase_order_list_view_model.dart';
 import 'features/purchasing/view_models/purchase_view_model.dart';
 import 'features/stock_count/view_models/stock_count_sessions_view_model.dart';
 import 'features/user_settings/view_models/user_settings_view_model.dart';
+import 'features/users/view_models/remote_sessions_view_model.dart';
 import 'shared/barcode/scan_feedback_sounds.dart';
 import 'shared/price_checker/price_checker_mode_controller.dart';
 import 'shared/product_search/product_search_mode_controller.dart';
@@ -178,6 +180,7 @@ class PointyAppDependencies {
     surveillanceRepository = SurveillanceRepository(service);
     scalesRepository = ScalesRepository(service);
     searchMissRepository = SearchMissRepository(service);
+    reorderRepository = ReorderRepository(service);
     dashboardCamerasViewModel = DashboardCamerasViewModel(
       surveillanceRepository,
     );
@@ -254,6 +257,11 @@ class PointyAppDependencies {
       analyticsEngine: analyticsEngine,
       autoLoad: false,
     );
+    // The backend saying 401 to a signed-in device may mean the session is
+    // gone (expired, signed out elsewhere, a clock that jumped). Ask, and let
+    // a real sign-out take the app back to the login screen.
+    service.onBackendUnauthorized = () =>
+        unawaited(authViewModel.confirmSessionAfterUnauthorized());
     posViewModel = PosViewModel(
       catalogRepository,
       registerSessionRepository,
@@ -468,6 +476,7 @@ class PointyAppDependencies {
   late final SurveillanceRepository surveillanceRepository;
   late final ScalesRepository scalesRepository;
   late final SearchMissRepository searchMissRepository;
+  late final ReorderRepository reorderRepository;
 
   /// The dashboard's camera strip. Long-lived so the per-device selection and
   /// the snapshot thumbnails survive navigating away and back, rather than
@@ -527,6 +536,7 @@ class PointyAppDependencies {
   PurchaseOrderListViewModel? _purchaseOrderListViewModel;
   StockCountSessionsViewModel? _stockCountSessionsViewModel;
   UserSettingsViewModel? _userSettingsViewModel;
+  RemoteSessionsViewModel? _remoteSessionsViewModel;
   LearningViewModel? _learningViewModel;
   int? _learningViewModelUserId;
 
@@ -746,6 +756,10 @@ class PointyAppDependencies {
       _stockCountSessionsViewModel ??= StockCountSessionsViewModel(
         stockCountRepository,
       );
+
+  /// The signed-in person's own remote sessions, for «إعداداتي».
+  RemoteSessionsViewModel get remoteSessionsViewModel =>
+      _remoteSessionsViewModel ??= RemoteSessionsViewModel(userRepository);
 
   UserSettingsViewModel get userSettingsViewModel =>
       _userSettingsViewModel ??= UserSettingsViewModel(
@@ -973,6 +987,8 @@ class PointyAppDependencies {
     _stockCountSessionsViewModel = null;
     _userSettingsViewModel?.dispose();
     _userSettingsViewModel = null;
+    _remoteSessionsViewModel?.dispose();
+    _remoteSessionsViewModel = null;
     _learningViewModel?.dispose();
     _learningViewModel = null;
     _learningViewModelUserId = null;

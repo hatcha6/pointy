@@ -30,6 +30,7 @@ class ProductDraft {
     this.openingQuantity,
     this.openingUnitCost,
     this.tracking,
+    this.lowStockThreshold,
   });
 
   final String variantSku;
@@ -79,6 +80,11 @@ class ProductDraft {
   /// Sent in place of [tracksExpiry], which is then derived from the mode.
   final ProductTracking? tracking;
 
+  /// The default variant's low-stock threshold, with
+  /// [ProductVariantDraft.lowStockThreshold]'s three states. Ignored when
+  /// [variants] carries generated rows — those bring their own.
+  final ({double? value})? lowStockThreshold;
+
   Map<String, Object?> toJson() {
     return {
       'name': name,
@@ -113,6 +119,8 @@ class ProductDraft {
             'price_amount': variantPriceAmount!.toStringAsFixed(2),
           'is_active': isActive,
           'option_values': optionValueIds,
+          if (lowStockThreshold case (:final value))
+            'low_stock_threshold': value?.toStringAsFixed(3),
           if (openingQuantity != null && openingQuantity! > 0) ...{
             'opening_quantity': openingQuantity!.toStringAsFixed(3),
             'opening_unit_cost': (openingUnitCost ?? 0).toStringAsFixed(6),

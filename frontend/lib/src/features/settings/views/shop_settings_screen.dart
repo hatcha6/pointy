@@ -457,7 +457,6 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
   late final TextEditingController _shopNameController;
   late final TextEditingController _receiptHeaderController;
   late final TextEditingController _receiptFooterController;
-  late final TextEditingController _lowStockThresholdController;
   late final TextEditingController _cardCommissionController;
   late final TextEditingController _transferCommissionController;
   late final TextEditingController _autoPrintMinLineCountController;
@@ -518,10 +517,6 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
       _setControllerText(
         _receiptFooterController,
         widget.settings.receiptFooter,
-      );
-      _setControllerText(
-        _lowStockThresholdController,
-        '${widget.settings.lowStockThreshold}',
       );
       _setControllerText(
         _cardCommissionController,
@@ -591,7 +586,6 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     _shopNameController.dispose();
     _receiptHeaderController.dispose();
     _receiptFooterController.dispose();
-    _lowStockThresholdController.dispose();
     _cardCommissionController.dispose();
     _transferCommissionController.dispose();
     _autoPrintMinLineCountController.dispose();
@@ -614,9 +608,6 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     );
     _receiptFooterController = TextEditingController(
       text: settings.receiptFooter,
-    );
-    _lowStockThresholdController = TextEditingController(
-      text: '${settings.lowStockThreshold}',
     );
     _cardCommissionController = TextEditingController(
       text: settings.cardCommissionPercent.toStringAsFixed(2),
@@ -871,7 +862,6 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
                           icon: Icons.inventory_2_outlined,
                           title: l10n.inventorySettingsSectionTitle,
                           subtitle: _inventorySummary(l10n),
-                          hasError: _lowStockThresholdError(l10n) != null,
                           onTap: widget.viewModel.isSaving
                               ? null
                               : () => _openSettingsGroup(
@@ -1138,14 +1128,13 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
   }
 
   String _inventorySummary(AppLocalizations l10n) {
-    final count = int.tryParse(_lowStockThresholdController.text.trim()) ?? 0;
     final status = _allowOverselling
         ? l10n.shopSettingsEnabledValue
         : l10n.shopSettingsDisabledValue;
     final lossStatus = _preventSellingAtLoss
         ? l10n.shopSettingsEnabledValue
         : l10n.shopSettingsDisabledValue;
-    return l10n.inventorySettingsSummary(count, status, lossStatus);
+    return l10n.inventorySettingsSummary(status, lossStatus);
   }
 
   String _paymentSummary(AppLocalizations l10n) {
@@ -1211,14 +1200,6 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
 
   String? _shopNameError(AppLocalizations l10n) {
     if (!_showValidationErrors || _shopNameController.text.trim().isNotEmpty) {
-      return null;
-    }
-    return l10n.requiredField;
-  }
-
-  String? _lowStockThresholdError(AppLocalizations l10n) {
-    final value = _lowStockThresholdController.text.trim();
-    if (!_showValidationErrors || value.isNotEmpty) {
       return null;
     }
     return l10n.requiredField;
@@ -1406,9 +1387,7 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
   ) {
     return [
       _InventorySettingsFields(
-        controller: _lowStockThresholdController,
         enabled: !widget.viewModel.isSaving,
-        errorText: _lowStockThresholdError(l10n),
         allowOverselling: _allowOverselling,
         warnLowStockBeforeSale: _warnLowStockBeforeSale,
         preventSellingAtLoss: _preventSellingAtLoss,
@@ -1417,7 +1396,6 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
           setState(() => _inventoryValuationMethod = value);
           refresh();
         },
-        onThresholdChanged: () => _refreshSettingsGroup(refresh),
         onAllowOversellingChanged: (value) {
           setState(() => _allowOverselling = value);
           refresh();
@@ -2053,7 +2031,6 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
     setState(() => _showValidationErrors = true);
 
     if (_shopNameError(l10n) != null ||
-        _lowStockThresholdError(l10n) != null ||
         _paymentMethodsError(l10n) != null ||
         _commissionError(l10n, _cardCommissionController) != null ||
         _commissionError(l10n, _transferCommissionController) != null) {
@@ -2135,8 +2112,6 @@ class _ShopSettingsFormState extends State<_ShopSettingsForm> {
       warnLowStockBeforeSale: _warnLowStockBeforeSale,
       preventSellingAtLoss: _preventSellingAtLoss,
       enablePurchaseSuggestions: _enablePurchaseSuggestions,
-      lowStockThreshold:
-          int.tryParse(_lowStockThresholdController.text.trim()) ?? 0,
       cashierReturnWindowHours: _cashierReturnWindowHours,
       enableCashPayments: _enableCashPayments,
       enableCardPayments: _enableCardPayments,

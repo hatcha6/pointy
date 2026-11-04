@@ -1252,8 +1252,34 @@ class CheckoutLineListSerializer(serializers.ListSerializer):
         return super().to_internal_value(data)
 
 
+class SellableVariantField(serializers.PrimaryKeyRelatedField):
+    """An active variant, or the one a merged id now means.
+
+    A till can hold a cart or a cached catalogue from before an alias was folded
+    into its product's single variant (``apps.migration.flatten``). That id is
+    the same goods, so the sale goes through against the survivor rather than
+    being refused at the counter. Only a refused id pays the extra query: this
+    is the checkout path.
+    """
+
+    def to_internal_value(self, data):
+        try:
+            return super().to_internal_value(data)
+        except serializers.ValidationError:
+            survivor = (
+                ProductVariant.objects.filter(merged_aliases__pk=data)
+                .values_list("pk", flat=True)
+                .first()
+                if isinstance(data, int) or str(data).isdigit()
+                else None
+            )
+            if survivor is None:
+                raise
+            return super().to_internal_value(survivor)
+
+
 class CheckoutLineSerializer(serializers.Serializer):
-    variant = serializers.PrimaryKeyRelatedField(
+    variant = SellableVariantField(
         queryset=ProductVariant.objects.active().select_related("product"),
     )
     quantity = serializers.DecimalField(
@@ -1400,7 +1426,11 @@ class CheckoutLineSerializer(serializers.Serializer):
         # the till sent one: which card, whose shelf and what it costs are the
         # server's own record of this variant, so nothing a till sends — or
         # leaves out — can change what is bought.
-        voucher = voucher_line_payload(variant)
+        voucher = voucher_line_payload(
+            variant,
+            account_target=(integration or {}).get("account_target"),
+            account_name=(integration or {}).get("account_name") or "",
+        )
         if voucher is not None:
             integration = voucher
         if integration:

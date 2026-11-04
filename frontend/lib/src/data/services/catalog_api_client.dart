@@ -1,3 +1,4 @@
+import '../../shared/date_formatters.dart';
 import '../models/attachment_summary.dart';
 import '../models/bought_together_product.dart';
 import '../models/catalog_identity_conflict.dart';
@@ -462,6 +463,26 @@ class CatalogApiClient {
     _session.throwApiException(
       response,
       'Product variant update failed with status',
+    );
+    return ProductVariant.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  /// Writes only the variant's expiry reminder; null clears it.
+  Future<ProductVariant> setVariantExpiryReminder(
+    int id,
+    DateTime? date,
+  ) async {
+    final response = await _session.patch(
+      'product-variants/$id/',
+      body: {
+        'expiry_reminder_date': date == null ? null : formatApiDate(date),
+      },
+    );
+    _session.throwApiException(
+      response,
+      'Variant expiry reminder update failed with status',
     );
     return ProductVariant.fromJson(
       _session.decodedBody(response) as Map<String, Object?>,

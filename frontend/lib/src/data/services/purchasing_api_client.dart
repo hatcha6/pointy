@@ -224,13 +224,18 @@ class PurchasingApiClient {
     int purchaseOrderId,
     PurchaseOrderDraft draft, {
     bool acknowledgeCostWarnings = false,
+    List<int> removedUnitIds = const [],
   }) async {
     final response = await _session.patch(
       'purchase-orders/$purchaseOrderId/',
-      body: draft.toJson(
-        forUpdate: true,
-        acknowledgeCostWarnings: acknowledgeCostWarnings,
-      ),
+      body: {
+        ...draft.toJson(
+          forUpdate: true,
+          acknowledgeCostWarnings: acknowledgeCostWarnings,
+        ),
+        // The handsets a lowered serial line no longer says arrived.
+        if (removedUnitIds.isNotEmpty) 'removed_units': removedUnitIds,
+      },
     );
     _session.throwApiException(
       response,

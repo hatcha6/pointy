@@ -423,6 +423,7 @@ class ProductDetailsView extends StatelessWidget {
           ),
           analyticsEngine: analyticsEngine,
           trackedStockRepository: trackedStockRepository,
+          catalogRepository: viewModel.catalogRepository,
         ),
       ),
     );

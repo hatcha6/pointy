@@ -25,7 +25,6 @@ void main() {
       autoPrintReceipts: false,
       allowOverselling: false,
       preventSellingAtLoss: true,
-      lowStockThreshold: 5,
       cashierReturnWindowHours: 42,
       enableCashPayments: true,
       enableCardPayments: true,
@@ -57,7 +56,7 @@ void main() {
       expect(json['valuation_method_change_acknowledged'], isTrue);
       expect(json['inventory_valuation_method'], 'fifo');
       expect(json['shop_name'], 'متجر');
-      expect(json['low_stock_threshold'], 5);
+      expect(json.containsKey('low_stock_threshold'), isFalse);
     });
 
     test('settings default to moving average when the field is absent', () {
@@ -133,7 +132,9 @@ void main() {
             message: 'Shop settings update failed with status 400',
             statusCode: 400,
             responseBody: jsonEncode({
-              'payment_methods': ['At least one payment method must be enabled.'],
+              'payment_methods': [
+                'At least one payment method must be enabled.',
+              ],
             }),
           ),
         ),
@@ -192,7 +193,6 @@ void main() {
           autoPrintReceipts: false,
           allowOverselling: false,
           preventSellingAtLoss: true,
-          lowStockThreshold: 5,
           cashierReturnWindowHours: 42,
           enableCashPayments: true,
           enableCardPayments: true,

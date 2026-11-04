@@ -79,12 +79,12 @@ class BusinessNotificationApiTests(APITestCase):
         product = create_product_with_default_variant(
             name="قهوة التنبيهات",
             sku="ALERT-COF",
+            low_stock_threshold=5,
             unit_price=Decimal("5.00"),
         )
         StockItem.objects.create(
             variant=product.default_variant,
             quantity_on_hand=0,
-            reorder_level=5,
         )
         client = APIClient()
         client.force_authenticate(user=self.manager)
@@ -135,13 +135,13 @@ class BusinessNotificationApiTests(APITestCase):
             product = create_product_with_default_variant(
                 name=f"صنف التنبيه {index}",
                 sku=f"DISMISS-{index}",
+                low_stock_threshold=5,
                 unit_price=Decimal("5.00"),
             )
             StockItem.objects.create(
                 variant=product.default_variant,
                 quantity_on_hand=0,
-                reorder_level=5,
-            )
+                )
         client = APIClient()
         client.force_authenticate(user=self.manager)
         results = client.get(reverse("business-notification-list")).data["results"]
@@ -332,12 +332,12 @@ class BusinessNotificationApiTests(APITestCase):
         product = create_product_with_default_variant(
             name="شاي الإدارة",
             sku="ALERT-TEA",
+            low_stock_threshold=5,
             unit_price=Decimal("3.00"),
         )
         StockItem.objects.create(
             variant=product.default_variant,
             quantity_on_hand=0,
-            reorder_level=5,
         )
         supplier = Supplier.objects.create(name="مورد الإدارة")
         PurchaseOrder.objects.create(
@@ -363,12 +363,12 @@ class BusinessNotificationApiTests(APITestCase):
         product = create_product_with_default_variant(
             name="سكر التنبيهات",
             sku="ALERT-SGR",
+            low_stock_threshold=5,
             unit_price=Decimal("2.00"),
         )
         stock_item = StockItem.objects.create(
             variant=product.default_variant,
             quantity_on_hand=0,
-            reorder_level=5,
         )
         client = APIClient()
         client.force_authenticate(user=self.manager)

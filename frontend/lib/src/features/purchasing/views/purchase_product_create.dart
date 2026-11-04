@@ -57,10 +57,15 @@ Future<BarcodeResolution?> resolveOrCreatePurchaseBarcode(
 /// Shared by the two places a code arrives — the hardware wedge (the screen)
 /// and the search field's submit (the catalog pane) — because a scan must
 /// behave identically whichever door it comes through.
+///
+/// [walkLine] is for a code a person typed and pressed Enter on: the keyboard
+/// then walks the line it landed on (quantity, cost, expiry) instead of going
+/// back to the search box, because that person is entering an invoice row.
 Future<void> addScannedPurchaseBarcode(
   BuildContext context, {
   required PurchaseViewModel viewModel,
   required String barcode,
+  bool walkLine = false,
 }) async {
   final messenger = ScaffoldMessenger.of(context);
   final l10n = AppLocalizations.of(context)!;
@@ -102,7 +107,12 @@ Future<void> addScannedPurchaseBarcode(
   // debounced search; clearing it stops the barcode reappearing ~350ms later,
   // and pulling focus back leaves the buyer ready for the next box.
   viewModel.requestSearchReset();
-  viewModel.requestSearchFocus();
+  final landed = resolution?.variant.id;
+  if (walkLine && landed != null) {
+    viewModel.requestLineEntry(landed);
+  } else {
+    viewModel.requestSearchFocus();
+  }
 }
 
 /// Opens the product-creation workflow from the purchasing workspace with

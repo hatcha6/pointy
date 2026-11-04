@@ -18,6 +18,7 @@ import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/infinite_scroll_grid.dart';
+import '../../../shared/order/order.dart';
 import '../../../shared/product_query_controls.dart';
 import '../../../shared/product_tile.dart';
 import '../../../shared/responsive/responsive.dart';
@@ -389,22 +390,24 @@ class _PosCatalogProducts extends StatelessWidget {
         }
       case PosProductSelectionStatus.chooseVariant:
         // One of the company's own cards, found by searching: the same sheet
-        // the menu opens, with its countries and flags.
+        // the menu opens, with its countries and flags. Read first if it has
+        // not been: a card sent to an account cannot be sold without asking.
+        if (product.isVoucher) {
+          await viewModel.voucherMenu.ensureLoaded();
+          if (!context.mounted) return;
+        }
         final menu = viewModel.voucherMenu.menu;
         final brand = product.isVoucher
             ? menu?.brandForProduct(product.id)
             : null;
         if (menu != null && brand != null) {
-          final card = await showPosVoucherBrandSheet(
+          await sellVoucherBrand(
             context,
+            viewModel: viewModel,
             brand: brand,
             menu: menu,
-            showsProfit: viewModel.isCostRevealed,
-            checkAvailability: () => viewModel.loadVoucherAvailability(product),
+            source: 'voucher_menu',
           );
-          if (card != null && context.mounted) {
-            viewModel.addVariant(card, source: 'voucher_menu');
-          }
           return;
         }
         if (product.isVoucher) {
@@ -528,21 +531,8 @@ class _PosProductLookupControlsState extends State<_PosProductLookupControls> {
   /// payment sheet, a dialog) or on the compact phone layout, so it never
   /// steals the caret from a sheet or pops the soft keyboard unbidden. The
   /// view model only ever fires it between actions, never mid quantity-edit.
-  void _handleFocusRequest() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      final route = ModalRoute.of(context);
-      if (route != null && !route.isCurrent) {
-        return;
-      }
-      if (AppBreakpoints.of(context).index < AppBreakpoint.tablet.index) {
-        return;
-      }
-      _searchFocusNode.requestFocus();
-    });
-  }
+  void _handleFocusRequest() =>
+      focusSearchAfterFrame(context, _searchFocusNode);
 
   @override
   Widget build(BuildContext context) {

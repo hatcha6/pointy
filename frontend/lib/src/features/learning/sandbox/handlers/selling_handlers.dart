@@ -8,6 +8,12 @@ SandboxReply handleSelling(SandboxShop shop, SandboxRequest request) {
     return _checkout(shop, request);
   }
 
+  // The till's card requests panel reads its history as it opens. A practice
+  // shop sells no cards from the company's shelf, so it has none.
+  if (request.on('GET', 'integrations/card-requests/') != null) {
+    return (200, {'results': <Object?>[]});
+  }
+
   if (request.on('POST', 'orders/discount-preview/') != null) {
     // Arithmetic, not a discount engine (§5): the practice shop prices the cart
     // at the seeded prices and applies nothing. `rules_active: false` is the

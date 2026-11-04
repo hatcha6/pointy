@@ -12,6 +12,7 @@ def create_product_with_default_variant(
     description="",
     is_active=True,
     variant_name="",
+    low_stock_threshold=None,
 ):
     product = Product.objects.create(
         name=name,
@@ -26,5 +27,8 @@ def create_product_with_default_variant(
         unit_price=Decimal(unit_price),
         is_active=is_active,
         is_default=True,
+        low_stock_threshold=(
+            None if low_stock_threshold is None else Decimal(str(low_stock_threshold))
+        ),
     )
     return product

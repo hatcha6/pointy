@@ -3,6 +3,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../../core/error_messages.dart';
 import '../../../../core/result.dart';
+import '../../../../data/models/purchase_edit_unit_choice.dart';
 import '../../../../data/models/purchase_submission.dart';
 import '../../../../data/services/api_error_detail.dart';
 import '../../../../shared/components/components.dart';
@@ -15,6 +16,7 @@ import '../../view_models/purchase_view_model.dart';
 import '../purchase_order_details_screen.dart'
     show PurchaseReceiveForm, PurchaseReceiveFormState;
 import '../receipt_labels.dart';
+import 'purchase_edit_units_view.dart';
 import 'purchase_result_buttons.dart';
 import 'purchase_result_failure_view.dart';
 import 'purchase_result_progress_view.dart';
@@ -101,6 +103,7 @@ class PurchaseResultDialog extends StatefulWidget {
 enum _Stage {
   sending,
   costWarnings,
+  chooseUnits,
   failed,
   recorded,
   receiveForm,
@@ -119,6 +122,11 @@ class _PurchaseResultDialogState extends State<PurchaseResultDialog> {
   _Stage _stage = _Stage.sending;
   Object? _error;
   PurchaseOrder? _order;
+
+  /// Which serial articles a lowered received line no longer says arrived:
+  /// asked for by the server, and sent with every later attempt.
+  List<PurchaseEditUnitChoice> _unitChoices = const [];
+  List<int> _removedUnitIds = const [];
 
   /// Whether the receiving form is mounted. It outlives the receipt's own
   /// progress, so a refused receipt goes back to the counts as typed.
@@ -158,6 +166,7 @@ class _PurchaseResultDialogState extends State<PurchaseResultDialog> {
       },
       PurchaseResultMode.save => await viewModel.saveDraft(
         acknowledgeCostWarnings: acknowledgeCostWarnings,
+        removedUnitIds: _removedUnitIds,
       ),
     };
     if (!mounted) return;
@@ -168,9 +177,12 @@ class _PurchaseResultDialogState extends State<PurchaseResultDialog> {
           _stage = _Stage.recorded;
         case Error(:final exception):
           _error = exception;
-          _stage = viewModel.costWarnings.isEmpty
-              ? _Stage.failed
-              : _Stage.costWarnings;
+          _unitChoices = purchaseEditUnitChoicesFromException(exception);
+          _stage = viewModel.costWarnings.isNotEmpty
+              ? _Stage.costWarnings
+              : _unitChoices.isNotEmpty
+              ? _Stage.chooseUnits
+              : _Stage.failed;
       }
     });
   }
@@ -268,7 +280,7 @@ class _PurchaseResultDialogState extends State<PurchaseResultDialog> {
           _formOpen = false;
           _stage = _Stage.recorded;
         });
-      case _Stage.costWarnings || _Stage.failed:
+      case _Stage.costWarnings || _Stage.chooseUnits || _Stage.failed:
         _backToDraft();
       case _Stage.recorded || _Stage.received:
         _close(const PurchaseResultDone());
@@ -355,6 +367,15 @@ class _PurchaseResultDialogState extends State<PurchaseResultDialog> {
           warnings: widget.viewModel.costWarnings,
           onConfirm: () => _send(acknowledgeCostWarnings: true),
           onReview: _backToDraft,
+        );
+      case _Stage.chooseUnits:
+        return PurchaseEditUnitsView(
+          choices: _unitChoices,
+          onConfirm: (unitIds) {
+            _removedUnitIds = unitIds;
+            _send();
+          },
+          onBack: _backToDraft,
         );
       case _Stage.failed:
         return PurchaseResultFailureView(

@@ -1,7 +1,7 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
@@ -89,6 +89,8 @@ import 'features/purchasing/view_models/purchase_order_documents.dart';
 import 'features/purchasing/views/purchase_order_details_screen.dart';
 import 'features/purchasing/views/purchase_order_edit_screen.dart';
 import 'features/purchasing/views/purchase_order_list_screen.dart';
+import 'features/purchasing/view_models/reorder_view_model.dart';
+import 'features/purchasing/views/reorder_screen.dart';
 import 'features/purchasing/views/purchasing_screen.dart';
 import 'features/stock_count/views/stock_count_sessions_screen.dart';
 import 'features/register_sessions/view_models/register_session_history_view_model.dart';
@@ -126,6 +128,7 @@ import 'features/settings/views/shop_settings_screen.dart';
 import 'features/settings/views/warehouses_page.dart';
 import 'features/user_settings/views/user_settings_screen.dart';
 import 'features/users/view_models/user_management_view_model.dart';
+import 'features/users/view_models/remote_sessions_view_model.dart';
 import 'features/users/view_models/user_details_view_model.dart';
 import 'features/users/view_models/user_permissions_view_model.dart';
 import 'features/users/views/user_details_screen.dart';
@@ -369,6 +372,7 @@ class _AuthenticatedRoutes implements AppNavigation {
       AppNavigationDestination.conversations => conversationsRouteBuilder,
       AppNavigationDestination.campaigns => campaignsRouteBuilder,
       AppNavigationDestination.catalog => catalogRouteBuilder,
+      AppNavigationDestination.reorder => reorderRouteBuilder,
       AppNavigationDestination.categories => categoryRouteBuilder,
       AppNavigationDestination.searchMisses => searchMissesRouteBuilder,
       AppNavigationDestination.stockCount => stockCountRouteBuilder,
@@ -636,6 +640,13 @@ class _AuthenticatedRoutes implements AppNavigation {
         onOpenRecord: _openEntityDeepLink,
         // Pushed over the catalog rather than replacing it, so back returns
         // to the products the owner was looking at.
+        onOpenReorder: capabilities.actionFor(
+          AppCapability.createPurchaseOrder,
+          () => push(
+            routeContext,
+            (context) => reorderRouteBuilder(context, showBackButton: true),
+          ),
+        ),
         onOpenSearchMisses: capabilities.actionFor(
           AppCapability.changeProduct,
           () => push(
@@ -644,6 +655,22 @@ class _AuthenticatedRoutes implements AppNavigation {
                 searchMissesRouteBuilder(context, showBackButton: true),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget reorderRouteBuilder(
+    BuildContext routeContext, {
+    bool showBackButton = false,
+  }) {
+    return _screen(
+      'reorder',
+      ReorderScreen(
+        viewModel: ReorderViewModel(dependencies.reorderRepository),
+        contactRepository: dependencies.contactRepository,
+        navigation: this,
+        showBackButton: showBackButton,
+        onOpenPurchaseOrder: _openPurchaseOrder,
       ),
     );
   }
@@ -910,6 +937,11 @@ class _AuthenticatedRoutes implements AppNavigation {
           capabilities: capabilities,
           onManagePermissions: (target) =>
               _openUserPermissions(context, target),
+          remoteSessionsViewModel: RemoteSessionsViewModel(
+            dependencies.userRepository,
+            userId: user.id,
+          ),
+          canRevokeRemoteSessions: _mayChangeUsers(currentUser),
         ),
       ),
     );
@@ -972,6 +1004,13 @@ class _AuthenticatedRoutes implements AppNavigation {
     );
     return true;
   }
+
+  /// Whether [user] may change other people's accounts — and so end their
+  /// remote sessions — rather than only look at them.
+  static bool _mayChangeUsers(PosUser user) =>
+      user.role.isManager ||
+      user.permissions.contains('auth.change_user') ||
+      user.permissions.contains('change_user');
 
   Future<bool> _openUserPermissions(BuildContext context, PosUser user) async {
     if (!capabilities.allows(AppCapability.manageUsers)) {
@@ -1231,6 +1270,7 @@ class _AuthenticatedRoutes implements AppNavigation {
         currentUser: currentUser,
         onUserChanged: dependencies.authViewModel.replaceCurrentUser,
         navigation: this,
+        remoteSessionsViewModel: dependencies.remoteSessionsViewModel,
       ),
     );
   }
@@ -2072,7 +2112,7 @@ class _AuthenticatedRoutes implements AppNavigation {
     final showStock = capabilities.canViewStock;
     final canReorder = capabilities.canCreatePurchaseOrder;
     return [
-      _quickActionsSource(l10n),
+      _quickActionsSource(context, l10n),
       RecentsCommandSource(
         label: l10n.commandPaletteRecentsSection,
         onOpen: _openRecent,
@@ -2246,7 +2286,10 @@ class _AuthenticatedRoutes implements AppNavigation {
   }
 
   /// Quick actions — verbs that jump straight into a creation flow.
-  StaticCommandSource _quickActionsSource(AppLocalizations l10n) {
+  StaticCommandSource _quickActionsSource(
+    BuildContext context,
+    AppLocalizations l10n,
+  ) {
     return StaticCommandSource(
       label: l10n.commandPaletteActionsSection,
       items: [
@@ -2265,6 +2308,16 @@ class _AuthenticatedRoutes implements AppNavigation {
             title: l10n.commandPaletteActionNewPurchaseOrder,
             keywords: const ['purchase', 'po', 'شراء'],
             onSelect: _openNewPurchaseOrder,
+          ),
+        if (capabilities.canCreatePurchaseOrder)
+          CommandItem(
+            id: 'action-resume-purchase-order',
+            icon: Icons.assignment_outlined,
+            title: l10n.commandPaletteActionPurchaseOrderWorkspace,
+            keywords: const ['purchase', 'po', 'شراء', 'مشتريات'],
+            hotkey: _purchaseOrderHotkey,
+            trailing: _purchaseOrderHotkey.label(context),
+            onSelect: _openPurchaseOrderWorkspace,
           ),
         if (capabilities.canManageExpenses)
           CommandItem(
@@ -2346,6 +2399,19 @@ class _AuthenticatedRoutes implements AppNavigation {
 
   void _openNewPurchaseOrder(BuildContext context) {
     dependencies.purchaseViewModel.clearDraft(trackLineDeletes: false);
+    push(context, createPurchaseOrderRouteBuilder);
+  }
+
+  /// Ctrl/⌘+Shift+P: straight to the purchase order being written — kept, not
+  /// cleared, because a buyer who stepped away to check a price is coming
+  /// back to the order they were halfway through.
+  static const _purchaseOrderHotkey = CommandHotkey(
+    PhysicalKeyboardKey.keyP,
+    LogicalKeyboardKey.keyP,
+    shift: true,
+  );
+
+  void _openPurchaseOrderWorkspace(BuildContext context) {
     push(context, createPurchaseOrderRouteBuilder);
   }
 
@@ -2600,6 +2666,7 @@ class _AuthenticatedRoutes implements AppNavigation {
           printingRepository: dependencies.printingRepository,
           capabilities: capabilities,
           analyticsEngine: dependencies.analyticsEngine,
+          catalogRepository: dependencies.catalogRepository,
         ),
       ),
     );

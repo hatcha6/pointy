@@ -7,6 +7,7 @@ import '../../../core/result.dart';
 import '../../../data/models/bulk_price_preview.dart';
 import '../../../data/models/bulk_price_rule.dart';
 import '../../../data/repositories/catalog_repository.dart';
+import 'bulk_price_filter_editing.dart';
 
 /// The bulk price editor: a draft [BulkPriceSpec] the owner builds, and a
 /// server preview that follows it.
@@ -15,7 +16,8 @@ import '../../../data/repositories/catalog_repository.dart';
 /// on screen always describe the rules on screen. Applying sends the
 /// preview's fingerprint back: the server refuses unless the same rules still
 /// produce exactly the prices that were shown — see `bulk_pricing.py`.
-class BulkPriceEditorViewModel extends ChangeNotifier {
+class BulkPriceEditorViewModel extends ChangeNotifier
+    implements BulkPriceFilterEditing {
   BulkPriceEditorViewModel({
     required CatalogRepository catalogRepository,
     List<BulkPriceRef> selectedProducts = const [],
@@ -148,6 +150,7 @@ class BulkPriceEditorViewModel extends ChangeNotifier {
 
   // -- conditions (filter tree and every step's own tree) --------------------
 
+  @override
   void addCondition(String groupKey) => _updateGroup(
     groupKey,
     (group) =>
@@ -156,6 +159,7 @@ class BulkPriceEditorViewModel extends ChangeNotifier {
 
   /// A nested group starts with one condition: an empty group would match
   /// everything, which is never what "add a group" means.
+  @override
   void addGroup(String groupKey) => _updateGroup(
     groupKey,
     (group) => group.copyWith(
@@ -172,9 +176,11 @@ class BulkPriceEditorViewModel extends ChangeNotifier {
     ),
   );
 
+  @override
   void setGroupMatch(String groupKey, BulkPriceMatch match) =>
       _updateGroup(groupKey, (group) => group.copyWith(match: match));
 
+  @override
   void updateCondition(
     String key,
     BulkPriceCondition Function(BulkPriceCondition condition) update,
@@ -185,6 +191,7 @@ class BulkPriceEditorViewModel extends ChangeNotifier {
 
   /// Removes a condition or a nested group. A group left with nothing in it
   /// is removed too, except a step's own condition, which is switched off.
+  @override
   void removeNode(String key) {
     _updateNode(key, (_) => null);
   }

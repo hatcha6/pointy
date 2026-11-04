@@ -260,16 +260,25 @@ class SerialBatchLineTests(CounterLotCaptureTestCase):
         )
         assert_tracking_invariants()
 
-    def test_without_its_lot_it_is_refused_in_arabic(self):
+    def test_without_its_lot_the_pack_joins_a_minted_lot(self):
+        """A lot number is never demanded: the shop that tracks expiry has
+        often never been told one. The pack is born into a lot we mint,
+        honestly marked as ours, carrying the line's date."""
         response = self.buy(
             {
                 "variant": self.variant.pk,
                 "quantity": "1",
                 "unit_cost": "40.00",
                 "units": [{"code": "PACK-0009"}],
+                "batches": [{"expiry_date": "2027-02-28"}],
             }
         )
-        self.assert_refused_without_trace(response, "رقم الدفعة مطلوب")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        lot = StockBatch.objects.get(variant=self.variant)
+        self.assertTrue(lot.code_is_generated)
+        self.assertEqual(lot.expiry_date, date(2027, 2, 28))
+        assert_tracking_invariants()
 
     def test_a_second_lot_row_is_refused(self):
         response = self.buy(
@@ -360,8 +369,10 @@ class SameShapeTwiceTests(CounterLotCaptureTestCase):
 
 
 class OrdinaryOrderTests(CounterLotCaptureTestCase):
-    def test_an_ordinary_order_refuses_lot_rows_rather_than_dropping_them(self):
-        """Only a flow that receives in the same call may carry captures."""
+    def test_an_ordinary_order_keeps_lot_rows_as_its_plan(self):
+        """An order that does not receive in the same call keeps what the
+        buyer typed as the plan its receipt starts from — and receives
+        nothing yet (see ``test_planned_capture``)."""
         variant = self.lot_product(Product.TrackingMode.BATCH, sku="LOT-PO")
         response = self.manager_client.post(
             reverse("purchaseorder-list"),
@@ -378,9 +389,12 @@ class OrdinaryOrderTests(CounterLotCaptureTestCase):
             },
             format="json",
         )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("عند استلام", str(response.data))
-        self.assertFalse(PurchaseOrder.objects.exists())
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(
+            response.data["lines"][0]["planned_batches"],
+            [{"code": "PO-LOT", "quantity": "3"}],
+        )
+        self.assertFalse(StockBatch.objects.filter(variant=variant).exists())
 
     def test_an_ordinary_order_without_captures_is_unchanged(self):
         variant = self.lot_product(Product.TrackingMode.BATCH, sku="LOT-PO-OK")

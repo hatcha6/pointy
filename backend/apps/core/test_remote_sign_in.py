@@ -1,5 +1,6 @@
 """Sign-in from the internet through the relay's sign-in route."""
 
+import base64
 from unittest import mock
 
 from django.contrib.auth import get_user_model
@@ -15,6 +16,11 @@ from apps.analytics.models import AnalyticsEvent
 from .models import RelayInstallation, ShopSettings
 from .roles import CASHIER_GROUP, MANAGER_GROUP, ensure_role_groups
 from .tests import FakeRelayControlClient
+
+
+def _basic(username, password):
+    token = base64.b64encode(f"{username}:{password}".encode()).decode()
+    return f"Basic {token}"
 
 
 SIGN_IN_ROUTE = {
@@ -164,3 +170,95 @@ class RemoteSignInTests(TestCase):
         allowed = client.patch(url, {"allow_remote_sign_in": True}, format="json")
         self.assertEqual(allowed.status_code, status.HTTP_200_OK, allowed.data)
         self.assertTrue(ShopSettings.load().allow_remote_sign_in)
+
+    def test_basic_auth_is_no_password_oracle_with_the_switch_off(self):
+        # Off: right and wrong passwords get the same refusal, and the
+        # profile cannot be read or changed.
+        for password in ("pass", "wrong"):
+            for username in ("owner", "till"):
+                me = APIClient().get(
+                    reverse("auth-me"),
+                    HTTP_AUTHORIZATION=_basic(username, password),
+                    **SIGN_IN_ROUTE,
+                )
+                self.assertEqual(me.status_code, status.HTTP_403_FORBIDDEN)
+                self.assertEqual(me.json()["code"], "remote_sign_in_disabled")
+        patch = APIClient().patch(
+            reverse("auth-me"),
+            {"username": "taken"},
+            format="json",
+            HTTP_AUTHORIZATION=_basic("till", "pass"),
+            **SIGN_IN_ROUTE,
+        )
+        self.assertEqual(patch.status_code, status.HTTP_403_FORBIDDEN)
+        self.cashier.refresh_from_db()
+        self.assertEqual(self.cashier.username, "till")
+        logout = APIClient().post(
+            reverse("auth-logout"), HTTP_AUTHORIZATION=_basic("owner", "pass"), **SIGN_IN_ROUTE
+        )
+        self.assertEqual(logout.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_basic_auth_never_signs_in_over_the_route_with_the_switch_on(self):
+        # On: a right password in the header is the same as none at all.
+        self._allow()
+        for password in ("pass", "wrong"):
+            me = APIClient().get(
+                reverse("auth-me"),
+                HTTP_AUTHORIZATION=_basic("till", password),
+                **SIGN_IN_ROUTE,
+            )
+            self.assertIn(
+                me.status_code, (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN)
+            )
+            self.assertNotIn("user", me.json())
+
+    def test_basic_auth_cannot_mint_a_ticket_over_the_route(self):
+        self._allow()
+        fake_relay = FakeRelayControlClient(relay_enabled=True, subscription_active=True)
+        with mock.patch("apps.core.relay.RelayControlClient", return_value=fake_relay):
+            response = APIClient().post(
+                reverse("relay-pairing"),
+                {"device_id": "attacker"},
+                format="json",
+                HTTP_AUTHORIZATION=_basic("owner", "pass"),
+                **SIGN_IN_ROUTE,
+            )
+        self.assertIn(
+            response.status_code, (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN)
+        )
+        self.assertIsNone(fake_relay.issued_ticket_request)
+
+    def test_a_remote_session_still_reads_me_with_the_switch_on(self):
+        self._allow()
+        client = APIClient()
+        login = self._login_with(client, "owner")
+        self.assertEqual(login.status_code, status.HTTP_200_OK)
+        me = client.get(reverse("auth-me"), **SIGN_IN_ROUTE)
+        self.assertEqual(me.status_code, status.HTTP_200_OK)
+        self.assertEqual(me.data["user"]["username"], "owner")
+
+    def test_a_remote_session_is_cut_off_when_the_switch_goes_off(self):
+        self._allow()
+        client = APIClient()
+        self._login_with(client, "owner")
+        self._allow(False)
+        me = client.get(reverse("auth-me"), **SIGN_IN_ROUTE)
+        self.assertEqual(me.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_basic_auth_off_the_route_is_unchanged(self):
+        # LAN tools that send Basic keep working; only the sign-in route drops it.
+        me = APIClient().get(
+            reverse("auth-me"),
+            HTTP_AUTHORIZATION=_basic("till", "pass"),
+            REMOTE_ADDR="192.168.1.20",
+        )
+        self.assertEqual(me.status_code, status.HTTP_200_OK)
+
+    def _login_with(self, client, username):
+        with self.captureOnCommitCallbacks(execute=True):
+            return client.post(
+                reverse("auth-login"),
+                {"username": username, "password": "pass"},
+                format="json",
+                **SIGN_IN_ROUTE,
+            )

@@ -209,7 +209,8 @@ void main() {
     // flagged cost made an edited order impossible to save. One shop met that
     // wall 41 times across two orders on 4–5 September 2026.
     final catalog = _FakeCatalogRepository({5: boxProduct()});
-    final purchase = _FakePurchaseRepository()..refuseUnacknowledgedCosts = true;
+    final purchase = _FakePurchaseRepository()
+      ..refuseUnacknowledgedCosts = true;
     final vm = PurchaseViewModel(catalog, purchase);
 
     await vm.loadOrderForEditing(
@@ -310,6 +311,7 @@ class _FakePurchaseRepository extends PurchaseRepository {
     String discountCode = '',
     double extraDiscountAmount = 0,
     bool acknowledgeCostWarnings = false,
+    List<int> removedUnitIds = const [],
   }) async {
     updateCalls++;
     lastUpdateOrderId = purchaseOrderId;

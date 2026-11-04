@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
+import '../../../data/models/voucher_account.dart';
 import '../../../data/models/voucher_menu.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
@@ -249,7 +250,17 @@ class _Stickers extends StatelessWidget {
         ? brand.badge
         : (brand.featured ? l10n.posVoucherMenuFeatured : null);
     if (promo == null && featuredLabel == null) {
-      return const SizedBox.shrink();
+      // A card sent to an account says so: there is no code to hand over.
+      final delivery = switch (brand.target?.kind) {
+        VoucherTargetKind.gameAccount => l10n.posVoucherStickerById,
+        VoucherTargetKind.telegram => l10n.posVoucherStickerTelegram,
+        VoucherTargetKind.steamLogin => l10n.posVoucherStickerSteamLogin,
+        VoucherTargetKind.steamInvite => l10n.posVoucherStickerSteamGift,
+        null => null,
+      };
+      return delivery == null
+          ? const SizedBox.shrink()
+          : VoucherSticker(tone: VoucherStickerTone.featured, label: delivery);
     }
     return Row(
       mainAxisSize: MainAxisSize.min,

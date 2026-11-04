@@ -144,8 +144,9 @@ extension PosCheckoutActions on PosViewModel {
   /// more. If that fails too, the answer is not "nothing happened": it is
   /// unknown, for every provider line, and the cashier is told so.
   Future<List<IntegrationChargeResult>> _performSoldRecharges(
-    SaleOrder order,
-  ) async {
+    SaleOrder order, {
+    bool noWait = false,
+  }) async {
     final repository = _integrationsRepository;
     if (repository == null) return const [];
     final lines = [
@@ -156,7 +157,7 @@ extension PosCheckoutActions on PosViewModel {
 
     var unanswered = false;
     for (var attempt = 0; attempt < 2; attempt++) {
-      final result = await repository.charge(orderId: order.id);
+      final result = await repository.charge(orderId: order.id, noWait: noWait);
       switch (result) {
         case Ok<List<IntegrationChargeResult>>(value: final rows):
           // After a call whose answer never came, "nothing left to perform"
@@ -170,6 +171,65 @@ extension PosCheckoutActions on PosViewModel {
       }
     }
     return _unknownCharges(lines);
+  }
+
+  /// Whether every provider line of [order] is one the requests panel can
+  /// follow: the company's own shelf, read back by key. Another provider's
+  /// top-up answers while the customer waits, as it always has.
+  bool _followsInPanel(SaleOrder order) {
+    final lines = [
+      for (final line in order.lines)
+        if (line.integration != null) line,
+    ];
+    return lines.isNotEmpty &&
+        cardRequests.isSupported &&
+        lines.every(
+          (line) => line.integration!.provider == cardRequestsProvider,
+        );
+  }
+
+  /// The charge's answer if it comes within the moment the till waits; null
+  /// when it does not, and the call goes on behind the cashier.
+  Future<List<IntegrationChargeResult>?> _answerOrHandOff(
+    Future<List<IntegrationChargeResult>> charge,
+  ) {
+    final answer = Completer<List<IntegrationChargeResult>?>();
+    final timer = Timer(_cardHandOffAfter, () {
+      if (!answer.isCompleted) answer.complete(null);
+    });
+    unawaited(
+      charge.then((rows) {
+        timer.cancel();
+        if (!answer.isCompleted) answer.complete(rows);
+      }),
+    );
+    return answer.future;
+  }
+
+  /// What the sale's result says of lines whose answer has not come yet.
+  List<IntegrationChargeResult> _inProgressCharges(SaleOrder order) => [
+    for (final line in order.lines)
+      if (line.integration != null)
+        IntegrationChargeResult(
+          fulfillment: null,
+          orderLine: line.id,
+          provider: line.integration!.provider,
+          kind: line.integration!.kind,
+          subscriberRef: line.integration!.subscriberRef,
+          optionLabel: line.integration!.optionLabel,
+          outcome: 'unknown',
+          status: 'submitted',
+          inProgress: true,
+        ),
+  ];
+
+  /// Prints a request's sale again, with what the provider answered.
+  Future<InvoicePrintStatus> reprintCardRequest(CardRequest request) async {
+    final loaded = await _saleRepository.loadOrder(request.orderId);
+    if (loaded case Ok<SaleOrder>(:final value)) {
+      return reprintPaidInvoice(value, recharges: [request.toChargeResult()]);
+    }
+    return InvoicePrintStatus.failed;
   }
 
   /// The answer for lines whose provider call never came back: not charged,
@@ -501,9 +561,36 @@ extension PosCheckoutActions on PosViewModel {
         // sale is therefore always recorded, even when the provider refuses —
         // which is the right way round, because the customer has paid.
         var recharges = const <IntegrationChargeResult>[];
+        var handedOff = false;
         try {
-          recharges = await _performSoldRecharges(result.value);
-          if (hasProviderLines && shouldPrintInvoice) {
+          if (_followsInPanel(result.value)) {
+            // The company's cards can take minutes. The till waits a moment —
+            // most answer at once, and then the code is handed over here as
+            // ever — and past that the requests panel takes over and the
+            // cashier carries on selling.
+            final charge = _performSoldRecharges(result.value, noWait: true);
+            final ticket = cardRequests.trackSale(result.value, charge: charge);
+            final answered = await _answerOrHandOff(charge);
+            handedOff =
+                answered == null || answered.any((row) => row.inProgress);
+            if (handedOff) {
+              recharges = answered ?? _inProgressCharges(result.value);
+              printStatus = InvoicePrintStatus.notRequested;
+              final printer = invoicePrinterConfig;
+              ticket.handOff(
+                printWhenDone: shouldPrintInvoice && !receiptPrinterMissing
+                    ? (performed) =>
+                          _printAfterProviders(result.value, printer, performed)
+                    : null,
+              );
+            } else {
+              recharges = answered;
+              ticket.close();
+            }
+          } else {
+            recharges = await _performSoldRecharges(result.value);
+          }
+          if (!handedOff && hasProviderLines && shouldPrintInvoice) {
             _advanceCheckoutProgress(PosCheckoutStep.print);
             printStatus = receiptPrinterMissing
                 ? InvoicePrintStatus.noPrinter
@@ -526,6 +613,7 @@ extension PosCheckoutActions on PosViewModel {
           result.value,
           printStatus,
           recharges: recharges,
+          receiptFollows: handedOff && shouldPrintInvoice,
         );
       case Error<SaleOrder>(:final exception):
         _isCheckingOut = false;
@@ -1178,12 +1266,18 @@ class SaleCheckoutOutcome {
     this.failureReason,
     this.reference,
     this.isUnanswered = false,
+    this.receiptFollows = false,
   });
+
+  /// The requests panel is following this sale, and its receipt prints by
+  /// itself when the supplier has answered — the code is printed on it.
+  final bool receiptFollows;
 
   const SaleCheckoutOutcome.success(
     SaleOrder order,
     InvoicePrintStatus printStatus, {
     List<IntegrationChargeResult> recharges = const [],
+    bool receiptFollows = false,
   }) : this._(
          isSuccess: true,
          isStockRejected: false,
@@ -1191,6 +1285,7 @@ class SaleCheckoutOutcome {
          order: order,
          printStatus: printStatus,
          recharges: recharges,
+         receiptFollows: receiptFollows,
        );
 
   /// [reason] is the server's own sentence when it wrote one in Arabic — "this

@@ -37,8 +37,9 @@ def _stock(name, sku, qty):
     variant = product.default_variant
     item, _ = StockItem.objects.get_or_create(variant=variant)
     item.quantity_on_hand = Decimal(qty)
-    item.reorder_level = 5
-    item.save(update_fields=["quantity_on_hand", "reorder_level", "updated_at"])
+    item.save(update_fields=["quantity_on_hand", "updated_at"])
+    variant.low_stock_threshold = Decimal("5")
+    variant.save(update_fields=["low_stock_threshold"])
     return variant
 
 

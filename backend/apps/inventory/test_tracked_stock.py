@@ -871,15 +871,19 @@ class SerialBatchTests(TestCase):
         unit = StockUnit.objects.get()
         self.assertEqual(unit.incoming_rate, Decimal("40.000000"))
 
-    def test_a_receipt_without_a_lot_is_refused(self):
-        with self.assertRaises(serializers.ValidationError) as caught:
-            receive(
-                variant=self.variant,
-                quantity=1,
-                unit_cost="40.00",
-                units=[{"code": "S1"}],
-            )
-        self.assertIn("رقم الدفعة مطلوب", str(caught.exception))
+    def test_a_receipt_without_a_lot_mints_one(self):
+        """Every pack is still born into a lot — one we generate and mark as
+        ours when the receiver could not name it."""
+        receive(
+            variant=self.variant,
+            quantity=1,
+            unit_cost="40.00",
+            units=[{"code": "S1"}],
+        )
+        unit = StockUnit.objects.get(variant=self.variant, code="S1")
+        self.assertIsNotNone(unit.batch_id)
+        self.assertTrue(unit.batch.code_is_generated)
+        assert_tracking_invariants()
 
     def test_an_expired_lot_is_refused_even_though_the_pack_has_a_serial(self):
         self._receive(["S1"], days=-1)
@@ -1160,15 +1164,15 @@ class TrackingModeTransitionTests(TestCase):
         serializer.save()
 
         # The existing unit keeps batch = NULL and lands on the worklist; the
-        # next receipt has to name a lot.
+        # next receipt is born into a lot — minted when nobody named one.
         self.assertEqual(units_missing_lots().count(), 1)
-        with self.assertRaises(serializers.ValidationError):
-            receive(
-                variant=product.default_variant,
-                quantity=1,
-                unit_cost="100.00",
-                units=[{"code": "MODE-PACK-2"}],
-            )
+        receive(
+            variant=product.default_variant,
+            quantity=1,
+            unit_cost="100.00",
+            units=[{"code": "MODE-PACK-2"}],
+        )
+        self.assertEqual(units_missing_lots().count(), 1)
 
     def test_serial_batch_back_to_serial_is_free(self):
         """Nothing is unsaid: the lots stop being required and every allocation
@@ -1188,47 +1192,6 @@ class TrackingModeTransitionTests(TestCase):
         )
         serializer = self._serializer(product, Product.TrackingMode.SERIAL)
         self.assertTrue(serializer.is_valid(), serializer.errors)
-
-
-class IdentifiedStockBlocksACostEditTests(TestCase):
-    """Editing a received order un-records its delivery and re-records it.
-
-    That is right for a quantity in a bin and wrong for forty handsets: the
-    identifiers were captured at the receiving bay, they are not in an edit
-    payload, and a re-record would invent a second set. Until §5.5's re-stamp
-    exists, this refuses and names what is in the way.
-    """
-
-    def test_a_landed_cost_edit_is_refused_and_names_the_units(self):
-        from apps.purchasing.models import PurchaseOrder
-        from apps.purchasing.services import save_purchase_order_with_lines
-
-        product = tracked_product(
-            name="هاتف",
-            sku="LC-1",
-            mode=Product.TrackingMode.SERIAL,
-            unit_price="1500.00",
-        )
-        receive(
-            variant=product.default_variant,
-            quantity=1,
-            unit_cost="1000.00",
-            units=[{"code": "LC-SER-1"}],
-        )
-        order = PurchaseOrder.objects.get()
-
-        with self.assertRaises(serializers.ValidationError) as caught:
-            save_purchase_order_with_lines(
-                purchase_order=order,
-                landed_cost_entries_data=[
-                    {"label": "شحن", "amount": Decimal("50.00")}
-                ],
-            )
-        detail = caught.exception.detail
-        self.assertEqual(
-            str(detail["code"]), "purchase_order_has_identified_stock"
-        )
-        self.assertEqual([str(code) for code in detail["stock_units"]], ["LC-SER-1"])
 
 
 class SaleLineIdentifierTests(TestCase):

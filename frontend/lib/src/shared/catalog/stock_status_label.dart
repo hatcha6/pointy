@@ -10,7 +10,7 @@ class StockStatusLabel extends StatelessWidget {
     super.key,
     required this.quantity,
     required this.isActive,
-    this.lowStockThreshold = 5,
+    this.isLow = false,
     this.compact = false,
   }) : _showCount = false;
 
@@ -22,13 +22,17 @@ class StockStatusLabel extends StatelessWidget {
     super.key,
     required this.quantity,
     required this.isActive,
-    this.lowStockThreshold = 5,
+    this.isLow = false,
   }) : compact = true,
        _showCount = true;
 
   final double quantity;
   final bool isActive;
-  final int lowStockThreshold;
+
+  /// Whether the stock is at or below the variant's own low-stock threshold
+  /// (`ProductVariant.isLowStock`). There is no shop-wide number to fall back
+  /// on: a variant nobody set a threshold for is never shown as low.
+  final bool isLow;
   final bool compact;
   final bool _showCount;
 
@@ -39,7 +43,7 @@ class StockStatusLabel extends StatelessWidget {
     final status = _StockStatus.resolve(
       quantity: quantity,
       isActive: isActive,
-      lowStockThreshold: lowStockThreshold,
+      isLow: isLow,
     );
     final color = switch (status) {
       _StockStatus.available => colors.success,
@@ -127,7 +131,7 @@ enum _StockStatus {
   static _StockStatus resolve({
     required double quantity,
     required bool isActive,
-    required int lowStockThreshold,
+    required bool isLow,
   }) {
     if (!isActive) {
       return _StockStatus.inactive;
@@ -135,7 +139,7 @@ enum _StockStatus {
     if (quantity <= 0) {
       return _StockStatus.out;
     }
-    if (quantity <= lowStockThreshold) {
+    if (isLow) {
       return _StockStatus.low;
     }
     return _StockStatus.available;

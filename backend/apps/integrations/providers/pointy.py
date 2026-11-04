@@ -48,7 +48,7 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import replace
+from dataclasses import dataclass, replace
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
@@ -65,6 +65,7 @@ from .base import (
     ATTEMPT_REFUSED,
     ATTEMPT_UNKNOWN,
     ERROR_BUSY,
+    DETAIL_IN_PROGRESS,
     ERROR_INDETERMINATE,
     ERROR_INSUFFICIENT_FLOAT,
     ERROR_NOT_CONFIGURED,
@@ -271,12 +272,17 @@ class PointyProvider(IntegrationProvider):
         link, refusal = self._link()
         if refusal is not None:
             return VoucherCatalogResult(ok=False, error_code=refusal[0], error_detail=refusal[1])
+        options = {}
+        if getattr(settings, "POINTY_VOUCHER_ACCOUNT_CARDS", False):
+            # Cards sent to an account only once the till can ask for one.
+            options["accounts"] = True
         try:
             payload, version = link.client.get_voucher_catalog(
                 access_token=link.access_token,
                 etag=etag,
                 timeout=CATALOG_TIMEOUT_SECONDS,
                 fresh_brand=(self.fresh_brand or "").strip(),
+                **options,
             )
         except RelayControlError as exc:
             code, detail = _read_refusal(exc)
@@ -545,9 +551,16 @@ class PointyProvider(IntegrationProvider):
             return RechargeResult(ok=False, error_code=refusal[0], error_detail=refusal[1])
         words = self._card_words(item)
 
+        # A card sent to an account carries what the customer typed, as the
+        # fulfillment keeps it (``card_no`` is that account on one line).
+        account = dict(getattr(self.fulfillment, "account_target", None) or {})
+
         # The money. Recorded as the step BEFORE the request, so a process that
         # dies mid-call leaves telemetry saying the write may be out.
         self._note(STEP_SUBMIT)
+        options = {"account": account} if account else {}
+        if self.answer_at_once:
+            options["no_wait"] = True
         try:
             status, payload = link.client.create_voucher_purchase(
                 access_token=link.access_token,
@@ -556,6 +569,7 @@ class PointyProvider(IntegrationProvider):
                 max_unit_price=_money_text(expected_cost),
                 quantity=1,
                 timeout=_purchase_timeout(),
+                **options,
             )
         except RelayControlError as exc:
             self._observe(http_status=exc.status_code)
@@ -631,6 +645,42 @@ class PointyProvider(IntegrationProvider):
             )
         return AttemptOutcome(state=ATTEMPT_UNKNOWN, reference=reference, error_detail=state)
 
+    def check_voucher_account(self, item: str, account: dict) -> "AccountCheckResult":
+        """Look up the account a customer typed for a card sent to one (a
+        player ID: does it exist, whose is it). Buys nothing; never raises."""
+        link, refusal = self._link()
+        if refusal is not None:
+            return AccountCheckResult(ok=False, error_code=refusal[0], error_detail=refusal[1])
+        try:
+            payload = link.client.check_voucher_account(
+                access_token=link.access_token,
+                item=(item or "").strip(),
+                account=account,
+                timeout=DETECT_TIMEOUT_SECONDS,
+            )
+        except RelayControlError as exc:
+            body = _error_body(exc)
+            code = str(body.get("code") or "")
+            if exc.status_code in (400, 404) and code:
+                # The relay read what was typed and refused it: say which field.
+                return AccountCheckResult(
+                    ok=False,
+                    error_code=ERROR_NOT_FOUND,
+                    error_detail=code,
+                    field=_text(body.get("field"), 32),
+                )
+            code, detail = _read_refusal(exc)
+            return AccountCheckResult(ok=False, error_code=code, error_detail=mask_numbers(detail))
+        if not isinstance(payload, dict) or _text(payload.get("status"), 16) not in ACCOUNT_CHECK_STATUSES:
+            return AccountCheckResult(ok=False, error_code=ERROR_UNEXPECTED, error_detail="no check status")
+        return AccountCheckResult(
+            ok=True,
+            status=_text(payload.get("status"), 16),
+            name=_text(payload.get("name"), 120),
+            region=_text(payload.get("region"), 64),
+            account=_text(payload.get("account"), 160),
+        )
+
     def _readable_receipt(self, purchase: dict, option_code: str) -> tuple[dict | None, str]:
         """The receipt of a succeeded purchase read back, or ``(None, why)``.
 
@@ -641,6 +691,8 @@ class PointyProvider(IntegrationProvider):
             option = services_options.parse_option_code(option_code)
             context = self._service_context(option, self._service_ref(option))
             return pointy_services.receipt(purchase, context), "receipt_pending"
+        if _sent_to_account(purchase):
+            return _account_receipt(purchase, self._card_words(_text(purchase.get("item")))), ""
         code_row = _first_code(purchase)
         if code_row is None:
             return None, "codes_pending"
@@ -710,12 +762,86 @@ def _parse_catalog(document: dict) -> tuple[tuple[VoucherBrand, ...], tuple[Vouc
     return tuple(brands), tuple(countries)
 
 
+#: What an account check can answer: the account exists, it does not, the game
+#: could not tell, or there is no check for this card (a Telegram username).
+ACCOUNT_CHECK_STATUSES = ("valid", "invalid", "unconfirmed", "unchecked")
+
+
+@dataclass(frozen=True)
+class AccountCheckResult:
+    """What the relay found about an account before a card is sent to it."""
+
+    ok: bool
+    status: str = ""
+    #: The account's own name when the game gives it (a player's nickname).
+    name: str = ""
+    region: str = ""
+    #: What was typed, as the relay read it, on one line.
+    account: str = ""
+    error_code: str = ""
+    error_detail: str = ""
+    #: The field the relay refused, when it named one.
+    field: str = ""
+
+
+#: What an account card's slip says in place of a code.
+NOTICE_SENT_TO_ACCOUNT = "تم الشحن مباشرة إلى الحساب، ولا يوجد رمز لإدخاله."
+
+#: The kinds of account a card can be sent to, as the relay names them.
+TARGET_KINDS = ("game_account", "telegram_username", "steam_login", "steam_invite")
+#: The most fields a target lists, and the longest text in one.
+_MAX_TARGET_FIELDS = 4
+_MAX_TARGET_OPTIONS = 60
+
+
+def _target(raw) -> dict | None:
+    """A brand's ``target`` as the shop keeps it, or ``None`` for a brand of codes.
+
+    Tolerant like the rest of the shelf: a target this build cannot read leaves
+    the brand out (``_brand``), never sold as if it were a code.
+    """
+    if raw is None:
+        return None
+    if not isinstance(raw, dict) or _text(raw.get("kind"), 32) not in TARGET_KINDS:
+        return {}
+    fields = []
+    for row in (raw.get("fields") or ())[:_MAX_TARGET_FIELDS]:
+        if not isinstance(row, dict) or not _text(row.get("key"), 32) or not _text(row.get("label"), 60):
+            return {}
+        field_type = _text(row.get("type"), 16) or "text"
+        if field_type not in ("text", "select"):
+            return {}
+        options = [
+            {"value": _text(option.get("value"), 64), "label": _text(option.get("label"), 60)}
+            for option in (row.get("options") or ())[:_MAX_TARGET_OPTIONS]
+            if isinstance(option, dict) and _text(option.get("value"), 64)
+        ]
+        if field_type == "select" and not options:
+            return {}
+        field_row = {"key": _text(row.get("key"), 32), "label": _text(row.get("label"), 60), "type": field_type}
+        if options:
+            field_row["options"] = options
+        fields.append(field_row)
+    if not fields:
+        return {}
+    return {
+        "kind": _text(raw.get("kind"), 32),
+        "fields": fields,
+        "check": _text(raw.get("check"), 64),
+        "hint": _text(raw.get("hint"), 300),
+    }
+
+
 def _brand(row, categories: dict) -> VoucherBrand | None:
     if not isinstance(row, dict):
         return None
     key = _text(row.get("key"), 32)
     name = _text(row.get("name"), 160)
     if not key or not name:
+        return None
+    target = _target(row.get("target"))
+    if target == {}:
+        # Sent to an account this build cannot ask for: not sold at all.
         return None
     items = tuple(item for item in map(_item, row.get("items") or ()) if item is not None)
     category_key = _text(row.get("category"), 64)
@@ -740,6 +866,7 @@ def _brand(row, categories: dict) -> VoucherBrand | None:
         category_rank=_int(category.get("rank")),
         redeem_hint=_text(row.get("redeem_hint"), 1000),
         aliases=aliases,
+        target=target,
     )
 
 
@@ -792,7 +919,7 @@ def _answered_purchase(
     reference = _text(purchase.get("id"), 64)
     state = str(purchase.get("status") or "")
     if status == 202 or state == "pending":
-        return _unknown("the purchase is still pending", reference=reference)
+        return replace(_unknown(DETAIL_IN_PROGRESS, reference=reference), balance_after=balance)
     if state == "succeeded" and service is not None:
         slip = pointy_services.receipt(purchase, service)
         if slip is None:
@@ -802,6 +929,15 @@ def _answered_purchase(
             reference=reference,
             balance_after=balance,
             receipt=slip,
+            actual_cost=_money(purchase.get("unit_price")),
+        )
+    if state == "succeeded" and _sent_to_account(purchase):
+        # Credit sent to an account: there is no code, and none is waited for.
+        return RechargeResult(
+            ok=True,
+            reference=reference,
+            balance_after=balance,
+            receipt=_account_receipt(purchase, words),
             actual_cost=_money(purchase.get("unit_price")),
         )
     if state == "succeeded":
@@ -985,6 +1121,33 @@ def _receipt(purchase: dict, code_row: dict, words: dict) -> dict:
     if purchase.get("test_mode") is True:
         # Bought from the relay's test supplier: the code is not a real card, and
         # the slip says so, as a service's does.
+        receipt["test_mode"] = True
+        receipt["printed"]["notice"] = pointy_services.NOTICE_TEST_CARD
+    return receipt
+
+
+def _sent_to_account(purchase: dict) -> bool:
+    """Whether a card purchase sent credit to an account rather than a code."""
+    return _text(purchase.get("delivery"), 16) == "account"
+
+
+def _account_receipt(purchase: dict, words: dict) -> dict:
+    """What the fulfillment keeps, and the slip prints, for credit sent to an
+    account: whose account (masked, as the relay keeps it), never a code."""
+    printed = {
+        "brand": words.get("brand") or "",
+        "product": words.get("product") or _text(purchase.get("name"), 160),
+        "account": _text(purchase.get("target"), 120),
+        "notice": NOTICE_SENT_TO_ACCOUNT,
+    }
+    receipt = {
+        "purchase_id": _text(purchase.get("id"), 64),
+        "item": _text(purchase.get("item"), 64),
+        "unit_price": _text(purchase.get("unit_price"), 32),
+        "delivery": "account",
+        "printed": {key: value for key, value in printed.items() if value},
+    }
+    if purchase.get("test_mode") is True:
         receipt["test_mode"] = True
         receipt["printed"]["notice"] = pointy_services.NOTICE_TEST_CARD
     return receipt

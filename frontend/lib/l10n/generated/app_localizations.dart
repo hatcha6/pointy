@@ -190,6 +190,12 @@ abstract class AppLocalizations {
   /// **'بيع جديد'**
   String get commandPaletteActionNewSale;
 
+  /// Palette quick action (Ctrl/Cmd+Shift+P): open the purchase order being written, keeping its lines.
+  ///
+  /// In ar, this message translates to:
+  /// **'متابعة أمر الشراء الحالي'**
+  String get commandPaletteActionPurchaseOrderWorkspace;
+
   /// Quick action: open a blank purchase order draft.
   ///
   /// In ar, this message translates to:
@@ -3744,7 +3750,17 @@ abstract class AppLocalizations {
   ///
   /// In ar, this message translates to:
   /// **'{sku}، حد الطلب {reorderLevel}، المتوقع {expected}'**
-  String dashboardStockItemSubtitle(String sku, int reorderLevel, int expected);
+  String dashboardStockItemSubtitle(
+    String sku,
+    String reorderLevel,
+    int expected,
+  );
+
+  /// Stock item secondary information for a variant with no low-stock threshold.
+  ///
+  /// In ar, this message translates to:
+  /// **'{sku}، بلا حد تنبيه، المتوقع {expected}'**
+  String dashboardStockItemSubtitleUnwatched(String sku, int expected);
 
   /// No description provided for @dashboardPurchasesMetric.
   ///
@@ -5517,6 +5533,300 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'آخر النشاطات'**
   String get userDetailsRecentActivityTitle;
+
+  /// No description provided for @remoteSessionsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الجلسات عن بُعد'**
+  String get remoteSessionsTitle;
+
+  /// No description provided for @remoteSessionsOwnSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأجهزة التي دخلتَ منها إلى المتجر من خارج شبكته عبر دفتر. أنهِ أي جلسة لا تعرفها.'**
+  String get remoteSessionsOwnSubtitle;
+
+  /// No description provided for @remoteSessionsUserSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأجهزة التي دخل منها هذا المستخدم إلى المتجر من خارج شبكته عبر دفتر.'**
+  String get remoteSessionsUserSubtitle;
+
+  /// No description provided for @remoteSessionsEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد جلسات عن بُعد'**
+  String get remoteSessionsEmpty;
+
+  /// No description provided for @remoteSessionsEmptyDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'تظهر هنا كل جلسة دخول من خارج شبكة المتجر، مع جهازها ومكانها.'**
+  String get remoteSessionsEmptyDescription;
+
+  /// No description provided for @remoteSessionsLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل الجلسات عن بُعد.'**
+  String get remoteSessionsLoadError;
+
+  /// No description provided for @remoteSessionsRefreshTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث الجلسات عن بُعد'**
+  String get remoteSessionsRefreshTooltip;
+
+  /// No description provided for @remoteSessionsActiveCount.
+  ///
+  /// In ar, this message translates to:
+  /// **'النشطة: {count}'**
+  String remoteSessionsActiveCount(String count);
+
+  /// No description provided for @remoteSessionStatusActive.
+  ///
+  /// In ar, this message translates to:
+  /// **'نشطة'**
+  String get remoteSessionStatusActive;
+
+  /// No description provided for @remoteSessionStatusExpired.
+  ///
+  /// In ar, this message translates to:
+  /// **'انتهت مدتها'**
+  String get remoteSessionStatusExpired;
+
+  /// No description provided for @remoteSessionStatusRevoked.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُنهيت'**
+  String get remoteSessionStatusRevoked;
+
+  /// No description provided for @remoteSessionStatusSignedOut.
+  ///
+  /// In ar, this message translates to:
+  /// **'سُجِّل الخروج'**
+  String get remoteSessionStatusSignedOut;
+
+  /// No description provided for @remoteSessionStatusDisabled.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُوقف الدخول عن بُعد'**
+  String get remoteSessionStatusDisabled;
+
+  /// No description provided for @remoteSessionThisDevice.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا الجهاز'**
+  String get remoteSessionThisDevice;
+
+  /// No description provided for @remoteSessionFactAddress.
+  ///
+  /// In ar, this message translates to:
+  /// **'العنوان'**
+  String get remoteSessionFactAddress;
+
+  /// No description provided for @remoteSessionFactSignedIn.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدخول'**
+  String get remoteSessionFactSignedIn;
+
+  /// No description provided for @remoteSessionFactLastSeen.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر نشاط'**
+  String get remoteSessionFactLastSeen;
+
+  /// No description provided for @remoteSessionFactExpires.
+  ///
+  /// In ar, this message translates to:
+  /// **'تنتهي'**
+  String get remoteSessionFactExpires;
+
+  /// No description provided for @remoteSessionFactEnded.
+  ///
+  /// In ar, this message translates to:
+  /// **'انتهت'**
+  String get remoteSessionFactEnded;
+
+  /// No description provided for @remoteSessionFactEndedBy.
+  ///
+  /// In ar, this message translates to:
+  /// **'أنهاها'**
+  String get remoteSessionFactEndedBy;
+
+  /// No description provided for @remoteSessionJustNow.
+  ///
+  /// In ar, this message translates to:
+  /// **'الآن'**
+  String get remoteSessionJustNow;
+
+  /// No description provided for @remoteSessionMinutesAgo.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, one{منذ دقيقة} two{منذ دقيقتين} few{منذ {count} دقائق} other{منذ {count} دقيقة}}'**
+  String remoteSessionMinutesAgo(int count);
+
+  /// No description provided for @remoteSessionHoursAgo.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, one{منذ ساعة} two{منذ ساعتين} few{منذ {count} ساعات} other{منذ {count} ساعة}}'**
+  String remoteSessionHoursAgo(int count);
+
+  /// No description provided for @remoteSessionDaysAgo.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, one{منذ يوم} two{منذ يومين} few{منذ {count} أيام} other{منذ {count} يومًا}}'**
+  String remoteSessionDaysAgo(int count);
+
+  /// No description provided for @remoteSessionInHours.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, one{بعد ساعة} two{بعد ساعتين} few{بعد {count} ساعات} other{بعد {count} ساعة}}'**
+  String remoteSessionInHours(int count);
+
+  /// No description provided for @remoteSessionInDays.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, one{بعد يوم} two{بعد يومين} few{بعد {count} أيام} other{بعد {count} يومًا}}'**
+  String remoteSessionInDays(int count);
+
+  /// No description provided for @remoteSessionDeviceTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'{platform} · {browser}'**
+  String remoteSessionDeviceTitle(String platform, String browser);
+
+  /// No description provided for @remoteSessionPlatformIphone.
+  ///
+  /// In ar, this message translates to:
+  /// **'آيفون'**
+  String get remoteSessionPlatformIphone;
+
+  /// No description provided for @remoteSessionPlatformIpad.
+  ///
+  /// In ar, this message translates to:
+  /// **'آيباد'**
+  String get remoteSessionPlatformIpad;
+
+  /// No description provided for @remoteSessionPlatformAndroid.
+  ///
+  /// In ar, this message translates to:
+  /// **'أندرويد'**
+  String get remoteSessionPlatformAndroid;
+
+  /// No description provided for @remoteSessionPlatformWindows.
+  ///
+  /// In ar, this message translates to:
+  /// **'ويندوز'**
+  String get remoteSessionPlatformWindows;
+
+  /// No description provided for @remoteSessionPlatformMac.
+  ///
+  /// In ar, this message translates to:
+  /// **'ماك'**
+  String get remoteSessionPlatformMac;
+
+  /// No description provided for @remoteSessionPlatformChromeOs.
+  ///
+  /// In ar, this message translates to:
+  /// **'كروم أو إس'**
+  String get remoteSessionPlatformChromeOs;
+
+  /// No description provided for @remoteSessionPlatformLinux.
+  ///
+  /// In ar, this message translates to:
+  /// **'لينكس'**
+  String get remoteSessionPlatformLinux;
+
+  /// No description provided for @remoteSessionPlatformOther.
+  ///
+  /// In ar, this message translates to:
+  /// **'جهاز غير معروف'**
+  String get remoteSessionPlatformOther;
+
+  /// No description provided for @remoteSessionBrowserSafari.
+  ///
+  /// In ar, this message translates to:
+  /// **'سفاري'**
+  String get remoteSessionBrowserSafari;
+
+  /// No description provided for @remoteSessionBrowserChrome.
+  ///
+  /// In ar, this message translates to:
+  /// **'كروم'**
+  String get remoteSessionBrowserChrome;
+
+  /// No description provided for @remoteSessionBrowserEdge.
+  ///
+  /// In ar, this message translates to:
+  /// **'إيدج'**
+  String get remoteSessionBrowserEdge;
+
+  /// No description provided for @remoteSessionBrowserFirefox.
+  ///
+  /// In ar, this message translates to:
+  /// **'فايرفوكس'**
+  String get remoteSessionBrowserFirefox;
+
+  /// No description provided for @remoteSessionBrowserSamsung.
+  ///
+  /// In ar, this message translates to:
+  /// **'متصفح سامسونج'**
+  String get remoteSessionBrowserSamsung;
+
+  /// No description provided for @remoteSessionBrowserOpera.
+  ///
+  /// In ar, this message translates to:
+  /// **'أوبرا'**
+  String get remoteSessionBrowserOpera;
+
+  /// No description provided for @remoteSessionRevokeButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنهاء'**
+  String get remoteSessionRevokeButton;
+
+  /// No description provided for @remoteSessionRevokeTooltip.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنهاء هذه الجلسة وتسجيل خروج الجهاز'**
+  String get remoteSessionRevokeTooltip;
+
+  /// No description provided for @remoteSessionRevokeTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنهاء الجلسة؟'**
+  String get remoteSessionRevokeTitle;
+
+  /// No description provided for @remoteSessionRevokeMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيُسجَّل خروج «{device}» فورًا، ولن يدخل إلى المتجر مجددًا إلا بكلمة المرور.'**
+  String remoteSessionRevokeMessage(String device);
+
+  /// No description provided for @remoteSessionRevokeCurrentMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذه هي الجلسة التي تستخدمها الآن. سيُسجَّل خروجك من هذا الجهاز فورًا.'**
+  String get remoteSessionRevokeCurrentMessage;
+
+  /// No description provided for @remoteSessionRevokeConfirm.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنهاء الجلسة'**
+  String get remoteSessionRevokeConfirm;
+
+  /// No description provided for @remoteSessionRevokeError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر إنهاء الجلسة. حاول مرة أخرى.'**
+  String get remoteSessionRevokeError;
+
+  /// No description provided for @remoteSessionRevoked.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُنهيت الجلسة وسُجِّل خروج الجهاز.'**
+  String get remoteSessionRevoked;
 
   /// No description provided for @userActivityNetSalesMetric.
   ///
@@ -9631,12 +9941,8 @@ abstract class AppLocalizations {
   /// Summary for inventory settings in the shop settings index.
   ///
   /// In ar, this message translates to:
-  /// **'تنبيه عند {count} قطع أو أقل، البيع فوق المخزون: {oversellStatus}، منع الخسارة: {lossStatus}'**
-  String inventorySettingsSummary(
-    int count,
-    String oversellStatus,
-    String lossStatus,
-  );
+  /// **'البيع فوق المخزون: {oversellStatus}، منع الخسارة: {lossStatus}'**
+  String inventorySettingsSummary(String oversellStatus, String lossStatus);
 
   /// Summary for payment settings in the shop settings index.
   ///
@@ -11170,6 +11476,24 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'حد تنبيه المخزون المنخفض'**
   String get lowStockThresholdLabel;
+
+  /// No description provided for @lowStockThresholdHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'ننبّهك عندما يصل مخزون هذا الصنف في كل الفروع إلى هذا العدد أو أقل. اتركه فارغًا لإيقاف التنبيه.'**
+  String get lowStockThresholdHelper;
+
+  /// No description provided for @lowStockThresholdMovedHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'حد تنبيه المخزون المنخفض يُضبط الآن لكل صنف على حدة من شاشة المنتج، ولا يُنبَّه إلا عن الأصناف التي ضُبط لها حد.'**
+  String get lowStockThresholdMovedHint;
+
+  /// No description provided for @lowStockThresholdGeneratedHelper.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُطبَّق على كل صنف مولَّد، ويمكن تعديله لكل صنف لاحقًا. اتركه فارغًا لإيقاف التنبيه.'**
+  String get lowStockThresholdGeneratedHelper;
 
   /// No description provided for @printerTransportLabel.
   ///
@@ -13966,6 +14290,12 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'إصلاح أُضيف إلى التكلفة'**
   String get stockVoucherRefurbishment;
+
+  /// No description provided for @stockVoucherCatalogMerge.
+  ///
+  /// In ar, this message translates to:
+  /// **'دمج أصناف فرعية'**
+  String get stockVoucherCatalogMerge;
 
   /// No description provided for @stockVoucherOther.
   ///
@@ -17455,12 +17785,6 @@ abstract class AppLocalizations {
   /// **'يظهر هنا بديل مطابق لكل عنصر صادر، ويمكنك تعديله أو إضافة غيره.'**
   String get purchaseExchangeReplacementMirrorHint;
 
-  /// Shown when a serial-and-lot replacement has no lot captured.
-  ///
-  /// In ar, this message translates to:
-  /// **'البديل صنف مسلسل بدفعة: امسح رقم الدفعة قبل التأكيد.'**
-  String get purchaseAdjustmentUnitsReplacementLotRequired;
-
   /// Hint of the scan/search field in the shared unit pick sheet.
   ///
   /// In ar, this message translates to:
@@ -20418,12 +20742,6 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'الدفعات: {count}'**
   String posCashPurchaseLotsCountLabel(int count);
-
-  /// Shown when a serial+lot tracked line has no lot captured.
-  ///
-  /// In ar, this message translates to:
-  /// **'هذا الصنف يُشترى برقم دفعة — أدخل رقم الدفعة.'**
-  String get posCashPurchaseLotRequiredError;
 
   /// Shown when a line's captured lot quantities no longer add up to its quantity.
   ///
@@ -26992,6 +27310,36 @@ abstract class AppLocalizations {
   /// **'رقم الدفعة'**
   String get batchCaptureLotCode;
 
+  /// Lot code field label; the lot number is never required.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم الدفعة (اختياري)'**
+  String get batchCaptureLotCodeOptional;
+
+  /// Helper under a blank lot code: the server generates one.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُولَّد رقم تلقائيًا إن تُرك فارغًا'**
+  String get batchCaptureLotCodeGenerated;
+
+  /// Typed expiry field hint: month/year, as printed on a pack. Latin digits on purpose.
+  ///
+  /// In ar, this message translates to:
+  /// **'12/27'**
+  String get expiryFieldHint;
+
+  /// Typed expiry could not be read.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ غير مفهوم — اكتب الشهر/السنة مثل 12/27'**
+  String get expiryFieldInvalid;
+
+  /// Calendar button beside a typed expiry field.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختيار من التقويم'**
+  String get expiryFieldPickTooltip;
+
   /// Per-lot quantity field label.
   ///
   /// In ar, this message translates to:
@@ -27087,6 +27435,42 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تُسجَّل أرقام الدفعات عند الاستلام.'**
   String get purchaseLineLotsNoExpiryAtReceipt;
+
+  /// Purchase-line button opening the lot sheet (lot number, split across lots).
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم الدفعة / تقسيم'**
+  String get purchaseLineCaptureLotNumber;
+
+  /// Purchase-line button naming its one lot.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدفعة {code}'**
+  String purchaseLineCaptureLotCode(String code);
+
+  /// Purchase-line button when the line is split across several lots.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =2{دفعتان} few{{count} دفعات} other{{count} دفعة}}'**
+  String purchaseLineCaptureLotsCount(int count);
+
+  /// Purchase-line button opening the serial scan loop.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأرقام التسلسلية {captured}/{expected}'**
+  String purchaseLineCaptureSerials(int captured, int expected);
+
+  /// Under a tracked purchase line's capture row.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختياري — ما لا يُدخل الآن يُطلب عند الاستلام.'**
+  String get purchaseLineCaptureLater;
+
+  /// A tracked purchase line's lots or serials exceed its quantity.
+  ///
+  /// In ar, this message translates to:
+  /// **'ما أُدخل أكثر من كمية السطر — عدّل الدفعات أو الأرقام.'**
+  String get purchaseLineCaptureMismatch;
 
   /// Hint on a serial-in-lot purchase line.
   ///
@@ -27249,12 +27633,6 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'أدخل تاريخ صلاحية كل دفعة.'**
   String get batchCaptureBlockedExpiry;
-
-  /// Why confirm is disabled: a lot is missing its code.
-  ///
-  /// In ar, this message translates to:
-  /// **'أدخل رقم كل دفعة.'**
-  String get batchCaptureBlockedCode;
 
   /// Why confirm is disabled: lot quantities do not add up.
   ///
@@ -32470,6 +32848,18 @@ abstract class AppLocalizations {
   /// **'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'**
   String get connectionRemoteFieldHint;
 
+  /// No description provided for @connectionRemotePasteButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'لصق'**
+  String get connectionRemotePasteButton;
+
+  /// No description provided for @connectionRemoteClipboardHasNoId.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد رقم تثبيت في الحافظة. انسخ الرقم من الإعدادات ← الاشتراك على جهاز المتجر، ثم اضغط «لصق».'**
+  String get connectionRemoteClipboardHasNoId;
+
   /// Relay connection form: submit button.
   ///
   /// In ar, this message translates to:
@@ -33667,7 +34057,7 @@ abstract class AppLocalizations {
   /// No description provided for @purchasingShortcutTypeQuantity.
   ///
   /// In ar, this message translates to:
-  /// **'اكتب الكمية ثم Enter لتطبيقها'**
+  /// **'اكتب الكمية ثم Enter للانتقال إلى التكلفة'**
   String get purchasingShortcutTypeQuantity;
 
   /// No description provided for @purchasingShortcutStepQuantity.
@@ -33693,6 +34083,60 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'حفظ أو تسجيل أمر الشراء'**
   String get purchasingShortcutSubmit;
+
+  /// No description provided for @purchasingShortcutsSectionSearch.
+  ///
+  /// In ar, this message translates to:
+  /// **'البحث والإضافة'**
+  String get purchasingShortcutsSectionSearch;
+
+  /// No description provided for @purchasingShortcutSearchEnter.
+  ///
+  /// In ar, this message translates to:
+  /// **'باركود ثم Enter يضيف المنتج، والاسم ثم Enter يبحث'**
+  String get purchasingShortcutSearchEnter;
+
+  /// No description provided for @purchasingShortcutResults.
+  ///
+  /// In ar, this message translates to:
+  /// **'التنقل بين نتائج البحث، وEnter يضيف المنتج المحدد'**
+  String get purchasingShortcutResults;
+
+  /// No description provided for @purchasingShortcutBackToSearch.
+  ///
+  /// In ar, this message translates to:
+  /// **'العودة إلى خانة البحث'**
+  String get purchasingShortcutBackToSearch;
+
+  /// No description provided for @purchasingShortcutWalkLine.
+  ///
+  /// In ar, this message translates to:
+  /// **'إدخال السطر المحدد: الكمية ثم التكلفة ثم الصلاحية'**
+  String get purchasingShortcutWalkLine;
+
+  /// No description provided for @purchasingShortcutWalkNext.
+  ///
+  /// In ar, this message translates to:
+  /// **'تأكيد الحقل والانتقال إلى التالي'**
+  String get purchasingShortcutWalkNext;
+
+  /// No description provided for @purchasingShortcutAdjacentLine.
+  ///
+  /// In ar, this message translates to:
+  /// **'السطر التالي أو السابق'**
+  String get purchasingShortcutAdjacentLine;
+
+  /// No description provided for @purchasingShortcutCaptureLine.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدفعات وتواريخ الصلاحية والأرقام التسلسلية للسطر'**
+  String get purchasingShortcutCaptureLine;
+
+  /// No description provided for @purchasingShortcutOpenWorkspace.
+  ///
+  /// In ar, this message translates to:
+  /// **'فتح أمر الشراء الحالي من أي شاشة'**
+  String get purchasingShortcutOpenWorkspace;
 
   /// No description provided for @purchaseDraftLineRemovedMessage.
   ///
@@ -48735,6 +49179,36 @@ abstract class AppLocalizations {
   /// **'بقي جزء من الأمر مفتوحًا. استلمه من صفحة الأمر حين يصل.'**
   String get purchaseResultStillOpen;
 
+  /// No description provided for @purchaseEditUnitsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أي الوحدات لم تصل؟'**
+  String get purchaseEditUnitsTitle;
+
+  /// No description provided for @purchaseEditUnitsSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أنقصت كمية صنف له أرقام تسلسلية. اختر الوحدات التي ستُحذف من المخزون مع هذا التعديل.'**
+  String get purchaseEditUnitsSubtitle;
+
+  /// No description provided for @purchaseEditUnitsPick.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر {count} من {product}'**
+  String purchaseEditUnitsPick(int count, String product);
+
+  /// No description provided for @purchaseEditUnitsConfirm.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف المختارة وحفظ'**
+  String get purchaseEditUnitsConfirm;
+
+  /// No description provided for @purchaseEditUnitsTip.
+  ///
+  /// In ar, this message translates to:
+  /// **'الوحدات المبيعة لا تظهر هنا: لا يمكن حذفها من أمر الشراء.'**
+  String get purchaseEditUnitsTip;
+
   /// No description provided for @bulkPriceEditorTitle.
   ///
   /// In ar, this message translates to:
@@ -49748,6 +50222,900 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'مثال: {before} بتكلفة {cost} ← {after}'**
   String bulkPriceStepExampleCost(String before, String cost, String after);
+
+  /// No description provided for @bulkTrackingTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تتبّع الصلاحية بالجملة'**
+  String get bulkTrackingTitle;
+
+  /// No description provided for @bulkTrackingMenuAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'تتبّع الصلاحية بالجملة'**
+  String get bulkTrackingMenuAction;
+
+  /// No description provided for @bulkTrackingSelectionAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'تتبّع الصلاحية'**
+  String get bulkTrackingSelectionAction;
+
+  /// No description provided for @bulkTrackingScopeAllHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل المنتجات غير المؤرشفة. منتجات النظام لا تتغيّر أبدًا.'**
+  String get bulkTrackingScopeAllHint;
+
+  /// No description provided for @bulkTrackingWhatTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'ماذا تريد؟'**
+  String get bulkTrackingWhatTitle;
+
+  /// No description provided for @bulkTrackingTrackingLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'التتبّع'**
+  String get bulkTrackingTrackingLabel;
+
+  /// No description provided for @bulkTrackingKeep.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدون تغيير'**
+  String get bulkTrackingKeep;
+
+  /// No description provided for @bulkTrackingExpiry.
+  ///
+  /// In ar, this message translates to:
+  /// **'تتبّع الصلاحية'**
+  String get bulkTrackingExpiry;
+
+  /// No description provided for @bulkTrackingExpiryHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُسجَّل الرصيد في دفعات لها تاريخ انتهاء.'**
+  String get bulkTrackingExpiryHint;
+
+  /// No description provided for @bulkTrackingLots.
+  ///
+  /// In ar, this message translates to:
+  /// **'تتبّع الدفعات بلا صلاحية'**
+  String get bulkTrackingLots;
+
+  /// No description provided for @bulkTrackingLotsHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُسجَّل الرصيد في دفعات بلا تاريخ انتهاء.'**
+  String get bulkTrackingLotsHint;
+
+  /// No description provided for @bulkTrackingReminderLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تذكير الصلاحية'**
+  String get bulkTrackingReminderLabel;
+
+  /// No description provided for @bulkTrackingReminderSet.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديد تاريخ تذكير'**
+  String get bulkTrackingReminderSet;
+
+  /// No description provided for @bulkTrackingReminderClear.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسح التذكير'**
+  String get bulkTrackingReminderClear;
+
+  /// No description provided for @bulkTrackingReminderHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'التذكير تنبيه فقط: لا يمنع البيع ولا ينشئ دفعة.'**
+  String get bulkTrackingReminderHint;
+
+  /// No description provided for @bulkTrackingReminderDateLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تاريخ التذكير'**
+  String get bulkTrackingReminderDateLabel;
+
+  /// No description provided for @bulkTrackingPreviewTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'المعاينة'**
+  String get bulkTrackingPreviewTitle;
+
+  /// No description provided for @bulkTrackingPreviewButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'معاينة التغيير'**
+  String get bulkTrackingPreviewButton;
+
+  /// No description provided for @bulkTrackingPreviewRefresh.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديث المعاينة'**
+  String get bulkTrackingPreviewRefresh;
+
+  /// No description provided for @bulkTrackingPreviewStale.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيّرت الخيارات بعد المعاينة. حدّثها قبل التطبيق.'**
+  String get bulkTrackingPreviewStale;
+
+  /// No description provided for @bulkTrackingPreviewFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّرت المعاينة. تحقّق من الاتصال وحاول مجددًا.'**
+  String get bulkTrackingPreviewFailed;
+
+  /// No description provided for @bulkTrackingNothingChosen.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر تغييرًا واحدًا على الأقل: التتبّع أو التذكير.'**
+  String get bulkTrackingNothingChosen;
+
+  /// No description provided for @bulkTrackingIncomplete.
+  ///
+  /// In ar, this message translates to:
+  /// **'أكمل شروط التصفية وتاريخ التذكير أولًا.'**
+  String get bulkTrackingIncomplete;
+
+  /// No description provided for @bulkTrackingSummaryMatched.
+  ///
+  /// In ar, this message translates to:
+  /// **'المطابقة'**
+  String get bulkTrackingSummaryMatched;
+
+  /// No description provided for @bulkTrackingSummaryChange.
+  ///
+  /// In ar, this message translates to:
+  /// **'ستتغيّر'**
+  String get bulkTrackingSummaryChange;
+
+  /// No description provided for @bulkTrackingSummarySame.
+  ///
+  /// In ar, this message translates to:
+  /// **'كما هي بالفعل'**
+  String get bulkTrackingSummarySame;
+
+  /// No description provided for @bulkTrackingSummaryBlocked.
+  ///
+  /// In ar, this message translates to:
+  /// **'مرفوضة'**
+  String get bulkTrackingSummaryBlocked;
+
+  /// No description provided for @bulkTrackingEmptyView.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا شيء في هذه القائمة.'**
+  String get bulkTrackingEmptyView;
+
+  /// No description provided for @bulkTrackingNoMatch.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا منتجات تطابق الشروط.'**
+  String get bulkTrackingNoMatch;
+
+  /// No description provided for @bulkTrackingRowDetail.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرصيد {onHand} · {variants} متغيّرًا'**
+  String bulkTrackingRowDetail(String onHand, int variants);
+
+  /// No description provided for @bulkTrackingTagEmptyShelf.
+  ///
+  /// In ar, this message translates to:
+  /// **'بلا رصيد'**
+  String get bulkTrackingTagEmptyShelf;
+
+  /// No description provided for @bulkTrackingTagUndated.
+  ///
+  /// In ar, this message translates to:
+  /// **'رصيد بلا تاريخ'**
+  String get bulkTrackingTagUndated;
+
+  /// No description provided for @bulkTrackingShowMore.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرض المزيد'**
+  String get bulkTrackingShowMore;
+
+  /// No description provided for @bulkTrackingWarningsTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} تنبيهًا قبل التطبيق'**
+  String bulkTrackingWarningsTitle(int count);
+
+  /// No description provided for @bulkTrackingEmptyShelfWarning.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} صنفًا بلا رصيد مسجَّل: لن يقبل الصندوق بيعها بعد التفعيل حتى تُستلم دفعة. راجع الجرد أولًا أو استثنها'**
+  String bulkTrackingEmptyShelfWarning(int count);
+
+  /// No description provided for @bulkTrackingUndatedWarning.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} صنفًا سيدخل رصيدها في دفعة واحدة بلا تاريخ، ولن يصل عنها تنبيه إلا إذا حدّدت تاريخ تذكير'**
+  String bulkTrackingUndatedWarning(int count);
+
+  /// No description provided for @bulkTrackingExcludeEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'استثناء الأصناف بلا رصيد'**
+  String get bulkTrackingExcludeEmpty;
+
+  /// No description provided for @bulkTrackingExcludeEmptyHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيُترك {count} صنفًا بلا رصيد كما هو.'**
+  String bulkTrackingExcludeEmptyHint(int count);
+
+  /// No description provided for @bulkTrackingApplyButton.
+  ///
+  /// In ar, this message translates to:
+  /// **'تطبيق على {count} منتجًا'**
+  String bulkTrackingApplyButton(int count);
+
+  /// No description provided for @bulkTrackingApplyIncomplete.
+  ///
+  /// In ar, this message translates to:
+  /// **'أكمل الخيارات أولًا'**
+  String get bulkTrackingApplyIncomplete;
+
+  /// No description provided for @bulkTrackingApplyWaiting.
+  ///
+  /// In ar, this message translates to:
+  /// **'اضغط «معاينة التغيير» أولًا'**
+  String get bulkTrackingApplyWaiting;
+
+  /// No description provided for @bulkTrackingApplyNothing.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد ما يتغيّر'**
+  String get bulkTrackingApplyNothing;
+
+  /// No description provided for @bulkTrackingConfirmTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تأكيد التغيير'**
+  String get bulkTrackingConfirmTitle;
+
+  /// No description provided for @bulkTrackingConfirmBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيُغيَّر {count} منتجًا. لا يمكن التراجع عن ذلك بنقرة واحدة: العودة إلى الحالة السابقة تتطلب تعديل المنتجات يدويًا.'**
+  String bulkTrackingConfirmBody(int count);
+
+  /// No description provided for @bulkTrackingConfirmSkipped.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} صنفًا بلا رصيد لن يُمسّ.'**
+  String bulkTrackingConfirmSkipped(int count);
+
+  /// No description provided for @bulkTrackingConfirmAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'نعم، طبّق'**
+  String get bulkTrackingConfirmAction;
+
+  /// No description provided for @bulkTrackingSending.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ التطبيق. أبقِ هذه الصفحة مفتوحة.'**
+  String get bulkTrackingSending;
+
+  /// No description provided for @bulkTrackingProgress.
+  ///
+  /// In ar, this message translates to:
+  /// **'تمّ إرسال {sent} من {total}'**
+  String bulkTrackingProgress(int sent, int total);
+
+  /// No description provided for @bulkTrackingInterrupted.
+  ///
+  /// In ar, this message translates to:
+  /// **'انقطع الاتصال بعد {sent} من {total}. المتبقي {remaining} منتجًا ولم يُرسل بعد.'**
+  String bulkTrackingInterrupted(int sent, int total, int remaining);
+
+  /// No description provided for @bulkTrackingResume.
+  ///
+  /// In ar, this message translates to:
+  /// **'إكمال الباقي'**
+  String get bulkTrackingResume;
+
+  /// No description provided for @bulkTrackingResultTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'نتيجة التطبيق'**
+  String get bulkTrackingResultTitle;
+
+  /// No description provided for @bulkTrackingResultDone.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيّر {count} منتجًا'**
+  String bulkTrackingResultDone(int count);
+
+  /// No description provided for @bulkTrackingResultBlocked.
+  ///
+  /// In ar, this message translates to:
+  /// **'رُفض {count} منتجًا'**
+  String bulkTrackingResultBlocked(int count);
+
+  /// No description provided for @bulkTrackingFailuresTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تغيير {count} منتجًا'**
+  String bulkTrackingFailuresTitle(int count);
+
+  /// No description provided for @expiryReminderTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تذكير انتهاء الصلاحية'**
+  String get expiryReminderTitle;
+
+  /// No description provided for @expiryReminderHelp.
+  ///
+  /// In ar, this message translates to:
+  /// **'تنبيه فقط: يصلك إشعار حين يقترب هذا التاريخ ما دام عند الصنف رصيد بلا تاريخ. لا يمنع البيع ولا ينشئ دفعة.'**
+  String get expiryReminderHelp;
+
+  /// No description provided for @expiryReminderNone.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يُحدَّد'**
+  String get expiryReminderNone;
+
+  /// No description provided for @expiryReminderSetAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحديد التاريخ'**
+  String get expiryReminderSetAction;
+
+  /// No description provided for @expiryReminderChangeAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيير'**
+  String get expiryReminderChangeAction;
+
+  /// No description provided for @expiryReminderClearAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسح التذكير'**
+  String get expiryReminderClearAction;
+
+  /// No description provided for @expiryReminderSaveFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر حفظ التذكير. حاول مجددًا.'**
+  String get expiryReminderSaveFailed;
+
+  /// No description provided for @reorderDrawerLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة الطلب'**
+  String get reorderDrawerLabel;
+
+  /// No description provided for @reorderTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعادة الطلب'**
+  String get reorderTitle;
+
+  /// No description provided for @reorderSearchHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث بالاسم أو الرمز'**
+  String get reorderSearchHint;
+
+  /// No description provided for @reorderChooseSupplier.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر موردًا'**
+  String get reorderChooseSupplier;
+
+  /// No description provided for @reorderApproachingLabel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إظهار ما سينخفض قريبًا'**
+  String get reorderApproachingLabel;
+
+  /// No description provided for @reorderApproachingHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'يضيف الأصناف التي تزيد على حدها بقطعة أو قطعتين، أو التي ستبلغه خلال أسبوع حسب مبيعاتها. عند الإيقاف يظهر فقط ما بلغ حده أو نزل عنه.'**
+  String get reorderApproachingHint;
+
+  /// No description provided for @reorderColumnProduct.
+  ///
+  /// In ar, this message translates to:
+  /// **'المنتج'**
+  String get reorderColumnProduct;
+
+  /// No description provided for @reorderColumnStatus.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحالة'**
+  String get reorderColumnStatus;
+
+  /// No description provided for @reorderColumnOnHand.
+  ///
+  /// In ar, this message translates to:
+  /// **'المتوفر'**
+  String get reorderColumnOnHand;
+
+  /// No description provided for @reorderColumnThreshold.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحد'**
+  String get reorderColumnThreshold;
+
+  /// No description provided for @reorderColumnExpected.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيد الطلب'**
+  String get reorderColumnExpected;
+
+  /// No description provided for @reorderColumnQuantity.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكمية'**
+  String get reorderColumnQuantity;
+
+  /// No description provided for @reorderStatusApproaching.
+  ///
+  /// In ar, this message translates to:
+  /// **'قريب من الحد'**
+  String get reorderStatusApproaching;
+
+  /// No description provided for @reorderDaysLeft.
+  ///
+  /// In ar, this message translates to:
+  /// **'{days, plural, =0{يبلغ الحد خلال أقل من يوم} =1{يبلغ الحد خلال نحو يوم} =2{يبلغ الحد خلال نحو يومين} few{يبلغ الحد خلال نحو {days} أيام} other{يبلغ الحد خلال نحو {days} يومًا}}'**
+  String reorderDaysLeft(int days);
+
+  /// No description provided for @reorderLastSupplier.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر شراء من {supplier}'**
+  String reorderLastSupplier(String supplier);
+
+  /// No description provided for @reorderInDraft.
+  ///
+  /// In ar, this message translates to:
+  /// **'في مسودة: {quantity}'**
+  String reorderInDraft(String quantity);
+
+  /// No description provided for @reorderEmptyTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا شيء يحتاج إلى إعادة الطلب الآن'**
+  String get reorderEmptyTitle;
+
+  /// No description provided for @reorderEmptySupplierTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا شيء من منتجات هذا المورد يحتاج إلى إعادة الطلب'**
+  String get reorderEmptySupplierTitle;
+
+  /// No description provided for @reorderEmptyMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'تظهر هنا الأصناف التي حددت لها حد مخزون منخفض في صفحة المنتج.'**
+  String get reorderEmptyMessage;
+
+  /// No description provided for @reorderLoadError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل قائمة إعادة الطلب.'**
+  String get reorderLoadError;
+
+  /// No description provided for @reorderMoreRowsHidden.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{يوجد صنف آخر غير معروض، والأكثر إلحاحًا أولًا.} =2{يوجد صنفان آخران غير معروضين، والأكثر إلحاحًا أولًا.} other{{count} صنفًا آخر غير معروضة، والأكثر إلحاحًا أولًا.}}'**
+  String reorderMoreRowsHidden(int count);
+
+  /// No description provided for @reorderSupplierRequiredHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر موردًا لإنشاء أمر شراء'**
+  String get reorderSupplierRequiredHint;
+
+  /// No description provided for @reorderCreateOrderAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنشاء أمر شراء'**
+  String get reorderCreateOrderAction;
+
+  /// No description provided for @reorderCreateOrderError.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر إنشاء أمر الشراء. حاول مجددًا.'**
+  String get reorderCreateOrderError;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلى {account} · {item}'**
+  String posAccountCartSubtitle(String account, String item);
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'بالمعرّف'**
+  String get posVoucherStickerById;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلى تيليجرام'**
+  String get posVoucherStickerTelegram;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلى حساب ستيم'**
+  String get posVoucherStickerSteamLogin;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'هدية برابط'**
+  String get posVoucherStickerSteamGift;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'طلبات الكروت'**
+  String get posShortcutCardRequests;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'حساب الزبون'**
+  String get voucherAccountSectionTitle;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر الكمية'**
+  String get voucherAccountPickAmount;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'حسابات سابقة'**
+  String get voucherAccountSavedTitle;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'حسابات الزبون أولاً'**
+  String get voucherAccountSavedForCustomer;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا حسابات محفوظة بعد. يُحفظ الحساب تلقائياً بعد أول بيع له.'**
+  String get voucherAccountSavedEmpty;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا حساب محفوظ بهذا. تابع إن كان حساباً جديداً.'**
+  String get voucherAccountSavedNoMatch;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'توجد حسابات أخرى: اكتب المعرّف أو الاسم لتجدها.'**
+  String get voucherAccountSavedMore;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتب المعرّف أو ابحث بالاسم'**
+  String get voucherAccountSearchHint;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'حساب آخر'**
+  String get voucherAccountOther;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسمية'**
+  String get voucherAccountRename;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم هذا الحساب عندك'**
+  String get voucherAccountRenameTitle;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'مثلاً: أحمد الجار'**
+  String get voucherAccountRenameHint;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف من القائمة'**
+  String get voucherAccountForget;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ'**
+  String get voucherAccountSave;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء'**
+  String get voucherAccountCancel;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} مرة'**
+  String voucherAccountUsedTimes(int count);
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'جارٍ التحقق من الحساب…'**
+  String get voucherAccountChecking;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحساب: {name}'**
+  String voucherAccountFound(String name);
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الحساب موجود'**
+  String get voucherAccountFoundNoName;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد حساب بهذا المعرّف. راجعه مع الزبون.'**
+  String get voucherAccountNotFound;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر التحقق الآن. تأكد من المعرّف مع الزبون: لا يُسترجع الشحن من حساب خاطئ.'**
+  String get voucherAccountCouldNotTell;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'راجع المعرّف مع الزبون: لا يُسترجع الشحن من حساب خاطئ.'**
+  String get voucherAccountNoCheck;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل الحساب أولاً'**
+  String get voucherAccountEnterFirst;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل {label}.'**
+  String voucherAccountProblemRequired(String label);
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'{label} أطول من المسموح.'**
+  String voucherAccountProblemTooLong(String label);
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر {label} من القائمة.'**
+  String voucherAccountProblemChoice(String label);
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم مستخدم تيليجرام غير صحيح: من 4 إلى 32 حرفاً إنجليزياً أو رقماً أو _.'**
+  String get voucherAccountProblemTelegram;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسم دخول ستيم غير صحيح: حروف إنجليزية وأرقام و _ فقط.'**
+  String get voucherAccountProblemSteamLogin;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'رابط دعوة ستيم غير صحيح: انسخه كما هو، ويبدأ بـ https://s.team/p/'**
+  String get voucherAccountProblemInvite;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُرسل الطلب، وما زال قيد التنفيذ'**
+  String get cardRequestFollowingTitle;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا تنتظر ولا تُعد العملية: تابع البيع، وستصلك النتيجة في لوحة طلبات الكروت.'**
+  String get cardRequestFollowingHint;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا تنتظر ولا تُعد العملية: تابع البيع. ستصلك النتيجة في لوحة طلبات الكروت، ويُطبع الإيصال عند الاكتمال.'**
+  String get cardRequestFollowingHintPrint;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم الشحن'**
+  String get cardRequestDelivered;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'طلبات الكروت'**
+  String get cardRequestsTitle;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا طلبات بعد.'**
+  String get cardRequestsEmpty;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إغلاق'**
+  String get cardRequestsClose;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'الطلبات'**
+  String get cardRequestsPillIdle;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count} قيد التنفيذ'**
+  String cardRequestsPillOpen(int count);
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يُرسل بعد'**
+  String get cardRequestStateQueued;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيد التنفيذ'**
+  String get cardRequestStateWorking;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'متأخر: لا تُعد العملية'**
+  String get cardRequestStateLate;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم'**
+  String get cardRequestStateSucceeded;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'فشل'**
+  String get cardRequestStateFailed;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُلغي'**
+  String get cardRequestStateCancelled;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرسال الآن'**
+  String get cardRequestSend;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'منذ {time}'**
+  String cardRequestElapsed(String time);
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'فاتورة {number}'**
+  String cardRequestReceipt(String number);
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'طباعة الإيصال'**
+  String get cardRequestPrint;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'نسخ'**
+  String get cardRequestCopy;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'نُسخ الرمز'**
+  String get cardRequestCopied;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'يتأخر المزوّد أكثر من المعتاد. النتيجة ستظهر هنا؛ لا تبع الطلب مرة أخرى ولا تُرجع المبلغ.'**
+  String get cardRequestLateHint;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'أعد للزبون {amount}: سُجّل الإرجاع في الدرج.'**
+  String cardRequestRefunded(String amount);
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يُرجع المبلغ تلقائياً (الدرج مغلق أو البيع آجل): راجع الفاتورة.'**
+  String get cardRequestNotRefunded;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم: {label}'**
+  String cardRequestNoticeDone(String label);
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'فشل: {label}'**
+  String cardRequestNoticeFailed(String label);
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'إخفاء'**
+  String get cardRequestNoticeDismiss;
+
+  /// Till: game top-ups by account and the card requests panel.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرض'**
+  String get cardRequestNoticeOpen;
+
+  /// Till: the sale's receipt waits for the slow supplier to finish.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُطبع الإيصال عند اكتمال الطلب'**
+  String get cardRequestReceiptFollows;
 }
 
 class _AppLocalizationsDelegate

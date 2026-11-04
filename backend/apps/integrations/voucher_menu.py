@@ -21,6 +21,11 @@ from __future__ import annotations
 import base64
 from decimal import Decimal
 
+from apps.attachments.models import Attachment
+from apps.catalog.models import Product, ProductVariant
+from apps.catalog.services import image_attachment_prefetch
+from apps.catalog.serializers import primary_attachment_summary
+
 from . import (
     catalog,
     company_account,
@@ -42,7 +47,7 @@ from .serializers import exceeds_float
 PROVIDER = catalog.POINTY.key
 
 
-def menu_payload(request, *, with_cost: bool) -> dict:
+def menu_payload(request, *, with_cost: bool, with_accounts: bool = False) -> dict:
     """The whole menu, or ``available: false`` with why the shop cannot sell."""
     payload = {
         "available": False,
@@ -94,6 +99,8 @@ def menu_payload(request, *, with_cost: bool) -> dict:
         .defer("print_logo")
         .order_by("rank", "name", "code")
     )
+    if not with_accounts:
+        brands = [brand for brand in brands if not brand.target]
     cards: dict[int, list] = {}
     for voucher in IntegrationVoucher.objects.filter(
         account=account,
@@ -105,7 +112,19 @@ def menu_payload(request, *, with_cost: bool) -> dict:
     brands = [brand for brand in brands if cards.get(brand.pk)]
     countries = list(IntegrationVoucherCountry.objects.filter(account=account))
     names = {country.code: country.name for country in countries}
-    products = _products(request, brands)
+    products = _products(request, brands, slim=with_accounts)
+    # A till that asks for accounts builds each card's cart line from the card
+    # itself, so the product need not repeat every variant (the shelf is 5,000+
+    # cards, and that repetition was six of the menu's seven and a half MB).
+    skus = (
+        dict(
+            ProductVariant.objects.filter(
+                pk__in=[voucher.variant_id for rows in cards.values() for voucher in rows]
+            ).values_list("pk", "sku")
+        )
+        if with_accounts
+        else None
+    )
 
     payload["available"] = True
     payload["categories"] = _categories(brands)
@@ -127,16 +146,46 @@ def menu_payload(request, *, with_cost: bool) -> dict:
             product=products.get(brand.product_id),
             names=names,
             with_cost=with_cost,
+            skus=skus,
         )
         for brand in brands
     ]
     return payload
 
 
-def _products(request, brands) -> dict:
+def _products(request, brands, *, slim: bool = False) -> dict:
     from apps.catalog.views import catalog_list_payloads
 
-    return catalog_list_payloads(request, [brand.product_id for brand in brands])
+    ids = [brand.product_id for brand in brands]
+    return _slim_products(request, ids) if slim else catalog_list_payloads(request, ids)
+
+
+def _slim_products(request, ids) -> dict:
+    """What a till that builds its lines from the cards needs of each product.
+
+    Not the catalog list's payload with its variants cut off: serializing those
+    was nine tenths of the menu's time on a shelf of 5,000 cards.
+    """
+    context = {"request": request}
+    rows = Product.objects.filter(pk__in=ids).prefetch_related(
+        image_attachment_prefetch("attachments")
+    )
+    return {
+        product.pk: {
+            "id": product.pk,
+            "name": product.name,
+            "is_active": product.is_active,
+            "is_service": product.is_service,
+            "is_system": product.is_system,
+            "system_kind": product.system_kind,
+            "unit": product.unit,
+            "quantity_on_hand": 0,
+            "primary_image": primary_attachment_summary(
+                product, role=Attachment.Role.PRODUCT_IMAGE, context=context
+            ),
+        }
+        for product in rows
+    }
 
 
 def _categories(brands) -> list[dict]:
@@ -152,7 +201,7 @@ def _categories(brands) -> list[dict]:
     ]
 
 
-def _brand_payload(account, brand, rows, *, product, names, with_cost) -> dict:
+def _brand_payload(account, brand, rows, *, product, names, with_cost, skus=None) -> dict:
     return {
         "key": brand.code,
         "name": brand.name,
@@ -163,15 +212,17 @@ def _brand_payload(account, brand, rows, *, product, names, with_cost) -> dict:
         "badge": brand.badge,
         "has_promo": any(voucher.has_promo for voucher in rows),
         "redeem_hint": brand.redeem_hint,
+        # What the cashier asks for when the card is sent to an account.
+        **({"target": brand.target} if brand.target else {}),
         "product": product,
         "items": [
-            _card_payload(account, brand, voucher, names=names, with_cost=with_cost)
+            _card_payload(account, brand, voucher, names=names, with_cost=with_cost, skus=skus)
             for voucher in rows
         ],
     }
 
 
-def _card_payload(account, brand, voucher, *, names, with_cost) -> dict:
+def _card_payload(account, brand, voucher, *, names, with_cost, skus=None) -> dict:
     price = vouchers.voucher_price(account, voucher)
     card = {
         "variant_id": voucher.variant_id,
@@ -196,6 +247,8 @@ def _card_payload(account, brand, voucher, *, names, with_cost) -> dict:
     }
     if with_cost:
         card["cost"] = _money(voucher.cost)
+    if skus is not None:
+        card["sku"] = skus.get(voucher.variant_id, "")
     return card
 
 

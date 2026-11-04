@@ -9,6 +9,7 @@ import '../models/attachment_summary.dart';
 import '../models/barcode_resolution.dart';
 import '../models/bulk_price_preview.dart';
 import '../models/bulk_price_rule.dart';
+import '../models/bulk_tracking_change.dart';
 import '../models/bought_together_product.dart';
 import '../models/catalog_identity_conflict.dart';
 import '../models/customer_asset.dart';
@@ -227,6 +228,35 @@ class CatalogRepository {
       fingerprint: fingerprint,
     ),
   );
+
+  Future<Result<BulkTrackingPreview>> previewBulkTrackingChange({
+    required BulkTrackingAction action,
+    required BulkPriceGroup filter,
+  }) => Result.guard(
+    () => _service.previewBulkTrackingChange(
+      action: action,
+      filter: filter.toJson(),
+    ),
+  );
+
+  /// One batch of at most 200 product ids; the view model does the batching.
+  Future<Result<BulkTrackingApplyResult>> applyBulkTrackingChange({
+    required BulkTrackingAction action,
+    required BulkPriceGroup filter,
+    required List<int> productIds,
+  }) => Result.guard(
+    () => _service.applyBulkTrackingChange(
+      action: action,
+      filter: filter.toJson(),
+      productIds: productIds,
+    ),
+  );
+
+  /// Sets (or, with null, clears) a variant's expiry reminder date.
+  Future<Result<ProductVariant>> setVariantExpiryReminder(
+    int variantId,
+    DateTime? date,
+  ) => Result.guard(() => _service.setVariantExpiryReminder(variantId, date));
 
   Future<Result<List<BulkPriceChangeRecord>>> loadBulkPriceChanges() =>
       Result.guard(_service.fetchBulkPriceChanges);

@@ -36,6 +36,11 @@ ERROR_INSUFFICIENT_FLOAT = "insufficient_float"  # the agency float cannot cover
 #: failure: a charge may have left the float, so the only safe reaction is to
 #: stop and go looking, never to try again.
 ERROR_INDETERMINATE = "indeterminate"
+#: The ``error_detail`` of an indeterminate answer with a known reason: the
+#: provider took the order and is still working on it (a supplier can take
+#: minutes). Nothing was lost; it is read back until it ends. Still
+#: ``ERROR_INDETERMINATE`` to everything that guards a charge.
+DETAIL_IN_PROGRESS = "the purchase is still pending"
 #: The provider knows the password is right and still will not let this
 #: machine in until the owner confirms it once with a one-time code. Qareeb
 #: answers a password login from a device it has not seen with exactly that.
@@ -569,6 +574,10 @@ class VoucherBrand:
     category_rank: int = 0
     redeem_hint: str = ""
     aliases: tuple[str, ...] = ()
+    #: For a brand whose cards are credit sent to an account, what the buyer
+    #: types (the relay's ``target``: ``kind``, ``fields``, ``hint``); ``None``
+    #: for a brand of codes. Left out of the hash: a dict has none.
+    target: dict | None = field(default=None, hash=False)
 
 
 @dataclass(frozen=True)
@@ -796,6 +805,10 @@ class IntegrationProvider:
         #: says (:meth:`bind`). A driver that needs more than the arguments
         #: carry reads it; every other driver never looks.
         self.fulfillment = None
+
+    #: Set for one call: the buyer follows the order itself, so a supplier need
+    #: not hold the answer back while the order finishes (``recharge.charge``).
+    answer_at_once = False
 
     def bind(self, fulfillment) -> "IntegrationProvider":
         """Say which fulfillment the next ``recharge`` / ``attempt_outcome`` is for.

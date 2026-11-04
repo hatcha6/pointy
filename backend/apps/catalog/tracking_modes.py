@@ -108,7 +108,7 @@ def _refuse(message, **extra):
 
 
 def assert_mode_change_allowed(
-    product, new_mode, *, identify_later=False, may_identify=True, lock=False
+    product, new_mode, *, identify_later=False, may_identify=True, lock=False, rows=None
 ):
     """Refuse a tracking-mode change that would re-label history.
 
@@ -119,7 +119,9 @@ def assert_mode_change_allowed(
     the server would refuse anyway. ``lock`` is for the second asking, inside
     the write's own transaction: ``validate`` reads the shelf without a lock,
     and a sale landing between the two must not leave stock the new mode
-    cannot explain.
+    cannot explain. ``rows`` lets a bulk preview hand in the shelf it already
+    loaded, so judging thirteen thousand products is not thirteen thousand
+    queries; a write never passes it.
     """
     if product is None or product.pk is None:
         return []
@@ -149,7 +151,7 @@ def assert_mode_change_allowed(
     # can do is put them on the worklist, and only when they *can* be named.
     from apps.inventory.models import Warehouse
 
-    rows = _stock_rows(product, lock=lock)
+    rows = _stock_rows(product, lock=lock) if rows is None else rows
     held = [row for row in rows if row.quantity_on_hand != 0]
     unit_mode = new_mode in _UNIT_MODES
     # Invariant 2: a unit mode's commitment is the count of reserved units, and

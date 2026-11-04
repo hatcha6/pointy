@@ -270,7 +270,6 @@ ShopSettings _settingsWith({required bool autoPrint}) => ShopSettings(
   autoPrintReceipts: autoPrint,
   allowOverselling: true,
   preventSellingAtLoss: true,
-  lowStockThreshold: 5,
   cashierReturnWindowHours: 42,
   enableCashPayments: true,
   enableCardPayments: true,

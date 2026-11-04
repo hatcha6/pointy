@@ -404,13 +404,30 @@ def _settle_attempt(driver, row, *, now) -> str | None:
     old_enough = (
         row.submitted_at is None or row.submitted_at <= now - ATTEMPT_SETTLE_AFTER
     )
-    if (
-        outcome.state in (ATTEMPT_REFUSED, ATTEMPT_ABSENT)
-        and old_enough
-        and _close_attempt(row, outcome, now=now)
-    ):
+    # The relay's own word that this very purchase failed needs no waiting; only
+    # "never heard of it" does, because the request may still be on its way.
+    closes = outcome.state == ATTEMPT_REFUSED or (
+        outcome.state == ATTEMPT_ABSENT and old_enough
+    )
+    if closes and _close_attempt(row, outcome, now=now):
+        _give_back(row)
         return "not_performed"
     return None
+
+
+def _give_back(row) -> None:
+    """A purchase that ended without delivering owes the customer their money:
+    the same return a refusal at the till makes (:mod:`.refusal_refund`). Never
+    worth failing the settle over: the row is closed either way, and the panel
+    says so when nothing came back."""
+    from . import recharge, refusal_refund
+
+    try:
+        refusal_refund.refund_refused(
+            [recharge.ChargeOutcome(outcome=recharge.OUTCOME_REFUSED, fulfillment=row)]
+        )
+    except Exception:  # noqa: BLE001 - see the docstring
+        logger.exception("giving back fulfillment %s failed", row.pk)
 
 
 def _locked_attempt(row):

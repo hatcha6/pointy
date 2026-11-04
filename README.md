@@ -256,6 +256,20 @@ price or cost moved since. Every apply is recorded and can be undone from
 Preview with `make frontend-bulk-price-preview`
 (`?screen=editor|filtered|selection|history|board`).
 
+Bulk expiry tracking («تتبّع الصلاحية بالجملة», products list «⋯» menu and the
+multi-select bar) reuses the same scope editor, previews through
+`/api/bulk-tracking-changes/preview/` and applies in batches of 100 product
+ids, resuming after a network failure. Preview with
+`make frontend-bulk-tracking-preview`
+(`?screen=tracking|previewed|filtered|selection|reminder|board`).
+
+The reorder queue («إعادة الطلب», stock menu and the catalog's app bar) lists
+variants at or below their low-stock threshold, plus those about to cross it
+(`apps/purchasing/reorder.py`; a switch on the screen leaves exactly at-or-below).
+Pick a supplier, tick rows, and `/api/purchase-orders/from-reorder/` makes a
+draft order. Preview with `make frontend-reorder-preview`
+(`?screen=queue|selected|empty|board`, `&dark=1`).
+
 ## App updates after a backend update
 
 Every API response names the backend's release in `X-Pointy-Server-Version`. When
@@ -276,6 +290,18 @@ under way at the till.
 For that reason, an empty answer is retried for about 15 minutes while the
 backend names a newer release than the app. Preview with
 `make frontend-app-update-preview` (`?screen=board|live`, `&theme=dark`).
+
+## Remote sessions
+
+Every sign-in from outside the shop (the relay's sign-in route, app.dftr.ly)
+is a remote session: its device, address, when it was last used and when it
+ends. A manager sees their own under «إعداداتي»; whoever manages users sees
+anyone's on that person's page, and may end one if they can change users.
+Ending one signs the device out at once and drops its relay tickets; turning
+the shop's remote sign-in off ends them all. A remote session lasts
+`POINTY_REMOTE_SESSION_DAYS` (14) and its tickets end with it. Preview with
+`make frontend-remote-sessions-preview`
+(`?screen=board|own|user|empty|error|dark`).
 
 ## Product page
 

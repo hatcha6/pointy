@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../data/models/receipt_capture.dart';
 import '../../../shared/barcode/barcode_scan_listener.dart';
-import '../../../shared/date_formatters.dart';
 import '../../../shared/design/design.dart';
+import '../../../shared/tracking/expiry_date_field.dart';
 import '../../../shared/units.dart';
 
 /// The multi-lot intake sheet: which lots arrived, and how much of each.
@@ -15,6 +16,12 @@ import '../../../shared/units.dart';
 /// quantities do not add up to what was accepted is a receipt the backend
 /// refuses, and it refuses it here first so the receiver finds out while the
 /// boxes are still in front of them.
+///
+/// A lot **number** is never required: a shop that tracks expiry and has never
+/// been told a batch number leaves it blank and the server files the goods
+/// under a generated one («بدون رقم دفعة»). The expiry is typed (`12/27`), and
+/// Enter on it — or Ctrl/⌘+Enter anywhere — confirms, so a keyboard-only
+/// receiver never reaches for the mouse.
 Future<List<ReceiptBatchCapture>?> showBatchCaptureSheet(
   BuildContext context, {
   required String productLabel,
@@ -113,9 +120,6 @@ class _BatchCaptureSheetState extends State<_BatchCaptureSheet> {
 
   /// Why confirming is not possible yet, in the receiver's terms — or empty.
   String _blockedReason(AppLocalizations l10n) {
-    if (_rows.any((row) => row.code.trim().isEmpty)) {
-      return l10n.batchCaptureBlockedCode;
-    }
     if (widget.expiryRequired && _rows.any((row) => row.expiryDate == null)) {
       return l10n.batchCaptureBlockedExpiry;
     }
@@ -150,6 +154,12 @@ class _BatchCaptureSheetState extends State<_BatchCaptureSheet> {
     });
   }
 
+  void _confirm() {
+    if (_canConfirm) {
+      Navigator.of(context).pop(_rows);
+    }
+  }
+
   void _removeAt(int index) {
     setState(() {
       _rowIds.removeAt(index);
@@ -163,112 +173,124 @@ class _BatchCaptureSheetState extends State<_BatchCaptureSheet> {
     final theme = Theme.of(context);
     final colors = context.pointyColors;
 
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          16,
-          0,
-          16,
-          16 + MediaQuery.of(context).viewInsets.bottom,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.inventory_2_outlined),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    widget.productLabel,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleMedium,
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.enter, control: true):
+            _confirm,
+        const SingleActivator(LogicalKeyboardKey.enter, meta: true): _confirm,
+        const SingleActivator(LogicalKeyboardKey.numpadEnter, control: true):
+            _confirm,
+      },
+      child: SafeArea(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            16,
+            0,
+            16,
+            16 + MediaQuery.of(context).viewInsets.bottom,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.inventory_2_outlined),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      widget.productLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium,
+                    ),
                   ),
-                ),
-                Text(
-                  l10n.batchCaptureProgress(
-                    formatQuantity(_captured),
-                    formatQuantity(widget.expectedQuantity),
+                  Text(
+                    l10n.batchCaptureProgress(
+                      formatQuantity(_captured),
+                      formatQuantity(widget.expectedQuantity),
+                    ),
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: _residual.abs() < 0.0005
+                          ? colors.primaryStrong
+                          : colors.warning,
+                    ),
                   ),
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    color: _residual.abs() < 0.0005
-                        ? colors.primaryStrong
-                        : colors.warning,
-                  ),
-                ),
-              ],
-            ),
-            const Divider(height: 16),
-            Flexible(
-              child: ListView.separated(
-                shrinkWrap: true,
-                itemCount: _rows.length,
-                separatorBuilder: (_, _) => const Divider(height: 12),
-                itemBuilder: (context, index) {
-                  return _BatchRowEditor(
-                    key: ValueKey('batch-row-${_rowIds[index]}'),
-                    row: _rows[index],
-                    expiryRequired: widget.expiryRequired,
-                    canRemove: _rows.length > 1,
-                    onChanged: (row) => _update(index, row),
-                    onRemove: () => _removeAt(index),
-                  );
-                },
+                ],
               ),
-            ),
-            const SizedBox(height: 8),
-            if (!widget.singleLot)
-              Align(
-                alignment: AlignmentDirectional.centerStart,
-                child: TextButton.icon(
-                  onPressed: _addRow,
-                  icon: const Icon(Icons.add),
-                  label: Text(l10n.batchCaptureAddLot),
+              const Divider(height: 16),
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: _rows.length,
+                  separatorBuilder: (_, _) => const Divider(height: 12),
+                  itemBuilder: (context, index) {
+                    return _BatchRowEditor(
+                      key: ValueKey('batch-row-${_rowIds[index]}'),
+                      row: _rows[index],
+                      expiryRequired: widget.expiryRequired,
+                      canRemove: _rows.length > 1,
+                      // The date is what most receivers came to type; the
+                      // number, when there is one, is a scan into the field
+                      // beside it.
+                      autofocusExpiry: index == 0,
+                      onChanged: (row) => _update(index, row),
+                      onRemove: () => _removeAt(index),
+                      onExpirySubmitted: _confirm,
+                    );
+                  },
                 ),
               ),
-            const SizedBox(height: 4),
-            if (!_canConfirm)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  children: [
-                    Icon(Icons.info_outline, size: 16, color: colors.warning),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        _blockedReason(l10n),
-                        key: const ValueKey('batch-capture-blocked'),
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: colors.warning,
+              const SizedBox(height: 8),
+              if (!widget.singleLot)
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: TextButton.icon(
+                    onPressed: _addRow,
+                    icon: const Icon(Icons.add),
+                    label: Text(l10n.batchCaptureAddLot),
+                  ),
+                ),
+              const SizedBox(height: 4),
+              if (!_canConfirm)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline, size: 16, color: colors.warning),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          _blockedReason(l10n),
+                          key: const ValueKey('batch-capture-blocked'),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colors.warning,
+                          ),
                         ),
                       ),
+                    ],
+                  ),
+                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: Text(l10n.cancelButton),
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton(
+                      key: const ValueKey('batch-capture-confirm'),
+                      onPressed: _canConfirm ? _confirm : null,
+                      child: Text(l10n.batchCaptureConfirm),
+                    ),
+                  ),
+                ],
               ),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: Text(l10n.cancelButton),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton(
-                    key: const ValueKey('batch-capture-confirm'),
-                    onPressed: _canConfirm
-                        ? () => Navigator.of(context).pop(_rows)
-                        : null,
-                    child: Text(l10n.batchCaptureConfirm),
-                  ),
-                ),
-              ],
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -283,10 +305,14 @@ class _BatchRowEditor extends StatelessWidget {
     required this.onChanged,
     required this.onRemove,
     this.expiryRequired = false,
+    this.autofocusExpiry = false,
+    this.onExpirySubmitted,
   });
 
   final ReceiptBatchCapture row;
   final bool expiryRequired;
+  final bool autofocusExpiry;
+  final VoidCallback? onExpirySubmitted;
   final bool canRemove;
   final ValueChanged<ReceiptBatchCapture> onChanged;
   final VoidCallback onRemove;
@@ -305,9 +331,13 @@ class _BatchRowEditor extends StatelessWidget {
               child: ScanWedgeTarget(
                 child: TextFormField(
                   initialValue: row.code,
+                  textInputAction: TextInputAction.next,
                   decoration: InputDecoration(
                     isDense: true,
-                    labelText: l10n.batchCaptureLotCode,
+                    labelText: l10n.batchCaptureLotCodeOptional,
+                    helperText: row.code.trim().isEmpty
+                        ? l10n.batchCaptureLotCodeGenerated
+                        : null,
                   ),
                   onChanged: (value) => onChanged(row.copyWith(code: value)),
                 ),
@@ -321,6 +351,7 @@ class _BatchRowEditor extends StatelessWidget {
                     ? formatQuantity(row.quantity)
                     : '',
                 textAlign: TextAlign.center,
+                textInputAction: TextInputAction.next,
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
@@ -344,16 +375,13 @@ class _BatchRowEditor extends StatelessWidget {
         Row(
           children: [
             Expanded(
-              child: _ExpiryField(
-                label: expiryRequired
-                    ? '${l10n.batchCaptureExpiry} *'
-                    : l10n.batchCaptureExpiry,
-                error: expiryRequired && row.expiryDate == null
-                    ? l10n.batchCaptureExpiryRequired
-                    : null,
+              child: ExpiryDateField(
                 value: row.expiryDate,
+                required: expiryRequired,
+                autofocus: autofocusExpiry,
                 onChanged: (value) =>
                     onChanged(row.copyWith(expiryDate: value)),
+                onSubmitted: (_) => onExpirySubmitted?.call(),
               ),
             ),
             const SizedBox(width: 10),
@@ -387,49 +415,5 @@ class _BatchRowEditor extends StatelessWidget {
     // The last day of that month: a pack expires in a month, not on a day, and
     // the day on the foil is the last one.
     return DateTime(year, normalizedMonth + 1, 0);
-  }
-}
-
-class _ExpiryField extends StatelessWidget {
-  const _ExpiryField({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-    this.error,
-  });
-
-  final String label;
-  final String? error;
-  final DateTime? value;
-  final ValueChanged<DateTime?> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return InkWell(
-      onTap: () async {
-        final now = DateTime.now();
-        final picked = await showDatePicker(
-          context: context,
-          initialDate: value ?? now,
-          firstDate: DateTime(now.year - 5),
-          lastDate: DateTime(now.year + 20),
-        );
-        if (picked != null) {
-          onChanged(picked);
-        }
-      },
-      child: InputDecorator(
-        decoration: InputDecoration(
-          isDense: true,
-          labelText: label,
-          errorText: error,
-        ),
-        child: Text(
-          value == null ? '—' : formatDate(value!),
-          style: theme.textTheme.bodyMedium,
-        ),
-      ),
-    );
   }
 }

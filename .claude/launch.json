@@ -452,6 +452,24 @@
       "port": 8097
     },
     {
+      "name": "reorder-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": [
+        "frontend-reorder-preview",
+        "WEB_PORT=8193"
+      ],
+      "port": 8193
+    },
+    {
+      "name": "bulk-tracking-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": [
+        "frontend-bulk-tracking-preview",
+        "WEB_PORT=8192"
+      ],
+      "port": 8192
+    },
+    {
       "name": "app-update-preview",
       "runtimeExecutable": "make",
       "runtimeArgs": [
@@ -519,6 +537,25 @@
       "port": 8090
     },
     {
+      "name": "relay-console-cards",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "POINTY_RELAY_CUSTOMER_WEB_ORIGINS=http://localhost:8090,http://127.0.0.1:8090",
+        "bash",
+        "relay/console-ui/scripts/dev-relay.sh"
+      ],
+      "port": 8191
+    },
+    {
+      "name": "cards-preview-console-relay",
+      "runtimeExecutable": "make",
+      "runtimeArgs": [
+        "cards-preview-live",
+        "CARDS_RELAY_URL=http://127.0.0.1:8191"
+      ],
+      "port": 8090
+    },
+    {
       "name": "cards-web",
       "runtimeExecutable": "make",
       "runtimeArgs": [
@@ -539,6 +576,14 @@
         "cards/build/web"
       ],
       "port": 8098
+    },
+    {
+      "name": "remote-sessions-preview",
+      "runtimeExecutable": "make",
+      "runtimeArgs": [
+        "frontend-remote-sessions-preview"
+      ],
+      "port": 8080
     }
   ]
 }

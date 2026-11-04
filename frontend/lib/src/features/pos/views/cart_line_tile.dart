@@ -104,6 +104,15 @@ class CartLineTile extends StatelessWidget {
       title: line.variant.productLabel,
       subtitle: recharge == null
           ? line.variant.variantLabel
+          : recharge.isSentToAccount
+          // A game top-up: who it goes to, as the look-up named them. There
+          // is no taking it back from a wrong account.
+          ? l10n.posAccountCartSubtitle(
+              recharge.accountName.isEmpty
+                  ? ltrIsolated(recharge.subscriberRef)
+                  : '${recharge.accountName} ${ltrIsolated(recharge.subscriberRef)}',
+              line.variant.variantLabel,
+            )
           : recharge.isAirtime
           // Airtime sent to a phone abroad, or a bill paid abroad: its own
           // words, not the «card» of a subscriber's top-up.

@@ -802,6 +802,15 @@ class PurchaseLine(TimeStampedModel):
         validators=[MinValueValidator(Decimal("0.00"))],
     )
     expiry_date = models.DateField(null=True, blank=True, db_index=True)
+    # What the buyer already knows about the goods while typing the order off
+    # the supplier's invoice: the lots and their expiry dates, the serials on
+    # the boxes. The receipt rows' own shape (lot quantities in BASE units),
+    # stored as JSON because nothing is stock until it is received — the
+    # receiving form starts from these, and a receipt that names nothing for
+    # the line takes them as given (``planned_receipt_capture``). ``db_default``
+    # so the release before this one can still insert lines mid-update.
+    planned_units = models.JSONField(default=list, blank=True, db_default=[])
+    planned_batches = models.JSONField(default=list, blank=True, db_default=[])
 
     class Meta:
         ordering = ["created_at"]

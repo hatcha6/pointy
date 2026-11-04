@@ -14,6 +14,7 @@ class ProductVariantDraft {
     this.priceAmount,
     this.openingQuantity,
     this.openingUnitCost,
+    this.lowStockThreshold,
   });
 
   final int? id;
@@ -46,6 +47,12 @@ class ProductVariantDraft {
   final double? openingQuantity;
   final double? openingUnitCost;
 
+  /// The low-stock threshold to write, wrapped so "leave it" and "clear it"
+  /// differ: null sends nothing and the saved one stays (a form that does not
+  /// show the field must not wipe it); `(value: null)` clears it — the variant
+  /// stops being watched; `(value: n)` sets it.
+  final ({double? value})? lowStockThreshold;
+
   Map<String, Object?> toJson({bool includeProduct = true}) {
     return {
       if (id != null) 'id': id,
@@ -60,6 +67,8 @@ class ProductVariantDraft {
       'is_active': isActive,
       'is_default': isDefault,
       'option_values': optionValueIds,
+      if (lowStockThreshold case (:final value))
+        'low_stock_threshold': value?.toStringAsFixed(3),
       if (openingQuantity != null && openingQuantity! > 0) ...{
         'opening_quantity': openingQuantity!.toStringAsFixed(3),
         'opening_unit_cost': (openingUnitCost ?? 0).toStringAsFixed(6),

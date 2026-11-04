@@ -199,6 +199,41 @@ reconciles with `--no-recreate` (availability, not convergence — it will never
 restart the database on its own timer to apply a drift), and if an update dies
 mid-flip it points the front door back at the managed backend.
 
+### A big jump, and flattening imported variants
+
+A shop several releases behind (v0.6.1 → v0.9.9) takes a **restart** update:
+contract migrations between those releases cannot share a database with the old
+backend. `deploy/onprem/UPDATE_STRATEGY.txt` ships that decision in the bundle;
+delete the file again in the release after.
+
+Before updating such a shop, by hand on its machine:
+
+```bash
+df -h /tmp . /var/lib/docker
+```
+
+```bash
+docker exec "$(docker ps -qf name=postgres)" sh -c 'pg_dump -U "${POSTGRES_USER:-pointy}" "${POSTGRES_DB:-pointy}"' | gzip > pre-0.9.9.sql.gz
+```
+
+Allow 4 GB free. Take the dump yourself and check its size: a v0.6.1 compose file
+has a duplicate key that strict `docker compose` refuses to parse, so that
+release's updater skips its own backup with only a warning, and its automatic
+rollback cannot restore the database either. Treat this update as forward only.
+
+After it, on a shop whose import made one variant per barcode:
+
+```bash
+docker compose exec backend python manage.py flatten_imported_variants --report /tmp/flatten.json
+```
+
+That writes nothing. It prints what would merge, what is held for review and why,
+the stock-value line's exact change, and any product whose cost would pass its
+price. Then `--apply`. It is safe while the shop trades and safe to run twice;
+`--include price_differs` also takes aliases whose price had drifted from their
+product's, which then ring at the product's price. Sales, profit and shrinkage do
+not move. Frozen Windows 7/8 tills keep scanning the old codes without an update.
+
 ## Backup Notes
 
 Pointy application backups can write to the internal `pointy-backups` Docker

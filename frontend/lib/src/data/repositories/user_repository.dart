@@ -1,6 +1,7 @@
 import '../../core/result.dart';
 import '../models/permission_catalog.dart';
 import '../models/pos_user.dart';
+import '../models/remote_session.dart';
 import '../models/user_activity.dart';
 import '../services/pos_api_service.dart';
 
@@ -40,5 +41,19 @@ class UserRepository {
 
   Future<Result<UserActivityOverview>> loadUserActivity(int id) async {
     return Result.guard(() => _service.fetchUserActivity(id));
+  }
+
+  /// [userId]'s remote sessions, or the signed-in person's own with none.
+  Future<Result<List<RemoteSession>>> loadRemoteSessions({int? userId}) async {
+    return Result.guard(() => _service.fetchRemoteSessions(userId: userId));
+  }
+
+  Future<Result<RemoteSession>> revokeRemoteSession(
+    int id, {
+    int? userId,
+  }) async {
+    return Result.guard(
+      () => _service.revokeRemoteSession(id, userId: userId),
+    );
   }
 }

@@ -696,6 +696,13 @@ jobs:
              deploy/onprem/move-server.sh \
              deploy/onprem/INSTALL.md deploy/onprem/README.md "${BUNDLE}/"
 
+          # A release that cannot share its database with the one before it
+          # says so in this file, and every updater restarts instead of flipping
+          # live. Delete the file again in the release after.
+          if [ -f deploy/onprem/UPDATE_STRATEGY.txt ]; then
+            cp deploy/onprem/UPDATE_STRATEGY.txt "${BUNDLE}/UPDATE_STRATEGY.txt"
+          fi
+
           # keep-pointy-running.ps1 is what keeps a WSL shop's server up: the
           # installer sets it up, and it must be in the zip for that to happen.
           echo "==> Staging the Windows (WSL) bootstrap…"

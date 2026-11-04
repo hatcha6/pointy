@@ -1,3 +1,4 @@
+import '../../shared/date_formatters.dart';
 import 'attachment_summary.dart';
 import 'product.dart';
 import 'tracking_mode.dart';
@@ -32,6 +33,8 @@ class ProductVariant {
     this.imageAttachments = const [],
     this.priceAmount,
     this.pricingCurrency = '',
+    this.lowStockThreshold,
+    this.expiryReminderDate,
   });
 
   final int id;
@@ -92,6 +95,23 @@ class ProductVariant {
 
   /// The ISO code [priceAmount] is denominated in; blank when base-priced.
   final String pricingCurrency;
+
+  /// The shop-wide on-hand count, in base units, at or below which this
+  /// variant is low and raises a notification. Null: the variant is not
+  /// watched — never shown as low, never alerted on.
+  final double? lowStockThreshold;
+
+  /// A soft date to be reminded on, for stock bought with no dates. Not a lot:
+  /// it never stops a sale. Null: no reminder. A calendar day, no time.
+  final DateTime? expiryReminderDate;
+
+  /// Whether [quantity] counts as low for this variant: watched, and at or
+  /// below its threshold. An empty shelf is "out", not "low"; callers check
+  /// that first.
+  bool isLowStock(double quantity) {
+    final threshold = lowStockThreshold;
+    return threshold != null && quantity <= threshold;
+  }
 
   /// Whether this row is maintained in a foreign price sheet.
   bool get hasForeignPrice => priceAmount != null && pricingCurrency.isNotEmpty;
@@ -235,6 +255,8 @@ class ProductVariant {
       primaryImage: _primaryImageFromJson(json),
       imageAttachments: _imageAttachmentsFromJson(json),
       priceAmount: _optionalMoneyFromJson(json['price_amount']),
+      lowStockThreshold: _optionalMoneyFromJson(json['low_stock_threshold']),
+      expiryReminderDate: _dateOnlyFromJson(json['expiry_reminder_date']),
       // The currency lives on the parent product (it describes the price sheet,
       // not the row), so it is read from the embedded detail when present.
       pricingCurrency:
@@ -283,6 +305,9 @@ class ProductVariant {
       'is_prepared': isPrepared,
       'unit': unit,
       'quantity_on_hand': quantityOnHand,
+      if (lowStockThreshold != null) 'low_stock_threshold': lowStockThreshold,
+      if (expiryReminderDate != null)
+        'expiry_reminder_date': formatApiDate(expiryReminderDate!),
       'option_values': optionValueIds,
       'product_detail': productDetail?.toCartJson(),
     };
@@ -325,6 +350,8 @@ class ProductVariant {
       primaryImage: primaryImage,
       imageAttachments: imageAttachments,
       priceAmount: priceAmount,
+      lowStockThreshold: lowStockThreshold,
+      expiryReminderDate: expiryReminderDate,
       // Like the mode, the currency is the product's: a catalog-list row
       // carries its `price_amount` but not the currency it is written in.
       // Re-attached to its product, it takes the product's, or the till shows
@@ -332,6 +359,16 @@ class ProductVariant {
       pricingCurrency: productDetail?.pricingCurrency ?? pricingCurrency,
     );
   }
+}
+
+DateTime? _dateOnlyFromJson(Object? value) {
+  final match = RegExp(r'^(\d{4})-(\d{2})-(\d{2})').firstMatch('${value ?? ''}');
+  if (match == null) return null;
+  return DateTime(
+    int.parse(match[1]!),
+    int.parse(match[2]!),
+    int.parse(match[3]!),
+  );
 }
 
 AttachmentSummary? _primaryImageFromJson(Map<String, Object?> json) {

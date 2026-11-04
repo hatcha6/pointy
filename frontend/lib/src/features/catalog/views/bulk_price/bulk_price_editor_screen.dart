@@ -6,17 +6,15 @@ import '../../../../data/models/bulk_price_preview.dart';
 import '../../../../data/models/bulk_price_rule.dart';
 import '../../../../data/repositories/catalog_repository.dart';
 import '../../../../data/repositories/contact_repository.dart';
-import '../../../../shared/async_selection/async_multi_select_picker.dart';
 import '../../../../shared/components/components.dart';
-import '../../../../shared/contact_picker_sheet.dart';
 import '../../../../shared/design/design.dart';
-import '../../../../shared/product_category_picker.dart';
 import '../../../../shared/responsive/responsive.dart';
 import '../../view_models/bulk_price_editor_view_model.dart';
 import 'bulk_price_condition_editor.dart';
 import 'bulk_price_history_sheet.dart';
 import 'bulk_price_labels.dart';
 import 'bulk_price_preview_panel.dart';
+import 'bulk_price_ref_picker.dart';
 import 'bulk_price_step_card.dart';
 
 /// Opens the rule-driven bulk price editor. [selectedProducts] (from the
@@ -100,42 +98,13 @@ class _BulkPriceEditorScreenState extends State<BulkPriceEditorScreen> {
     BuildContext context,
     BulkPriceField field,
     List<BulkPriceRef> current,
-  ) async {
-    final l10n = AppLocalizations.of(context)!;
-    if (field == BulkPriceField.category) {
-      final picked = await showAsyncMultiSelectPicker<int>(
-        context: context,
-        strings: productCategoryPickerStrings(l10n),
-        selected: [
-          for (final ref in current)
-            AsyncSelectionOption(id: ref.id, label: ref.label, subtitle: ''),
-        ],
-        loadPage: (search, page) => loadProductCategorySelectionPage(
-          catalogRepository: widget.catalogRepository,
-          search: search,
-          page: page,
-        ),
-      );
-      if (picked == null) return null;
-      return [
-        for (final option in picked)
-          BulkPriceRef(id: option.id, label: option.label),
-      ];
-    }
-    final repository = widget.contactRepository;
-    if (field == BulkPriceField.supplier && repository != null) {
-      final supplier = await showSupplierPickerSheet(
-        context: context,
-        repository: repository,
-      );
-      if (supplier == null) return null;
-      return [
-        ...current.where((ref) => ref.id != supplier.id),
-        BulkPriceRef(id: supplier.id, label: supplier.name),
-      ];
-    }
-    return null;
-  }
+  ) => pickBulkPriceRefs(
+    context,
+    catalogRepository: widget.catalogRepository,
+    contactRepository: widget.contactRepository,
+    field: field,
+    current: current,
+  );
 
   Future<void> _apply() async {
     final l10n = AppLocalizations.of(context)!;

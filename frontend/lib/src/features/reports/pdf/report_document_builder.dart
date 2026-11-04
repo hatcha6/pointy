@@ -435,10 +435,6 @@ List<ReportPdfField> _shopSettingFieldsForReport(
     ReportRunType.stockMovements ||
     ReportRunType.reorderItems => [
       ReportPdfField(
-        label: 'حد تنبيه المخزون المنخفض',
-        value: '${settings.lowStockThreshold}',
-      ),
-      ReportPdfField(
         label: 'طريقة تقييم المخزون',
         value: _valuationMethodLabel(settings.inventoryValuationMethod),
       ),
@@ -448,10 +444,6 @@ List<ReportPdfField> _shopSettingFieldsForReport(
       ),
     ],
     ReportRunType.purchasingSummary || ReportRunType.payablesAging => [
-      ReportPdfField(
-        label: 'حد تنبيه المخزون المنخفض',
-        value: '${settings.lowStockThreshold}',
-      ),
       if (settings.enableTransferPayments)
         ReportPdfField(
           label: 'عمولة التحويل',

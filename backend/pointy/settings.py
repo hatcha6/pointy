@@ -31,6 +31,7 @@ env = environ.Env(
     POINTY_IMAGE_IMPORT_TOKEN_MAX_AGE_SECONDS=(int, 60 * 60),
     POINTY_RELAY_REQUEST_TIMEOUT_SECONDS=(int, 5),
     POINTY_RELAY_PAIRING_BUDGET_SECONDS=(int, 8),
+    POINTY_REMOTE_SESSION_DAYS=(int, 14),
     POINTY_RELAY_UNAVAILABLE_COOLDOWN_SECONDS=(int, 300),
     POINTY_RELAY_AI_REQUEST_TIMEOUT_SECONDS=(int, 120),
     POINTY_RELAY_IMAGE_SEARCH_TIMEOUT_SECONDS=(int, 15),
@@ -186,6 +187,12 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    # Keeps the relay's sign-in route to the login form: no HTTP Basic, and
+    # nothing past the shop's switch while it is off (apps.core.remote_sign_in).
+    "apps.core.remote_sign_in.RemoteSignInGateMiddleware",
+    # Signs out a remote session that has ended or lapsed, and keeps its
+    # last-seen time for the owner's list (apps.core.remote_sessions).
+    "apps.core.remote_sessions.RemoteSessionMiddleware",
     "apps.channels.middleware.SalesChannelMiddleware",
     "apps.analytics.middleware.BackendPerformanceAnalyticsMiddleware",
     # Bounds unauthenticated /api/ traffic. Sits inside the analytics
@@ -1142,6 +1149,10 @@ POINTY_RELAY_REQUEST_TIMEOUT_SECONDS = env("POINTY_RELAY_REQUEST_TIMEOUT_SECONDS
 # Device pairing (every sign-in) chains two relay calls; this caps the chain as
 # a whole so a slow uplink cannot hold a worker for a multiple of the timeout.
 POINTY_RELAY_PAIRING_BUDGET_SECONDS = env("POINTY_RELAY_PAIRING_BUDGET_SECONDS")
+# How long a sign-in from outside the shop (the relay's sign-in route) lasts
+# before it has to be made again; its relay tickets end with it. A till on the
+# shop's own network is not bounded by this (apps.core.remote_sessions).
+POINTY_REMOTE_SESSION_DAYS = env("POINTY_REMOTE_SESSION_DAYS")
 # After a relay transport failure (timeout/unreachable), opportunistic callers
 # answer "relay unavailable" from memory for this long. 0 disables.
 POINTY_RELAY_UNAVAILABLE_COOLDOWN_SECONDS = env("POINTY_RELAY_UNAVAILABLE_COOLDOWN_SECONDS")
@@ -1277,6 +1288,12 @@ POINTY_INTEGRATION_SESSION_CACHE_TTL = (
 POINTY_PROVIDER_QUIET_HOURS = (
     "" if TESTING else env("POINTY_PROVIDER_QUIET_HOURS", default="1-9")
 )
+# The company's cards sent to an account — a game topped up by its player ID,
+# Telegram Stars to a username, a Steam wallet by its login — are mirrored onto
+# the till, which asks the cashier for the account. The till's menu asks for them
+# by name (``?accounts=1``), so a till that cannot ask never sees them. Off leaves
+# them out of the shelf altogether.
+POINTY_VOUCHER_ACCOUNT_CARDS = env.bool("POINTY_VOUCHER_ACCOUNT_CARDS", default=True)
 # Catalog version stamp (apps.catalog.cache): drives the list-endpoint ETags
 # (304 on unchanged polls) and invalidates the price-checker lookup cache.
 POINTY_CATALOG_CACHE_ENABLED = (

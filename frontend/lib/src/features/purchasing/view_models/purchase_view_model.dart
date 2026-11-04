@@ -15,6 +15,7 @@ import '../../../data/models/product_variant.dart';
 import '../../../data/models/product_variant_page.dart';
 import '../../../data/models/purchase_submission.dart';
 import '../../../data/models/purchase_suggestion.dart';
+import '../../../data/models/receipt_capture.dart';
 import '../../../data/models/exchange_rate.dart';
 import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/fx_repository.dart';
@@ -22,6 +23,7 @@ import '../../../data/models/warehouse.dart';
 import '../../../data/repositories/warehouse_repository.dart';
 import '../../../data/repositories/purchase_repository.dart';
 import '../../../data/services/local_scoped_json_storage.dart';
+import '../../../shared/catalog/catalog_results_focus.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/units.dart';
 import '../../../data/models/purchase_cost_warning.dart';
@@ -683,8 +685,55 @@ class PurchaseViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Asks the draft pane to walk the keyboard through [variantId]'s line:
+  /// select it for a typed quantity, then Enter moves to its cost, then its
+  /// expiry, then back to the search box. Bumps a token rather than holding
+  /// a flag, so asking twice for the same line is two requests.
+  void requestLineEntry(int variantId) {
+    if (_draft.every((line) => line.variant.id != variantId)) {
+      return;
+    }
+    _selectedVariantId = variantId;
+    _lineEntryVariantId = variantId;
+    _lineEntryToken += 1;
+    notifyListeners();
+  }
+
+  int _lineEntryToken = 0;
+  int? _lineEntryVariantId;
+  int get lineEntryToken => _lineEntryToken;
+  int? get lineEntryVariantId => _lineEntryVariantId;
+
+  /// Page Down / Page Up: the next or previous line, wrapping — in the order
+  /// the draft shows them, newest first. Returns whether there was one to go
+  /// to, so the key falls through on an empty or one-line draft.
+  bool selectAdjacentLine({required bool forward}) {
+    if (_draft.isEmpty) {
+      return false;
+    }
+    final shown = _draft.reversed.toList(growable: false);
+    final current = activeDraftLine;
+    final index = current == null
+        ? -1
+        : shown.indexWhere((line) => line.variant.id == current.variant.id);
+    if (index == -1) {
+      requestLineEntry(shown.first.variant.id);
+      return true;
+    }
+    if (shown.length < 2) {
+      return false;
+    }
+    final next = (index + (forward ? 1 : -1) + shown.length) % shown.length;
+    requestLineEntry(shown[next].variant.id);
+    return true;
+  }
+
   PurchaseSearchFocusController get searchFocusController =>
       _searchFocusController;
+
+  /// Where ↓ in the search box sends the keyboard: the first result.
+  final CatalogResultsFocus resultsFocus = CatalogResultsFocus();
+
   PurchaseSearchResetController get searchResetController =>
       _searchResetController;
 
@@ -870,6 +919,58 @@ class PurchaseViewModel extends ChangeNotifier {
     _touchSubmissionIntent();
     notifyListeners();
     unawaited(refreshDiscountPreview());
+  }
+
+  /// Replaces what has been typed for a line's lots and serials.
+  void updateLineCapture(ProductVariant variant, ReceiptLineCapture capture) {
+    if (_isSubmitting) {
+      return;
+    }
+    final index = _draft.indexWhere((line) => line.variant.id == variant.id);
+    if (index == -1) {
+      return;
+    }
+    _draft[index] = _draft[index].copyWith(
+      units: capture.units,
+      batches: capture.batches,
+    );
+    _touchSubmissionIntent();
+    notifyListeners();
+  }
+
+  /// The line's expiry, typed on the line itself: one lot covering the whole
+  /// line, carrying that date (and any lot number already typed for it). The
+  /// shape of nearly every delivery a pharmacy or grocer enters, so it gets a
+  /// field on the line rather than a sheet. Null clears the date; a lot left
+  /// with neither number nor date is dropped.
+  void setLineExpiry(ProductVariant variant, DateTime? expiry) {
+    if (_isSubmitting) {
+      return;
+    }
+    final index = _draft.indexWhere((line) => line.variant.id == variant.id);
+    if (index == -1) {
+      return;
+    }
+    final line = _draft[index];
+    if (line.batches.length > 1) {
+      return;
+    }
+    final current = line.batches.isEmpty
+        ? const ReceiptBatchCapture()
+        : line.batches.single;
+    if (current.expiryDate == expiry) {
+      return;
+    }
+    final lot = current.copyWith(
+      expiryDate: expiry,
+      quantity: line.baseQuantity,
+    );
+    final keep = lot.code.trim().isNotEmpty || lot.expiryDate != null;
+    _draft[index] = line.copyWith(
+      batches: keep ? [lot] : const <ReceiptBatchCapture>[],
+    );
+    _touchSubmissionIntent();
+    notifyListeners();
   }
 
   /// Sets a line's unit cost from a typed LINE TOTAL, dividing by the quantity.
@@ -1477,6 +1578,7 @@ class PurchaseViewModel extends ChangeNotifier {
   /// Returns an error result (and is a no-op) unless [isEditing].
   Future<Result<PurchaseOrder>> saveDraft({
     bool acknowledgeCostWarnings = false,
+    List<int> removedUnitIds = const [],
   }) async {
     final supplier = _selectedSupplier;
     final orderId = _editingOrderId;
@@ -1503,6 +1605,7 @@ class PurchaseViewModel extends ChangeNotifier {
       discountCode: _discountCode,
       extraDiscountAmount: _extraDiscount,
       acknowledgeCostWarnings: acknowledgeCostWarnings,
+      removedUnitIds: removedUnitIds,
     );
     switch (result) {
       case Ok<PurchaseOrder>():
@@ -1590,14 +1693,21 @@ class PurchaseViewModel extends ChangeNotifier {
     final unit = _resolvePurchaseUnit(product, line.unit);
     return PurchaseDraftLine(
       variant: variant,
-      quantity: line.quantity.clamp(1, 999),
+      // The same bounds a typed quantity gets. This used to clamp to 1–999,
+      // so reopening an order of 1,200 pieces saved it back as 999, and half
+      // a kilo came back as one.
+      quantity: _clampQuantity(line.quantity),
       unitCost: line.unitCost,
       // Keep the order's unit even if it can no longer be resolved, so the
       // saved line still round-trips the same purchase unit to the backend.
       unitCode: unit?.code ?? line.unit,
       unitLabel: unit?.label ?? line.unitLabel,
-      unitFactor: unit?.factorToBase ?? 1,
+      unitFactor: unit?.factorToBase ?? line.unitFactor,
       expiryDate: line.expiryDate,
+      // The lots and serials typed when the order was entered, so an edit
+      // saves them back instead of clearing them.
+      units: line.planned.units,
+      batches: line.planned.batches,
     );
   }
 

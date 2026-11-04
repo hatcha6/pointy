@@ -96,6 +96,7 @@ class _ProductCompactRow extends StatelessWidget {
                         StockStatusLabel(
                           quantity: product.effectiveQuantityOnHand,
                           isActive: product.isActive,
+                          isLow: product.hasLowStockVariant,
                           compact: true,
                         ),
                         Text(
@@ -185,6 +186,7 @@ class _ProductTableRow extends StatelessWidget {
                   child: StockStatusLabel(
                     quantity: product.effectiveQuantityOnHand,
                     isActive: product.isActive,
+                    isLow: product.hasLowStockVariant,
                   ),
                 ),
                 SizedBox(

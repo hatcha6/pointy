@@ -202,6 +202,7 @@ class _PosCheckoutDialogState extends State<PosCheckoutDialog> {
         saleType: saleType,
         printStatus: outcome.printStatus,
         recharges: outcome.recharges,
+        receiptFollows: outcome.receiptFollows,
         changeDue: widget.payment.changeDue,
         soldInTestMode: widget.soldInTestMode,
         onlineInvoicesEnabled: viewModel.onlineInvoicesEnabled,

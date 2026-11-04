@@ -884,6 +884,7 @@ class IntegrationChargeResult {
     this.receipt = const {},
     this.testMode = false,
     this.refundAmount,
+    this.inProgress = false,
   });
 
   final int? fulfillment;
@@ -917,8 +918,17 @@ class IntegrationChargeResult {
   /// the server says so; the till also knows from what it sold.
   final bool testMode;
 
+  /// The provider took it and is still working on it (a supplier can take
+  /// minutes). Unknown, but nothing was lost: the till's requests panel follows
+  /// it, and the cashier is not held up.
+  final bool inProgress;
+
   bool get isCharged => outcome == 'charged';
   bool get isVoucher => kind == 'voucher';
+
+  /// Credit sent to an account (a game top-up): done, with no code to hand over.
+  bool get isSentToAccount =>
+      isCharged && (receipt['account'] ?? '').trim().isNotEmpty;
 
   /// Airtime sent to a phone, or a bill paid: «كروت دفتر»' direct services.
   bool get isAirtime => kind == 'airtime';
@@ -960,6 +970,7 @@ class IntegrationChargeResult {
       refundAmount: json['refunded'] == true
           ? double.tryParse(json['refund_amount']?.toString() ?? '')
           : null,
+      inProgress: json['in_progress'] == true,
     );
   }
 }

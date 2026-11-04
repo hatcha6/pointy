@@ -116,6 +116,7 @@ Product _product({required double quantity, required String barcode}) {
       barcode: barcode,
       unitPrice: 5.50,
       quantityOnHand: quantity,
+      lowStockThreshold: 5,
     ),
   );
 }

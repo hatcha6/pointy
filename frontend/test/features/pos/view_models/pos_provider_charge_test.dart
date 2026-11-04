@@ -40,7 +40,9 @@ void main() {
   late _Sales sales;
   late _Integrations integrations;
 
-  Future<PosViewModel> open() async {
+  Future<PosViewModel> open({
+    Duration cardHandOffAfter = const Duration(seconds: 6),
+  }) async {
     sales = _Sales();
     integrations = _Integrations();
     final viewModel = PosViewModel(
@@ -52,6 +54,7 @@ void main() {
       integrationsRepository: integrations,
       sessionStorage: MemoryScopedJsonStorage(),
       chargeRetryDelay: Duration.zero,
+      cardHandOffAfter: cardHandOffAfter,
     );
     addTearDown(viewModel.dispose);
     await viewModel.loadCurrentRegisterSession();
@@ -156,6 +159,64 @@ void main() {
       expect(outcome.recharges, isEmpty);
     },
   );
+
+  group('the company cards the requests panel follows', () {
+    test('an answer in time is the sale\'s result, as ever', () async {
+      final viewModel = await open();
+      integrations.answers = [
+        Ok([charged()]),
+      ];
+      final outcome = await pay(viewModel);
+      expect(outcome.recharges.single.isCharged, isTrue);
+      expect(outcome.receiptFollows, isFalse);
+      expect(viewModel.cardRequests.requests.single.isSucceeded, isTrue);
+      expect(viewModel.cardRequests.notices, isEmpty);
+    });
+
+    test('a supplier still working hands over at once', () async {
+      final viewModel = await open();
+      integrations.answers = [
+        const Ok([
+          IntegrationChargeResult(
+            fulfillment: 1,
+            orderLine: 7,
+            provider: 'pointy',
+            outcome: 'unknown',
+            status: 'submitted',
+            needsAttention: true,
+            inProgress: true,
+          ),
+        ]),
+      ];
+      final outcome = await pay(viewModel);
+      expect(outcome.isSuccess, isTrue);
+      expect(outcome.recharges.single.inProgress, isTrue);
+      expect(viewModel.isCheckingOut, isFalse);
+      expect(viewModel.cardRequests.openCount, 1);
+    });
+
+    test('a supplier that does not answer does not hold the till', () async {
+      final viewModel = await open(
+        cardHandOffAfter: const Duration(milliseconds: 20),
+      );
+      final hold = Completer<void>();
+      integrations.hold = hold.future;
+      integrations.answers = [
+        Ok([charged()]),
+      ];
+      final outcome = await pay(viewModel);
+      expect(hold.isCompleted, isFalse, reason: 'the call is still out');
+      expect(outcome.isSuccess, isTrue);
+      expect(outcome.recharges.single.inProgress, isTrue);
+      expect(viewModel.isCheckingOut, isFalse);
+      expect(viewModel.cardRequests.openCount, 1);
+      // The answer still lands, in the panel.
+      hold.complete();
+      await pumpEventQueue();
+      expect(viewModel.cardRequests.openCount, 0);
+      expect(viewModel.cardRequests.notices.single.isSucceeded, isTrue);
+    });
+  });
 
   test('a sale with nothing for a provider never asks one', () async {
     final viewModel = await open();
@@ -296,6 +357,7 @@ class _Integrations extends IntegrationsRepository {
   @override
   Future<Result<List<IntegrationChargeResult>>> charge({
     required int orderId,
+    bool noWait = false,
   }) async {
     final index = chargeCalls < answers.length
         ? chargeCalls

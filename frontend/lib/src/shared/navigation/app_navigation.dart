@@ -18,6 +18,7 @@ enum AppNavigationDestination {
   conversations,
   campaigns,
   catalog,
+  reorder,
   categories,
   searchMisses,
   stockCount,
@@ -64,6 +65,8 @@ AppCapability appNavigationDestinationCapability(
     AppNavigationDestination.conversations => AppCapability.viewConversations,
     AppNavigationDestination.campaigns => AppCapability.manageCampaigns,
     AppNavigationDestination.catalog => AppCapability.viewCatalogManagement,
+    // A queue to draft orders from: the server asks what drafting asks.
+    AppNavigationDestination.reorder => AppCapability.createPurchaseOrder,
     AppNavigationDestination.categories => AppCapability.manageCategories,
     // Teaching the catalogue a word is editing products: the server asks
     // catalog.change_product for the list and for every action on it.

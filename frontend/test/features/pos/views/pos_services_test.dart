@@ -10,6 +10,7 @@ import 'package:pointy_frontend/src/data/models/service_kinds.dart';
 import 'package:pointy_frontend/src/data/models/service_quote.dart';
 import 'package:pointy_frontend/src/data/models/voucher_menu.dart';
 import 'package:pointy_frontend/src/features/pos/view_models/pos_service_shelves.dart';
+import 'package:pointy_frontend/src/features/pos/view_models/pos_card_requests_controller.dart';
 import 'package:pointy_frontend/src/features/pos/view_models/pos_view_model.dart';
 import 'package:pointy_frontend/src/features/pos/views/direct_services/airtime_launcher.dart';
 import 'package:pointy_frontend/src/features/pos/views/direct_services/bill_flow_sheet.dart';
@@ -631,23 +632,33 @@ void main() {
         await tester.tapAt(const Offset(8, 8));
         await tester.pump(const Duration(milliseconds: 100));
         expect(key('checkout_progress'), findsOneWidget);
-        // A slow provider is said to be slow, not left to look hung.
-        await tester.pump(const Duration(seconds: 16));
-        expect(find.textContaining('ما زلنا ننتظر'), findsOneWidget);
-
-        gate.complete();
-        await tester.pump();
+        // A slow provider holds nobody up: past a moment the sale's result
+        // says it is being followed, and the cashier can go on.
+        await tester.pump(const Duration(seconds: 7));
         await tester.pump(const Duration(milliseconds: 400));
-
         expect(key('checkout_success'), findsOneWidget);
-        expect(key('service_delivered_details'), findsOneWidget);
+        expect(key('checkout_card_request_following'), findsOneWidget);
         expect(viewModel.checkoutProgress, isNull);
+        expect(viewModel.cardRequests.openCount, 1);
 
         await tester.tap(key('checkout_new_sale'));
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 400));
         await tester.pump(const Duration(milliseconds: 100));
         expect(key('checkout_success'), findsNothing);
+        expect(key('card_requests_pill'), findsOneWidget);
+
+        // The answer lands in the panel, which says so.
+        gate.complete();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(viewModel.cardRequests.openCount, 0);
+        expect(find.textContaining('تم:'), findsOneWidget);
+
+        // Its notice fades by itself; no timer is left behind.
+        await tester.pump(PosCardRequestsController.successNoticeFor);
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(find.textContaining('تم:'), findsNothing);
       },
     );
 

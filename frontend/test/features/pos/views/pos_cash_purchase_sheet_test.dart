@@ -161,7 +161,6 @@ class _FakeShopSettingsRepository extends ShopSettingsRepository {
       autoPrintReceipts: false,
       allowOverselling: false,
       preventSellingAtLoss: true,
-      lowStockThreshold: 5,
       cashierReturnWindowHours: 42,
       enableCashPayments: true,
       enableCardPayments: true,
@@ -239,7 +238,7 @@ Future<void> _captureLot(
   await tester.tap(find.text(chipLabel));
   await tester.pumpAndSettle();
   await tester.enterText(
-    find.widgetWithText(TextFormField, 'رقم الدفعة'),
+    find.widgetWithText(TextFormField, 'رقم الدفعة (اختياري)'),
     code,
   );
   // A frame between typing and the shortcut, as a person always leaves: the
@@ -355,16 +354,15 @@ void main() {
   });
 
   testWidgets(
-    'a serial+lot line stays blocked until both its lot and its numbers are in',
+    'a serial+lot line is never held for a lot number nobody printed',
     (tester) async {
       _useTallView(tester);
       final purchases = await _pumpSheet(tester, product: _vaccine);
       await _buildOneLinePurchase(tester, product: _vaccine);
 
-      // Required, so the chip does not say «optional».
-      expect(find.text('رقم الدفعة (اختياري)'), findsNothing);
+      // The lot is optional here too: the server mints one for the pack.
+      expect(find.text('رقم الدفعة (اختياري)'), findsOneWidget);
 
-      // The pack's number first.
       await tester.tap(find.text('0 / 1'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField).last, 'PACK-0001');
@@ -374,18 +372,43 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('1 / 1'), findsOneWidget);
 
-      // Numbers alone are not enough: nothing submits without the lot.
-      await _tapSubmit(tester);
-      expect(purchases.submittedLines, isNull);
+      // Only the date off the foil — no lot number at all.
+      await _captureLot(
+        tester,
+        chipLabel: 'رقم الدفعة (اختياري)',
+        code: '',
+      );
 
-      await _captureLot(tester, chipLabel: 'رقم الدفعة', code: 'VX-01');
-      expect(find.text('دفعة VX-01'), findsOneWidget);
-
       await _tapSubmit(tester);
-      final line = purchases.submittedLines!.single;
-      expect(line.units.single.code, 'PACK-0001');
-      expect(line.batches.single.code, 'VX-01');
-      expect(line.expiryDate, isNotNull);
+      final unnamed = purchases.submittedLines!.single;
+      expect(unnamed.units.single.code, 'PACK-0001');
+      expect(unnamed.batches.single.code, isEmpty);
+      expect(unnamed.batches.single.expiryDate, isNotNull);
+      expect(unnamed.batches.single.toJson().containsKey('code'), isFalse);
     },
   );
+
+  testWidgets('a serial+lot line sends the lot when the cashier reads one', (
+    tester,
+  ) async {
+    _useTallView(tester);
+    final purchases = await _pumpSheet(tester, product: _vaccine);
+    await _buildOneLinePurchase(tester, product: _vaccine);
+    await tester.tap(find.text('0 / 1'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).last, 'PACK-0001');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('تأكيد المعرّفات'));
+    await tester.pumpAndSettle();
+
+    await _captureLot(tester, chipLabel: 'رقم الدفعة (اختياري)', code: 'VX-01');
+    expect(find.text('دفعة VX-01'), findsOneWidget);
+
+    await _tapSubmit(tester);
+    final line = purchases.submittedLines!.single;
+    expect(line.units.single.code, 'PACK-0001');
+    expect(line.batches.single.code, 'VX-01');
+    expect(line.expiryDate, isNotNull);
+  });
 }

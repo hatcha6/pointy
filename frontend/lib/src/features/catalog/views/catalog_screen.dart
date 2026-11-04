@@ -54,6 +54,7 @@ class CatalogScreen extends StatefulWidget {
     required this.navigation,
     required this.capabilities,
     this.analyticsEngine,
+    this.onOpenReorder,
     this.onOpenSearchMisses,
     this.trackedStockRepository,
     this.onOpenStockUnit,
@@ -78,6 +79,10 @@ class CatalogScreen extends StatefulWidget {
   final AppNavigation navigation;
   final AuthorizationCapabilities capabilities;
   final AnalyticsEngine? analyticsEngine;
+
+  /// Opens «إعادة الطلب». Null hides the button: for someone who may not draft
+  /// purchase orders, or where nothing can open it.
+  final VoidCallback? onOpenReorder;
 
   /// Opens the words searched for and not found. Null hides the button: for
   /// someone who may not change products, or where nothing can open it.
@@ -172,6 +177,13 @@ class _CatalogScreenState extends State<CatalogScreen> {
             leading: const PointyNavigationMenuButton(),
             title: Text(l10n.catalogManagementTitle),
             actions: [
+              if (widget.onOpenReorder case final openReorder?)
+                IconButton(
+                  key: const ValueKey('catalog_open_reorder'),
+                  tooltip: l10n.reorderTitle,
+                  onPressed: openReorder,
+                  icon: const Icon(Icons.production_quantity_limits_outlined),
+                ),
               SmartReorderAction(
                 navigation: widget.navigation,
                 capabilities: capabilities,

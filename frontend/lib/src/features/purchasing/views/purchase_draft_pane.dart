@@ -4,14 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../shared/barcode/barcode_scan_listener.dart';
-import '../../../shared/barcode/scan_burst_guard.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
 import '../../../core/parsing.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/product_unit.dart';
-import '../../../data/models/product_variant.dart';
 import '../../../data/models/purchase_submission.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../../../shared/catalog/catalog.dart';
@@ -31,10 +29,8 @@ import '../../../shared/tutor/tutor_target.dart';
 import 'supplier_currency_field.dart';
 import '../view_models/purchase_order_documents.dart';
 import '../view_models/purchase_view_model.dart';
-import 'purchase_pricing_sheet.dart';
-import 'purchase_receipt_hint.dart';
+import 'purchase_draft_lines.dart';
 import 'purchase_result/purchase_result_dialog.dart';
-import 'purchase_suggestion_strip.dart';
 
 /// Lets the draft pane publish its footer actions to the workspace above it, so
 /// the global keyboard handler can run the very same flows — Ctrl/Cmd+Enter to
@@ -178,7 +174,10 @@ class _PurchaseDraftPaneState extends State<PurchaseDraftPane> {
                   onEditSettings: () =>
                       _showPurchaseDraftSettingsDialog(context),
                 ),
-                child: _PurchaseDraftScrollContent(viewModel: viewModel),
+                child: PurchaseDraftLines(
+                  viewModel: viewModel,
+                  permissions: UnitIntakePermissions.of(widget.capabilities),
+                ),
               ),
             ),
             if (viewModel.selectedSupplier == null) ...[
@@ -481,319 +480,6 @@ class _PurchaseDraftHeaderActions extends StatelessWidget {
   }
 }
 
-class _PurchaseDraftScrollContent extends StatefulWidget {
-  const _PurchaseDraftScrollContent({required this.viewModel});
-
-  final PurchaseViewModel viewModel;
-
-  @override
-  State<_PurchaseDraftScrollContent> createState() =>
-      _PurchaseDraftScrollContentState();
-}
-
-/// Keyboard flow mirrors the POS cart exactly: tap a line to select it, type a
-/// quantity (previewed in the banner below), Enter applies it; +/- step,
-/// Backspace edits, Esc clears the entry then the selection.
-class _PurchaseDraftScrollContentState
-    extends State<_PurchaseDraftScrollContent> {
-  final FocusNode _focusNode = FocusNode(debugLabel: 'purchase_draft_keyboard');
-  int? _focusedVariantId;
-  String _pendingQuantity = '';
-  // Rejects scanner-speed keystrokes so a wedge burst can never become a
-  // line quantity (the scan itself is BarcodeScanListener's job).
-  final ScanBurstGuard _scanBurstGuard = ScanBurstGuard();
-  int _lastLineCount = -1;
-
-  PurchaseViewModel get _viewModel => widget.viewModel;
-
-  @override
-  void dispose() {
-    _focusNode.dispose();
-    super.dispose();
-  }
-
-  PurchaseDraftLine? _focusedLine(List<PurchaseDraftLine> lines) {
-    final id = _focusedVariantId;
-    if (id == null) {
-      return null;
-    }
-    for (final line in lines) {
-      if (line.variant.id == id) {
-        return line;
-      }
-    }
-    return null;
-  }
-
-  void _focusLine(PurchaseDraftLine line) {
-    setState(() {
-      _focusedVariantId = line.variant.id;
-      _pendingQuantity = '';
-    });
-    // The function keys fire through the global scan listener, outside this
-    // focus tree, so they read the selection off the view model. Publishing it
-    // here is what keeps "the line I tapped" and "the line F4 deletes" the same
-    // line.
-    _viewModel.selectLine(line.variant.id);
-    _focusNode.requestFocus();
-  }
-
-  KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
-    if (event is KeyUpEvent || _viewModel.isSubmitting) {
-      return KeyEventResult.ignored;
-    }
-    if (HardwareKeyboard.instance.isControlPressed ||
-        HardwareKeyboard.instance.isAltPressed ||
-        HardwareKeyboard.instance.isMetaPressed) {
-      return KeyEventResult.ignored;
-    }
-    // Only treat keystrokes as line-quantity entry when this scope itself holds
-    // the primary focus. Tapping into a text field inside the pane (unit cost,
-    // expiry, supplier invoice, discount code, …) moves the primary focus to
-    // that field; its digits must reach the field, not be hijacked as quantity.
-    if (!node.hasPrimaryFocus) {
-      return KeyEventResult.ignored;
-    }
-    final line = _focusedLine(_viewModel.draft);
-    if (line == null) {
-      return KeyEventResult.ignored;
-    }
-    final key = event.logicalKey;
-
-    final digit = _draftDigitKeys[key];
-    if (digit != null) {
-      final rollback = _scanBurstGuard.onDigit(
-        _pendingQuantity,
-        DateTime.now(),
-      );
-      if (rollback != null) {
-        // A wedge is typing, not the buyer — roll the pending entry back to
-        // its pre-burst value and swallow the keystroke. The scan itself is
-        // recognized (or safely dropped) by BarcodeScanListener.
-        if (_pendingQuantity != rollback) {
-          setState(() => _pendingQuantity = rollback);
-        }
-        return KeyEventResult.handled;
-      }
-      if (_pendingQuantity.length < 7) {
-        setState(() => _pendingQuantity = '$_pendingQuantity$digit');
-      }
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.period ||
-        key == LogicalKeyboardKey.numpadDecimal) {
-      // Fractional entry (2.5 of anything) is the buyer's choice — allowed for
-      // every product; at most one decimal point.
-      final rollback = _scanBurstGuard.onDigit(
-        _pendingQuantity,
-        DateTime.now(),
-      );
-      if (rollback != null) {
-        if (_pendingQuantity != rollback) {
-          setState(() => _pendingQuantity = rollback);
-        }
-        return KeyEventResult.handled;
-      }
-      if (!_pendingQuantity.contains('.') && _pendingQuantity.length < 6) {
-        setState(
-          () => _pendingQuantity = _pendingQuantity.isEmpty
-              ? '0.'
-              : '$_pendingQuantity.',
-        );
-      }
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.backspace) {
-      if (_pendingQuantity.isEmpty) {
-        return KeyEventResult.ignored;
-      }
-      setState(
-        () => _pendingQuantity = _pendingQuantity.substring(
-          0,
-          _pendingQuantity.length - 1,
-        ),
-      );
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.enter ||
-        key == LogicalKeyboardKey.numpadEnter) {
-      if (_scanBurstGuard.shouldSwallowCommit(DateTime.now())) {
-        // Tail of a scanner burst (reaches here only when the listener is
-        // disabled or the code was too short) — never commit it as quantity.
-        return KeyEventResult.handled;
-      }
-      _applyPendingQuantity(line);
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.add ||
-        key == LogicalKeyboardKey.numpadAdd ||
-        key == LogicalKeyboardKey.equal) {
-      setState(() => _pendingQuantity = '');
-      unawaited(
-        _viewModel.addVariant(
-          line.variant,
-          source: 'purchase_draft_quantity_button',
-        ),
-      );
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.minus ||
-        key == LogicalKeyboardKey.numpadSubtract) {
-      setState(() => _pendingQuantity = '');
-      _viewModel.decrementVariant(
-        line.variant,
-        source: 'purchase_draft_quantity_button',
-      );
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.escape) {
-      if (_pendingQuantity.isNotEmpty) {
-        setState(() => _pendingQuantity = '');
-      } else {
-        setState(() => _focusedVariantId = null);
-        _viewModel.selectLine(null);
-        _focusNode.unfocus();
-      }
-      return KeyEventResult.handled;
-    }
-    return KeyEventResult.ignored;
-  }
-
-  void _applyPendingQuantity(PurchaseDraftLine line) {
-    final quantity = double.tryParse(_pendingQuantity);
-    setState(() => _pendingQuantity = '');
-    if (quantity != null && quantity > 0) {
-      _viewModel.setLineQuantity(
-        line.variant,
-        quantity,
-        source: 'purchase_quantity_edit',
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final spacing = AdaptiveSpacing.of(context);
-    final colors = context.pointyColors;
-    final viewModel = _viewModel;
-    final visibleDraft = viewModel.draft.reversed.toList(growable: false);
-    // A structural change (line added/removed) invalidates half-typed input.
-    if (visibleDraft.length != _lastLineCount) {
-      _lastLineCount = visibleDraft.length;
-      _pendingQuantity = '';
-    }
-    final focusedLine = _focusedLine(viewModel.draft);
-    final scopeFocused = _focusNode.hasFocus;
-
-    return Focus(
-      focusNode: _focusNode,
-      onKeyEvent: _handleKey,
-      child: Column(
-        children: [
-          Expanded(
-            child: ListView(
-              padding: EdgeInsetsDirectional.fromSTEB(
-                spacing.md,
-                spacing.sm,
-                spacing.md,
-                spacing.md,
-              ),
-              children: [
-                if (viewModel.draft.isEmpty)
-                  SizedBox(
-                    height: 240,
-                    child: PointyEmptyState(
-                      icon: Icons.inventory_2_outlined,
-                      title: l10n.emptyPurchaseDraft,
-                      message: l10n.emptyPurchaseDraftMessage,
-                    ),
-                  )
-                else
-                  for (
-                    var index = 0;
-                    index < visibleDraft.length;
-                    index += 1
-                  ) ...[
-                    if (index > 0) Divider(height: 1, color: colors.line),
-                    PurchaseDraftLineTile(
-                      line: visibleDraft[index],
-                      previewLine: viewModel.discountPreviewLineForDraftIndex(
-                        viewModel.draft.length - index - 1,
-                      ),
-                      enabled: !viewModel.isSubmitting,
-                      selected:
-                          scopeFocused &&
-                          _focusedVariantId == visibleDraft[index].variant.id,
-                      onSelect: viewModel.isSubmitting
-                          ? null
-                          : () => _focusLine(visibleDraft[index]),
-                      onAdd: () => viewModel.addVariant(
-                        visibleDraft[index].variant,
-                        source: 'purchase_draft_quantity_button',
-                      ),
-                      onRemove: () => viewModel.decrementVariant(
-                        visibleDraft[index].variant,
-                        source: 'purchase_draft_quantity_button',
-                      ),
-                      onCostChanged: (unitCost) {
-                        viewModel.updateLineCost(
-                          visibleDraft[index].variant,
-                          unitCost,
-                        );
-                      },
-                      onUnitChanged: (code, label, factor, allowsFractional) {
-                        viewModel.updateLineUnit(
-                          visibleDraft[index].variant,
-                          unitCode: code,
-                          unitLabel: label,
-                          unitFactor: factor,
-                          allowsFractional: allowsFractional,
-                        );
-                      },
-                      onQuantityChanged: (quantity) {
-                        viewModel.setLineQuantity(
-                          visibleDraft[index].variant,
-                          quantity,
-                          source: 'purchase_quantity_edit',
-                        );
-                      },
-                      previousBaseCost: viewModel.previousBaseCostFor(
-                        visibleDraft[index].variant.id,
-                      ),
-                      onChangePrices: () => unawaited(
-                        showPurchasePricingSheet(
-                          context,
-                          viewModel: viewModel,
-                          line: visibleDraft[index],
-                        ),
-                      ),
-                      quantityHint: PurchaseQuantityHintChip.maybeBuild(
-                        viewModel: viewModel,
-                        line: visibleDraft[index],
-                      ),
-                      onLineTotalEntry: (total) {
-                        viewModel.setLineCostFromTotal(
-                          visibleDraft[index].variant,
-                          total,
-                        );
-                      },
-                    ),
-                  ],
-              ],
-            ),
-          ),
-          if (_pendingQuantity.isNotEmpty && focusedLine != null)
-            PendingQuantityBanner(
-              quantity: _pendingQuantity,
-              productName: focusedLine.variant.productLabel,
-            ),
-        ],
-      ),
-    );
-  }
-}
-
 enum _SellingPriceSeverity { normal, unpriced, belowCost }
 
 /// What this line is going to sell for, and what that leaves.
@@ -1044,29 +730,6 @@ class _CostDeltaChip extends StatelessWidget {
     );
   }
 }
-
-final Map<LogicalKeyboardKey, String> _draftDigitKeys = {
-  LogicalKeyboardKey.digit0: '0',
-  LogicalKeyboardKey.digit1: '1',
-  LogicalKeyboardKey.digit2: '2',
-  LogicalKeyboardKey.digit3: '3',
-  LogicalKeyboardKey.digit4: '4',
-  LogicalKeyboardKey.digit5: '5',
-  LogicalKeyboardKey.digit6: '6',
-  LogicalKeyboardKey.digit7: '7',
-  LogicalKeyboardKey.digit8: '8',
-  LogicalKeyboardKey.digit9: '9',
-  LogicalKeyboardKey.numpad0: '0',
-  LogicalKeyboardKey.numpad1: '1',
-  LogicalKeyboardKey.numpad2: '2',
-  LogicalKeyboardKey.numpad3: '3',
-  LogicalKeyboardKey.numpad4: '4',
-  LogicalKeyboardKey.numpad5: '5',
-  LogicalKeyboardKey.numpad6: '6',
-  LogicalKeyboardKey.numpad7: '7',
-  LogicalKeyboardKey.numpad8: '8',
-  LogicalKeyboardKey.numpad9: '9',
-};
 
 class _PurchaseDraftTotals extends StatelessWidget {
   const _PurchaseDraftTotals({required this.viewModel});
@@ -1788,6 +1451,9 @@ class PurchaseDraftLineTile extends StatefulWidget {
     this.onChangePrices,
     this.onLineTotalEntry,
     this.quantityHint,
+    this.costFocusNode,
+    this.onCostSubmitted,
+    this.capture,
   });
 
   final PurchaseDraftLine line;
@@ -1833,6 +1499,17 @@ class PurchaseDraftLineTile extends StatefulWidget {
   /// quantity for this product, which is most of the time.
   final Widget? quantityHint;
 
+  /// The cost field's focus, owned by the line list so Enter can walk from
+  /// the quantity to the cost to the expiry. Null: the tile keeps its own.
+  final FocusNode? costFocusNode;
+
+  /// Enter in the cost field — the line list moves on to the next field.
+  final VoidCallback? onCostSubmitted;
+
+  /// The lots, expiry and serials row of a tracked line. Null for goods
+  /// counted rather than named.
+  final Widget? capture;
+
   /// Narrowest line that still draws the product thumbnail beside the name.
   static const double thumbnailMinWidth = 320;
 
@@ -1844,11 +1521,40 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
   late final TextEditingController _costController = TextEditingController(
     text: widget.line.unitCost.toStringAsFixed(2),
   );
-  final FocusNode _costFocusNode = FocusNode();
+  FocusNode? _ownCostFocusNode;
+  FocusNode? _listenedCostNode;
+
+  FocusNode get _costFocusNode =>
+      widget.costFocusNode ?? (_ownCostFocusNode ??= FocusNode());
+
+  @override
+  void initState() {
+    super.initState();
+    _listenCost();
+  }
+
+  /// Arriving in the cost field by keyboard selects what is there, so the
+  /// number on the invoice simply replaces it — no Backspace × 5 first.
+  void _listenCost() {
+    _listenedCostNode?.removeListener(_onCostFocus);
+    _listenedCostNode = _costFocusNode..addListener(_onCostFocus);
+  }
+
+  void _onCostFocus() {
+    if (_costFocusNode.hasFocus) {
+      _costController.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: _costController.text.length,
+      );
+    }
+  }
 
   @override
   void didUpdateWidget(covariant PurchaseDraftLineTile oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.costFocusNode, widget.costFocusNode)) {
+      _listenCost();
+    }
     final nextText = widget.line.unitCost.toStringAsFixed(2);
     if (!_costFocusNode.hasFocus && _costController.text != nextText) {
       _costController.text = nextText;
@@ -1857,7 +1563,8 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
 
   @override
   void dispose() {
-    _costFocusNode.dispose();
+    _listenedCostNode?.removeListener(_onCostFocus);
+    _ownCostFocusNode?.dispose();
     _costController.dispose();
     super.dispose();
   }
@@ -1950,6 +1657,12 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
         enabled: widget.enabled,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         inputFormatters: [DecimalTextInputFormatter()],
+        textInputAction: TextInputAction.next,
+        // The line list decides where Enter goes next (the expiry, or back to
+        // the search box); without this the field would first jump to the
+        // unit dropdown on its own.
+        onEditingComplete: widget.onCostSubmitted == null ? null : () {},
+        onSubmitted: (_) => widget.onCostSubmitted?.call(),
         decoration: InputDecoration(
           labelText: line.isBaseUnit
               ? l10n.purchaseLineCostLabel
@@ -2206,31 +1919,11 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
                   ],
                 ),
               ],
-              // Said on the line, before the buyer submits: an order carries a
-              // count, and the numbers are scanned off the boxes at receipt.
-              if (line.variant.trackingMode.isTracked) ...[
+              // What the buyer already knows about tracked goods — their
+              // expiry, lots and serials — typed with the quantity and cost.
+              if (widget.capture != null) ...[
                 const SizedBox(height: 8),
-                Row(
-                  key: ValueKey(
-                    'purchase_line_tracking_${line.variant.id}_hint',
-                  ),
-                  children: [
-                    Icon(
-                      Icons.qr_code_scanner_outlined,
-                      size: 16,
-                      color: colors.mutedInk,
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        _receiptHint(l10n, line.variant),
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: colors.mutedInk,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                widget.capture!,
               ],
             ],
           ),
@@ -2347,9 +2040,3 @@ class _DestinationField extends StatelessWidget {
 
 /// What the receiver will be asked for when this line's goods arrive — said
 /// on the order line, because the order itself carries only a count.
-String _receiptHint(AppLocalizations l10n, ProductVariant variant) =>
-    purchaseReceiptHint(
-      l10n,
-      variant.trackingMode,
-      expiryRequired: variant.expiryRequired,
-    );

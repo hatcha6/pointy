@@ -364,6 +364,39 @@ class MigrationIssue(TimeStampedModel):
         return f"[{self.severity}] {self.entity_type}:{self.source_key} {self.code}"
 
 
+class VariantMerge(TimeStampedModel):
+    """One alias variant folded into its survivor (``apps.migration.flatten``).
+
+    What was there, what moved and how far the value had to be restated, so a
+    question six months later has an answer and a mistake can be traced. Written
+    in the merge's own transaction.
+    """
+
+    run_key = models.CharField(max_length=64, blank=True, db_index=True)
+    alias = models.ForeignKey(
+        "catalog.ProductVariant", on_delete=models.CASCADE, related_name="+"
+    )
+    survivor = models.ForeignKey(
+        "catalog.ProductVariant", on_delete=models.CASCADE, related_name="+"
+    )
+    alias_sku = models.CharField(max_length=64)
+    alias_barcode = models.CharField(max_length=64, blank=True)
+    alias_name = models.CharField(max_length=160, blank=True)
+    alias_was_active = models.BooleanField(default=True)
+    alias_unit_price = models.DecimalField(max_digits=10, decimal_places=2)
+    #: ``{warehouse id: on-hand moved}``, as strings so a Decimal stays exact.
+    moved_on_hand = models.JSONField(default=dict, blank=True)
+    value_delta = models.DecimalField(max_digits=18, decimal_places=6, default=0)
+    rows_moved = models.JSONField(default=dict, blank=True)
+    barcodes_moved = models.JSONField(default=list, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self):
+        return f"{self.alias_sku} -> {self.survivor_id}"
+
+
 class CollapsePlan(TimeStampedModel):
     """A proposal to turn "one product per handset" back into stock (§12).
 

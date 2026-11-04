@@ -13,6 +13,7 @@ import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
+import '../../../shared/units.dart';
 import '../../../data/models/dashboard_ai_digest.dart';
 import '../../../data/models/camera.dart';
 import '../view_models/dashboard_cameras_view_model.dart';

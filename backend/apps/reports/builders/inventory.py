@@ -17,19 +17,23 @@ from decimal import Decimal
 from django.db.models import (
     Count,
     DecimalField,
-    ExpressionWrapper,
     F,
     Max,
     Prefetch,
-    Q,
     Sum,
     Value,
 )
-from django.db.models.functions import Abs, Coalesce, Greatest
+from django.db.models.functions import Abs, Coalesce
 
 from apps.catalog.models import ProductVariant, VariantOptionValue
 from apps.inventory.consignment import custody_units_by_variant
-from apps.inventory.models import StockItem, StockMovement, Warehouse
+from apps.inventory.low_stock import (
+    SUGGESTED_REORDER,
+    low_stock_variants,
+    stocked_lines,
+    suggested_reorder_quantity,
+)
+from apps.inventory.models import StockItem, StockMovement
 from apps.inventory.reporting import (
     shrinkage_value,
     stock_cost_value,
@@ -50,25 +54,6 @@ from ..sections import (
 from .scope import in_window, with_variant_labels
 
 QTY = DecimalField(max_digits=16, decimal_places=3)
-
-
-def stocked_lines():
-    """The stock lines a shop keeps, counts and reorders: in a place it sells
-    or stores from — not the transit warehouse every transfer opens, not a
-    closed location — of a product it still stocks. A service, a made-to-order
-    dish or a provider's system product holds no shelf stock to run low; an
-    archived or deactivated product is not reordered. Left in, the transit
-    rows alone (reorder level 5, never any stock) read as a page of things to
-    buy that nobody can buy."""
-    return StockItem.objects.filter(
-        warehouse__is_active=True,
-        variant__is_active=True,
-        variant__product__is_active=True,
-        variant__product__archived_at__isnull=True,
-        variant__product__is_system=False,
-        variant__product__is_service=False,
-        variant__product__is_prepared=False,
-    ).exclude(warehouse__kind=Warehouse.Kind.TRANSIT)
 
 
 def inventory_status(context):
@@ -128,9 +113,7 @@ def inventory_status(context):
     retail_value = None
     if not historical:
         lines = stocked_lines()
-        figures["low_stock_count"] = lines.filter(
-            quantity_on_hand__lte=F("reorder_level")
-        ).count()
+        figures["low_stock_count"] = low_stock_variants().count()
         figures["out_of_stock_count"] = lines.filter(quantity_on_hand__lte=0).count()
         retail_value = _retail_value(shelf)
         figures["retail_stock_value"] = money(retail_value)
@@ -165,18 +148,15 @@ def inventory_status(context):
 
 def _live_shelf():
     """``{variant_id: line}`` — what is on the shelf now, per variant, summed
-    across every location it sits in: on hand, spoken for, on its way, the
-    reorder level of the lines the shop keeps, and the consigned units among
-    it. The quantity is the shelf's own, not the valuation's: an article whose
+    across every location it sits in: on hand, spoken for, on its way, and
+    the consigned units among it. The quantity is the shelf's own, not the valuation's: an article whose
     cost was never recorded is still on the shelf and still sells."""
-    keeps = stocked_lines().values("pk")
     shelf = {
         row["variant_id"]: row
         for row in StockItem.objects.order_by().values("variant_id").annotate(
             on_hand=Sum("quantity_on_hand"),
             committed=Sum("quantity_committed"),
             expected=Sum("quantity_expected"),
-            reorder=Sum("reorder_level", filter=Q(pk__in=keeps)),
             unit_price=Max("variant__unit_price"),
         )
     }
@@ -274,7 +254,13 @@ def _inventory_items_section(
                 {
                     "quantity_committed": quantity(line.get("committed")),
                     "quantity_expected": quantity(line.get("expected")),
-                    "reorder_level": quantity(line.get("reorder")),
+                    # Blank for a variant nobody watches — not a zero, which
+                    # would read as "warn me when it empties".
+                    "reorder_level": (
+                        quantity(variant.low_stock_threshold)
+                        if variant and variant.low_stock_threshold is not None
+                        else ""
+                    ),
                     "retail_value": money(
                         max(owned, Decimal("0")) * decimal_from(line.get("unit_price"))
                     ),
@@ -462,50 +448,31 @@ def _movement_list_section(movements, context):
     )
 
 
-#: Back to twice the reorder level, less what is on hand and on the way, never
-#: below nothing — the row's own arithmetic, as SQL, so the headline can be
-#: summed over every line rather than over the ones the table printed.
-_SUGGESTED_QUANTITY = Greatest(
-    ExpressionWrapper(
-        F("reorder_level") * 2 - F("quantity_on_hand") - F("quantity_expected"),
-        output_field=QTY,
-    ),
-    Value(Decimal("0"), output_field=QTY),
-    output_field=QTY,
-)
-
-
 def reorder_items(context):
-    stock = stocked_lines().select_related("variant", "variant__product").filter(
-        quantity_on_hand__lte=F("reorder_level"),
-    )
+    """One line per watched variant at or below its threshold, judged on the
+    shop-wide total — see ``apps.inventory.low_stock``. A variant with no
+    threshold is not listed: nobody asked to be told about it."""
+    stock = low_stock_variants().select_related("product")
     limit = context.row_limit("reorder_items")
     bounded = bounded_queryset(
-        with_variant_labels(
-            stock.order_by(
-                "quantity_on_hand",
-                "variant__product__name",
-                "variant__name",
+        stock.prefetch_related(
+            Prefetch(
+                "option_values",
+                queryset=VariantOptionValue.objects.select_related("option"),
             )
-        ),
+        ).order_by("on_hand", "product__name", "name", "pk"),
         limit=limit,
     )
     rows = []
-    for item in bounded.rows:
-        # Restock back to twice the reorder level, counting stock already on
-        # the way so the owner does not double-order.
-        suggested = max(
-            item.reorder_level * 2 - item.quantity_on_hand - item.quantity_expected,
-            Decimal("0"),
-        )
+    for variant in bounded.rows:
         rows.append(
             {
-                "product_name": item.variant.full_name,
-                "sku": item.variant.sku,
-                "quantity_on_hand": quantity(item.quantity_on_hand),
-                "quantity_expected": quantity(item.quantity_expected),
-                "reorder_level": quantity(item.reorder_level),
-                "suggested_quantity": quantity(suggested),
+                "product_name": variant.full_name,
+                "sku": variant.sku,
+                "quantity_on_hand": quantity(variant.on_hand),
+                "quantity_expected": quantity(variant.expected),
+                "reorder_level": quantity(variant.low_stock_threshold),
+                "suggested_quantity": quantity(suggested_reorder_quantity(variant)),
             }
         )
 
@@ -513,11 +480,11 @@ def reorder_items(context):
     # lines the table kept: summed from the rows, a summary cut to ten stated
     # ten lines' worth of units, and a headline-only pass stated none at all.
     suggested_units = stock.aggregate(
-        total=Coalesce(Sum(_SUGGESTED_QUANTITY), Value(Decimal("0")), output_field=QTY)
+        total=Coalesce(Sum(SUGGESTED_REORDER), Value(Decimal("0")), output_field=QTY)
     )["total"]
     figures = {
         "reorder_item_count": stock.count(),
-        "out_of_stock_count": stock.filter(quantity_on_hand__lte=0).count(),
+        "out_of_stock_count": stock.filter(on_hand__lte=0).count(),
         "suggested_units": quantity(suggested_units),
     }
     return {

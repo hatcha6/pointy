@@ -3,7 +3,10 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:http/http.dart' as http;
 
+import '../models/card_request.dart';
 import '../models/money_source.dart';
+import '../models/voucher_account.dart';
+import '../models/remote_session.dart';
 import '../models/remote_sign_in_status.dart';
 import '../models/return_search.dart';
 import '../models/attachment_summary.dart';
@@ -71,6 +74,7 @@ import '../models/relay_installation_status.dart';
 import '../models/relay_pairing.dart';
 import '../models/report_catalog.dart';
 import '../models/bulk_price_preview.dart';
+import '../models/bulk_tracking_change.dart';
 import '../models/report_run.dart';
 import '../models/sale_order.dart';
 import '../models/sale_order_page.dart';
@@ -113,6 +117,7 @@ import 'companion_api_client.dart';
 import 'ai_api_client.dart';
 import 'analytics_api_client.dart';
 import 'bulk_price_api_client.dart';
+import 'bulk_tracking_api_client.dart';
 import 'attendance_api_client.dart';
 import 'auth_api_client.dart';
 import 'business_notification_api_client.dart';
@@ -167,6 +172,7 @@ import 'modifier_group_api_client.dart';
 import 'prep_station_api_client.dart';
 import 'scale_barcode_rule_api_client.dart';
 import 'scales_api_client.dart';
+import 'reorder_api_client.dart';
 import 'search_miss_api_client.dart';
 import 'unit_of_measure_api_client.dart';
 import 'fx_api_client.dart';
@@ -203,6 +209,7 @@ class PosApiService {
     _shopSettings = ShopSettingsApiClient(_session);
     _catalog = CatalogApiClient(_session);
     _bulkPrices = BulkPriceApiClient(_session);
+    _bulkTracking = BulkTrackingApiClient(_session);
     _customers = CustomerApiClient(_session);
     _balances = BalanceApiClient(_session);
     _documentTrail = DocumentTrailApiClient(_session);
@@ -228,6 +235,7 @@ class PosApiService {
     _scaleBarcodeRules = ScaleBarcodeRuleApiClient(_session);
     _scales = ScalesApiClient(_session);
     _searchMisses = SearchMissApiClient(_session);
+    _reorder = ReorderApiClient(_session);
     _purchasing = PurchasingApiClient(_session);
     _printing = PrintingApiClient(_session);
     _messaging = MessagingApiClient(_session);
@@ -302,6 +310,7 @@ class PosApiService {
   late final ShopSettingsApiClient _shopSettings;
   late final CatalogApiClient _catalog;
   late final BulkPriceApiClient _bulkPrices;
+  late final BulkTrackingApiClient _bulkTracking;
   late final CustomerApiClient _customers;
   late final BalanceApiClient _balances;
   late final DashboardApiClient _dashboard;
@@ -327,6 +336,7 @@ class PosApiService {
   late final ScaleBarcodeRuleApiClient _scaleBarcodeRules;
   late final ScalesApiClient _scales;
   late final SearchMissApiClient _searchMisses;
+  late final ReorderApiClient _reorder;
   late final WalletApiClient _wallet;
   late final PurchasingApiClient _purchasing;
   late final PrintingApiClient _printing;
@@ -361,6 +371,12 @@ class PosApiService {
   /// [PosApiSession.onRelayTicketRejected].
   set onRelayTicketRejected(Future<RelayTicketRecovery> Function()? callback) {
     _session.onRelayTicketRejected = callback;
+  }
+
+  /// Fires when the backend (not the relay) answers 401. See
+  /// [PosApiSession.onBackendUnauthorized].
+  set onBackendUnauthorized(void Function()? callback) {
+    _session.onBackendUnauthorized = callback;
   }
 
   void configureConnectionTarget({
@@ -508,6 +524,14 @@ class PosApiService {
 
   Future<UserActivityOverview> fetchUserActivity(int id) {
     return _users.fetchUserActivity(id);
+  }
+
+  Future<List<RemoteSession>> fetchRemoteSessions({int? userId}) {
+    return _users.fetchRemoteSessions(userId: userId);
+  }
+
+  Future<RemoteSession> revokeRemoteSession(int id, {int? userId}) {
+    return _users.revokeRemoteSession(id, userId: userId);
   }
 
   Future<EmployeePage> fetchEmployees({int page = 1, String search = ''}) {
@@ -1011,6 +1035,26 @@ class PosApiService {
     required Map<String, Object?> spec,
     required String fingerprint,
   }) => _bulkPrices.apply(spec: spec, fingerprint: fingerprint);
+
+  Future<BulkTrackingPreview> previewBulkTrackingChange({
+    required BulkTrackingAction action,
+    required Map<String, Object?> filter,
+  }) => _bulkTracking.preview(action: action, filter: filter);
+
+  Future<BulkTrackingApplyResult> applyBulkTrackingChange({
+    required BulkTrackingAction action,
+    required Map<String, Object?> filter,
+    required List<int> productIds,
+  }) => _bulkTracking.apply(
+    action: action,
+    filter: filter,
+    productIds: productIds,
+  );
+
+  Future<ProductVariant> setVariantExpiryReminder(
+    int variantId,
+    DateTime? date,
+  ) => _catalog.setVariantExpiryReminder(variantId, date);
 
   Future<List<BulkPriceChangeRecord>> fetchBulkPriceChanges() =>
       _bulkPrices.fetchHistory();
@@ -2596,6 +2640,7 @@ class PosApiService {
 
   /// The catalogue's "searched but not found" worklist.
   SearchMissApiClient get searchMisses => _searchMisses;
+  ReorderApiClient get reorder => _reorder;
 
   /// The Daftar wallet: balance, top-ups through the payment gateway, history.
   WalletApiClient get wallet => _wallet;
@@ -2812,7 +2857,35 @@ class PosApiService {
   /// Perform an order's sold recharges. At most once per line, server-side.
   Future<List<IntegrationChargeResult>> chargeIntegrationRecharges({
     required int orderId,
-  }) => _integrations.charge(orderId: orderId);
+    bool noWait = false,
+  }) => _integrations.charge(orderId: orderId, noWait: noWait);
+
+  Future<List<CardRequest>> fetchCardRequests() =>
+      _integrations.fetchCardRequests();
+
+  Future<List<CardRequest>> settleCardRequests(List<int> lines) =>
+      _integrations.settleCardRequests(lines);
+
+  Future<SavedVoucherAccountPage> fetchSavedVoucherAccounts({
+    required String brand,
+    String search = '',
+    int? customer,
+  }) => _integrations.fetchSavedVoucherAccounts(
+    brand: brand,
+    search: search,
+    customer: customer,
+  );
+
+  Future<SavedVoucherAccount> renameSavedVoucherAccount(int id, String label) =>
+      _integrations.renameSavedVoucherAccount(id, label);
+
+  Future<void> deleteSavedVoucherAccount(int id) =>
+      _integrations.deleteSavedVoucherAccount(id);
+
+  Future<VoucherAccountCheck> checkVoucherAccount({
+    required int variantId,
+    required Map<String, String> values,
+  }) => _integrations.checkVoucherAccount(variantId: variantId, values: values);
 
   Future<PortalPaymentsDay> fetchPortalPayments(
     String providerKey, {
@@ -2944,11 +3017,13 @@ class PosApiService {
     int purchaseOrderId,
     PurchaseOrderDraft draft, {
     bool acknowledgeCostWarnings = false,
+    List<int> removedUnitIds = const [],
   }) {
     return _purchasing.updatePurchaseOrder(
       purchaseOrderId,
       draft,
       acknowledgeCostWarnings: acknowledgeCostWarnings,
+      removedUnitIds: removedUnitIds,
     );
   }
 

@@ -195,6 +195,9 @@ class ShopSettings(TimeStampedModel):
     print_voucher_qr_codes = models.BooleanField(default=True, db_default=True)
     allow_overselling = models.BooleanField(default=False)
     prevent_selling_at_loss = models.BooleanField(default=True)
+    # Retired, and never read by anything that alerted: the threshold is per
+    # variant now (``ProductVariant.low_stock_threshold``). Off the API, kept in
+    # the schema one release for the backend still serving a live update.
     low_stock_threshold = models.PositiveIntegerField(default=5)
     # How stock is costed when it was bought at several prices. Moving average
     # is the default because it is what the shops we run today were already
@@ -606,7 +609,6 @@ SHOP_TYPE_PRESETS = {
         "enable_production_operations": False,
         "allow_overselling": False,
         "prevent_selling_at_loss": True,
-        "low_stock_threshold": 10,
         "enable_batch_tracking": True,
     },
     # A pharmacy's shelves are lots and expiry dates before they are anything
@@ -862,3 +864,48 @@ class RelayConnectorSetupToken(TimeStampedModel):
     @property
     def is_expired(self):
         return self.expires_at is not None and timezone.now() >= self.expires_at
+
+
+class RemoteSession(TimeStampedModel):
+    """One sign-in from outside the shop, through the relay's sign-in route.
+
+    Each is a Django session (``session_key``) plus, once the device pairs,
+    the relay tickets minted for ``device_id``. Ending one deletes the session
+    and asks the relay to drop the device's tickets: see
+    ``apps.core.remote_sessions``.
+    """
+
+    class EndReason(models.TextChoices):
+        SIGNED_OUT = "signed_out", "Signed out"
+        REVOKED = "revoked", "Revoked"
+        REMOTE_SIGN_IN_DISABLED = "remote_sign_in_disabled", "Remote sign-in turned off"
+
+    user = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="remote_sessions",
+    )
+    session_key = models.CharField(max_length=40, db_index=True)
+    device_id = models.CharField(max_length=128, blank=True)
+    device_name = models.CharField(max_length=128, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=512, blank=True)
+    last_seen_at = models.DateTimeField()
+    expires_at = models.DateTimeField()
+    ended_at = models.DateTimeField(null=True, blank=True)
+    end_reason = models.CharField(max_length=32, choices=EndReason.choices, blank=True)
+    ended_by = models.ForeignKey(
+        django_settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["user", "-created_at"])]
+
+    @property
+    def is_active(self):
+        return self.ended_at is None and timezone.now() < self.expires_at

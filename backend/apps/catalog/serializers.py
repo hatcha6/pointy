@@ -729,6 +729,17 @@ class DefaultProductVariantInputSerializer(serializers.Serializer):
         allow_null=True,
         min_value=0,
     )
+    # Shop-wide on-hand count, in base units, at or below which the variant is
+    # low. Null clears it — the variant stops being watched. Omitted keeps
+    # whatever is stored, so a client that predates the field (the compat till
+    # build) never wipes a threshold by saving a product.
+    low_stock_threshold = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=3,
+        required=False,
+        allow_null=True,
+        min_value=0,
+    )
     is_active = serializers.BooleanField(required=False)
     option_values = serializers.PrimaryKeyRelatedField(
         queryset=VariantOptionValue.objects.all(),
@@ -953,6 +964,8 @@ class ProductVariantSerializer(serializers.ModelSerializer):
             "price_amount",
             "price_rate",
             "price_rate_at",
+            "low_stock_threshold",
+            "expiry_reminder_date",
             "is_active",
             "tracks_expiry",
             "expiry_required",
@@ -1149,6 +1162,17 @@ class ProductVariantInputSerializer(serializers.Serializer):
     price_amount = serializers.DecimalField(
         max_digits=10,
         decimal_places=2,
+        required=False,
+        allow_null=True,
+        min_value=0,
+    )
+    # Shop-wide on-hand count, in base units, at or below which the variant is
+    # low. Null clears it — the variant stops being watched. Omitted keeps
+    # whatever is stored, so a client that predates the field (the compat till
+    # build) never wipes a threshold by saving a product.
+    low_stock_threshold = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=3,
         required=False,
         allow_null=True,
         min_value=0,
@@ -1819,7 +1843,12 @@ class ProductCatalogSerializer(serializers.ModelSerializer):
         foreign_amount = variant_data.pop("price_amount", None)
         extra_barcodes = variant_data.pop(EXTRA_BARCODES_FIELD, None)
         opening_stock = _pop_opening_stock(variant_data)
+        has_threshold = "low_stock_threshold" in variant_data
+        threshold = variant_data.pop("low_stock_threshold", None)
         variant = product.ensure_default_variant(**variant_data)
+        if has_threshold and variant.low_stock_threshold != threshold:
+            variant.low_stock_threshold = threshold
+            variant.save(update_fields=["low_stock_threshold", "updated_at"])
         _derive_base_price(variant, foreign_amount)
         if extra_barcodes is not None:
             replace_extra_barcodes(variant, extra_barcodes)

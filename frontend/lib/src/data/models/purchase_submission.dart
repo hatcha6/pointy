@@ -602,6 +602,7 @@ class PurchaseOrderDraft {
               expiryDate: line.expiryDate,
               units: line.units,
               batches: line.batches,
+              sendCapture: line.variant.trackingMode.isTracked,
             ),
           )
           .toList(growable: false),
@@ -893,17 +894,56 @@ class PurchaseDraftLine {
     bool? unitAllowsFractional,
     DateTime? expiryDate,
     bool clearExpiryDate = false,
+    List<ReceiptUnitCapture>? units,
+    List<ReceiptBatchCapture>? batches,
   }) {
+    final nextQuantity = quantity ?? this.quantity;
+    final nextFactor = unitFactor ?? this.unitFactor;
+    var nextBatches = batches ?? this.batches;
+    // One lot is the whole line by definition, so it follows the line through
+    // every quantity path — stepper, typed count, repeat scan, unit switch —
+    // instead of each of them having to remember. A split is left alone.
+    if (batches == null &&
+        nextBatches.length == 1 &&
+        (nextQuantity != this.quantity || nextFactor != this.unitFactor)) {
+      nextBatches = [
+        nextBatches.single.copyWith(quantity: nextQuantity * nextFactor),
+      ];
+    }
     return PurchaseDraftLine(
       variant: variant ?? this.variant,
-      quantity: quantity ?? this.quantity,
+      quantity: nextQuantity,
       unitCost: unitCost ?? this.unitCost,
       unitCode: unitCode ?? this.unitCode,
       unitLabel: unitLabel ?? this.unitLabel,
-      unitFactor: unitFactor ?? this.unitFactor,
+      unitFactor: nextFactor,
       unitAllowsFractional: unitAllowsFractional ?? this.unitAllowsFractional,
       expiryDate: clearExpiryDate ? null : expiryDate ?? this.expiryDate,
+      // Carried through every edit: a quantity typed after the lots must not
+      // quietly throw the lots away.
+      units: units ?? this.units,
+      batches: nextBatches,
     );
+  }
+
+  /// What has been typed for this line's lots and serials.
+  ReceiptLineCapture get capture =>
+      ReceiptLineCapture(units: units, batches: batches);
+
+  /// Whether the identifiers typed so far still fit the line — more serials
+  /// than articles, or lots that no longer add up after a quantity change, are
+  /// refused by the server, so the line says so first. Fewer is fine: the
+  /// rest are captured when the goods arrive.
+  bool get captureFits {
+    final mode = variant.trackingMode;
+    if (units.length > baseQuantity.round() && mode.tracksUnits) {
+      return false;
+    }
+    if (mode.tracksLots && !mode.tracksUnits && batches.length > 1) {
+      final planned = batches.fold<double>(0, (sum, row) => sum + row.quantity);
+      return planned <= baseQuantity + 0.0005;
+    }
+    return true;
   }
 
   Map<String, Object?> toJson() {
@@ -916,6 +956,9 @@ class PurchaseDraftLine {
       'unit_factor': unitFactor,
       'unit_allows_fractional': unitAllowsFractional,
       'expiry_date': expiryDate?.toIso8601String(),
+      if (units.isNotEmpty) 'units': [for (final unit in units) unit.toJson()],
+      if (batches.isNotEmpty)
+        'batches': [for (final batch in batches) batch.toJson()],
     };
   }
 
@@ -925,6 +968,7 @@ class PurchaseDraftLine {
       throw const FormatException('purchase draft line is missing its variant');
     }
     final expiry = json['expiry_date'];
+    final capture = ReceiptLineCapture.fromJson(json['units'], json['batches']);
     return PurchaseDraftLine(
       variant: ProductVariant.fromJson(variantJson),
       quantity: (json['quantity'] as num?)?.toDouble() ?? 0,
@@ -934,6 +978,8 @@ class PurchaseDraftLine {
       unitFactor: (json['unit_factor'] as num?)?.toDouble() ?? 1,
       unitAllowsFractional: json['unit_allows_fractional'] == true,
       expiryDate: expiry == null ? null : DateTime.tryParse(expiry.toString()),
+      units: capture.units,
+      batches: capture.batches,
     );
   }
 }
@@ -966,6 +1012,7 @@ class PurchaseOrderLineDraft {
     this.unitCostInCurrency,
     this.units = const [],
     this.batches = const [],
+    this.sendCapture = false,
   });
 
   final int variantId;
@@ -982,17 +1029,19 @@ class PurchaseOrderLineDraft {
   /// base-currency order.
   final double? unitCostInCurrency;
 
-  /// Identifiers captured at the counter, for the one flow where ordering and
-  /// receiving are the same act: a shop buying a handset off a walk-in seller
-  /// scans the IMEI while the person is still standing there. Refused by the
-  /// server on every other purchase path, and empty for everything a shop
-  /// counts rather than identifies.
+  /// Identifiers known while the order is typed. The counter purchase hands
+  /// them straight to the receipt it makes in the same call; every other order
+  /// keeps them on the line as its plan (`planned_units`), which its receipt
+  /// starts from. Empty for everything a shop counts rather than identifies.
   final List<ReceiptUnitCapture> units;
 
-  /// The lots the goods came in, captured at the same counter for the same
-  /// reason, in base units. The server refuses them on any order that does not
-  /// receive in the same call, so only the counter purchase ever sets them.
+  /// The lots and their expiry dates, in base units — the plan's
+  /// `planned_batches`, or the counter receipt's lots.
   final List<ReceiptBatchCapture> batches;
+
+  /// Sent on every tracked line, even empty: an edit that cleared the lots
+  /// must clear the stored plan, and an absent key leaves it as it was.
+  final bool sendCapture;
 
   Map<String, Object?> toJson() {
     final normalizedUnit = unit.trim();
@@ -1005,8 +1054,9 @@ class PurchaseOrderLineDraft {
       if (unitCostInCurrency != null)
         'unit_cost_in_currency': unitCostJson(unitCostInCurrency!),
       if (expiryDate != null) 'expiry_date': _dateOnlyString(expiryDate!),
-      if (units.isNotEmpty) 'units': [for (final unit in units) unit.toJson()],
-      if (batches.isNotEmpty)
+      if (units.isNotEmpty || sendCapture)
+        'units': [for (final unit in units) unit.toJson()],
+      if (batches.isNotEmpty || sendCapture)
         'batches': [
           for (final batch in batches)
             if (!batch.isEmpty) batch.toJson(),

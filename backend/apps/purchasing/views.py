@@ -279,6 +279,10 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
         # Same code as the discount preview: suggestions are a drafting aid, so
         # the permission that lets you draft is the one that lets you see them.
         "suggestions": ("purchasing.add_purchaseorder",),
+        # The reorder queue exists to draft orders from, so it asks what drafting
+        # asks. Same permission for the draft it creates.
+        "reorder_queue": ("purchasing.add_purchaseorder",),
+        "create_from_reorder": ("purchasing.add_purchaseorder",),
         "product_cost_history": ("purchasing.view_purchaseorder",),
         "variant_cost_history": ("purchasing.view_purchaseorder",),
         "product_margin_impact": ("purchasing.view_purchaseorder",),
@@ -614,6 +618,44 @@ class PurchaseOrderViewSet(viewsets.ModelViewSet):
                 }
             ).data
         )
+
+    @action(detail=False, methods=["get"], url_path="reorder-queue")
+    def reorder_queue(self, request):
+        """What needs buying, most urgent first — see ``purchasing.reorder``.
+
+        ``?supplier=`` narrows to that supplier's products; ``?approaching=false``
+        leaves only what is already at or below its threshold.
+        """
+        from .reorder import reorder_queue
+
+        supplier_id = request.query_params.get("supplier")
+        if supplier_id is not None and not supplier_id.isdigit():
+            raise serializers.ValidationError({"supplier": "Supplier is invalid."})
+        rows, total = reorder_queue(
+            supplier_id=int(supplier_id) if supplier_id else None,
+            include_approaching=request.query_params.get("approaching") != "false",
+        )
+        return Response({"count": total, "results": rows})
+
+    @action(detail=False, methods=["post"], url_path="from-reorder")
+    def create_from_reorder(self, request):
+        """A draft order for the rows the buyer ticked on the reorder queue."""
+        from .reorder import ReorderOrderSerializer, reorder_order_payload
+
+        def create():
+            request_serializer = ReorderOrderSerializer(data=request.data)
+            request_serializer.is_valid(raise_exception=True)
+            serializer = self.get_serializer(
+                data=reorder_order_payload(
+                    supplier_id=request_serializer.validated_data["supplier"],
+                    lines=request_serializer.validated_data["lines"],
+                )
+            )
+            serializer.is_valid(raise_exception=True)
+            self.perform_create(serializer)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        return run_idempotent_request(request, create)
 
     @action(detail=False, methods=["post"], url_path="discount-preview")
     def discount_preview(self, request):

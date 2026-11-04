@@ -319,7 +319,6 @@ const _settings = ShopSettings(
   autoPrintReceipts: false,
   allowOverselling: false,
   preventSellingAtLoss: true,
-  lowStockThreshold: 5,
   cashierReturnWindowHours: 48,
   enableCashPayments: true,
   enableCardPayments: true,

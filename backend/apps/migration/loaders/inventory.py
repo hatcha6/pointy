@@ -109,8 +109,7 @@ class StockLoader(BaseLoader):
             lots = getattr(record, "lots", None) or [CanonicalStockLot(quantity=quantity)]
             return self._open_lots(variant, quantity, lots, record, resolver)
         defaults = {"quantity_on_hand": quantity}
-        if record.reorder_level is not None:
-            defaults["reorder_level"] = int(record.reorder_level)
+        _carry_threshold(variant_pk, record)
 
         stock_item, created = StockItem.objects.update_or_create(
             variant_id=variant_pk,
@@ -197,10 +196,7 @@ class StockLoader(BaseLoader):
         except ValidationError as exc:
             raise LoaderError(f"تعذّر فتح دفعات الصنف: {exc.detail}", code="lots_refused") from exc
         stock_item = StockItem.objects.filter(variant=variant).order_by("pk").first()
-        if record.reorder_level is not None:
-            StockItem.objects.filter(pk=stock_item.pk).update(
-                reorder_level=int(record.reorder_level)
-            )
+        _carry_threshold(variant.pk, record)
         resolver.remember(self.entity_type, record.source_key, stock_item)
         return LoadOutcome(CREATED, stock_item.pk)
 
@@ -391,3 +387,17 @@ class StockLoader(BaseLoader):
         entry.method = method
         entry.note = "رصيد افتتاحي من الترحيل"
         entry.save()
+
+
+def _carry_threshold(variant_pk, record):
+    """The source system's reorder level becomes the variant's low-stock
+    threshold. Only a positive one: old systems store 0 for "not set", and a
+    0 here would mean "warn me when it empties". A record without one leaves
+    whatever the variant already has, so a re-import never clears a threshold
+    the owner set since."""
+    level = record.reorder_level
+    if level is None or level <= 0:
+        return
+    ProductVariant.objects.filter(pk=variant_pk).update(
+        low_stock_threshold=to_decimal(level)
+    )

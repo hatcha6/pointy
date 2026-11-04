@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
@@ -207,11 +208,41 @@ class SurveillanceApiClient {
   }
 
   // -- video ---------------------------------------------------------------
+  /// The most one stream may ask for while the session runs through the relay.
+  ///
+  /// The bottleneck off-site is not the relay but the shop's uplink — usually
+  /// a mobile line that every till shares. On the LAN the player asks for the
+  /// main stream at the recorder's full rate (up to 30 fps): several MB/s of
+  /// JPEG, harmless on a switch, and enough through the relay to fill the
+  /// uplink and stall the shop's sales with it. Six frames a second at 960 px
+  /// keeps the full-screen player near 300 KB/s, and a wall tile — already
+  /// narrow — near 100 KB/s. The server only ever downscales
+  /// (`scale='min(w,iw)'`), so the cap never enlarges a small picture.
+  static const int remoteMaxFps = 6;
+  static const int remoteMaxWidth = 960;
+
+  /// What a stream actually asks for, given where the session is.
+  @visibleForTesting
+  static ({int fps, int width}) streamBudget({
+    required bool throughRelay,
+    required int fps,
+    required int width,
+  }) {
+    if (!throughRelay) {
+      return (fps: fps, width: width);
+    }
+    return (
+      fps: fps.clamp(1, remoteMaxFps),
+      width: width <= 0 ? remoteMaxWidth : math.min(width, remoteMaxWidth),
+    );
+  }
+
   /// Live frames for one camera.
   ///
   /// [smooth] asks the server for the RTSP pipeline instead of snapshot polling
   /// — more frames, more server CPU — and is silently ignored where ffmpeg is
-  /// absent, so callers need not pre-check.
+  /// absent, so callers need not pre-check. Through the relay, [fps] and
+  /// [width] are held to [streamBudget].
   Stream<CameraFrame> liveFrames(
     int cameraId, {
     int fps = 4,
@@ -219,19 +250,24 @@ class SurveillanceApiClient {
     bool smooth = false,
     int width = 0,
   }) {
+    final budget = streamBudget(
+      throughRelay: _session.usesRelay,
+      fps: fps,
+      width: width,
+    );
     return _frames(
       'surveillance/cameras/$cameraId/live/',
       query: {
-        'fps': '$fps',
+        'fps': '${budget.fps}',
         if (quality != null) 'quality': quality.wireValue,
         // Always stated, never omitted. The server treats an absent `smooth`
         // as "yes" — the RTSP pipeline is its default — so a caller that wants
         // the cheap snapshot path (the dashboard) has to say so out loud.
         'smooth': smooth ? 'true' : 'false',
-        if (width > 0) 'width': '$width',
+        if (budget.width > 0) 'width': '${budget.width}',
       },
       pollFallback: () => snapshotUrl(cameraId, quality: quality),
-      pollInterval: Duration(milliseconds: (1000 / fps).round()),
+      pollInterval: Duration(milliseconds: (1000 / budget.fps).round()),
     );
   }
 
@@ -282,7 +318,8 @@ class SurveillanceApiClient {
     );
   }
 
-  /// Recorded frames for a window, paced at [speed] times real time.
+  /// Recorded frames for a window, paced at [speed] times real time. Through
+  /// the relay, [fps] and [width] are held to [streamBudget].
   Stream<CameraFrame> playbackFrames(
     int cameraId, {
     required DateTime start,
@@ -292,15 +329,20 @@ class SurveillanceApiClient {
     CameraQuality? quality,
     int width = 0,
   }) {
+    final budget = streamBudget(
+      throughRelay: _session.usesRelay,
+      fps: fps,
+      width: width,
+    );
     return _frames(
       'surveillance/cameras/$cameraId/playback/',
       query: {
         'start': start.toUtc().toIso8601String(),
         'end': end.toUtc().toIso8601String(),
         'speed': '$speed',
-        'fps': '$fps',
+        'fps': '${budget.fps}',
         if (quality != null) 'quality': quality.wireValue,
-        if (width > 0) 'width': '$width',
+        if (budget.width > 0) 'width': '${budget.width}',
       },
     );
   }
@@ -361,24 +403,45 @@ class SurveillanceApiClient {
   }
 
   // -- multipart plumbing --------------------------------------------------
+  /// Whether a frame stream is polled as stills instead of streamed.
+  ///
+  /// Only ever on web, and only over plain HTTP. The browser client reads a
+  /// response body as it arrives (`fetch` and a `ReadableStream`), so a browser
+  /// plays MJPEG the way a till does. What it cannot do over plain HTTP is hold
+  /// many: HTTP/1.1 gives an origin about six connections, and a wall of
+  /// streaming tiles would take every one, leaving the rest of the app queued
+  /// behind a camera. Browsers speak HTTP/2 — any number of streams over one
+  /// connection — only over TLS, so an `https` origin (the hosted web app,
+  /// through the relay) streams. Polling there would be the wrong trade anyway:
+  /// every still is one request through the relay, and a few tiles at a few
+  /// frames a second spend the shop's whole relay request budget.
+  ///
+  /// A stream with no still to fall back on — playback — streams regardless:
+  /// it is one connection, in the one full-screen player.
+  @visibleForTesting
+  static bool pollsInsteadOfStreaming({
+    required bool isWeb,
+    required Uri target,
+    required bool hasStillFallback,
+  }) => isWeb && hasStillFallback && target.scheme != 'https';
+
   /// Opens an MJPEG (`multipart/x-mixed-replace`) response and emits its parts.
   ///
-  /// On web the HTTP client buffers a response until it completes, so a live
-  /// stream would deliver nothing, ever. [pollFallback] is the honest answer
-  /// there: fetch stills on a timer at the same rate. Native platforms — the
-  /// tills, which is where this feature lives — stream properly.
+  /// Streams on every platform, the browser included, except where
+  /// [pollsInsteadOfStreaming] says a browser must fetch stills on a timer at
+  /// the same rate instead.
   Stream<CameraFrame> _frames(
     String path, {
     Map<String, String> query = const {},
     String Function()? pollFallback,
     Duration pollInterval = const Duration(milliseconds: 250),
   }) {
-    if (kIsWeb) {
-      if (pollFallback == null) {
-        return Stream<CameraFrame>.error(
-          StateError('Playback is not supported in the browser build.'),
-        );
-      }
+    if (pollFallback != null &&
+        pollsInsteadOfStreaming(
+          isWeb: kIsWeb,
+          target: _session.uri(path),
+          hasStillFallback: true,
+        )) {
       return _pollFrames(pollFallback(), pollInterval);
     }
     late StreamController<CameraFrame> controller;
@@ -450,8 +513,9 @@ class SurveillanceApiClient {
     return controller.stream;
   }
 
-  /// [_pollFrames] for tests: only the browser build polls, and `kIsWeb` is a
-  /// compile-time constant, so a VM test cannot reach it through [liveFrames].
+  /// [_pollFrames] for tests: only a browser over plain HTTP polls, and `kIsWeb`
+  /// is a compile-time constant, so a VM test cannot reach it through
+  /// [liveFrames].
   @visibleForTesting
   Stream<CameraFrame> pollFrames(String path, Duration interval) =>
       _pollFrames(path, interval);

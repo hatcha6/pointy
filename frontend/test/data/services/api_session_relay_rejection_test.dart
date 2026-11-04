@@ -331,4 +331,45 @@ void main() {
       expect(fromBackend?.fromRelay, isFalse);
     });
   });
+
+  group('a 401 the backend answers', () {
+    PosApiSession sessionAnswering(http.Response Function() answer) {
+      return PosApiSession(
+        client: MockClient((_) async => answer()),
+        baseUrl: 'http://shop.test/api',
+      );
+    }
+
+    test('is reported, so the app can check it is still signed in', () async {
+      final session = sessionAnswering(_backendSignedOut);
+      var reports = 0;
+      session.onBackendUnauthorized = () => reports++;
+
+      final response = await session.get('state/');
+
+      expect(response.statusCode, 401);
+      expect(reports, 1);
+    });
+
+    test('a 401 of the relay\'s own is not', () async {
+      final tickets = <String?>[];
+      final session = _sessionOnRelay(ticketsSeen: tickets);
+      var reports = 0;
+      session.onBackendUnauthorized = () => reports++;
+
+      await session.get('products/');
+
+      expect(reports, 0);
+    });
+
+    test('nor is an answer that worked', () async {
+      final session = sessionAnswering(() => http.Response('{}', 200));
+      var reports = 0;
+      session.onBackendUnauthorized = () => reports++;
+
+      await session.get('state/');
+
+      expect(reports, 0);
+    });
+  });
 }

@@ -38,6 +38,7 @@ import '../view_models/pos_view_model.dart';
 import 'pos_cash_purchase_sheet.dart';
 import 'direct_services/service_requote_dialog.dart';
 import 'pos_cart_pane.dart';
+import 'card_requests/pos_card_requests_dock.dart';
 import 'pos_catalog_pane.dart';
 import 'pos_shortcuts_sheet.dart';
 import 'pos_unit_pick.dart';
@@ -717,27 +718,18 @@ class _PosWorkspaceState extends State<_PosWorkspace> {
     if (line == null) {
       return false;
     }
-    final options = sellableUnitOptions(
-      AppLocalizations.of(context)!,
-      Product.fromVariant(line.variant),
-      line.variant.unitPrice,
+    final next = cycledUnitOption(
+      sellableUnitOptions(
+        AppLocalizations.of(context)!,
+        Product.fromVariant(line.variant),
+        line.variant.unitPrice,
+      ),
+      line.unitCode,
+      key,
     );
-    if (options.length < 2) {
+    if (next == null) {
       return false;
     }
-    final currentCode = line.unitCode.isEmpty
-        ? options.first.code
-        : line.unitCode;
-    var index = options.indexWhere((option) => option.code == currentCode);
-    if (index == -1) {
-      index = 0;
-    }
-    final forward =
-        key == null ||
-        key == LogicalKeyboardKey.arrowUp ||
-        key == LogicalKeyboardKey.arrowRight;
-    final next =
-        options[(index + (forward ? 1 : -1) + options.length) % options.length];
     return viewModel.setActiveCartLineUnit(next);
   }
 
@@ -749,8 +741,6 @@ class _PosWorkspaceState extends State<_PosWorkspace> {
     if (line == null) {
       return;
     }
-    final l10n = AppLocalizations.of(context)!;
-    final messenger = ScaffoldMessenger.of(context);
     final removed = viewModel.removeCartLine(
       line.lineKey,
       source: 'keyboard_delete_line',
@@ -758,18 +748,11 @@ class _PosWorkspaceState extends State<_PosWorkspace> {
     if (removed == null) {
       return;
     }
-    messenger
-      ..clearSnackBars()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(l10n.cartLineRemovedMessage),
-          action: SnackBarAction(
-            label: l10n.undoButton,
-            onPressed: () =>
-                viewModel.restoreCartLine(removed.line, removed.index),
-          ),
-        ),
-      );
+    showLineRemovedUndo(
+      context,
+      message: AppLocalizations.of(context)!.cartLineRemovedMessage,
+      onUndo: () => viewModel.restoreCartLine(removed.line, removed.index),
+    );
   }
 
   @override
@@ -819,6 +802,10 @@ class _PosWorkspaceState extends State<_PosWorkspace> {
         // cost" asked mid-haggle with a customer across the counter —
         // and the same counter is why it goes away again just as fast.
         // Deliberately far from F4, which deletes.
+        // F10 glances at the card requests, and puts them away again.
+        if (key == LogicalKeyboardKey.f10) {
+          return viewModel.cardRequests.togglePanel();
+        }
         if (key == LogicalKeyboardKey.f9) {
           if (!capabilities.canViewTillCost) {
             return false;
@@ -842,12 +829,17 @@ class _PosWorkspaceState extends State<_PosWorkspace> {
             return TwoPaneLayout(
               minPrimaryWidth: 390,
               secondaryPaneMaxWidth: AppPaneWidths.orderPaneMaxWidthFor(width),
-              primaryPane: PosCatalogPane(
-                viewModel: viewModel,
-                capabilities: capabilities,
-                rechargeProviders: _rechargeProviders,
-                onRecharge: _openRecharge,
-                onTransferVoucherBalance: _voucherTransfer,
+              primaryPane: PosCardRequestsDock(
+                controller: viewModel.cardRequests,
+                onPrint: viewModel.reprintCardRequest,
+                showsWhenIdle: viewModel.showsVoucherMenu,
+                child: PosCatalogPane(
+                  viewModel: viewModel,
+                  capabilities: capabilities,
+                  rechargeProviders: _rechargeProviders,
+                  onRecharge: _openRecharge,
+                  onTransferVoucherBalance: _voucherTransfer,
+                ),
               ),
               secondaryPane: PosCartPane(
                 viewModel: viewModel,
@@ -900,12 +892,17 @@ class _CompactPosWorkspace extends StatelessWidget {
     return Column(
       children: [
         Expanded(
-          child: PosCatalogPane(
-            viewModel: viewModel,
-            capabilities: capabilities,
-            rechargeProviders: rechargeProviders,
-            onRecharge: onRecharge,
-            onTransferVoucherBalance: onTransferVoucherBalance,
+          child: PosCardRequestsDock(
+            controller: viewModel.cardRequests,
+            onPrint: viewModel.reprintCardRequest,
+            showsWhenIdle: viewModel.showsVoucherMenu,
+            child: PosCatalogPane(
+              viewModel: viewModel,
+              capabilities: capabilities,
+              rechargeProviders: rechargeProviders,
+              onRecharge: onRecharge,
+              onTransferVoucherBalance: onTransferVoucherBalance,
+            ),
           ),
         ),
         PointyCompactOrderLauncher(

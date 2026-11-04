@@ -81,12 +81,14 @@ class ReportingRoleVisibilityTests(TestCase):
         )
 
         product = create_product_with_default_variant(
-            sku="ROLE-1", name="سلعة", unit_price=Decimal("4.00")
+            sku="ROLE-1",
+            name="سلعة",
+            unit_price=Decimal("4.00"),
+            low_stock_threshold=Decimal("10.000"),
         )
         StockItem.objects.create(
             variant=product.default_variant,
             quantity_on_hand=Decimal("3.000"),
-            reorder_level=Decimal("10.000"),
         )
         # The sale belongs to the cashier's till, which is the whole point:
         # nobody else owns the session it was rung up on.

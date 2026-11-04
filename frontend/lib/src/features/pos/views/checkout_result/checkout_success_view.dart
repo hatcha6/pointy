@@ -12,6 +12,7 @@ import '../../view_models/pos_view_model.dart';
 import '../direct_services/service_charge_issue_details.dart';
 import '../direct_services/service_delivered_details.dart';
 import '../recharge_outcome_details.dart';
+import 'card_request_following_note.dart';
 import 'checkout_receipt_actions.dart';
 import 'invoice_link_card.dart';
 import 'voucher_codes_card.dart';
@@ -33,7 +34,11 @@ class CheckoutSuccessView extends StatelessWidget {
     this.onlineInvoicesEnabled = false,
     this.onOpenSettings,
     this.scanToContinue = false,
+    this.receiptFollows = false,
   });
+
+  /// The requests panel prints this sale's receipt when the supplier answers.
+  final bool receiptFollows;
 
   final SaleOrder order;
   final SaleType saleType;
@@ -51,7 +56,7 @@ class CheckoutSuccessView extends StatelessWidget {
 
   /// Something a provider did not do, or did not say whether it did.
   static bool needsAttention(List<IntegrationChargeResult> recharges) =>
-      recharges.any((row) => !row.isCharged);
+      recharges.any((row) => !row.isCharged && !row.inProgress);
 
   /// Whether the result must stay up until the cashier closes it on purpose:
   /// a PIN or token not yet handed over, or a charge nobody knows the fate
@@ -59,7 +64,7 @@ class CheckoutSuccessView extends StatelessWidget {
   static bool holdsOpen(List<IntegrationChargeResult> recharges) =>
       recharges.any(
         (row) =>
-            row.needsAttention ||
+            (row.needsAttention && !row.inProgress) ||
             (row.isCharged &&
                 (row.voucherCode.isNotEmpty ||
                     (row.receipt['pin'] ?? '').trim().isNotEmpty)),
@@ -71,14 +76,22 @@ class CheckoutSuccessView extends StatelessWidget {
     final colors = context.pointyColors;
     final textTheme = Theme.of(context).textTheme;
 
+    final following = recharges
+        .where((row) => row.inProgress)
+        .toList(growable: false);
+    final sentToAccounts = recharges
+        .where((row) => row.isSentToAccount)
+        .toList(growable: false);
     final cardRows = recharges
-        .where((row) => !row.isDirectService)
+        .where((row) => !row.isDirectService && !row.inProgress)
         .toList(growable: false);
     final unperformedCards = cardRows
         .where((row) => !row.isCharged)
         .toList(growable: false);
     final unperformedServices = recharges
-        .where((row) => row.isDirectService && !row.isCharged)
+        .where(
+          (row) => row.isDirectService && !row.isCharged && !row.inProgress,
+        )
         .toList(growable: false);
     final deliveredServices = recharges
         .where((row) => row.isDirectService && row.isCharged)
@@ -167,6 +180,13 @@ class CheckoutSuccessView extends StatelessWidget {
         ],
       ),
       children: [
+        if (following.isNotEmpty)
+          CardRequestFollowingNote(
+            rows: following,
+            receiptFollows: receiptFollows,
+          ),
+        if (sentToAccounts.isNotEmpty)
+          AccountDeliveredNote(rows: sentToAccounts),
         if (unperformedCards.isNotEmpty)
           RechargeOutcomeDetails(rows: unperformedCards),
         if (unperformedServices.isNotEmpty)
@@ -191,6 +211,7 @@ class CheckoutSuccessView extends StatelessWidget {
           initialPrintStatus: printStatus,
           handlers: handlers,
           customerPhone: order.customerPhone ?? '',
+          receiptFollows: receiptFollows,
         ),
       ],
     );

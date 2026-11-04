@@ -27,6 +27,8 @@ from apps.core.models import ShopSettings
 from apps.core.dispatch import enqueue_best_effort
 from apps.core.roles import user_is_manager
 from apps.discounts.models import DiscountRule
+from apps.inventory.low_stock import low_stock_variants
+from apps.inventory.expiry_reminders import due_reminders
 from apps.inventory.models import StockBatch, StockItem
 from apps.payments.models import Payment
 from apps.printing.models import PrintAgent, PrintJob
@@ -55,6 +57,7 @@ MANAGED_CODES = (
     "inventory.low_stock",
     "inventory.position_untrusted",
     "inventory.expiring_batch",
+    "inventory.expiry_reminder",
     # Phase D. Three things a shop that identifies its stock has to be told
     # about without going looking: goods on the shelf that nothing has named,
     # a claim on somebody else's property that nobody has priced, and money in
@@ -123,6 +126,10 @@ NOTIFICATION_AUDIENCE_RULES = {
         "manager_only": True,
     },
     "inventory.expiring_batch": {
+        "permissions": ("inventory.view_stockitem", "inventory.view_stockmovement"),
+        "manager_only": True,
+    },
+    "inventory.expiry_reminder": {
         "permissions": ("inventory.view_stockitem", "inventory.view_stockmovement"),
         "manager_only": True,
     },
@@ -567,46 +574,34 @@ def _inventory_notifications(now):
         # Every per-variant alert would be derived from the same broken data.
         return specs
 
-    # Only rows that can alert leave the DB: on a 30k-item catalog a handful
-    # are at/below reorder, but this used to materialize every StockItem.
+    # Per-variant alerts are for the variants the shop chose to watch, judged
+    # on the shop-wide total (``apps.inventory.low_stock``). A variant with no
+    # threshold raises nothing — not even out of stock — so clearing one also
+    # resolves its open alert on the next pass. Only variants that can alert
+    # leave the DB.
     stock = (
-        tracked.select_related("variant", "variant__product")
-        .filter(
-            Q(quantity_on_hand__lte=0)
-            | Q(quantity_on_hand__lte=F("reorder_level"))
-        )
-        .order_by("quantity_on_hand", "variant_id")
+        low_stock_variants()
+        .select_related("product")
+        .order_by("on_hand", "pk")
     )
 
     item_specs = []
-    for item in stock:
-        if item.quantity_on_hand < 0:
+    for variant in stock:
+        if variant.on_hand < 0:
             # Covered by the roll-up above.
             continue
-        if item.quantity_on_hand == 0:
-            item_specs.append(
-                _spec(
-                    code="inventory.out_of_stock",
-                    category=BusinessNotification.Category.INVENTORY,
-                    severity=BusinessNotification.Severity.WARNING,
-                    fingerprint=f"inventory.out_of_stock:variant:{item.variant_id}",
-                    entity_type="catalog.productvariant",
-                    entity_id=str(item.variant_id),
-                    payload=_stock_payload(item),
-                )
+        code = "inventory.out_of_stock" if variant.on_hand == 0 else "inventory.low_stock"
+        item_specs.append(
+            _spec(
+                code=code,
+                category=BusinessNotification.Category.INVENTORY,
+                severity=BusinessNotification.Severity.WARNING,
+                fingerprint=f"{code}:variant:{variant.pk}",
+                entity_type="catalog.productvariant",
+                entity_id=str(variant.pk),
+                payload=_stock_payload(variant),
             )
-        elif item.quantity_on_hand <= item.reorder_level:
-            item_specs.append(
-                _spec(
-                    code="inventory.low_stock",
-                    category=BusinessNotification.Category.INVENTORY,
-                    severity=BusinessNotification.Severity.WARNING,
-                    fingerprint=f"inventory.low_stock:variant:{item.variant_id}",
-                    entity_type="catalog.productvariant",
-                    entity_id=str(item.variant_id),
-                    payload=_stock_payload(item),
-                )
-            )
+        )
 
     if max_items and len(item_specs) > max_items:
         dropped = len(item_specs) - max_items
@@ -701,6 +696,38 @@ def _expiry_notifications(now):
                     "days": max(days, 0),
                     "batch_code": batch.display_code,
                     "supplier_name": supplier_name,
+                    "count": 1,
+                },
+            )
+        )
+    for variant, quantity in due_reminders(window_end=window_end):
+        days = (variant.expiry_reminder_date - today).days
+        severity = BusinessNotification.Severity.INFO
+        if days <= 1:
+            severity = BusinessNotification.Severity.CRITICAL
+        elif days <= 7:
+            severity = BusinessNotification.Severity.WARNING
+        specs.append(
+            _spec(
+                code="inventory.expiry_reminder",
+                category=BusinessNotification.Category.INVENTORY,
+                severity=severity,
+                # The date is in the key: moving it is a new reminder, so one
+                # the owner hid does not stay hidden after they reschedule it.
+                fingerprint=(
+                    f"inventory.expiry_reminder:variant:{variant.pk}:"
+                    f"{variant.expiry_reminder_date.isoformat()}"
+                ),
+                entity_type="catalog.productvariant",
+                entity_id=str(variant.pk),
+                payload={
+                    "product_name": variant.full_name,
+                    "sku": variant.sku,
+                    "quantity": float(quantity),
+                    "expiry_date": variant.expiry_reminder_date.isoformat(),
+                    "days": max(days, 0),
+                    "batch_code": "",
+                    "supplier_name": "",
                     "count": 1,
                 },
             )
@@ -1413,16 +1440,18 @@ def _spec(
     }
 
 
-def _stock_payload(item):
-    variant_name = item.variant.name.strip()
-    product_name = item.variant.product.name
+def _stock_payload(variant):
+    """``variant`` comes from ``low_stock_variants()``: its quantities are the
+    shop-wide totals annotated there."""
+    variant_name = variant.name.strip()
+    product_name = variant.product.name
     display_name = f"{product_name} - {variant_name}" if variant_name else product_name
     return {
         "product_name": display_name,
-        "sku": item.variant.sku,
-        "quantity": float(item.quantity_on_hand),
-        "threshold": item.reorder_level,
-        "expected": item.quantity_expected,
+        "sku": variant.sku,
+        "quantity": float(variant.on_hand),
+        "threshold": float(variant.low_stock_threshold),
+        "expected": float(variant.expected),
         "count": 1,
     }
 

@@ -23,6 +23,8 @@ class CartLineIntegration {
     this.quotedAt,
     this.quoteRequest,
     this.testMode = false,
+    this.accountTarget = const {},
+    this.accountName = '',
   });
 
   final String provider;
@@ -60,6 +62,16 @@ class CartLineIntegration {
   /// with the held invoice, never sent to the server (which knows its own mode).
   final bool testMode;
 
+  /// For a card sent to an account: what the customer gave, by the brand's
+  /// fields (`{'player_id': '5123456789'}`). Empty for everything else.
+  final Map<String, String> accountTarget;
+
+  /// Who the look-up said that account is, when it said.
+  final String accountName;
+
+  /// A card sent to an account: a game top-up, Telegram Stars.
+  bool get isSentToAccount => accountTarget.isNotEmpty;
+
   /// «كروت دفتر»' direct services are told apart by the option code the server
   /// built (`air:…` for airtime, `bill:…` for a bill), so a held invoice keeps
   /// knowing what a line is without a field of its own.
@@ -96,6 +108,8 @@ class CartLineIntegration {
     'months': months,
     'package_id': packageId,
     'package_name': packageName,
+    if (accountTarget.isNotEmpty) 'account_target': accountTarget,
+    if (accountName.isNotEmpty) 'account_name': accountName,
   };
 
   /// What a held invoice keeps: [toJson] and when the quote was given.
@@ -151,6 +165,13 @@ class CartLineIntegration {
             }
           : null,
       testMode: json['test_mode'] == true,
+      accountTarget: json['account_target'] is Map
+          ? {
+              for (final entry in (json['account_target'] as Map).entries)
+                entry.key.toString(): entry.value.toString(),
+            }
+          : const {},
+      accountName: json['account_name']?.toString() ?? '',
     );
   }
 }

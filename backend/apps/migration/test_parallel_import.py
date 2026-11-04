@@ -11,6 +11,7 @@ import threading
 from collections import Counter
 from unittest import mock, skipUnless
 
+from django.core.management import call_command
 from django.db import connection
 from django.test import TransactionTestCase, override_settings
 
@@ -91,6 +92,25 @@ def _issues(run):
 @override_settings(POINTY_MIGRATION_IMPORT_WORKERS=2)
 class ParallelImportTests(MigrationFixtures, TransactionTestCase):
     serialized_rollback = True
+
+    @classmethod
+    def _fixture_setup(cls):
+        # serialized_rollback restores the post-migration snapshot onto the
+        # database as it finds it. A TransactionTestCase without it that ran
+        # earlier flushed with post_migrate firing, which recreates the role
+        # groups, so the restore collided with them («manager» already
+        # exists) depending on test order. Start from empty, as the snapshot
+        # assumes; post_migrate stays quiet, since the snapshot holds its rows.
+        for db_name in cls._databases_names(include_mirrors=False):
+            call_command(
+                "flush",
+                verbosity=0,
+                interactive=False,
+                database=db_name,
+                reset_sequences=False,
+                inhibit_post_migrate=True,
+            )
+        super()._fixture_setup()
 
     def setUp(self):
         super().setUp()

@@ -224,6 +224,17 @@ class PosApiSession {
   /// followed failed on the same 401, reported as a wrong password.
   Future<RelayTicketRecovery> Function()? onRelayTicketRejected;
 
+  /// Invoked when the backend itself answers 401 — never a 401 of the relay's
+  /// own, which [onRelayTicketRejected] handles. That is the server saying
+  /// this device's session is gone, and only a fresh look at `auth/me` can
+  /// tell the app so: nothing else moves it off the signed-in screens.
+  ///
+  /// Field telemetry, 2026-11-01: a till booted with its clock two months
+  /// slow, signed in, then NTP corrected the clock and the session expired at
+  /// once. Every request answered 401 while the dashboard stayed up, and the
+  /// cashier could not find a way back to the sign-in page.
+  void Function()? onBackendUnauthorized;
+
   /// LRU of (etag, body) per request URL for opt-in conditional GETs — the
   /// catalog/category/unit/modifier/notification list endpoints send ETags so
   /// unchanged polls come back as an empty 304 and the stored body is replayed
@@ -1014,6 +1025,9 @@ class PosApiSession {
         responseSizeBytes: response.bodyBytes.length,
         traceId: traceId,
       );
+      if (response.statusCode == 401 && !isRelayError(response)) {
+        onBackendUnauthorized?.call();
+      }
       return response;
     }
 

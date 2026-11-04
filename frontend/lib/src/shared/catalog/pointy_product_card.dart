@@ -103,107 +103,116 @@ class PointyProductCard extends StatelessWidget {
                   }
                   return null;
                 }),
-                child: Padding(
-                  padding: EdgeInsetsDirectional.all(cardPadding),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(
-                        child: Stack(
-                          children: [
-                            Positioned.fill(
-                              child: PointyProductImageFrame(
-                                imageUrl: imageUrl,
-                                fallbackText: fallbackText,
-                                padding: EdgeInsets.all(imagePadding),
-                                backgroundColor: Color.alphaBlend(
-                                  colors.primaryStrong.withValues(alpha: 0.035),
-                                  colors.subtleFill,
-                                ),
-                                border: Border.all(
-                                  color: colors.line.withValues(alpha: 0.52),
-                                ),
-                              ),
-                            ),
-                            if (status != null)
-                              PositionedDirectional(
-                                top: 8,
-                                start: 8,
-                                child: _ProductCardBadge(child: status!),
-                              ),
-                            if (inCart)
-                              PositionedDirectional(
-                                top: 8,
-                                end: 8,
-                                child: PointyCartQuantityBadge(
-                                  quantity: cartQuantity,
+                // The keyboard's selection, drawn OVER the image — the ink
+                // tint alone sat under it, so a result picked with the arrows
+                // looked exactly like one that was not.
+                child: _KeyboardFocusRing(
+                  radius: PointyRadii.card,
+                  color: colors.primaryStrong,
+                  child: Padding(
+                    padding: EdgeInsetsDirectional.all(cardPadding),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(
+                          child: Stack(
+                            children: [
+                              Positioned.fill(
+                                child: PointyProductImageFrame(
+                                  imageUrl: imageUrl,
+                                  fallbackText: fallbackText,
+                                  padding: EdgeInsets.all(imagePadding),
+                                  backgroundColor: Color.alphaBlend(
+                                    colors.primaryStrong.withValues(
+                                      alpha: 0.035,
+                                    ),
+                                    colors.subtleFill,
+                                  ),
+                                  border: Border.all(
+                                    color: colors.line.withValues(alpha: 0.52),
+                                  ),
                                 ),
                               ),
-                            if (marker != null)
-                              PositionedDirectional(
-                                bottom: 6,
-                                start: 6,
-                                end: 6,
-                                child: Align(
-                                  alignment: AlignmentDirectional.bottomStart,
-                                  child: _ProductCardBadge(child: marker!),
+                              if (status != null)
+                                PositionedDirectional(
+                                  top: 8,
+                                  start: 8,
+                                  child: _ProductCardBadge(child: status!),
                                 ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      SizedBox(height: contentGap),
-                      if (resolvedSku.isNotEmpty) ...[
-                        Text(
-                          resolvedSku,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: colors.mutedInk,
-                            fontWeight: FontWeight.w600,
+                              if (inCart)
+                                PositionedDirectional(
+                                  top: 8,
+                                  end: 8,
+                                  child: PointyCartQuantityBadge(
+                                    quantity: cartQuantity,
+                                  ),
+                                ),
+                              if (marker != null)
+                                PositionedDirectional(
+                                  bottom: 6,
+                                  start: 6,
+                                  end: 6,
+                                  child: Align(
+                                    alignment: AlignmentDirectional.bottomStart,
+                                    child: _ProductCardBadge(child: marker!),
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
-                        SizedBox(height: isCompact ? 3 : 4),
-                      ],
-                      Text(
-                        title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style:
-                            (isCompact
-                                    ? theme.textTheme.titleSmall
-                                    : theme.textTheme.titleMedium)
-                                ?.copyWith(
-                                  color: colors.ink,
-                                  fontWeight: FontWeight.w800,
-                                  height: 1.2,
-                                ),
-                      ),
-                      if (resolvedPrice.isNotEmpty) ...[
                         SizedBox(height: contentGap),
-                        _CardFooterRow(
-                          enabled: enabled,
-                          child: Text(
-                            resolvedPrice,
+                        if (resolvedSku.isNotEmpty) ...[
+                          Text(
+                            resolvedSku,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              color: colors.primaryStrong,
-                              fontWeight: FontWeight.w900,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: colors.mutedInk,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
+                          SizedBox(height: isCompact ? 3 : 4),
+                        ],
+                        Text(
+                          title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style:
+                              (isCompact
+                                      ? theme.textTheme.titleSmall
+                                      : theme.textTheme.titleMedium)
+                                  ?.copyWith(
+                                    color: colors.ink,
+                                    fontWeight: FontWeight.w800,
+                                    height: 1.2,
+                                  ),
                         ),
-                      ] else if (stockLabel != null) ...[
-                        SizedBox(height: contentGap),
-                        _CardFooterRow(enabled: enabled, child: stockLabel!),
-                      ] else if (onTap != null) ...[
-                        SizedBox(height: contentGap),
-                        Align(
-                          alignment: AlignmentDirectional.centerEnd,
-                          child: PointyAddToOrderCue(enabled: enabled),
-                        ),
+                        if (resolvedPrice.isNotEmpty) ...[
+                          SizedBox(height: contentGap),
+                          _CardFooterRow(
+                            enabled: enabled,
+                            child: Text(
+                              resolvedPrice,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                color: colors.primaryStrong,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ] else if (stockLabel != null) ...[
+                          SizedBox(height: contentGap),
+                          _CardFooterRow(enabled: enabled, child: stockLabel!),
+                        ] else if (onTap != null) ...[
+                          SizedBox(height: contentGap),
+                          Align(
+                            alignment: AlignmentDirectional.centerEnd,
+                            child: PointyAddToOrderCue(enabled: enabled),
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -329,6 +338,34 @@ class PointyAddToOrderCue extends StatelessWidget {
           color: cueColor,
         ),
       ),
+    );
+  }
+}
+
+/// A ring around a card while the keyboard has it, drawn in front of the
+/// card's content. Reads the focus of the nearest [Focus] above it — the
+/// card's own InkWell — so it needs no state of its own.
+class _KeyboardFocusRing extends StatelessWidget {
+  const _KeyboardFocusRing({
+    required this.radius,
+    required this.color,
+    required this.child,
+  });
+
+  final double radius;
+  final Color color;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final focused = Focus.maybeOf(context)?.hasPrimaryFocus ?? false;
+    return DecoratedBox(
+      position: DecorationPosition.foreground,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(radius),
+        border: focused ? Border.all(color: color, width: 3) : null,
+      ),
+      child: child,
     );
   }
 }

@@ -149,6 +149,14 @@ class Product {
   double get effectiveQuantityOnHand =>
       defaultVariant?.quantityOnHand ?? quantityOnHand;
 
+  /// Whether any sellable variant is running low on its own threshold. An
+  /// empty one is "out", which the stock label already says first.
+  bool get hasLowStockVariant => activeVariants.any(
+    (variant) =>
+        variant.quantityOnHand > 0 &&
+        variant.isLowStock(variant.quantityOnHand),
+  );
+
   List<ProductVariant> get activeVariants {
     if (!isActive) {
       return const [];

@@ -289,7 +289,7 @@ class FakeRelay:
     def etag(self):
         return f'"{self.document.get("version")}"'
 
-    def get_voucher_catalog(self, *, access_token, etag="", timeout=None, fresh_brand=""):
+    def get_voucher_catalog(self, *, access_token, etag="", timeout=None, fresh_brand="", accounts=False):
         self.etags_sent.append(etag)
         self.fresh_brands.append(fresh_brand)
         if self.catalog_error is not None:

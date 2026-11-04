@@ -5,9 +5,10 @@ import '../../../core/parsing.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/product_variant.dart';
 import '../../../data/models/receipt_capture.dart';
+import '../../inventory/views/tracked_goods_capture.dart';
 import '../../../shared/decimal_text_input_formatter.dart';
-import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
+import '../../../shared/tracking/tracking_capture_chip.dart';
 import '../../../shared/unit_options.dart';
 
 /// Mutable in-sheet draft line of the counter cash purchase. [revision] keys
@@ -48,12 +49,6 @@ class PosCashPurchaseLine {
   /// Does this line's stock belong to lots at all? Only then is a lot offered.
   bool get capturesLots => product.trackingMode.tracksLots;
 
-  /// A serialised pack inside a lot cannot be bought without its lot. A plain
-  /// lot-tracked line can: the server files it under one generated lot that
-  /// carries the line's expiry, which is how the bread and milk runs this sheet
-  /// was built for keep working without a lot code nobody prints on a loaf.
-  bool get requiresLot => capturesLots && needsIdentifiers;
-
   /// How many base units this line is — what lots and identifiers are counted
   /// against. A carton of twelve is twelve.
   double get baseQuantity => quantity * unit.factorToBase;
@@ -68,12 +63,13 @@ class PosCashPurchaseLine {
   double get capturedLotQuantity =>
       batches.fold<double>(0, (sum, batch) => sum + batch.quantity);
 
+  /// Lots are never owed: a line bought with none is filed by the server
+  /// under one generated lot carrying the line's expiry, and a lot typed
+  /// without a number gets one the same way. Only lots that were typed must
+  /// add up to the line.
   bool get lotsComplete {
     if (!capturesLots || batches.isEmpty) {
-      return !requiresLot;
-    }
-    if (batches.any((batch) => batch.code.trim().isEmpty)) {
-      return false;
+      return true;
     }
     // A serialised line's lot is one header over its scan loop; its quantity
     // is the line's by definition.
@@ -87,11 +83,7 @@ class PosCashPurchaseLine {
   /// cashier changes the quantity or the pack after reading the lot. A split
   /// across several lots is left for the cashier to redo: which lot grew is not
   /// something to guess.
-  void syncSingleLot() {
-    if (batches.length == 1) {
-      batches = [batches.single.copyWith(quantity: baseQuantity)];
-    }
-  }
+  void syncSingleLot() => batches = resizeSingleLot(batches, baseQuantity);
 }
 
 class PosCashPurchaseLineRow extends StatefulWidget {
@@ -262,7 +254,7 @@ class _PosCashPurchaseLineRowState extends State<PosCashPurchaseLineRow> {
             spacing: 8,
             children: [
               if (line.product.tracksExpiry)
-                _CaptureChip(
+                _chip(
                   icon: Icons.event_outlined,
                   complete: line.expiryDate != null,
                   label: line.expiryDate == null
@@ -271,14 +263,14 @@ class _PosCashPurchaseLineRowState extends State<PosCashPurchaseLineRow> {
                   onPressed: widget.enabled ? _pickExpiry : null,
                 ),
               if (widget.onCaptureLots != null)
-                _CaptureChip(
+                _chip(
                   icon: Icons.inventory_2_outlined,
                   complete: line.lotsComplete,
                   label: _lotLabel(l10n, line),
                   onPressed: widget.enabled ? widget.onCaptureLots : null,
                 ),
               if (widget.onCaptureIdentifiers != null)
-                _CaptureChip(
+                _chip(
                   icon: Icons.qr_code_2_outlined,
                   complete: line.identifiersComplete,
                   label: l10n.unitCaptureProgress(
@@ -296,15 +288,33 @@ class _PosCashPurchaseLineRowState extends State<PosCashPurchaseLineRow> {
     );
   }
 
+  /// The counter keeps its chips red until each capture is in: here a line
+  /// that still owes one cannot be bought.
+  static Widget _chip({
+    required IconData icon,
+    required bool complete,
+    required String label,
+    required VoidCallback? onPressed,
+  }) => Padding(
+    padding: const EdgeInsets.only(top: 6),
+    child: TrackingCaptureChip(
+      icon: icon,
+      owed: !complete,
+      label: label,
+      onPressed: onPressed,
+    ),
+  );
+
   static String _lotLabel(AppLocalizations l10n, PosCashPurchaseLine line) {
     final batches = line.batches;
     if (batches.isEmpty) {
-      return line.requiresLot
-          ? l10n.batchCaptureLotCode
-          : l10n.posCashPurchaseLotOptionalLabel;
+      return l10n.posCashPurchaseLotOptionalLabel;
     }
     if (batches.length == 1) {
-      return l10n.posCashPurchaseLotLabel(batches.single.code.trim());
+      final code = batches.single.code.trim();
+      return code.isEmpty
+          ? l10n.posCashPurchaseLotOptionalLabel
+          : l10n.posCashPurchaseLotLabel(code);
     }
     return l10n.posCashPurchaseLotsCountLabel(batches.length);
   }
@@ -320,38 +330,5 @@ class _PosCashPurchaseLineRowState extends State<PosCashPurchaseLineRow> {
     if (picked != null) {
       widget.onExpiryChanged(picked);
     }
-  }
-}
-
-/// One of the line's captures — expiry, lot, identifiers — as a chip that
-/// turns red while the line still owes it.
-class _CaptureChip extends StatelessWidget {
-  const _CaptureChip({
-    required this.icon,
-    required this.complete,
-    required this.label,
-    required this.onPressed,
-  });
-
-  final IconData icon;
-  final bool complete;
-  final String label;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.pointyColors;
-    return Padding(
-      padding: const EdgeInsets.only(top: 6),
-      child: ActionChip(
-        avatar: Icon(
-          icon,
-          size: 18,
-          color: complete ? colors.mutedInk : colors.danger,
-        ),
-        label: Text(label),
-        onPressed: onPressed,
-      ),
-    );
   }
 }

@@ -43,7 +43,6 @@ class ShopSettings {
     required this.autoPrintReceipts,
     required this.allowOverselling,
     required this.preventSellingAtLoss,
-    required this.lowStockThreshold,
     required this.cashierReturnWindowHours,
     required this.enableCashPayments,
     required this.enableCardPayments,
@@ -119,7 +118,6 @@ class ShopSettings {
   final bool printVoucherQrCodes;
   final bool allowOverselling;
   final bool preventSellingAtLoss;
-  final int lowStockThreshold;
   final int cashierReturnWindowHours;
   final bool enableCashPayments;
   final bool enableCardPayments;
@@ -331,7 +329,6 @@ class ShopSettings {
         json['prevent_selling_at_loss'],
         true,
       ),
-      lowStockThreshold: (json['low_stock_threshold'] as num?)?.toInt() ?? 5,
       cashierReturnWindowHours:
           (json['cashier_return_window_hours'] as num?)?.toInt() ?? 42,
       enableCashPayments: _boolFromJson(json['enable_cash_payments'], true),
@@ -474,7 +471,6 @@ class ShopSettingsDraft {
     required this.autoPrintReceipts,
     required this.allowOverselling,
     required this.preventSellingAtLoss,
-    required this.lowStockThreshold,
     required this.cashierReturnWindowHours,
     required this.enableCashPayments,
     required this.enableCardPayments,
@@ -530,7 +526,6 @@ class ShopSettingsDraft {
   final bool printVoucherQrCodes;
   final bool allowOverselling;
   final bool preventSellingAtLoss;
-  final int lowStockThreshold;
   final int cashierReturnWindowHours;
   final bool enableCashPayments;
   final bool enableCardPayments;
@@ -577,7 +572,6 @@ class ShopSettingsDraft {
       allowOverselling: settings.allowOverselling,
       warnLowStockBeforeSale: settings.warnLowStockBeforeSale,
       preventSellingAtLoss: settings.preventSellingAtLoss,
-      lowStockThreshold: settings.lowStockThreshold,
       cashierReturnWindowHours: settings.cashierReturnWindowHours,
       enableCashPayments: settings.enableCashPayments,
       enableCardPayments: settings.enableCardPayments,
@@ -645,7 +639,6 @@ class ShopSettingsDraft {
     bool? allowOverselling,
     bool? warnLowStockBeforeSale,
     bool? preventSellingAtLoss,
-    int? lowStockThreshold,
     int? cashierReturnWindowHours,
     bool? enableCashPayments,
     bool? enableCardPayments,
@@ -696,7 +689,6 @@ class ShopSettingsDraft {
       warnLowStockBeforeSale:
           warnLowStockBeforeSale ?? this.warnLowStockBeforeSale,
       preventSellingAtLoss: preventSellingAtLoss ?? this.preventSellingAtLoss,
-      lowStockThreshold: lowStockThreshold ?? this.lowStockThreshold,
       cashierReturnWindowHours:
           cashierReturnWindowHours ?? this.cashierReturnWindowHours,
       enableCashPayments: enableCashPayments ?? this.enableCashPayments,
@@ -778,7 +770,6 @@ class ShopSettingsDraft {
       'print_voucher_qr_codes': printVoucherQrCodes,
       'allow_overselling': allowOverselling,
       'prevent_selling_at_loss': preventSellingAtLoss,
-      'low_stock_threshold': lowStockThreshold,
       'cashier_return_window_hours': cashierReturnWindowHours,
       'enable_cash_payments': enableCashPayments,
       'enable_card_payments': enableCardPayments,

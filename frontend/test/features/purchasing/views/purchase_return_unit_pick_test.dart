@@ -130,7 +130,7 @@ void main() {
     expect(replacement.containsKey('units'), isFalse);
   });
 
-  testWidgets('a serial-and-lot replacement is held until its lot is scanned', (
+  testWidgets('a serial-and-lot replacement goes without a lot number', (
     tester,
   ) async {
     final repository = await _pumpOrder(tester, mode: 'serial_batch');
@@ -144,11 +144,9 @@ void main() {
     await tester.tap(find.text('تأكيد'));
     await tester.pumpAndSettle();
 
-    expect(
-      find.text('البديل صنف مسلسل بدفعة: امسح رقم الدفعة قبل التأكيد.'),
-      findsOneWidget,
-    );
-    expect(find.text('حدّد الأجهزة المُرجَعة للمورد'), findsNothing);
+    // Nobody is stopped for a lot number: the server mints one for the
+    // replacement, so the exchange moves straight on to the returned units.
+    expect(find.text('حدّد الأجهزة المُرجَعة للمورد'), findsOneWidget);
     expect(repository.exchanged, isNull);
   });
 

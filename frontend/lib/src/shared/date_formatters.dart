@@ -37,3 +37,9 @@ String formatExpiry(DateTime dateTime) {
 String formatMonthYear(DateTime dateTime) {
   return DateFormat('yyyy/MM').format(dateTime);
 }
+
+/// A calendar day as the API writes it: `2027-08-31`, Latin digits, no zone.
+String formatApiDate(DateTime date) =>
+    '${date.year.toString().padLeft(4, '0')}-'
+    '${date.month.toString().padLeft(2, '0')}-'
+    '${date.day.toString().padLeft(2, '0')}';

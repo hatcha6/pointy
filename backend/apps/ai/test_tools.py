@@ -407,7 +407,7 @@ class AiAdviceToolTests(TestCase):
         self.cashier.groups.add(Group.objects.get(name=CASHIER_GROUP))
         self.manager.groups.add(Group.objects.get(name=MANAGER_GROUP))
 
-    def _variant(self, name, sku, price, *, on_hand="0", reorder_level=5):
+    def _variant(self, name, sku, price, *, on_hand="0", threshold=5):
         from apps.catalog.models import Product, ProductVariant
         from apps.inventory.models import StockItem
 
@@ -415,10 +415,13 @@ class AiAdviceToolTests(TestCase):
         variant = ProductVariant.objects.create(
             product=product, sku=sku, unit_price=Decimal(price), is_default=True
         )
+        variant.low_stock_threshold = (
+            None if threshold is None else Decimal(str(threshold))
+        )
+        variant.save(update_fields=["low_stock_threshold"])
         StockItem.objects.create(
             variant=variant,
             quantity_on_hand=Decimal(on_hand),
-            reorder_level=reorder_level,
         )
         return variant
 
@@ -519,8 +522,8 @@ class AiAdviceToolTests(TestCase):
     # ── inventory_intelligence ───────────────────────────────────────────────
 
     def test_inventory_reorder_suggests_quantities(self):
-        low = self._variant("سكر", "ADV-LOW", "5.00", on_hand="2", reorder_level=10)
-        self._variant("أرز", "ADV-OK", "5.00", on_hand="100", reorder_level=10)
+        low = self._variant("سكر", "ADV-LOW", "5.00", on_hand="2", threshold=10)
+        self._variant("أرز", "ADV-OK", "5.00", on_hand="100", threshold=10)
 
         result = inventory_intelligence(user=self.manager, mode="reorder")
         self.assertTrue(result["ok"], result)
@@ -627,7 +630,7 @@ class AiAdviceToolTests(TestCase):
         self._order([(v, "1", "50.00", "20.00")])  # current 50 → down ~95%
         # Dead + low stock.
         self._variant("راكد", "ADV-BH-DEAD", "30.00", on_hand="5")
-        self._variant("ناقص", "ADV-BH-LOW", "30.00", on_hand="1", reorder_level=10)
+        self._variant("ناقص", "ADV-BH-LOW", "30.00", on_hand="1", threshold=10)
         # Outstanding credit.
         debtor = Customer.objects.create(full_name="مدين BH")
         self._order(
@@ -800,7 +803,7 @@ class AiReorderPlanTests(TestCase):
 
     # ── builders ──────────────────────────────────────────────────────────────
 
-    def _variant(self, name, sku, price="5.00", *, on_hand="0", reorder_level=5):
+    def _variant(self, name, sku, price="5.00", *, on_hand="0", threshold=5):
         from apps.catalog.models import Product, ProductVariant
         from apps.inventory.models import StockItem
 
@@ -808,10 +811,13 @@ class AiReorderPlanTests(TestCase):
         variant = ProductVariant.objects.create(
             product=product, sku=sku, unit_price=Decimal(price), is_default=True
         )
+        variant.low_stock_threshold = (
+            None if threshold is None else Decimal(str(threshold))
+        )
+        variant.save(update_fields=["low_stock_threshold"])
         StockItem.objects.create(
             variant=variant,
             quantity_on_hand=Decimal(on_hand),
-            reorder_level=reorder_level,
         )
         return variant
 
@@ -874,7 +880,7 @@ class AiReorderPlanTests(TestCase):
     def test_velocity_sizes_order_and_rounds_to_packs(self):
         # Sells 2/day over 30 days = 60 units; with 14-day cover target = 28.
         # On hand 4 → need 24 base units; carton of 12 → 2 cartons (24 units).
-        v = self._variant("ماء", "RP-WATER", "1.50", on_hand="4", reorder_level=10)
+        v = self._variant("ماء", "RP-WATER", "1.50", on_hand="4", threshold=10)
         self._pack(v.product, "rp-carton", "12")
         sup = self._supplier("مورد الماء")
         self._purchase(v, sup, unit_cost="12.00", unit="rp-carton", unit_factor="12")
@@ -893,7 +899,7 @@ class AiReorderPlanTests(TestCase):
 
     def test_dead_mover_low_on_stock_is_not_reordered(self):
         # Below reorder level but ZERO sales in the window → must be skipped.
-        dead = self._variant("بضاعة راكدة", "RP-DEAD", on_hand="1", reorder_level=10)
+        dead = self._variant("بضاعة راكدة", "RP-DEAD", on_hand="1", threshold=10)
         sup = self._supplier("مورد")
         self._purchase(dead, sup, unit_cost="3.00")
 
@@ -905,8 +911,8 @@ class AiReorderPlanTests(TestCase):
 
     def test_slow_mover_only_topped_up_when_out_of_stock(self):
         # ~1 unit/month: with stock it's left alone; fully out it gets a minimal pack.
-        held = self._variant("بطيء فيه مخزون", "RP-SLOW-IN", on_hand="2", reorder_level=10)
-        out = self._variant("بطيء نافد", "RP-SLOW-OUT", on_hand="0", reorder_level=10)
+        held = self._variant("بطيء فيه مخزون", "RP-SLOW-IN", on_hand="2", threshold=10)
+        out = self._variant("بطيء نافد", "RP-SLOW-OUT", on_hand="0", threshold=10)
         sup = self._supplier("مورد بطيء")
         for v in (held, out):
             self._purchase(v, sup, unit_cost="5.00")
@@ -922,9 +928,9 @@ class AiReorderPlanTests(TestCase):
 
     def test_groups_by_supplier_and_buckets_unassigned(self):
         # Two fast movers from different suppliers + one with no purchase history.
-        a = self._variant("صنف أ", "RP-A", on_hand="0", reorder_level=10)
-        b = self._variant("صنف ب", "RP-B", on_hand="0", reorder_level=10)
-        new = self._variant("صنف بلا تاريخ", "RP-NEW", on_hand="0", reorder_level=10)
+        a = self._variant("صنف أ", "RP-A", on_hand="0", threshold=10)
+        b = self._variant("صنف ب", "RP-B", on_hand="0", threshold=10)
+        new = self._variant("صنف بلا تاريخ", "RP-NEW", on_hand="0", threshold=10)
         sup_a = self._supplier("مورد أ")
         sup_b = self._supplier("مورد ب")
         self._purchase(a, sup_a, unit_cost="2.00")
@@ -948,7 +954,7 @@ class AiReorderPlanTests(TestCase):
 
     def test_scoped_to_permission_boundary(self):
         # A cashier without stock-read permission gets a clean refusal, not data.
-        v = self._variant("سرّي", "RP-SCOPE", on_hand="0", reorder_level=10)
+        v = self._variant("سرّي", "RP-SCOPE", on_hand="0", threshold=10)
         sup = self._supplier("مورد")
         self._purchase(v, sup, unit_cost="2.00")
         for d in range(1, 31):

@@ -126,11 +126,11 @@ class ReportRunApiTests(TestCase):
             sku="REPORT-REORDER",
             name="منتج إعادة الطلب",
             unit_price=Decimal("2.00"),
+            low_stock_threshold=5,
         ).default_variant
         StockItem.objects.create(
             variant=variant,
             quantity_on_hand=1,
-            reorder_level=5,
         )
         client = APIClient()
         client.force_authenticate(user=self.manager)
@@ -337,11 +337,11 @@ class ReportRunApiTests(TestCase):
                 sku=f"{prefix}-{index:03d}",
                 name=f"منتج {prefix} {index:03d}",
                 unit_price=Decimal("2.00"),
+                low_stock_threshold=5,
             )
             StockItem.objects.create(
                 variant=product.default_variant,
                 quantity_on_hand=index % 3,
-                reorder_level=5,
             )
 
     def _post(self, report_type, params=None):

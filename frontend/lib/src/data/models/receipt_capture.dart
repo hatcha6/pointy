@@ -1,8 +1,9 @@
 /// What a receiver wrote down while the goods were in front of them.
 ///
-/// Identifiers are captured **where the goods physically are** — at the
-/// receiving bay, not on the purchase order — so these travel with the receipt
-/// and nowhere else. A purchase line carries a count; it never carries a serial.
+/// Identity is born at the receipt, but it may be *typed* earlier: a buyer
+/// entering an order off the supplier's invoice already knows the expiry dates
+/// and often the serials, so an order line carries the same rows as its plan
+/// (`planned_units` / `planned_batches`) and the receipt starts from them.
 library;
 
 /// One identified article on a delivery.
@@ -43,6 +44,26 @@ class ReceiptUnitCapture {
   /// The article's own warranty end date, when it arrives with one that is
   /// not ours to compute — a car under its maker's warranty (§17.3).
   final DateTime? warrantyOverrideExpiresOn;
+
+  /// Reads the rows the API echoes back (an order line's plan) and the ones
+  /// this class writes to local storage — the same shape.
+  factory ReceiptUnitCapture.fromJson(Map<String, Object?> json) {
+    final attributes = json['attributes'];
+    return ReceiptUnitCapture(
+      code: json['code']?.toString() ?? '',
+      secondaryCode: json['secondary_code']?.toString() ?? '',
+      identifierKind: json['identifier_kind']?.toString() ?? '',
+      unitCost: _doubleOrNull(json['unit_cost']),
+      listPrice: _doubleOrNull(json['list_price']),
+      notes: json['notes']?.toString() ?? '',
+      attributes: attributes is Map
+          ? Map<String, Object?>.from(attributes)
+          : const {},
+      warrantyOverrideExpiresOn: _dateOrNull(
+        json['warranty_override_expires_on'],
+      ),
+    );
+  }
 
   bool get hasDetails =>
       attributes.isNotEmpty || warrantyOverrideExpiresOn != null;
@@ -110,13 +131,30 @@ class ReceiptBatchCapture {
     this.barcode = '',
   });
 
+  factory ReceiptBatchCapture.fromJson(Map<String, Object?> json) {
+    return ReceiptBatchCapture(
+      code: json['code']?.toString() ?? '',
+      quantity: _doubleOrNull(json['quantity']) ?? 0,
+      expiryDate: _dateOrNull(json['expiry_date']),
+      manufacturedOn: _dateOrNull(json['manufactured_on']),
+      barcode: json['barcode']?.toString() ?? '',
+    );
+  }
+
   final String code;
   final double quantity;
   final DateTime? expiryDate;
   final DateTime? manufacturedOn;
   final String barcode;
 
-  bool get isEmpty => code.trim().isEmpty && quantity <= 0;
+  /// Nothing worth sending: no number, no quantity and no date. A lot that
+  /// carries only an expiry is NOT empty — it is the whole point for a shop
+  /// that tracks expiry and has never been told its lot numbers.
+  bool get isEmpty =>
+      code.trim().isEmpty &&
+      quantity <= 0 &&
+      expiryDate == null &&
+      manufacturedOn == null;
 
   ReceiptBatchCapture copyWith({
     String? code,
@@ -156,6 +194,20 @@ class ReceiptBatchCapture {
 /// should type the lot once rather than once per pack.
 class ReceiptLineCapture {
   const ReceiptLineCapture({this.units = const [], this.batches = const []});
+
+  /// An order line's plan, or a stored draft line's capture.
+  factory ReceiptLineCapture.fromJson(Object? units, Object? batches) {
+    List<Map<String, Object?>> rows(Object? value) => value is List
+        ? value
+              .whereType<Map>()
+              .map(Map<String, Object?>.from)
+              .toList(growable: false)
+        : const [];
+    return ReceiptLineCapture(
+      units: rows(units).map(ReceiptUnitCapture.fromJson).toList(),
+      batches: rows(batches).map(ReceiptBatchCapture.fromJson).toList(),
+    );
+  }
 
   final List<ReceiptUnitCapture> units;
   final List<ReceiptBatchCapture> batches;
@@ -205,6 +257,17 @@ DateTime? earliestLotExpiry(Iterable<ReceiptBatchCapture> batches) {
     }
   }
   return earliest;
+}
+
+double? _doubleOrNull(Object? value) => switch (value) {
+  final num number => number.toDouble(),
+  final String text => double.tryParse(text),
+  _ => null,
+};
+
+DateTime? _dateOrNull(Object? value) {
+  final text = value?.toString() ?? '';
+  return text.isEmpty ? null : DateTime.tryParse(text);
 }
 
 String _dateOnly(DateTime value) {

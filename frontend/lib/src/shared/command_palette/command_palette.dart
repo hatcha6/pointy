@@ -7,6 +7,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../core/analytics_interaction_tracker.dart';
 import '../../core/storage/app_key_value_store.dart';
+import '../components/pointy_shortcuts_sheet.dart';
 import '../design/design.dart';
 import '../navigation/app_navigation.dart';
 import '../navigation/navigation_catalog.dart';
@@ -23,6 +24,48 @@ final GlobalKey<CommandPaletteScopeState> commandPaletteScopeKey =
 /// Opens the global command palette, if one is currently mounted.
 void openCommandPalette() => commandPaletteScopeKey.currentState?.open();
 
+/// A Ctrl/⌘(+Shift)+letter chord that runs a palette action without opening
+/// the palette.
+///
+/// Matched on the PHYSICAL key as well as the logical one: on an Arabic
+/// layout the K key types «ن», so `LogicalKeyboardKey.keyK` never arrives and
+/// a chord matched only logically silently does nothing for exactly the shops
+/// this app is built for.
+class CommandHotkey {
+  const CommandHotkey(this.physical, this.logical, {this.shift = false});
+
+  final PhysicalKeyboardKey physical;
+  final LogicalKeyboardKey logical;
+  final bool shift;
+
+  bool accepts(KeyEvent event) {
+    if (event is! KeyDownEvent) {
+      return false;
+    }
+    final keyboard = HardwareKeyboard.instance;
+    if (!keyboard.isControlPressed && !keyboard.isMetaPressed) {
+      return false;
+    }
+    if (keyboard.isShiftPressed != shift || keyboard.isAltPressed) {
+      return false;
+    }
+    return event.physicalKey == physical || event.logicalKey == logical;
+  }
+
+  /// `Ctrl ⇧ P` / `⌘ ⇧ P`, for the row's trailing hint.
+  String label(BuildContext context) {
+    final letter = logical.keyLabel.toUpperCase();
+    final command = pointyCommandKeyLabel(context);
+    return shift ? '$command ⇧ $letter' : '$command $letter';
+  }
+}
+
+/// ⌘/Ctrl+K, which opens the palette itself.
+const CommandHotkey commandPaletteHotkey = CommandHotkey(
+  PhysicalKeyboardKey.keyK,
+  LogicalKeyboardKey.keyK,
+);
+
 /// One selectable row in the command palette.
 class CommandItem {
   const CommandItem({
@@ -35,6 +78,7 @@ class CommandItem {
     this.keywords = const [],
     this.actions = const [],
     this.recent,
+    this.hotkey,
   });
 
   final String id;
@@ -55,6 +99,10 @@ class CommandItem {
 
   /// Runs when the item is chosen. Receives the scope's (home-route) context.
   final void Function(BuildContext context) onSelect;
+
+  /// Runs [onSelect] from anywhere, palette closed. Only quick actions carry
+  /// one; set [trailing] to its [CommandHotkey.label] so the row teaches it.
+  final CommandHotkey? hotkey;
 
   bool matches(String query) => matchesTokens(searchTokens(query));
 
@@ -402,14 +450,44 @@ class CommandPaletteScopeState extends State<CommandPaletteScope> {
   }
 
   bool _handleKey(KeyEvent event) {
-    if (event is! KeyDownEvent || event.logicalKey != LogicalKeyboardKey.keyK) {
+    if (commandPaletteHotkey.accepts(event)) {
+      open();
+      return true;
+    }
+    if (_isOpen || event is! KeyDownEvent) {
       return false;
     }
-    final keyboard = HardwareKeyboard.instance;
-    if (!keyboard.isControlPressed && !keyboard.isMetaPressed) {
+    for (final source in widget.sources) {
+      if (source is! StaticCommandSource) {
+        continue;
+      }
+      for (final item in source.items) {
+        final hotkey = item.hotkey;
+        if (hotkey != null && hotkey.accepts(event)) {
+          return _runHotkey(item);
+        }
+      }
+    }
+    return false;
+  }
+
+  /// A quick action's chord, run as if it had been chosen in the palette —
+  /// except over a dialog or sheet. Those are somebody mid-task (a payment, a
+  /// receipt), and collapsing the stack under them would throw it away.
+  bool _runHotkey(CommandItem item) {
+    if (!mounted) {
       return false;
     }
-    open();
+    final focused = FocusManager.instance.primaryFocus?.context;
+    final route = focused == null ? null : ModalRoute.of(focused);
+    // With nothing focused there is no telling what is on top, so only the
+    // bare home route is safe to act over.
+    final homeIsCurrent = ModalRoute.of(context)?.isCurrent ?? true;
+    if (route is PopupRoute || (route == null && !homeIsCurrent)) {
+      return false;
+    }
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    item.onSelect(context);
     return true;
   }
 

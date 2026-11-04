@@ -95,9 +95,22 @@ class IntegrationLineSerializer(serializers.Serializer):
     cost = serializers.DecimalField(
         max_digits=12, decimal_places=2, min_value=0, required=False
     )
+    # For a card sent to an account (a game topped up by its player ID): what
+    # the customer gave, by the brand's target fields. Read against the brand
+    # (:mod:`.voucher_accounts`), never believed as it came.
+    account_target = serializers.DictField(
+        child=serializers.CharField(max_length=64, allow_blank=True),
+        required=False,
+        default=dict,
+    )
+    # Who the look-up said that account is, for the screens. Not checked: it
+    # decides nothing.
+    account_name = serializers.CharField(
+        max_length=120, required=False, allow_blank=True, default=""
+    )
 
 
-def voucher_line_payload(variant) -> dict | None:
+def voucher_line_payload(variant, *, account_target=None, account_name="") -> dict | None:
     """The fulfillment a card off a provider's shelf carries, built from the variant.
 
     A voucher line needs nothing from the till: which card, whose shelf and
@@ -117,6 +130,10 @@ def voucher_line_payload(variant) -> dict | None:
         "provider": voucher.account.provider,
         "subscriber_ref": "",
         "option_code": voucher.code,
+        # The one thing a till does say about a card sent to an account: whose
+        # account. Checked against the brand when the line is resolved.
+        "account_target": dict(account_target or {}),
+        "account_name": account_name or "",
     }
 
 
@@ -150,7 +167,9 @@ def resolve_line_integration(payload: dict, variant):
         return _resolve_service_line(provider, service_kind, payload)
 
     if catalog.CAPABILITY_VOUCHERS in spec.capabilities:
-        return _resolve_voucher_line(provider, variant)
+        return _resolve_voucher_line(
+            provider, variant, payload.get("account_target"), payload.get("account_name")
+        )
 
     # The line must be rung up as that provider's own service product. Anything
     # else would let a top-up be attached to, say, a bag of rice — and the
@@ -237,13 +256,17 @@ def _quoted_cost(payload: dict, *, account, subscriber_ref: str, option_code: st
         raise serializers.ValidationError({"integration": "A quoted cost is required."})
 
 
-def _resolve_voucher_line(provider: str, variant) -> dict:
+def _resolve_voucher_line(provider: str, variant, account_target=None, account_name="") -> dict:
     """A card off the shelf: everything comes from the server's own mirror.
 
     The price is the one the catalog shows (``vouchers.voucher_price``), the
     cost is the provider's as last read, and the card is the one this variant
-    *is* — never an option code a till could have swapped.
+    *is* — never an option code a till could have swapped. A card sent to an
+    account takes the account the line carries, read against its brand; any
+    other card takes none.
     """
+    from . import voucher_accounts
+
     from .vouchers import voucher_for_variant, voucher_price
 
     voucher = voucher_for_variant(variant)
@@ -265,6 +288,16 @@ def _resolve_voucher_line(provider: str, variant) -> dict:
             }
         )
     brand = voucher.brand
+    target = brand.target or {}
+    typed = account_target if isinstance(account_target, dict) else {}
+    account_target, subscriber_ref = {}, ""
+    if target:
+        account_target = voucher_accounts.read_account(target, typed)
+        subscriber_ref = voucher_accounts.account_line(target, account_target)
+    elif any(str(value or "").strip() for value in typed.values()):
+        raise serializers.ValidationError(
+            {"integration": "هذه البطاقة رمز يُسلَّم للزبون، ولا تُشحن إلى حساب."}
+        )
     # The company's cards carry their store region in the variant's name
     # («الولايات المتحدة · 10 دولار»), and an alert about the line must say
     # which card it was as fully as the receipt does.
@@ -274,8 +307,12 @@ def _resolve_voucher_line(provider: str, variant) -> dict:
     return {
         "account": account,
         "provider": provider,
-        # A card off a shelf belongs to nobody until it is scratched.
-        "subscriber_ref": "",
+        # A card off a shelf belongs to nobody until it is scratched; one sent
+        # to an account belongs to that account from the start.
+        "subscriber_ref": subscriber_ref,
+        "account_target": account_target,
+        "account_name": str(account_name or "").strip()[:120] if account_target else "",
+        "brand_target": target,
         "option_code": voucher.code,
         "option_label": f"{brand.name} {card}".strip()[:160],
         "months": 0,
@@ -409,12 +446,14 @@ def persist_fulfillment(order_line, resolved: dict) -> IntegrationFulfillment:
             "provider_receipt": dict(performed.get("receipt") or {}),
             "performed_outside": True,
         }
-    return IntegrationFulfillment.objects.create(
+    row = IntegrationFulfillment.objects.create(
         order_line=order_line,
         account=resolved["account"],
         provider=resolved["provider"],
         subscriber=_subscriber_for(resolved),
         subscriber_ref=resolved["subscriber_ref"],
+        account_target=dict(resolved.get("account_target") or {}),
+        account_name=resolved.get("account_name") or "",
         option_code=resolved["option_code"],
         option_label=resolved["option_label"],
         months=resolved["months"],
@@ -423,6 +462,11 @@ def persist_fulfillment(order_line, resolved: dict) -> IntegrationFulfillment:
         cost=resolved["cost"],
         **{"status": IntegrationFulfillment.Status.PENDING, **extra},
     )
+    if row.account_target:
+        from .voucher_book import note_sale
+
+        note_sale(row, target=resolved.get("brand_target") or {})
+    return row
 
 
 def cancel_unperformed(order_line_ids) -> int:
@@ -514,7 +558,9 @@ def _subscriber_for(resolved: dict):
     nobody until it is scratched.
     """
     subscriber_ref = resolved["subscriber_ref"]
-    if not subscriber_ref:
+    if not subscriber_ref or resolved.get("voucher") is not None:
+        # A card off a shelf has no subscriber; one sent to an account names
+        # the account on the line itself, not in the provider's subscriber book.
         return None
     subscriber, _ = IntegrationSubscriber.objects.get_or_create(
         account=resolved["account"],

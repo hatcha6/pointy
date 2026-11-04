@@ -10,6 +10,8 @@ import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
+import '../view_models/pos_view_model.dart';
+import 'pos_voucher_account_sheet.dart';
 import 'voucher_card_art.dart';
 import 'voucher_country_flag.dart';
 
@@ -40,6 +42,55 @@ Future<ProductVariant?> showPosVoucherBrandSheet(
       onPicked: (variant) => Navigator.of(sheetContext).pop(variant),
     ),
   );
+}
+
+/// Opens the right sheet for [brand] and puts what was picked in the cart: the
+/// one place the menu and the till's search both sell a brand through.
+Future<void> sellVoucherBrand(
+  BuildContext context, {
+  required PosViewModel viewModel,
+  required VoucherBrand brand,
+  required VoucherMenu menu,
+  required String source,
+}) async {
+  final product = brand.product;
+  Future<VoucherAvailability?> Function()? check;
+  if (product != null) {
+    check = () => viewModel.loadVoucherAvailability(product);
+  }
+  final target = brand.target;
+  if (target != null) {
+    final pick = await showPosVoucherAccountSheet(
+      context,
+      brand: brand,
+      target: target,
+      menu: menu,
+      viewModel: viewModel,
+      checkAvailability: check,
+    );
+    if (pick != null && context.mounted) {
+      viewModel.addAccountCard(
+        variant: pick.variant,
+        optionCode: pick.item.key,
+        optionLabel: pick.item.displayLabel,
+        subscriberRef: pick.subscriberRef,
+        account: pick.account,
+        accountName: pick.accountName,
+      );
+    }
+    return;
+  }
+  final card = await showPosVoucherBrandSheet(
+    context,
+    brand: brand,
+    menu: menu,
+    showsProfit: viewModel.isCostRevealed,
+    checkAvailability: check,
+  );
+  if (card != null && context.mounted) {
+    // One card, one line: a card never merges into another.
+    viewModel.addVariant(card, source: source);
+  }
 }
 
 /// Public, and callback-driven, so the preview harness and widget tests can
@@ -139,7 +190,7 @@ class _PosVoucherBrandPickerState extends State<PosVoucherBrandPicker> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _Header(
+            VoucherBrandHeader(
               brand: brand,
               // One country: no chips to pick from, but the customer is
               // still told which country the card is for.
@@ -149,7 +200,7 @@ class _PosVoucherBrandPickerState extends State<PosVoucherBrandPicker> {
             ),
             if (codes.length > 1) ...[
               SizedBox(height: spacing.md),
-              _SectionTitle(text: l10n.posVoucherMenuCountryTitle),
+              VoucherSectionTitle(text: l10n.posVoucherMenuCountryTitle),
               SizedBox(height: spacing.xs),
               Wrap(
                 spacing: spacing.xs,
@@ -169,7 +220,7 @@ class _PosVoucherBrandPickerState extends State<PosVoucherBrandPicker> {
             Row(
               children: [
                 Expanded(
-                  child: _SectionTitle(
+                  child: VoucherSectionTitle(
                     text: l10n.posVoucherMenuDenominationTitle,
                   ),
                 ),
@@ -186,7 +237,7 @@ class _PosVoucherBrandPickerState extends State<PosVoucherBrandPicker> {
             SizedBox(height: spacing.xs),
             Flexible(
               child: SingleChildScrollView(
-                child: _DenominationGrid(
+                child: VoucherDenominationGrid(
                   brand: brand,
                   items: items,
                   isAvailable: _available,
@@ -225,8 +276,8 @@ class _PosVoucherBrandPickerState extends State<PosVoucherBrandPicker> {
   }
 }
 
-class _Header extends StatelessWidget {
-  const _Header({required this.brand, this.country});
+class VoucherBrandHeader extends StatelessWidget {
+  const VoucherBrandHeader({super.key, required this.brand, this.country});
 
   final VoucherBrand brand;
 
@@ -317,8 +368,8 @@ class _Header extends StatelessWidget {
   }
 }
 
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({required this.text});
+class VoucherSectionTitle extends StatelessWidget {
+  const VoucherSectionTitle({super.key, required this.text});
 
   final String text;
 
@@ -369,8 +420,9 @@ class _CountryChip extends StatelessWidget {
 
 /// The denominations in rows of equal height, so a card on promotion — with
 /// its struck price and badge — never leaves its neighbours ragged.
-class _DenominationGrid extends StatelessWidget {
-  const _DenominationGrid({
+class VoucherDenominationGrid extends StatelessWidget {
+  const VoucherDenominationGrid({
+    super.key,
     required this.brand,
     required this.items,
     required this.isAvailable,
@@ -384,7 +436,7 @@ class _DenominationGrid extends StatelessWidget {
   final bool showsProfit;
   final ValueChanged<ProductVariant> onPicked;
 
-  static const double _minTile = 140;
+  static const double _minTile = 120;
   static const int _maxPerRow = 4;
 
   @override

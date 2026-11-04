@@ -10,10 +10,15 @@ class DiscoveredRecorder {
     required this.port,
     this.brand = RecorderBrand.auto,
     this.model = '',
+    this.onvifServicePath = '',
   });
 
   final String host;
   final int port;
+
+  /// The ONVIF device service path, when WS-Discovery heard a device announce
+  /// one other than the usual `/onvif/device_service`. Empty otherwise.
+  final String onvifServicePath;
 
   /// A *hint*, not a verdict. Both brands guard their identity endpoint behind
   /// the same kind of challenge, and a box that answers ambiguously is reported
@@ -37,7 +42,8 @@ class DiscoveredRecorder {
 ///
 /// Needs no credentials: both brands answer their identity endpoint with an
 /// authentication challenge, and *which* endpoint challenges is what names the
-/// brand.
+/// brand. ONVIF devices are also asked over WS-Discovery, which finds them on
+/// whatever port their firmware chose.
 Future<List<DiscoveredRecorder>> discoverRecorders({
   Duration perProbeTimeout = const Duration(milliseconds: 400),
   int concurrency = 64,

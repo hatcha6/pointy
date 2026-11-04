@@ -7,6 +7,7 @@ import '../../../data/models/barcode_label.dart';
 import '../../../data/models/product.dart';
 import '../../../data/models/purchase_submission.dart';
 import '../../../data/models/stock_batch.dart';
+import '../../../data/repositories/catalog_repository.dart';
 import '../../../data/repositories/printing_repository.dart';
 import '../../../data/repositories/tracked_stock_repository.dart';
 import '../../../shared/authorization_guards.dart';
@@ -27,6 +28,7 @@ import '../../../shared/tracking/tracking_labels.dart';
 import '../view_models/product_stock_view_model.dart';
 import 'barcode_label_print_action.dart';
 import 'product_details_hero.dart';
+import 'product_expiry_reminder_section.dart';
 import 'variant_cost_metrics.dart';
 import 'stock_movement_form.dart';
 import 'stock_movements_sheet.dart';
@@ -39,6 +41,7 @@ class ProductVariantDetailsScreen extends StatelessWidget {
     required this.capabilities,
     this.analyticsEngine,
     this.trackedStockRepository,
+    this.catalogRepository,
   });
 
   final ProductStockViewModel viewModel;
@@ -49,6 +52,9 @@ class ProductVariantDetailsScreen extends StatelessWidget {
   /// Opens this variant's own articles and lots, and dates its labels from a
   /// lot. Null for an untracked shop.
   final TrackedStockRepository? trackedStockRepository;
+
+  /// Saves the expiry reminder. Null leaves that section read-only.
+  final CatalogRepository? catalogRepository;
 
   @override
   Widget build(BuildContext context) {
@@ -159,6 +165,11 @@ class ProductVariantDetailsScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 12),
+                  ProductExpiryReminderSection(
+                    product: product,
+                    capabilities: capabilities,
+                    catalogRepository: catalogRepository,
+                  ),
                   PointyDetailSection(
                     title: l10n.productDescriptionTitle,
                     icon: Icons.notes_outlined,

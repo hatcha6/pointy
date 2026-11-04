@@ -395,6 +395,7 @@ class Recorder {
     this.serialNumber = '',
     this.channelCount = 0,
     this.rtspPathTemplate = '',
+    this.onvifServicePath = '',
     this.clockOffsetMinutes = 0,
     this.clockOffsetIsMeasured = false,
     this.lastError = '',
@@ -431,6 +432,10 @@ class Recorder {
 
   /// The stream address template, for the brands that need one typed in.
   final String rtspPathTemplate;
+
+  /// ONVIF only: a device service path other than the usual one, as the
+  /// device announced it over WS-Discovery. Empty on nearly every recorder.
+  final String onvifServicePath;
 
   /// How far the recorder's clock is from UTC, measured at the last probe.
   final int clockOffsetMinutes;
@@ -470,6 +475,7 @@ class Recorder {
       serialNumber: json['serial_number']?.toString() ?? '',
       channelCount: (json['channel_count'] as num?)?.toInt() ?? 0,
       rtspPathTemplate: json['rtsp_path_template']?.toString() ?? '',
+      onvifServicePath: json['onvif_service_path']?.toString() ?? '',
       clockOffsetMinutes: (json['clock_offset_minutes'] as num?)?.toInt() ?? 0,
       clockOffsetIsMeasured: json['clock_offset_is_measured'] == true,
       lastError: json['last_error']?.toString() ?? '',
@@ -501,6 +507,7 @@ class RecorderDraft {
     this.useHttps = false,
     this.isEnabled = true,
     this.rtspPathTemplate = '',
+    this.onvifServicePath = '',
     this.channelCount = 0,
     this.connection = RecorderConnection.direct,
     this.ftpHost = '',
@@ -534,6 +541,11 @@ class RecorderDraft {
   /// `{channel}` and `{stream}` placeholders.
   final String rtspPathTemplate;
 
+  /// ONVIF only, and only when the device announced a non-standard device
+  /// service path. Not typed by anyone: it comes from discovery or the saved
+  /// recorder, and travels so an edit does not drop it.
+  final String onvifServicePath;
+
   /// Only for [RecorderBrand.genericRtsp]: a box with no control API cannot be
   /// asked how many cameras it has, so somebody has to say.
   final int channelCount;
@@ -553,6 +565,7 @@ class RecorderDraft {
       useHttps: recorder.useHttps,
       isEnabled: recorder.isEnabled,
       rtspPathTemplate: recorder.rtspPathTemplate,
+      onvifServicePath: recorder.onvifServicePath,
       channelCount: recorder.channelCount,
       connection: recorder.connection,
       ftpHost: recorder.ftp?.host ?? '',
@@ -570,6 +583,7 @@ class RecorderDraft {
     bool? useHttps,
     bool? isEnabled,
     String? rtspPathTemplate,
+    String? onvifServicePath,
     int? channelCount,
     RecorderConnection? connection,
     String? ftpHost,
@@ -586,6 +600,7 @@ class RecorderDraft {
       useHttps: useHttps ?? this.useHttps,
       isEnabled: isEnabled ?? this.isEnabled,
       rtspPathTemplate: rtspPathTemplate ?? this.rtspPathTemplate,
+      onvifServicePath: onvifServicePath ?? this.onvifServicePath,
       channelCount: channelCount ?? this.channelCount,
       connection: connection ?? this.connection,
       ftpHost: ftpHost ?? this.ftpHost,
@@ -615,6 +630,9 @@ class RecorderDraft {
       'use_https': useHttps,
       'is_enabled': isEnabled,
       'rtsp_path_template': rtspPathTemplate,
+      // Always sent, like the template: the form round-trips it from the saved
+      // recorder or a discovered device, and a blank must be able to clear it.
+      'onvif_service_path': onvifServicePath,
       // Only meaningful for Direct RTSP; every other brand has it overwritten
       // by the probe, so sending it costs nothing and sending it conditionally
       // would mean a blank form could not clear it.

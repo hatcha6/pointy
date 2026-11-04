@@ -5,7 +5,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../../data/models/bulk_price_rule.dart';
 import '../../../../shared/design/design.dart';
 import '../../../../shared/formatters.dart';
-import '../../view_models/bulk_price_editor_view_model.dart';
+import '../../view_models/bulk_price_filter_editing.dart';
 import 'bulk_price_labels.dart';
 
 /// Opens a picker for a category / supplier condition and returns the new
@@ -32,7 +32,7 @@ class BulkPriceGroupEditor extends StatelessWidget {
   });
 
   final BulkPriceGroup group;
-  final BulkPriceEditorViewModel viewModel;
+  final BulkPriceFilterEditing viewModel;
   final BulkPriceRefPicker pickRefs;
   final List<BulkPriceField> availableFields;
   final int depth;
@@ -214,7 +214,7 @@ class BulkPriceConditionRow extends StatelessWidget {
   });
 
   final BulkPriceCondition condition;
-  final BulkPriceEditorViewModel viewModel;
+  final BulkPriceFilterEditing viewModel;
   final BulkPriceRefPicker pickRefs;
   final List<BulkPriceField> availableFields;
 

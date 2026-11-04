@@ -761,11 +761,17 @@ class _StockItemList extends StatelessWidget {
         for (final item in items)
           _InsightRowData(
             title: item.productName,
-            subtitle: l10n.dashboardStockItemSubtitle(
-              item.sku,
-              item.reorderLevel,
-              item.quantityExpected,
-            ),
+            subtitle: switch (item.reorderLevel) {
+              final level? => l10n.dashboardStockItemSubtitle(
+                item.sku,
+                formatQuantity(level),
+                item.quantityExpected,
+              ),
+              null => l10n.dashboardStockItemSubtitleUnwatched(
+                item.sku,
+                item.quantityExpected,
+              ),
+            },
             trailing: _formatNumber(item.quantityOnHand),
           ),
       ],

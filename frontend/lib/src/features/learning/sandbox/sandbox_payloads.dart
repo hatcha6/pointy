@@ -302,7 +302,6 @@ Map<String, Object?> shopSettingsJson(SandboxShop shop) {
     'require_opening_cash': shop.requireOpeningCash,
     'auto_print_receipts': false,
     'allow_overselling': false,
-    'low_stock_threshold': 5,
     'cashier_return_window_hours': 48,
     'enable_cash_payments': true,
     'enable_card_payments': true,

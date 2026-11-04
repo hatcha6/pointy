@@ -224,7 +224,6 @@ class _PurchaseExchangeDialogState extends State<_PurchaseExchangeDialog> {
   final List<_ReplacementLineEditor> _replacementEditors = [];
   final TextEditingController _reasonController = TextEditingController();
   bool _showInputError = false;
-  bool _showLotError = false;
 
   @override
   void dispose() {
@@ -343,13 +342,6 @@ class _PurchaseExchangeDialogState extends State<_PurchaseExchangeDialog> {
                   style: TextStyle(color: colors.danger),
                 ),
               ],
-              if (_showLotError) ...[
-                const SizedBox(height: 8),
-                Text(
-                  l10n.purchaseAdjustmentUnitsReplacementLotRequired,
-                  style: TextStyle(color: colors.danger),
-                ),
-              ],
               const SizedBox(height: 12),
               AdjustmentReasonField(
                 controller: _reasonController,
@@ -452,43 +444,26 @@ class _PurchaseExchangeDialogState extends State<_PurchaseExchangeDialog> {
     final unitCost =
         double.tryParse(editor.unitCostController.text.trim()) ??
         editor.option.unitCost;
-    var batches = editor.capture?.batches ?? const <ReceiptBatchCapture>[];
-    if (mode.tracksLots) {
-      final captured = await showBatchCaptureSheet(
-        context,
+    final captured = await captureTrackedGoods(
+      context,
+      TrackedGoodsCaptureRequest(
+        mode: mode,
         productLabel: editor.option.label,
-        expectedQuantity: quantity,
-        initial: batches,
-        singleLot: mode.tracksUnits,
-      );
-      if (captured == null || !mounted) {
-        return;
-      }
-      batches = captured;
-    }
-    var units = editor.capture?.units ?? const <ReceiptUnitCapture>[];
-    if (mode.tracksUnits) {
-      final captured = await showUnitCaptureSheet(
-        context,
-        productLabel: editor.option.label,
-        expectedCount: quantity.round(),
-        lineUnitCost: unitCost,
-        initial: units,
+        lotQuantity: quantity,
+        unitCount: quantity.round(),
+        baseUnitCost: unitCost,
+        existing: editor.capture,
         // A replacement nobody scanned is counted and waits on the
         // missing-identifier list, which is what the server does with it.
         allowCaptureLater: true,
         // It is worth what the shelf says, so a cost per handset is not asked.
         allowSplitCosts: false,
-      );
-      if (captured == null || !mounted) {
-        return;
-      }
-      units = captured;
+      ),
+    );
+    if (captured == null || !mounted) {
+      return;
     }
-    setState(() {
-      editor.capture = ReceiptLineCapture(units: units, batches: batches);
-      _showLotError = false;
-    });
+    setState(() => editor.capture = captured);
   }
 
   void _submit() {
@@ -511,12 +486,6 @@ class _PurchaseExchangeDialogState extends State<_PurchaseExchangeDialog> {
       final mode = editor.option.trackingMode;
       if (mode.tracksUnits && quantity != quantity.roundToDouble()) {
         setState(() => _showInputError = true);
-        return;
-      }
-      // The server mints a lot for a batch replacement nobody named, but a
-      // serialised pack is born into its lot: without one it is refused.
-      if (mode.requiresLot && (editor.capture?.batches.isEmpty ?? true)) {
-        setState(() => _showLotError = true);
         return;
       }
       replacementLines.add(

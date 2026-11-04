@@ -926,7 +926,13 @@ def inventory_intelligence(*, user, mode="reorder", days=30, limit=20):
     velocity, _ = _velocity_by_variant(user, days=days)
 
     if mode == "reorder":
-        stock_qs = stock_qs.filter(quantity_on_hand__lte=F("reorder_level"))
+        # Only variants the shop watches — a blank threshold is "do not tell
+        # me". Row by row here, not shop-wide: this view is already scoped to
+        # the locations the asking user may see.
+        stock_qs = stock_qs.filter(
+            variant__low_stock_threshold__isnull=False,
+            quantity_on_hand__lte=F("variant__low_stock_threshold"),
+        )
     stock_qs = stock_qs.select_related("variant", "variant__product")
 
     items = []
@@ -955,10 +961,11 @@ def inventory_intelligence(*, user, mode="reorder", days=30, limit=20):
             "value_at_retail": _money(on_hand * (variant.unit_price or Decimal("0"))),
         }
         if mode == "reorder":
-            row["reorder_level"] = st.reorder_level
+            threshold = variant.low_stock_threshold or Decimal("0")
+            row["reorder_level"] = _qty(threshold)
             row["quantity_expected"] = _qty(st.quantity_expected)
             row["suggested_quantity"] = max(
-                int(st.reorder_level) * 2 - float(on_hand) - float(st.quantity_expected or 0), 0
+                float(threshold) * 2 - float(on_hand) - float(st.quantity_expected or 0), 0
             )
         items.append(row)
 
@@ -997,8 +1004,9 @@ def reorder_plan(*, user, days=30, cover_days=14, limit=60):
       * slow movers are only topped up when fully out of stock, and only by a
         minimal pack;
       * order sizes come from real velocity (cover ``cover_days`` of demand) and the
-        shop's manual ``reorder_level`` as a floor, rounded UP to whole purchase
-        packs so we never suggest loose pieces of a carton-bought item.
+        variant's ``low_stock_threshold`` as a floor (none when blank), rounded UP
+        to whole purchase packs so we never suggest loose pieces of a carton-bought
+        item.
 
     Each item carries ``supplier_candidates`` — every supplier the product was bought
     from, ranked, with recency/frequency/price signals — so the caller picks the best
@@ -1059,7 +1067,7 @@ def reorder_plan(*, user, days=30, cover_days=14, limit=60):
             continue
         on_hand = st.quantity_on_hand or Decimal("0")
         expected = st.quantity_expected or Decimal("0")
-        reorder_level = Decimal(st.reorder_level or 0)
+        reorder_level = variant.low_stock_threshold or Decimal("0")
         sold = velocity.get(variant.id, Decimal("0"))
         daily = (sold / window) if window else Decimal("0")
         out_of_stock = on_hand <= 0

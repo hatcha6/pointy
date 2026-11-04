@@ -188,6 +188,7 @@ const _coffee = Product(
     barcode: '6281100001234',
     unitPrice: 5.50,
     quantityOnHand: 3,
+    lowStockThreshold: 5,
   ),
 );
 

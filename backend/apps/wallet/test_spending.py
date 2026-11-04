@@ -226,7 +226,7 @@ class WalletSpendingTests(TestCase):
     # --- plans -----------------------------------------------------------------
 
     def test_paying_for_the_assistant_turns_it_on_here_at_once(self):
-        until = datetime(2026, 11, 1, 9, 0, tzinfo=dt_timezone.utc)
+        until = datetime(2099, 11, 1, 9, 0, tzinfo=dt_timezone.utc)
         self.relay.purchase_wallet_plan.return_value = {
             "plan": {"key": "ai", "active": True, "until": until.isoformat(), "included": False},
             "balance": "70.000",
@@ -256,7 +256,7 @@ class WalletSpendingTests(TestCase):
         # The period it bought is spending, paid from the wallet.
         expense = Expense.objects.select_related("money_account").get()
         self.assertEqual(expense.amount, Decimal("30.00"))
-        self.assertEqual(expense.description, "اشتراك المساعد الذكي حتى 2026-11-01")
+        self.assertEqual(expense.description, "اشتراك المساعد الذكي حتى 2099-11-01")
         self.assertEqual(expense.money_account.name, WALLET_ACCOUNT_NAME)
         self.assertEqual(expense.reference, "plan:buy-1")
 

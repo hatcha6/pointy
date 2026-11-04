@@ -40,7 +40,8 @@ class NotificationsConditionalGetTests(TestCase):
         self.client_api.force_authenticate(user=user)
         # A deterministic out-of-stock condition the sync keeps re-asserting.
         self.product = create_product_with_default_variant(
-            name="Widget", sku="W-1", unit_price="10.00", barcode="123456"
+            name="Widget", sku="W-1", unit_price="10.00", low_stock_threshold=5,
+            barcode="123456"
         )
         StockItem.objects.create(
             variant=self.product.variants.get(),
@@ -77,7 +78,8 @@ class NotificationsConditionalGetTests(TestCase):
         etag = self._get()["ETag"]
         # A second product going out of stock creates a new notification.
         second = create_product_with_default_variant(
-            name="Gadget", sku="G-1", unit_price="5.00", barcode="654321"
+            name="Gadget", sku="G-1", unit_price="5.00", low_stock_threshold=5,
+            barcode="654321"
         )
         StockItem.objects.create(
             variant=second.variants.get(),

@@ -15,11 +15,13 @@ import '../../../shared/design/design.dart';
 import '../../../shared/formatters.dart';
 import '../../../shared/order/order.dart';
 import '../../../shared/responsive/responsive.dart';
+import '../../../shared/tracking/unit_intake_permissions.dart';
 import '../../../shared/shell/shell.dart';
 import '../../../shared/unit_options.dart';
 import '../view_models/purchase_view_model.dart';
 import 'purchase_catalog_pane.dart';
 import 'purchase_draft_pane.dart';
+import 'purchase_line_capture_row.dart';
 import 'purchase_pricing_sheet.dart';
 import 'purchasing_shortcuts_sheet.dart';
 import 'purchase_product_create.dart';
@@ -148,26 +150,17 @@ class _PurchasingWorkspaceState extends State<_PurchasingWorkspace> {
     if (line == null) {
       return false;
     }
-    final options = purchasableUnitOptions(
-      AppLocalizations.of(context)!,
-      Product.fromVariant(line.variant),
+    final next = cycledUnitOption(
+      purchasableUnitOptions(
+        AppLocalizations.of(context)!,
+        Product.fromVariant(line.variant),
+      ),
+      line.unitCode,
+      key,
     );
-    if (options.length < 2) {
+    if (next == null) {
       return false;
     }
-    final currentCode = line.unitCode.isEmpty
-        ? options.first.code
-        : line.unitCode;
-    var index = options.indexWhere((option) => option.code == currentCode);
-    if (index == -1) {
-      index = 0;
-    }
-    final forward =
-        key == null ||
-        key == LogicalKeyboardKey.arrowUp ||
-        key == LogicalKeyboardKey.arrowRight;
-    final next =
-        options[(index + (forward ? 1 : -1) + options.length) % options.length];
     viewModel.updateLineUnit(
       line.variant,
       unitCode: next.isBase ? '' : next.code,
@@ -219,8 +212,6 @@ class _PurchasingWorkspaceState extends State<_PurchasingWorkspace> {
     if (line == null) {
       return false;
     }
-    final l10n = AppLocalizations.of(context)!;
-    final messenger = ScaffoldMessenger.of(context);
     final removed = viewModel.removeLine(
       line.variant.id,
       source: 'purchase_keyboard_delete_line',
@@ -228,18 +219,43 @@ class _PurchasingWorkspaceState extends State<_PurchasingWorkspace> {
     if (removed == null) {
       return false;
     }
-    messenger
-      ..clearSnackBars()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(l10n.purchaseDraftLineRemovedMessage),
-          action: SnackBarAction(
-            label: l10n.undoButton,
-            onPressed: () => viewModel.restoreLine(removed),
-          ),
-        ),
-      );
+    showLineRemovedUndo(
+      context,
+      message: AppLocalizations.of(context)!.purchaseDraftLineRemovedMessage,
+      onUndo: () => viewModel.restoreLine(removed),
+    );
     viewModel.requestSearchFocus();
+    return true;
+  }
+
+  /// F5 — walk the active line from the keyboard: its quantity, then Enter
+  /// to its cost, then its expiry, then back to the search box.
+  bool _walkActiveLine() {
+    final line = viewModel.activeDraftLine;
+    if (line == null || viewModel.isSubmitting) {
+      return false;
+    }
+    viewModel.requestLineEntry(line.variant.id);
+    return true;
+  }
+
+  /// F9 — the active line's lots, expiry dates and serials, in the sheets the
+  /// receiving form uses. Falls through for goods counted rather than named.
+  bool _captureActiveLine() {
+    final line = viewModel.activeDraftLine;
+    if (line == null ||
+        viewModel.isSubmitting ||
+        !line.variant.trackingMode.isTracked) {
+      return false;
+    }
+    unawaited(
+      capturePurchaseLine(
+        context,
+        viewModel: viewModel,
+        line: line,
+        permissions: UnitIntakePermissions.of(widget.capabilities),
+      ),
+    );
     return true;
   }
 
@@ -280,11 +296,23 @@ class _PurchasingWorkspaceState extends State<_PurchasingWorkspace> {
         if (key == LogicalKeyboardKey.f4) {
           return _deleteActiveLine();
         }
+        if (key == LogicalKeyboardKey.f5) {
+          return _walkActiveLine();
+        }
         if (key == LogicalKeyboardKey.f6) {
           return _acceptSuggestedQuantityForActiveLine();
         }
+        if (key == LogicalKeyboardKey.f9) {
+          return _captureActiveLine();
+        }
         return false;
       },
+      // Page Down / Page Up step through the order's lines, from anywhere —
+      // the search box included, where the keys do nothing of their own. The
+      // POS spends them on held invoices; an order has one, and many lines.
+      onPageKey: (key) => viewModel.selectAdjacentLine(
+        forward: key == LogicalKeyboardKey.pageDown,
+      ),
       onCommandEnter: () => _submitController.onSubmit?.call(),
       child: LayoutBuilder(
         builder: (context, constraints) {

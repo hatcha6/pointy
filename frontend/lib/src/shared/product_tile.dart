@@ -26,6 +26,7 @@ class ProductTile extends StatelessWidget {
        unitPrice = product.effectiveUnitPrice,
        quantityOnHand = product.effectiveQuantityOnHand,
        isActive = product.isActive,
+       isLowStock = product.hasLowStockVariant,
        imageUrl = product.primaryImage?.contentUrl,
        _showStock = false,
        _product = product,
@@ -47,6 +48,7 @@ class ProductTile extends StatelessWidget {
        unitPrice = variant.unitPrice,
        quantityOnHand = variant.quantityOnHand,
        isActive = variant.isSellable,
+       isLowStock = variant.isLowStock(variant.quantityOnHand),
        imageUrl =
            variant.primaryImage?.contentUrl ??
            variant.productDetail?.primaryImage?.contentUrl,
@@ -76,6 +78,7 @@ class ProductTile extends StatelessWidget {
        // every size and colour the variant picker will offer.
        quantityOnHand = product.quantityOnHand,
        isActive = product.isActive,
+       isLowStock = product.hasLowStockVariant,
        imageUrl = product.primaryImage?.contentUrl,
        showPrice = true,
        _showStock = !product.isService && !product.isPrepared,
@@ -96,6 +99,7 @@ class ProductTile extends StatelessWidget {
        unitPrice = product.effectiveUnitPrice,
        quantityOnHand = product.effectiveQuantityOnHand,
        isActive = product.isActive,
+       isLowStock = product.hasLowStockVariant,
        imageUrl = product.primaryImage?.contentUrl,
        showPrice = true,
        cartQuantity = 0,
@@ -118,6 +122,9 @@ class ProductTile extends StatelessWidget {
   final double unitPrice;
   final double quantityOnHand;
   final bool isActive;
+
+  /// At or below the variant's own threshold; see `StockStatusLabel.isLow`.
+  final bool isLowStock;
   final String? imageUrl;
   final bool _showStock;
   final Product? _product;
@@ -175,6 +182,7 @@ class ProductTile extends StatelessWidget {
             ? StockStatusLabel.count(
                 quantity: quantityOnHand,
                 isActive: isActive,
+                isLow: isLowStock,
               )
             : null,
         status: status,
@@ -201,6 +209,7 @@ class ProductTile extends StatelessWidget {
           ? StockStatusLabel(
               quantity: quantityOnHand,
               isActive: isActive,
+              isLow: isLowStock,
               compact: true,
             )
           : null,

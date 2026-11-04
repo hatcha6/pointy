@@ -13,6 +13,7 @@ import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
 import '../view_models/product_details_view_model.dart';
 import 'auto_sku_filler.dart';
+import 'low_stock_threshold_field.dart';
 import 'product_form_fields.dart';
 import 'product_form_section.dart';
 import 'variant_extra_barcodes_field.dart';
@@ -47,6 +48,7 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
   late final TextEditingController _barcodeController;
   late final TextEditingController _priceController;
   late final TextEditingController _gtinController;
+  late final TextEditingController _lowStockThresholdController;
   late final ExtraBarcodesController _extraBarcodes;
   String? _gtinError;
   late final VariantIdentityWatcher _identity;
@@ -66,6 +68,12 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
       widget.viewModel.product.trackingMode.tracksLots ||
       (widget.variant?.gtin.isNotEmpty ?? false);
 
+  /// A service or a made-to-order dish keeps no shelf stock, so it has no
+  /// count to run low; the field is not offered and nothing is written.
+  bool get _showsLowStockThreshold =>
+      !widget.viewModel.product.isService &&
+      !widget.viewModel.product.isPrepared;
+
   @override
   void initState() {
     super.initState();
@@ -74,6 +82,9 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
     _skuController = TextEditingController(text: variant?.sku ?? '');
     _barcodeController = TextEditingController(text: variant?.barcode ?? '');
     _gtinController = TextEditingController(text: variant?.gtin ?? '');
+    _lowStockThresholdController = TextEditingController(
+      text: lowStockThresholdText(variant?.lowStockThreshold),
+    );
     _extraBarcodes = ExtraBarcodesController(
       variant?.extraBarcodes ?? const [],
     );
@@ -108,6 +119,7 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
     _skuController.dispose();
     _barcodeController.dispose();
     _gtinController.dispose();
+    _lowStockThresholdController.dispose();
     _extraBarcodes.dispose();
     _priceController.dispose();
     super.dispose();
@@ -125,6 +137,7 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
           _barcodeController.text.trim().isNotEmpty ||
           _extraBarcodes.isDirty ||
           _gtinController.text.trim().isNotEmpty ||
+          _lowStockThresholdController.text.trim().isNotEmpty ||
           _priceController.text.trim().isNotEmpty ||
           _selectedOptionValueIds.isNotEmpty;
     }
@@ -133,6 +146,8 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
         _barcodeController.text.trim() != variant.barcode.trim() ||
         _extraBarcodes.isDirty ||
         _gtinController.text.trim() != variant.gtin ||
+        lowStockThresholdFromText(_lowStockThresholdController.text) !=
+            variant.lowStockThreshold ||
         _parseNumber(_priceController.text) != variant.unitPrice ||
         _isActive != variant.isActive ||
         _isDefault != variant.isDefault ||
@@ -220,6 +235,13 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
                               setState(() => _gtinError = null);
                             }
                           },
+                        ),
+                      ],
+                      if (_showsLowStockThreshold) ...[
+                        const SizedBox(height: 12),
+                        LowStockThresholdField(
+                          controller: _lowStockThresholdController,
+                          enabled: !widget.viewModel.isSavingVariant,
                         ),
                       ],
                       if (_variantOptions.isNotEmpty) ...[
@@ -363,6 +385,13 @@ class _ProductVariantFormSheetState extends State<ProductVariantFormSheet> {
       isActive: _isActive,
       isDefault: _isDefault,
       optionValueIds: _selectedOptionValueIds,
+      lowStockThreshold: _showsLowStockThreshold
+          ? (
+              value: lowStockThresholdFromText(
+                _lowStockThresholdController.text,
+              ),
+            )
+          : null,
     );
 
     final variant = widget.variant;

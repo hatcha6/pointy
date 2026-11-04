@@ -13,7 +13,9 @@ class PurchaseResultButton {
   final String name;
   final String label;
   final IconData icon;
-  final VoidCallback onPressed;
+
+  /// Null draws the button disabled — a choice that is not complete yet.
+  final VoidCallback? onPressed;
 }
 
 /// A result's next steps: the one it expects, filled and focused so Enter

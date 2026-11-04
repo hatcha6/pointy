@@ -135,7 +135,7 @@ ENDURANCE_WORKERS ?= 4
 	backend-tracked-simulation backend-stock-integrity backend-contract-gate backend-search-eval \
 	backend-shell backend-superuser backend-test backend-test-pg backend-test-keepdb backend-test-slowest \
 	backend-check backend-celery backend-celery-beat backend-ftp backend-ingest-footage \
-	frontend-install frontend-l10n frontend-run frontend-web frontend-web-build frontend-test frontend-camera-wedge-test frontend-camera-wedge-linux frontend-camera-wedge-linux-clean frontend-camera-wedge-preview frontend-calculator-preview frontend-e2e frontend-analyze frontend-format frontend-navigation-preview frontend-balances-preview frontend-employee-loans-preview frontend-scales-preview frontend-invoice-attribution-preview frontend-learning-preview frontend-integrations-preview frontend-moamalat-preview frontend-bulk-price-preview frontend-recharge-preview frontend-portal-payments-preview frontend-printers-preview frontend-reports-preview frontend-marketing-preview frontend-app-update-preview \
+	frontend-install frontend-l10n frontend-run frontend-web frontend-web-build frontend-test frontend-camera-wedge-test frontend-camera-wedge-linux frontend-camera-wedge-linux-clean frontend-camera-wedge-preview frontend-calculator-preview frontend-e2e frontend-analyze frontend-format frontend-navigation-preview frontend-balances-preview frontend-employee-loans-preview frontend-scales-preview frontend-invoice-attribution-preview frontend-learning-preview frontend-integrations-preview frontend-moamalat-preview frontend-bulk-price-preview frontend-bulk-tracking-preview frontend-reorder-preview frontend-recharge-preview frontend-portal-payments-preview frontend-printers-preview frontend-reports-preview frontend-marketing-preview frontend-app-update-preview frontend-remote-sessions-preview \
 	marketing-site marketing-site-capture marketing-site-dist marketing-pos-tour \
 	camera-rig camera-rig-stop camera-rig-logs camera-rig-test \
 	relay-install relay-format relay-check relay-test relay-production-test relay-fleet-test relay-run relay-openserp relay-openserp-stop relay-connector relay-connector-remote relay-migrate relay-provision relay-subscription-update relay-remote-mint relay-remote-activate relay-remote-provision relay-cli \
@@ -438,6 +438,12 @@ frontend-moamalat-preview: frontend-install ## Run the Moamalat card-verificatio
 frontend-bulk-price-preview: frontend-install ## Run the rule-driven bulk price editor UI preview harness (?screen=editor|filtered|selection|history|board, &dark=1).
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/bulk_price_preview.dart
 
+frontend-reorder-preview: frontend-install ## Run the reorder queue preview harness (?screen=queue|selected|empty|board, &dark=1).
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/reorder_preview.dart
+
+frontend-bulk-tracking-preview: frontend-install ## Run the bulk expiry-tracking page + expiry reminder preview harness (?screen=tracking|previewed|filtered|selection|reminder|board, &dark=1).
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/bulk_tracking_preview.dart
+
 frontend-treasury-preview: frontend-install ## Run the treasury (money position) UI preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/treasury_preview.dart
 
@@ -502,6 +508,9 @@ frontend-ai-preview: frontend-install ## Run the AI assistant UI preview harness
 frontend-ai-ui-preview: frontend-install ## Run the AI generated-UI (catalog) preview harness as a local web server.
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/ai_ui_preview.dart
 
+frontend-remote-sessions-preview: frontend-install ## Run the remote sessions («الجلسات عن بُعد») preview harness as a local web server.
+	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/remote_sessions_preview.dart
+
 frontend-export-ai-catalog: frontend-install ## Re-export the AI UI catalog contract the backend validates against.
 	cd "$(FRONTEND_DIR)" && POINTY_WRITE_AI_CATALOG=1 $(FLUTTER) test test/features/ai/ui/ai_catalog_export_test.dart
 
@@ -551,7 +560,7 @@ frontend-wallet-preview: frontend-install ## Run the Daftar wallet (balance, Daf
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/wallet_preview.dart
 
 .PHONY: frontend-voucher-menu-preview
-frontend-voucher-menu-preview: frontend-install ## Run the till's «كروت دفتر» voucher menu preview harness (?screen=board|menu|menu-dark|sheet|sheet-countries|cashier|manager|empty|error|loading).
+frontend-voucher-menu-preview: frontend-install ## Run the till's «كروت دفتر» voucher menu preview harness (?screen=board|menu|menu-dark|sheet|sheet-countries|cashier|manager|empty|error|loading|account|account-telegram|account-gift|requests|requests-notice).
 	cd "$(FRONTEND_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(WEB_PORT) -t lib/dev/voucher_menu_preview.dart
 
 .PHONY: frontend-services-preview

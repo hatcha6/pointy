@@ -124,9 +124,18 @@ class PurchaseReceiveFormState extends State<PurchaseReceiveForm> {
   };
   final TextEditingController _noteController = TextEditingController();
 
-  /// What the receiver captured per line, with the goods in front of them.
-  /// Empty for every delivery of everything a shop counts rather than names.
-  final Map<int, ReceiptLineCapture> _captures = {};
+  /// What the receiver captured per line, with the goods in front of them —
+  /// starting from what the buyer typed on the order, so a delivery that
+  /// matches its paperwork is confirmed rather than retyped. Empty for every
+  /// delivery of everything a shop counts rather than names.
+  late final Map<int, ReceiptLineCapture> _captures = {
+    for (final line in _receivableLines)
+      line.id: ?line.plannedCaptureFor(
+        received: line.receivableQuantity,
+        damaged: 0,
+      ),
+  };
+
   bool _showQuantityError = false;
   bool _showCaptureError = false;
 
@@ -174,6 +183,7 @@ class PurchaseReceiveFormState extends State<PurchaseReceiveForm> {
               onChanged: () => setState(() {
                 _showQuantityError = false;
                 _showCaptureError = false;
+                _resizeSingleLot(line);
               }),
             ),
         if (_showQuantityError) ...[
@@ -210,11 +220,7 @@ class PurchaseReceiveFormState extends State<PurchaseReceiveForm> {
     );
   }
 
-  /// Open the right capture sheet for this line's mode.
-  ///
-  /// ``serial_batch`` asks for both, in the order a receiver actually works: the
-  /// lot header once — it is printed once on the carton — then the scan loop for
-  /// each pack beneath it, which names that lot above its scan field.
+  /// Open the right capture sheets for this line's mode.
   Future<void> _captureFor(PurchaseOrderLine line) async {
     final mode = line.trackingMode;
     final received = _quantity(_receivedControllers, line.id);
@@ -235,56 +241,55 @@ class PurchaseReceiveFormState extends State<PurchaseReceiveForm> {
     final receivedBase = line.toBaseQuantity(received);
     final damagedBase = line.toBaseQuantity(damaged);
 
-    var batches = existing?.batches ?? const <ReceiptBatchCapture>[];
-    if (mode.tracksLots) {
-      final captured = await showBatchCaptureSheet(
-        context,
+    final captured = await captureTrackedGoods(
+      context,
+      TrackedGoodsCaptureRequest(
+        mode: mode,
         productLabel: label,
-        expectedQuantity: receivedBase,
-        initial: batches,
+        lotQuantity: receivedBase,
+        // Damaged goods are units too, in the same table and in the same
+        // capture — two disjoint sets, neither overwriting the other.
+        unitCount: (receivedBase + damagedBase).round(),
+        baseUnitCost: line.baseUnitCost,
+        existing: existing,
         suggestedExpiry: line.expiryDate,
-        // A serialised pack's lot is one header over the whole scan loop.
-        singleLot: mode.tracksUnits,
         // `tracks_expiry` on a purchase line is the product's
         // `expiry_required`: these lots must each say when they go off.
         expiryRequired: line.tracksExpiry,
-      );
-      if (captured == null || !mounted) {
-        return;
-      }
-      batches = captured;
-    }
-
-    var units = existing?.units ?? const <ReceiptUnitCapture>[];
-    if (mode.tracksUnits) {
-      final captured = await showUnitCaptureSheet(
-        context,
-        productLabel: label,
-        // Damaged goods are units too, in the same table and in the same
-        // capture — two disjoint sets, neither overwriting the other.
-        expectedCount: (receivedBase + damagedBase).round(),
-        lineUnitCost: line.baseUnitCost,
-        initial: units,
         // The shop's own answer to "a truck at six in the evening": receive
         // now, scan later. The articles not scanned wait, unsellable, on the
         // missing-identifier list.
         allowCaptureLater: TrackingFeaturesScope.of(context).captureLater,
         assetTypeId: line.assetTypeId,
         identifierKind: line.identifierKind,
-        lot: batches.isEmpty ? null : batches.first,
-        canSetPrice: widget.permissions.canSetPrice,
-        canSetWarranty: widget.permissions.canSetWarranty,
-      );
-      if (captured == null || !mounted) {
-        return;
-      }
-      units = captured;
+        permissions: widget.permissions,
+      ),
+    );
+    if (captured == null || !mounted) {
+      return;
     }
 
     setState(() {
-      _captures[line.id] = ReceiptLineCapture(units: units, batches: batches);
+      _captures[line.id] = captured;
       _showCaptureError = false;
     });
+  }
+
+  /// A line's one lot is the whole delivery, so it follows the count as the
+  /// receiver corrects it — the lot the order planned stays the lot that
+  /// arrived, at whatever quantity did.
+  void _resizeSingleLot(PurchaseOrderLine line) {
+    final capture = _captures[line.id];
+    if (capture == null || !line.trackingMode.tracksLots) {
+      return;
+    }
+    _captures[line.id] = ReceiptLineCapture(
+      units: capture.units,
+      batches: resizeSingleLot(
+        capture.batches,
+        line.toBaseQuantity(_quantity(_receivedControllers, line.id)),
+      ),
+    );
   }
 
   /// Whether this line's identifiers cover exactly what is being received —
@@ -340,8 +345,7 @@ class PurchaseReceiveFormState extends State<PurchaseReceiveForm> {
         // needs them and has not got them is refused here rather than by the
         // backend, so the receiver finds out while the boxes are still open —
         // unless the shop receives articles first and names them later. A lot
-        // is never left to later: one the server invents has no number to
-        // recall by.
+        // without a number is fine: the server mints one («بدون رقم دفعة»).
         if (line.trackingMode.isTracked &&
             (received > 0 || damaged > 0) &&
             !_captureCovers(line, received, damaged)) {

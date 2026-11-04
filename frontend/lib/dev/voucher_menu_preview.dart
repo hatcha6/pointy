@@ -17,6 +17,11 @@
 //   ?screen=empty            nothing to sell (the cards are not switched on)
 //   ?screen=error            the menu could not be read
 //   ?screen=loading          the first read still on its way
+//   ?screen=account          a game top-up: the shop's saved accounts, look-up
+//   ?screen=account-telegram Telegram Stars: a username, nothing to look up
+//   ?screen=account-gift     a Steam gift: an invite link, never saved
+//   ?screen=requests         the floating requests panel, every state
+//   ?screen=requests-notice  a failure and a success just ended, panel closed
 //
 // `&menu=live` shows the live catalog with the real brand logos (see
 // [_useLiveMenu]), `&seed=off` starts with an empty invoice, and `&printer=on` auto-prints every
@@ -34,6 +39,7 @@ import 'package:http/http.dart' as http;
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import 'package:pointy_frontend/src/core/authorization.dart';
 import 'package:pointy_frontend/src/core/result.dart';
+import 'package:pointy_frontend/src/data/models/card_request.dart';
 import 'package:pointy_frontend/src/data/models/integration_card.dart';
 import 'package:pointy_frontend/src/data/models/pos_user.dart';
 import 'package:pointy_frontend/src/data/models/product.dart';
@@ -42,6 +48,7 @@ import 'package:pointy_frontend/src/data/models/product_page.dart';
 import 'package:pointy_frontend/src/data/models/product_query.dart';
 import 'package:pointy_frontend/src/data/models/register_session.dart';
 import 'package:pointy_frontend/src/data/models/sale_order.dart';
+import 'package:pointy_frontend/src/data/models/voucher_account.dart';
 import 'package:pointy_frontend/src/data/models/voucher_menu.dart';
 import 'package:pointy_frontend/src/data/repositories/catalog_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/contact_repository.dart';
@@ -53,6 +60,7 @@ import 'package:pointy_frontend/src/data/repositories/shop_settings_repository.d
 import 'package:pointy_frontend/src/data/services/local_scoped_json_storage.dart';
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/features/pos/view_models/pos_view_model.dart';
+import 'package:pointy_frontend/src/features/pos/views/card_requests/pos_card_requests_dock.dart';
 import 'package:pointy_frontend/src/features/pos/views/pos_cart_pane.dart';
 import 'package:pointy_frontend/src/features/pos/views/pos_catalog_pane.dart';
 import 'package:pointy_frontend/src/features/pos/views/pos_voucher_brand_sheet.dart';
@@ -192,6 +200,14 @@ Widget _surfaceFor(String screen, {required bool instant}) {
       instant: instant,
       openBrand: named.substring('brand:'.length),
     ),
+    'account' => _TillSurface(instant: instant, openBrand: 'pubg-id'),
+    'account-telegram' => _TillSurface(instant: instant, openBrand: 'tg-stars'),
+    'account-gift' => _TillSurface(instant: instant, openBrand: 'steam-gift'),
+    'requests' => _TillSurface(instant: instant, requests: _Requests.panel),
+    'requests-notice' => _TillSurface(
+      instant: instant,
+      requests: _Requests.notice,
+    ),
     'empty' => _TillSurface(instant: instant, menu: _MenuState.empty),
     'error' => _TillSurface(instant: instant, menu: _MenuState.error),
     'loading' => _TillSurface(instant: instant, menu: _MenuState.loading),
@@ -200,6 +216,8 @@ Widget _surfaceFor(String screen, {required bool instant}) {
 }
 
 enum _MenuState { ready, empty, error, loading }
+
+enum _Requests { none, panel, notice }
 
 /// The till as a cashier sees it with the «كروت دفتر» chip picked: the real
 /// catalog pane and cart pane, two-pane from a tablet up, the cart behind a
@@ -211,8 +229,10 @@ class _TillSurface extends StatefulWidget {
     this.menu = _MenuState.ready,
     this.openBrand,
     this.cashier = false,
+    this.requests = _Requests.none,
   });
 
+  final _Requests requests;
   final bool instant;
   final _MenuState menu;
 
@@ -270,6 +290,12 @@ class _TillSurfaceState extends State<_TillSurface> {
     if (card != null && Uri.base.queryParameters['seed'] != 'off') {
       _viewModel.addVariant(card, source: 'seed');
     }
+    if (widget.requests != _Requests.none) {
+      await _viewModel.cardRequests.start();
+      if (widget.requests == _Requests.panel) {
+        _viewModel.cardRequests.setPanelOpen(true);
+      }
+    }
     final brandKey = widget.openBrand;
     if (brandKey == null || widget.menu != _MenuState.ready) {
       return;
@@ -282,6 +308,18 @@ class _TillSurfaceState extends State<_TillSurface> {
     final brand = menu.brands.firstWhere((brand) => brand.key == brandKey);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
+        if (brand.target != null) {
+          unawaited(
+            sellVoucherBrand(
+              context,
+              viewModel: _viewModel,
+              brand: brand,
+              menu: menu,
+              source: 'preview',
+            ),
+          );
+          return;
+        }
         // The preview shows the owner's view as if F9 had revealed cost.
         unawaited(
           showPosVoucherBrandSheet(
@@ -340,9 +378,14 @@ class _Workspace extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
-        final catalog = PosCatalogPane(
-          viewModel: viewModel,
-          capabilities: capabilities,
+        final catalog = PosCardRequestsDock(
+          controller: viewModel.cardRequests,
+          onPrint: viewModel.reprintCardRequest,
+          showsWhenIdle: viewModel.showsVoucherMenu,
+          child: PosCatalogPane(
+            viewModel: viewModel,
+            capabilities: capabilities,
+          ),
         );
         if (AppBreakpoints.usesTwoPane(width)) {
           return TwoPaneLayout(
@@ -545,6 +588,82 @@ class _PreviewNavigation implements AppNavigation {
   void logout(BuildContext context) {}
 }
 
+/// The requests a till has followed, in every state the panel can show.
+final List<CardRequest> _previewRequests = [
+  CardRequest(
+    orderLine: 1,
+    orderId: 1,
+    state: CardRequestState.working,
+    label: 'ببجي موبايل 325 شدة',
+    account: '5123456789',
+    accountName: 'Sniper',
+    receiptNumber: 'INV-1042',
+    createdAt: DateTime.now().subtract(const Duration(minutes: 1, seconds: 12)),
+  ),
+  CardRequest(
+    orderLine: 2,
+    orderId: 2,
+    state: CardRequestState.working,
+    late: true,
+    label: 'نجوم تيليجرام 100 نجمة',
+    account: '@ahmed_ly',
+    receiptNumber: 'INV-1038',
+    createdAt: DateTime.now().subtract(const Duration(minutes: 22)),
+  ),
+  CardRequest(
+    orderLine: 3,
+    orderId: 3,
+    state: CardRequestState.succeeded,
+    label: 'موبايل ليجندز 172 ماسة',
+    account: '88120331 · 2041',
+    accountName: 'Layla',
+    receiptNumber: 'INV-1041',
+    createdAt: DateTime.now().subtract(const Duration(minutes: 8)),
+    finishedAt: DateTime.now().subtract(const Duration(minutes: 5)),
+  ),
+  CardRequest(
+    orderLine: 4,
+    orderId: 4,
+    state: CardRequestState.succeeded,
+    label: 'أمازون مصر 100 جنيه',
+    receiptNumber: 'INV-1040',
+    receipt: const {'code': 'AQ7K-22MX-LPQ9'},
+    createdAt: DateTime.now().subtract(const Duration(minutes: 14)),
+  ),
+  CardRequest(
+    orderLine: 5,
+    orderId: 5,
+    state: CardRequestState.failed,
+    label: 'ببجي موبايل 60 شدة',
+    account: '71992003',
+    receiptNumber: 'INV-1039',
+    errorCode: 'out_of_stock',
+    refundAmount: 11,
+    amount: 11,
+    createdAt: DateTime.now().subtract(const Duration(minutes: 20)),
+    finishedAt: DateTime.now().subtract(const Duration(minutes: 18)),
+  ),
+];
+
+/// The shop's book for a game: enough customers that typing is how to find one.
+final List<SavedVoucherAccount> _previewBook = [
+  for (final (index, row) in const [
+    ('5123456789', 'Sniper', 'أحمد الجار', 14),
+    ('7712004411', 'ShadowLY', '', 6),
+    ('4418820073', 'ذيب ليبيا', 'محمد - مقهى النور', 3),
+    ('3009917265', 'NoobMaster', '', 1),
+    ('9120048811', 'Layla', 'ليلى', 2),
+  ].indexed)
+    SavedVoucherAccount(
+      id: index + 1,
+      ref: row.$1,
+      values: {'player_id': row.$1},
+      playerName: row.$2,
+      label: row.$3,
+      useCount: row.$4,
+    ),
+];
+
 class _PreviewIntegrationsRepository extends IntegrationsRepository {
   _PreviewIntegrationsRepository({
     required this.state,
@@ -556,11 +675,101 @@ class _PreviewIntegrationsRepository extends IntegrationsRepository {
   final VoucherMenu menu;
   final Duration delay;
 
+  /// Sold, asked about this often: it ends on the third ask, as a slow order.
+  int _asks = 0;
+
+  @override
+  Future<Result<List<CardRequest>>> loadCardRequests() async =>
+      Ok(_previewRequests);
+
+  @override
+  Future<Result<List<CardRequest>>> settleCardRequests(List<int> lines) async {
+    _asks++;
+    return Ok([
+      for (final line in lines)
+        CardRequest(
+          orderLine: line,
+          orderId: line,
+          state: _asks < 3
+              ? CardRequestState.working
+              : CardRequestState.succeeded,
+          label: 'ببجي موبايل 325 شدة',
+          account: '5123456789',
+          accountName: 'Sniper',
+          receiptNumber: 'INV-1043',
+          createdAt: DateTime.now().subtract(Duration(seconds: _asks * 5)),
+        ),
+    ]);
+  }
+
+  @override
+  Future<Result<SavedVoucherAccountPage>> loadSavedVoucherAccounts({
+    required String brand,
+    String search = '',
+    int? customer,
+  }) async {
+    final text = search.toLowerCase();
+    return Ok(
+      SavedVoucherAccountPage(
+        accounts: [
+          for (final row in _previewBook)
+            if (text.isEmpty ||
+                row.ref.contains(text) ||
+                row.title.toLowerCase().contains(text) ||
+                row.playerName.toLowerCase().contains(text))
+              row,
+        ],
+      ),
+    );
+  }
+
+  @override
+  Future<Result<VoucherAccountCheck>> checkVoucherAccount({
+    required int variantId,
+    required Map<String, String> values,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+    final id = values.values.first;
+    return Ok(
+      id.startsWith('0')
+          ? const VoucherAccountCheck(status: VoucherAccountStatus.invalid)
+          : VoucherAccountCheck(
+              status: VoucherAccountStatus.valid,
+              name:
+                  _previewBook
+                      .where((row) => row.ref == id)
+                      .firstOrNull
+                      ?.playerName ??
+                  'Player$id',
+            ),
+    );
+  }
+
   @override
   Future<Result<List<IntegrationChargeResult>>> charge({
     required int orderId,
+    bool noWait = false,
   }) async {
     await Future<void>.delayed(const Duration(milliseconds: 1300));
+    final toAccounts = _PreviewSaleRepository.lastCardLines
+        .where((line) => line.integration?.subscriberRef.isNotEmpty ?? false)
+        .toList(growable: false);
+    if (toAccounts.isNotEmpty) {
+      return Ok([
+        for (final line in toAccounts)
+          IntegrationChargeResult(
+            fulfillment: line.id,
+            orderLine: line.id,
+            provider: 'pointy',
+            kind: 'recharge',
+            subscriberRef: line.integration!.subscriberRef,
+            optionLabel: line.variantName ?? '',
+            outcome: 'unknown',
+            status: 'submitted',
+            inProgress: true,
+          ),
+      ]);
+    }
     return Ok([
       for (final (index, line) in _PreviewSaleRepository.lastCardLines.indexed)
         IntegrationChargeResult(
@@ -725,8 +934,8 @@ class _PreviewSaleRepository extends SaleRepository {
               ? null
               : SaleLineIntegration(
                   provider: 'pointy',
-                  kind: 'voucher',
-                  subscriberRef: '',
+                  kind: line.integration == null ? 'voucher' : 'recharge',
+                  subscriberRef: line.integration?.subscriberRef ?? '',
                   optionLabel: card.$2.name,
                 ),
         ),

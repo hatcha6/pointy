@@ -78,7 +78,7 @@ __all__ = [
     "_recent_orders", "_register_summary", "_register_variance_summary",
     "_totals_by_key",
     "_purchase_order_balance_rows", "_purchase_order_balance_due",
-    "_top_supplier_balances", "_stock_item_row", "_settled_orders",
+    "_top_supplier_balances", "_stock_item_row", "_low_stock_row", "_settled_orders",
     "_order_adjustments", "_payments", "_print_jobs", "_owner_key",
     "_views_shop_wide", "_can", "_can_any", "_money", "_decimal_from",
     "_percent", "_change_percent",
@@ -534,7 +534,23 @@ def _stock_item_row(item):
         "quantity_on_hand": item.quantity_on_hand,
         "quantity_expected": item.quantity_expected,
         "quantity_committed": item.quantity_committed,
-        "reorder_level": item.reorder_level,
+        "reorder_level": item.variant.low_stock_threshold,
+    }
+
+
+def _low_stock_row(variant):
+    """``_stock_item_row``'s shape for a variant from ``low_stock_variants()``:
+    one row per variant on its shop-wide totals, not one per location."""
+    return {
+        "product_id": variant.product_id,
+        "variant_id": variant.pk,
+        "product_name": variant.product.name,
+        "variant_name": variant.display_name,
+        "sku": variant.sku,
+        "quantity_on_hand": variant.on_hand,
+        "quantity_expected": variant.expected,
+        "quantity_committed": variant.committed,
+        "reorder_level": variant.low_stock_threshold,
     }
 
 

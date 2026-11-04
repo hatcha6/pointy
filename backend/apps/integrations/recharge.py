@@ -95,8 +95,13 @@ class AtomicBlockError(RuntimeError):
     """
 
 
-def charge(fulfillment_id: int, *, user=None) -> ChargeOutcome:
-    """Perform the recharge for one fulfillment, at most once, ever."""
+def charge(fulfillment_id: int, *, user=None, no_wait: bool = False) -> ChargeOutcome:
+    """Perform the recharge for one fulfillment, at most once, ever.
+
+    ``no_wait`` is a till that follows the order by itself (its requests panel):
+    a supplier that takes minutes is asked to answer as soon as it has taken the
+    order, and the row stays ``submitted`` until it is read back.
+    """
     if transaction.get_connection().in_atomic_block:
         raise AtomicBlockError(
             "integrations.recharge.charge() must not run inside a transaction: "
@@ -131,6 +136,7 @@ def charge(fulfillment_id: int, *, user=None) -> ChargeOutcome:
     # whose recharge() is a definite "not available" rather than a surprise.
     driver = provider_for(claimed.account)
     driver.bind(claimed)
+    driver.answer_at_once = no_wait
     try:
         result = driver.recharge(
             claimed.subscriber_ref,
@@ -302,6 +308,15 @@ def _refuse_unsent(fulfillment_id: int, error_code: str) -> IntegrationFulfillme
     return row
 
 
+def _settled_outcome(row) -> str:
+    """The outcome a row that is no longer ``submitted`` already came to."""
+    if row.status == IntegrationFulfillment.Status.CONFIRMED:
+        return OUTCOME_CHARGED
+    if row.status == IntegrationFulfillment.Status.FAILED:
+        return OUTCOME_REFUSED
+    return OUTCOME_NOT_CLAIMABLE
+
+
 def _record(fulfillment, result: RechargeResult) -> ChargeOutcome:
     """Write down what came back, and nothing more than what came back."""
     with transaction.atomic():
@@ -311,6 +326,18 @@ def _record(fulfillment, result: RechargeResult) -> ChargeOutcome:
             .get(pk=fulfillment.pk)
         )
         fields = ["status", "last_error_code", "last_error", "updated_at"]
+
+        if row.status != IntegrationFulfillment.Status.SUBMITTED:
+            # Settled by a read-back while this answer was on its way (a till
+            # following the order asks every few seconds). What the read-back
+            # found stands: this answer knows no more than it did.
+            return ChargeOutcome(
+                outcome=_settled_outcome(row),
+                fulfillment=row,
+                error_code=row.last_error_code,
+                error_detail=row.last_error,
+                balance_after=result.balance_after,
+            )
 
         if result.ok:
             row.status = IntegrationFulfillment.Status.CONFIRMED

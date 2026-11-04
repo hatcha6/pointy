@@ -37,6 +37,7 @@ from apps.fx import currencies as fx_currencies
 from . import currency as purchase_currency
 from .cost_guard import block_thresholds, find_cost_anomalies, warn_thresholds
 from .unit_costs import cost_string, quantize_cost
+from .planned_capture import planned_capture_from_line_attrs
 from .models import (
     prime_supplier_balances,
     PurchaseLine,
@@ -550,6 +551,8 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
             "line_total",
             "units",
             "batches",
+            "planned_units",
+            "planned_batches",
         ]
         read_only_fields = (
             "id",
@@ -583,6 +586,8 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
             "backordered_quantity",
             "over_received_quantity",
             "line_total",
+            "planned_units",
+            "planned_batches",
         )
 
     def get_identifier_kind(self, line):
@@ -740,23 +745,6 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
         variant = attrs.get("variant", getattr(self.instance, "variant", None))
         if variant is None:
             raise serializers.ValidationError({"variant": "Variant is required."})
-        # Captured identifiers and lots belong to a receipt. Only the counter
-        # purchase (and the trade-in, which is one) receives in the same call,
-        # so only those flows may carry them on an order line. Anywhere else
-        # they are refused rather than dropped: a client that sent a lot code
-        # with an ordinary order believes it was recorded, and it would not be
-        # — the receiving dialog is where that order's lots are captured.
-        if (attrs.get("units") or attrs.get("batches")) and not self.context.get(
-            "pos_cash_purchase"
-        ):
-            raise serializers.ValidationError(
-                {
-                    "batches": (
-                        "تُسجَّل الدفعات والمعرّفات عند استلام أمر الشراء، "
-                        "لا على سطوره."
-                    )
-                }
-            )
         # No expiry date is asked of an order line. Dates belong to lots, and a
         # lot is only known when the boxes arrive: a delivery of two lots has
         # two dates, which no single date typed at ordering can be. Receiving
@@ -786,6 +774,25 @@ class PurchaseLineSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({error.field: error.message})
         attrs["unit"] = resolved.code
         attrs["unit_factor"] = resolved.factor
+        # The counter purchase receives in the same call, so its lots and
+        # serials go straight to that receipt (``create_pos_cash_purchase``).
+        # On every other order they are what the buyer already knows while
+        # typing it — stored on the line, and what its receipt starts from.
+        if not self.context.get("pos_cash_purchase") and (
+            "units" in attrs or "batches" in attrs
+        ):
+            base_quantity = Decimal(
+                quantity if quantity is not None else 0
+            ) * Decimal(resolved.factor)
+            (
+                attrs["planned_units"],
+                attrs["planned_batches"],
+            ) = planned_capture_from_line_attrs(
+                variant=variant,
+                base_quantity=base_quantity,
+                units=attrs.pop("units", None),
+                batches=attrs.pop("batches", None),
+            )
         return attrs
 
 
@@ -1817,6 +1824,15 @@ class PurchaseOrderSerializer(DocumentLifecycleFields, serializers.ModelSerializ
         default=False,
         write_only=True,
     )
+    # The handsets a corrected received order no longer says arrived — the
+    # owner's choice, asked for when a serial line is lowered and more of its
+    # articles are still on the shelf than leave (``identified_order_edit``).
+    removed_units = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        required=False,
+        write_only=True,
+        allow_empty=True,
+    )
     receipts = PurchaseReceiptSerializer(many=True, read_only=True)
     adjustments = PurchaseOrderAdjustmentSerializer(many=True, read_only=True)
     audit_events = PurchaseOrderAuditEventSerializer(many=True, read_only=True)
@@ -1919,6 +1935,7 @@ class PurchaseOrderSerializer(DocumentLifecycleFields, serializers.ModelSerializ
             # Derived, for reconciling the screen against the paper invoice.
             "foreign_total",
             "acknowledge_cost_warnings",
+            "removed_units",
             "lines",
             "receipts",
             "adjustments",
@@ -2452,9 +2469,14 @@ class PurchaseReceiptInputSerializer(serializers.Serializer):
                     # the line serializer and then left behind here, so the
                     # endpoint received every handset as an unnamed
                     # placeholder (or refused it outright) while the service
-                    # the tests call directly worked.
-                    "units": line_data.get("units") or [],
-                    "batches": line_data.get("batches") or [],
+                    # the tests call directly worked. Carried only when sent:
+                    # a line that names nothing takes the order's plan, and an
+                    # empty list is a receiver saying "none of those".
+                    **{
+                        key: line_data[key] or []
+                        for key in ("units", "batches")
+                        if key in line_data
+                    },
                 }
             )
 

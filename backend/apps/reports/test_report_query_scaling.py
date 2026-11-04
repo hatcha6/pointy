@@ -79,11 +79,11 @@ class ReportSectionQueryScalingTests(TestCase):
                 sku=f"SCALE-{index}",
                 name=f"منتج {index}",
                 unit_price=Decimal("5.00"),
+                low_stock_threshold=Decimal("10.000"),
             )
             stock_item = StockItem.objects.create(
                 variant=product.default_variant,
                 quantity_on_hand=Decimal("1.000"),
-                reorder_level=Decimal("10.000"),
             )
             StockMovement.objects.create(
                 variant=product.default_variant,

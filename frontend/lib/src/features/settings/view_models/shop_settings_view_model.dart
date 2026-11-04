@@ -551,7 +551,6 @@ class ShopSettingsViewModel extends ChangeNotifier {
         'source': 'shop_settings',
       },
       metrics: {
-        'low_stock_threshold': draft.lowStockThreshold,
         'cashier_return_window_hours': draft.cashierReturnWindowHours,
         'enabled_payment_method_count': [
           draft.enableCashPayments,

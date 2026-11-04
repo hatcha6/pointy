@@ -22,7 +22,7 @@ from apps.integrations.fulfillment import resolve_line_integration
 from apps.integrations.models import IntegrationFulfillment
 from apps.integrations.provisioning import service_variant_for
 from apps.integrations.tests import make_account
-from apps.inventory.models import StockItem
+from apps.inventory.models import StockItem, forget_default_warehouse
 from apps.sales import annaseem_repair as repair
 from apps.sales.models import Order, OrderAdjustment, RegisterSession
 from apps.sales.services import checkout_order, void_order
@@ -40,6 +40,9 @@ class AnnaseemRepairTests(TransactionTestCase):
     reset_sequences = True
 
     def setUp(self):
+        # No request has run yet to clear it, and this class's flush may have
+        # removed the warehouse an earlier test left cached.
+        forget_default_warehouse()
         cashier = get_user_model().objects.create_user(username="cashier", password="p")
         manager = get_user_model().objects.create_user(username="manager", password="p")
         product = create_product_with_default_variant(

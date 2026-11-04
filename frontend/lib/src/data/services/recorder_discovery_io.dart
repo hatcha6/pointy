@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show compute;
 
 import 'lan_interfaces.dart';
+import 'onvif_ws_discovery.dart';
+import 'onvif_ws_discovery_io.dart';
 import 'recorder_discovery.dart';
 import 'recorder_identity.dart';
 
@@ -92,9 +94,16 @@ Future<List<DiscoveredRecorder>> _discoverEntrypoint(
   // Two stages, because they cost wildly different amounts. A TCP connect is
   // one round trip and can be run against all 254 hosts in about a second; an
   // HTTP request against 254 hosts is not. So: knock on every door, then only
-  // talk to the ones that opened.
-  final open = await _scanOpenPorts(hosts, timeout, args.concurrency);
-  if (open.isEmpty) {
+  // talk to the ones that opened. WS-Discovery runs alongside: it is the
+  // standard's own way to find ONVIF devices, and the only one that finds a
+  // device on a port this sweep does not knock on.
+  final scanned = await Future.wait([
+    _scanOpenPorts(hosts, timeout, args.concurrency),
+    _wsDiscovered(),
+  ]);
+  final open = scanned[0] as List<_Endpoint>;
+  final announced = scanned[1] as List<DiscoveredRecorder>;
+  if (open.isEmpty && announced.isEmpty) {
     return const [];
   }
 
@@ -127,17 +136,41 @@ Future<List<DiscoveredRecorder>> _discoverEntrypoint(
   } finally {
     client.close(force: true);
   }
+  // After the sweep's own answers, so a host both found is folded with the
+  // vendor identification first in line.
+  found.addAll(announced);
   // Back into sweep order, which is nearest-first, so the list does not depend
-  // on which worker finished when.
-  final rank = {
-    for (var i = 0; i < open.length; i++) '${open[i].host}:${open[i].port}': i,
-  };
-  found.sort(
-    (a, b) => (rank['${a.host}:${a.port}'] ?? 0).compareTo(
-      rank['${b.host}:${b.port}'] ?? 0,
-    ),
-  );
+  // on which worker finished when. A device that answered from outside the
+  // swept subnets goes last.
+  final hostRank = {for (var i = 0; i < hosts.length; i++) hosts[i]: i};
+  int rankOf(DiscoveredRecorder recorder) =>
+      hostRank[recorder.host] ?? hosts.length;
+  found.sort((a, b) {
+    final byHost = rankOf(a).compareTo(rankOf(b));
+    return byHost != 0 ? byHost : a.port.compareTo(b.port);
+  });
   return _foldByHost(found);
+}
+
+/// WS-Discovery answers, as rows the fold can weigh against the sweep's.
+Future<List<DiscoveredRecorder>> _wsDiscovered() async {
+  try {
+    return [
+      for (final advert in await discoverOnvifDevices())
+        DiscoveredRecorder(
+          host: advert.host,
+          port: advert.port,
+          brand: brandFromOnvifAdvert(advert),
+          model: advert.model,
+          onvifServicePath: advert.servicePath == defaultOnvifServicePath
+              ? ''
+              : advert.servicePath,
+        ),
+    ];
+  } on Object {
+    // Multicast refused (no route, a sandbox): the TCP sweep still runs.
+    return const [];
+  }
 }
 
 class _Endpoint {

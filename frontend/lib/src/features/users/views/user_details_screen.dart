@@ -13,7 +13,9 @@ import '../../../shared/shell/shell.dart';
 import '../../purchasing/views/purchase_order_filter_sheet.dart';
 import '../../register_sessions/views/session_cash_variance.dart';
 import '../role_presentation.dart';
+import '../view_models/remote_sessions_view_model.dart';
 import '../view_models/user_details_view_model.dart';
+import 'remote_sessions_section.dart';
 
 class UserDetailsScreen extends StatelessWidget {
   const UserDetailsScreen({
@@ -21,10 +23,17 @@ class UserDetailsScreen extends StatelessWidget {
     required this.viewModel,
     required this.capabilities,
     required this.onManagePermissions,
+    this.remoteSessionsViewModel,
+    this.canRevokeRemoteSessions = false,
   });
 
   final UserDetailsViewModel viewModel;
   final AuthorizationCapabilities capabilities;
+
+  /// This person's sign-ins from outside the shop, and whether the viewer
+  /// may end them (changing users, not only viewing them).
+  final RemoteSessionsViewModel? remoteSessionsViewModel;
+  final bool canRevokeRemoteSessions;
 
   /// Opens the permission editor for the given user; resolves true if it saved,
   /// in which case the detail view refreshes.
@@ -67,6 +76,8 @@ class UserDetailsScreen extends StatelessWidget {
                   activity: viewModel.activity,
                   isRefreshing: viewModel.isLoading,
                   capabilities: capabilities,
+                  remoteSessionsViewModel: remoteSessionsViewModel,
+                  canRevokeRemoteSessions: canRevokeRemoteSessions,
                   onManagePermissions: () async {
                     final changed = await onManagePermissions(viewModel.user);
                     if (changed) {
@@ -87,6 +98,8 @@ class _UserDetailsBody extends StatelessWidget {
     required this.isRefreshing,
     required this.capabilities,
     required this.onManagePermissions,
+    required this.remoteSessionsViewModel,
+    required this.canRevokeRemoteSessions,
   });
 
   final PosUser user;
@@ -94,6 +107,8 @@ class _UserDetailsBody extends StatelessWidget {
   final bool isRefreshing;
   final AuthorizationCapabilities capabilities;
   final VoidCallback onManagePermissions;
+  final RemoteSessionsViewModel? remoteSessionsViewModel;
+  final bool canRevokeRemoteSessions;
 
   @override
   Widget build(BuildContext context) {
@@ -117,6 +132,14 @@ class _UserDetailsBody extends StatelessWidget {
                 onManagePermissions: onManagePermissions,
               ),
               SizedBox(height: spacing.md),
+              if (remoteSessionsViewModel case final remoteSessions?) ...[
+                RemoteSessionsSection(
+                  viewModel: remoteSessions,
+                  canRevoke: canRevokeRemoteSessions,
+                  isOwn: false,
+                ),
+                SizedBox(height: spacing.md),
+              ],
               if (overview == null)
                 PointyDetailSection(
                   title: l10n.userDetailsOverviewTitle,

@@ -1105,6 +1105,37 @@ class ProductVariant(TimeStampedModel):
         validators=[MinValueValidator(Decimal("0"))],
     )
     price_rate_at = models.DateTimeField(null=True, blank=True)
+    # The shop-wide on-hand quantity, in base units, at or below which this
+    # variant counts as running low. Blank is a decision, not a missing value:
+    # the variant is not watched, so it raises neither a low-stock nor an
+    # out-of-stock alert and is never listed as something to reorder. It is
+    # per variant because a 500 ml and a 2 L of the same drink do not run out
+    # at the same count, and it replaces both ``StockItem.reorder_level`` (a
+    # silent 5 on every row nobody could edit) and the shop-wide setting that
+    # nothing read. Read through ``apps.inventory.low_stock``, never directly.
+    low_stock_threshold = models.DecimalField(
+        max_digits=12,
+        decimal_places=3,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0"))],
+    )
+    # A soft date the owner states for stock bought before dates were kept:
+    # "tell me when this is about to go off". **Not a lot and not a fact about
+    # any pack**: it never stops a sale and never reaches FEFO, which is why it is
+    # not written onto a lot, where a guessed date would refuse the sale at the
+    # till the day it passed. Read through ``apps.inventory.expiry_reminders``.
+    expiry_reminder_date = models.DateField(null=True, blank=True)
+    # Set when this row was only ever another barcode of the variant it points
+    # at and has been folded into it (``apps.migration.flatten``). A tombstone:
+    # inactive, barcode-less, kept so an old id still means something.
+    merged_into = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="merged_aliases",
+    )
     is_active = models.BooleanField(default=True)
     is_default = models.BooleanField(default=False)
     option_signature = models.CharField(
@@ -1148,6 +1179,11 @@ class ProductVariant(TimeStampedModel):
                 fields=["product", "option_signature"],
                 condition=~Q(option_signature=""),
                 name="unique_product_variant_option_signature",
+            ),
+            models.CheckConstraint(
+                condition=Q(low_stock_threshold__isnull=True)
+                | Q(low_stock_threshold__gte=0),
+                name="product_variant_low_stock_threshold_non_negative",
             ),
         ]
 

@@ -35,6 +35,7 @@ import 'package:pointy_frontend/src/data/models/product_page.dart';
 import 'package:pointy_frontend/src/data/models/product_query.dart';
 import 'package:pointy_frontend/src/data/models/product_unit.dart';
 import 'package:pointy_frontend/src/data/models/product_variant.dart';
+import 'package:pointy_frontend/src/data/models/tracking_mode.dart';
 import 'package:pointy_frontend/src/data/models/product_variant_page.dart';
 import 'package:pointy_frontend/src/data/models/purchase_submission.dart';
 import 'package:pointy_frontend/src/data/models/purchase_suggestion.dart';
@@ -448,7 +449,25 @@ class _PurchaseSurfaceState extends State<_PurchaseSurface> {
           unit: _waterUnits[1],
           source: 'seed',
         )
-        ..addVariant(_variantFor(_items[10]), quantity: 3, source: 'seed');
+        ..addVariant(_variantFor(_items[10]), quantity: 3, source: 'seed')
+        // Tracked goods, so the draft shows the expiry / lots / serials row a
+        // buyer fills while typing the order: a lot-tracked medicine with its
+        // expiry already typed, and a handset whose serials are owed.
+        ..addVariant(
+          _previewMedicine,
+          quantity: 12,
+          unitCost: 4,
+          source: 'seed',
+        )
+        ..addVariant(
+          _previewHandset,
+          quantity: 2,
+          unitCost: 900,
+          source: 'seed',
+        ).then(
+          (_) =>
+              _viewModel.setLineExpiry(_previewMedicine, DateTime(2027, 8, 31)),
+        );
     }
   }
 
@@ -1732,6 +1751,25 @@ Product _productFor(_Item item) {
     defaultVariant: _variantFor(item),
   );
 }
+
+const _previewMedicine = ProductVariant(
+  id: 9001,
+  productId: 901,
+  productName: 'أموكسيسيلين 500',
+  sku: 'MED-500',
+  unitPrice: 9,
+  trackingMode: TrackingMode.batch,
+  expiryRequired: true,
+);
+
+const _previewHandset = ProductVariant(
+  id: 9002,
+  productId: 902,
+  productName: 'هاتف سامسونج A15',
+  sku: 'PHN-A15',
+  unitPrice: 1200,
+  trackingMode: TrackingMode.serial,
+);
 
 ProductVariant _variantFor(_Item item) {
   return ProductVariant(

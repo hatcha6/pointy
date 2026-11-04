@@ -223,27 +223,25 @@ void main() {
     expect(closedWith, hasLength(1));
   });
 
-  testWidgets(
-    'Enter from the barcode lands at the end of the copied name',
-    (tester) async {
-      final l10n = await pumpForm(tester);
-      await type(tester, l10n.barcodeLabel, '6281000000020');
+  testWidgets('Enter from the barcode lands at the end of the copied name', (
+    tester,
+  ) async {
+    final l10n = await pumpForm(tester);
+    await type(tester, l10n.barcodeLabel, '6281000000020');
 
-      await tester.testTextInput.receiveAction(TextInputAction.next);
-      await tester.pumpAndSettle();
+    await tester.testTextInput.receiveAction(TextInputAction.next);
+    await tester.pumpAndSettle();
 
-      // A desktop selects a whole field on focus; then Ctrl+Backspace would
-      // take the whole name instead of its last word.
-      final name = tester
-          .widget<TextFormField>(field(l10n.productNameLabel))
-          .controller!;
-      expect(
-        name.selection,
-        TextSelection.collapsed(offset: 'كولا علبة 330'.length),
-      );
-    },
-    variant: const TargetPlatformVariant({TargetPlatform.windows}),
-  );
+    // A desktop selects a whole field on focus; then Ctrl+Backspace would
+    // take the whole name instead of its last word.
+    final name = tester
+        .widget<TextFormField>(field(l10n.productNameLabel))
+        .controller!;
+    expect(
+      name.selection,
+      TextSelection.collapsed(offset: 'كولا علبة 330'.length),
+    );
+  }, variant: const TargetPlatformVariant({TargetPlatform.windows}));
 
   testWidgets("a name left as the original's is questioned once", (
     tester,

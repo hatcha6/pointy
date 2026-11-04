@@ -1,10 +1,15 @@
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../models/card_request.dart';
 import '../models/integration_card.dart';
 import '../models/integration_provider.dart';
 import '../models/integration_recent_search.dart';
 import '../models/portal_payment.dart';
 import '../models/voucher_availability.dart';
+import '../models/voucher_account.dart';
 import '../models/voucher_menu.dart';
 import 'api_session.dart';
 
@@ -240,10 +245,16 @@ class IntegrationsApiClient {
   /// Safe to call more than once for the same order: the server allows each
   /// line one attempt ever, so a repeat finds nothing claimable and comes back
   /// with an empty list rather than charging again.
-  Future<List<IntegrationChargeResult>> charge({required int orderId}) async {
+  ///
+  /// [noWait] is a till that follows the order in its requests panel: a slow
+  /// supplier answers as soon as it has taken the order.
+  Future<List<IntegrationChargeResult>> charge({
+    required int orderId,
+    bool noWait = false,
+  }) async {
     final response = await _session.post(
       'integrations/fulfillments/charge/',
-      body: {'order': orderId},
+      body: {'order': orderId, if (noWait) 'no_wait': true},
       timeout: chargeTimeout,
     );
     _session.throwApiException(
@@ -255,6 +266,90 @@ class IntegrationsApiClient {
         .whereType<Map<String, Object?>>()
         .map(IntegrationChargeResult.fromJson)
         .toList(growable: false);
+  }
+
+  // --- the till's requests panel and account book --------------------------
+  /// The latest cards this till's cashier sold from the company's shelf.
+  Future<List<CardRequest>> fetchCardRequests() async {
+    final response = await _session.get('integrations/card-requests/');
+    _session.throwApiException(response, 'Loading the card requests failed');
+    return _cardRequests(_session.decodedBody(response));
+  }
+
+  /// Reads the open ones among [lines] back; answers all of them.
+  Future<List<CardRequest>> settleCardRequests(List<int> lines) async {
+    final response = await _session.post(
+      'integrations/card-requests/settle/',
+      body: {'lines': lines},
+    );
+    _session.throwApiException(response, 'Settling the card requests failed');
+    return _cardRequests(_session.decodedBody(response));
+  }
+
+  List<CardRequest> _cardRequests(Object? decoded) {
+    final rows = decoded is Map<String, Object?> ? decoded['results'] : null;
+    return (rows is List ? rows : const <Object?>[])
+        .whereType<Map<String, Object?>>()
+        .map(CardRequest.fromJson)
+        .toList(growable: false);
+  }
+
+  /// The accounts the shop sold [brand] to, the [customer]'s first.
+  Future<SavedVoucherAccountPage> fetchSavedVoucherAccounts({
+    required String brand,
+    String search = '',
+    int? customer,
+  }) async {
+    final response = await _session.get(
+      'integrations/vouchers/saved-accounts/',
+      query: {
+        'brand': brand,
+        if (search.isNotEmpty) 'search': search,
+        if (customer != null) 'customer': '$customer',
+      },
+    );
+    _session.throwApiException(response, 'Loading saved accounts failed');
+    final decoded = _session.decodedBody(response);
+    return decoded is Map<String, Object?>
+        ? SavedVoucherAccountPage.fromJson(decoded)
+        : const SavedVoucherAccountPage();
+  }
+
+  Future<SavedVoucherAccount> renameSavedVoucherAccount(
+    int id,
+    String label,
+  ) async {
+    final response = await _session.patch(
+      'integrations/vouchers/saved-accounts/$id/',
+      body: {'label': label},
+    );
+    _session.throwApiException(response, 'Naming the account failed');
+    return SavedVoucherAccount.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  Future<void> deleteSavedVoucherAccount(int id) async {
+    final response = await _session.delete(
+      'integrations/vouchers/saved-accounts/$id/',
+    );
+    _session.throwApiException(response, 'Forgetting the account failed');
+  }
+
+  /// Whose account [values] is, before the card is sold. Buys nothing.
+  Future<VoucherAccountCheck> checkVoucherAccount({
+    required int variantId,
+    required Map<String, String> values,
+  }) async {
+    final response = await _session.post(
+      'integrations/vouchers/check-account/',
+      body: {'variant_id': variantId, 'account': values},
+    );
+    _session.throwApiException(response, 'Checking the account failed');
+    final decoded = _session.decodedBody(response);
+    return decoded is Map<String, Object?>
+        ? VoucherAccountCheck.fromJson(decoded)
+        : const VoucherAccountCheck(status: VoucherAccountStatus.unconfirmed);
   }
 
   // --- confirming this device with the provider ----------------------------
@@ -339,12 +434,17 @@ class IntegrationsApiClient {
   /// The company's own cards for the till's voucher menu: categories, brands
   /// with their system products, and every card with its price.
   Future<VoucherMenu> fetchVoucherMenu() async {
-    final response = await _session.get('integrations/vouchers/menu/');
+    final response = await _session.get(
+      'integrations/vouchers/menu/',
+      query: const {'accounts': '1'},
+    );
     _session.throwApiException(response, 'Loading the voucher menu failed');
-    final decoded = _session.decodedBody(response);
-    return decoded is Map<String, Object?>
-        ? VoucherMenu.fromJson(decoded)
-        : VoucherMenu.empty;
+    // The whole shelf is megabytes of JSON: a till mid-sale must not stutter
+    // while it is read. A small menu is quicker read here than sent away.
+    if (response.bodyBytes.length > _menuInlineLimit) {
+      return compute(_parseVoucherMenu, response.bodyBytes);
+    }
+    return _parseVoucherMenu(response.bodyBytes);
   }
 
   // --- payments made on the provider's own website ---------------------------
@@ -470,4 +570,13 @@ class IntegrationProviderRefusal implements Exception {
 
   @override
   String toString() => 'IntegrationProviderRefusal($errorCode)';
+}
+
+const int _menuInlineLimit = 256 * 1024;
+
+VoucherMenu _parseVoucherMenu(Uint8List bytes) {
+  final decoded = jsonDecode(utf8.decode(bytes));
+  return decoded is Map<String, Object?>
+      ? VoucherMenu.fromJson(decoded)
+      : VoucherMenu.empty;
 }

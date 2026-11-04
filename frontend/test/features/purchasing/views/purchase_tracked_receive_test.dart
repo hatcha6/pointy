@@ -162,8 +162,10 @@ void main() {
     );
   });
 
-  group('the order line says what receiving will ask', () {
-    testWidgets('paint is named in lots, never dated', (tester) async {
+  group('the order line takes what the buyer already knows', () {
+    testWidgets('a dated lot asks for its date inline; paint is never dated', (
+      tester,
+    ) async {
       await _pumpDraft(tester, [
         _variant(1, 'دهان', TrackingMode.batch),
         _variant(2, 'حليب', TrackingMode.batch, expiryRequired: true),
@@ -175,19 +177,21 @@ void main() {
         ),
       ]);
 
-      expect(find.text('تُسجَّل أرقام الدفعات عند الاستلام.'), findsOneWidget);
+      // Every tracked line offers its lots, none insists on them.
+      expect(find.text('رقم الدفعة / تقسيم'), findsNWidgets(3));
       expect(
-        find.text('تُسجَّل الدفعات وتواريخ صلاحيتها عند الاستلام.'),
-        findsOneWidget,
+        find.text('اختياري — ما لا يُدخل الآن يُطلب عند الاستلام.'),
+        findsNWidgets(3),
       );
+      // Milk and insulin must be dated, so the date is on the line; paint
+      // is named in lots and never dated, so it is not asked for one.
+      expect(find.text('تاريخ الصلاحية *'), findsNWidgets(2));
       expect(
-        find.text(
-          'تُسجَّل الدفعة وصلاحيتها وتُمسح الأرقام التسلسلية عند الاستلام.',
-        ),
-        findsOneWidget,
+        find.byKey(const ValueKey('purchase_line_expiry_1')),
+        findsNothing,
       );
-      // No line asks for a date before the goods exist.
-      expect(find.text('تاريخ الانتهاء'), findsNothing);
+      // The insulin pens' numbers, owed and offered.
+      expect(find.text('الأرقام التسلسلية 0/2'), findsOneWidget);
     });
   });
 }

@@ -13,6 +13,8 @@ import '../../../shared/formatters.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/shell/shell.dart';
 import '../../users/username_rules.dart';
+import '../../users/view_models/remote_sessions_view_model.dart';
+import '../../users/views/remote_sessions_section.dart';
 import '../view_models/user_settings_view_model.dart';
 
 class UserSettingsScreen extends StatefulWidget {
@@ -22,12 +24,17 @@ class UserSettingsScreen extends StatefulWidget {
     required this.currentUser,
     required this.onUserChanged,
     required this.navigation,
+    this.remoteSessionsViewModel,
   });
 
   final UserSettingsViewModel viewModel;
   final PosUser currentUser;
   final ValueChanged<PosUser> onUserChanged;
   final AppNavigation navigation;
+
+  /// The signed-in person's sign-ins from outside the shop. Only a manager
+  /// may sign in that way, so only a manager's page shows them.
+  final RemoteSessionsViewModel? remoteSessionsViewModel;
 
   @override
   State<UserSettingsScreen> createState() => _UserSettingsScreenState();
@@ -83,6 +90,9 @@ class _UserSettingsScreenState extends State<UserSettingsScreen> {
             viewModel: widget.viewModel,
             currentUser: widget.currentUser,
             onUserChanged: widget.onUserChanged,
+            remoteSessionsViewModel: widget.currentUser.role.isManager
+                ? widget.remoteSessionsViewModel
+                : null,
           ),
         );
       },
@@ -95,11 +105,13 @@ class _UserSettingsBody extends StatelessWidget {
     required this.viewModel,
     required this.currentUser,
     required this.onUserChanged,
+    required this.remoteSessionsViewModel,
   });
 
   final UserSettingsViewModel viewModel;
   final PosUser currentUser;
   final ValueChanged<PosUser> onUserChanged;
+  final RemoteSessionsViewModel? remoteSessionsViewModel;
 
   @override
   Widget build(BuildContext context) {
@@ -136,6 +148,14 @@ class _UserSettingsBody extends StatelessWidget {
                 child: _PasswordForm(viewModel: viewModel),
               ),
               SizedBox(height: spacing.lg),
+              if (remoteSessionsViewModel case final remoteSessions?) ...[
+                RemoteSessionsSection(
+                  viewModel: remoteSessions,
+                  canRevoke: true,
+                  isOwn: true,
+                ),
+                SizedBox(height: spacing.lg),
+              ],
               PointyDetailSection(
                 icon: Icons.account_balance_wallet_outlined,
                 title: l10n.userSettingsLoansSectionTitle,

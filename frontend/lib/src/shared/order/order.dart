@@ -5,3 +5,5 @@ export 'pointy_compact_order_launcher.dart';
 export 'pending_quantity_banner.dart';
 export 'pointy_quantity_stepper.dart';
 export 'pointy_totals_panel.dart';
+export 'line_quantity_keyboard.dart';
+export 'order_line_shortcuts.dart';

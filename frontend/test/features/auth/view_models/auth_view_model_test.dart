@@ -132,6 +132,82 @@ void main() {
     });
   });
 
+  group('a 401 from the backend while signed in', () {
+    // Field telemetry, 2026-11-01: a till's clock jumped forward two months
+    // after sign-in, the session expired, and every request answered 401
+    // while the dashboard stayed up with no way back to the login screen.
+    test('signs out when the session is gone', () async {
+      final repo = _FakeAuthRepository(
+        currentUserResults: [Ok(_user), const Ok(null)],
+        onboardingResults: [
+          const Ok(OnboardingStatus(requiresOnboarding: false)),
+        ],
+      );
+      final viewModel = AuthViewModel(repo, autoLoad: false);
+      addTearDown(viewModel.dispose);
+      await viewModel.loadCurrentUser();
+      expect(viewModel.status, AuthStatus.authenticated);
+
+      await viewModel.confirmSessionAfterUnauthorized();
+
+      expect(viewModel.status, AuthStatus.unauthenticated);
+      expect(viewModel.currentUser, isNull);
+    });
+
+    test('stays signed in when the session is still alive', () async {
+      final repo = _FakeAuthRepository(
+        currentUserResults: [Ok(_user)],
+        onboardingResults: const [],
+      );
+      final viewModel = AuthViewModel(repo, autoLoad: false);
+      addTearDown(viewModel.dispose);
+      await viewModel.loadCurrentUser();
+
+      await viewModel.confirmSessionAfterUnauthorized();
+
+      expect(viewModel.status, AuthStatus.authenticated);
+      expect(viewModel.currentUser, _user);
+    });
+
+    test('a burst of 401s asks the server once', () async {
+      final repo = _FakeAuthRepository(
+        currentUserResults: [Ok(_user), const Ok(null)],
+        onboardingResults: [
+          const Ok(OnboardingStatus(requiresOnboarding: false)),
+        ],
+      );
+      final viewModel = AuthViewModel(repo, autoLoad: false);
+      addTearDown(viewModel.dispose);
+      await viewModel.loadCurrentUser();
+
+      await Future.wait([
+        for (var i = 0; i < 5; i++) viewModel.confirmSessionAfterUnauthorized(),
+      ]);
+
+      // One probe to sign in, one for the whole burst.
+      expect(repo.currentUserProbeCount, 2);
+      expect(repo.onboardingProbeCount, 1);
+      expect(viewModel.status, AuthStatus.unauthenticated);
+    });
+
+    test('is ignored when nobody is signed in', () async {
+      final repo = _FakeAuthRepository(
+        currentUserResults: [const Ok(null)],
+        onboardingResults: [
+          const Ok(OnboardingStatus(requiresOnboarding: false)),
+        ],
+      );
+      final viewModel = AuthViewModel(repo, autoLoad: false);
+      addTearDown(viewModel.dispose);
+      await viewModel.loadCurrentUser();
+
+      await viewModel.confirmSessionAfterUnauthorized();
+
+      expect(repo.currentUserProbeCount, 1);
+      expect(viewModel.status, AuthStatus.unauthenticated);
+    });
+  });
+
   group('what a failed sign-in is reported as', () {
     // Every failure used to be one message — check the username and password
     // — including a relay that no longer held the phone's ticket. A cashier

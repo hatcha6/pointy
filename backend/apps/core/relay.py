@@ -282,11 +282,26 @@ class RelayControlClient:
             **self._installation_auth(),
         )
 
-    def issue_ticket(self, *, access_token, device_id="", device_name="", timeout=None):
+    def issue_ticket(
+        self, *, access_token, device_id="", device_name="", not_after=None, timeout=None
+    ):
+        body = {"device_id": device_id, "device_name": device_name}
+        if not_after is not None:
+            # A remote sign-in's tickets, refreshes included, end with it.
+            body["not_after"] = not_after.isoformat()
         return self._request(
             "POST",
             "/v1/relay-tickets",
-            body={"device_id": device_id, "device_name": device_name},
+            body=body,
+            relay_token=access_token,
+            timeout=timeout,
+        )
+
+    def revoke_device_tickets(self, *, access_token, device_id, timeout=None):
+        return self._request(
+            "POST",
+            "/v1/relay-tickets/revoke",
+            body={"device_id": device_id},
             relay_token=access_token,
             timeout=timeout,
         )
@@ -604,7 +619,9 @@ class RelayControlClient:
         )
 
     # --- the company's voucher shop («كروت دفتر») ----------------------------
-    def get_voucher_catalog(self, *, access_token, etag="", timeout=None, fresh_brand=""):
+    def get_voucher_catalog(
+        self, *, access_token, etag="", timeout=None, fresh_brand="", accounts=False
+    ):
         """The shelf the shop sells from: ``(payload, etag)``, or ``(None, etag)``
         when ``etag`` still names the current edition (the relay's ``304``).
 
@@ -612,11 +629,19 @@ class RelayControlClient:
         costs one small round trip and is never parsed or written again.
         ``fresh_brand`` is a brand a till just opened: the relay re-reads its
         cards at the suppliers first (shared by every shop for a minute).
+        ``accounts`` asks for the cards sent to an account too (a game topped
+        up by its player ID, Telegram Stars to a username): a relay leaves them
+        out for a shop that does not say it can ask for one.
         """
         headers = {"If-None-Match": etag} if etag else None
         path = "/v1/vouchers/catalog"
+        query = {}
         if fresh_brand:
-            path += "?" + urlencode({"fresh": fresh_brand})
+            query["fresh"] = fresh_brand
+        if accounts:
+            query["accounts"] = "1"
+        if query:
+            path += "?" + urlencode(query)
         answer = self._exchange(
             "GET",
             path,
@@ -653,9 +678,14 @@ class RelayControlClient:
         max_unit_price=None,
         quantity=1,
         requested_by="",
+        account=None,
+        no_wait=False,
         timeout=None,
     ):
         """Buy a card. Spends the shop's voucher balance: ``(status, payload)``.
+
+        ``account`` is what the customer typed for a card sent to an account
+        (``{"player_id": "5123456789"}``), by the brand's target fields.
 
         Sent once and never retried here — not even on a timeout: the key makes
         a replay safe on the relay's side, but whether to replay is the at-most-
@@ -674,6 +704,11 @@ class RelayControlClient:
             body["max_unit_price"] = str(max_unit_price)
         if requested_by:
             body["requested_by"] = requested_by
+        if account:
+            body["account"] = {str(key): str(value) for key, value in account.items()}
+        if no_wait:
+            # A relay from before this ignores it, and simply answers later.
+            body["no_wait"] = True
         answer = self._exchange(
             "POST",
             "/v1/vouchers/purchases",
@@ -682,6 +717,22 @@ class RelayControlClient:
             timeout=timeout,
         )
         return answer.status, answer.json()
+
+    def check_voucher_account(self, *, access_token, item, account, timeout=None):
+        """Look up the account a customer typed for a card sent to one, before
+        selling it: ``{status, name, region, account}`` (``valid``,
+        ``invalid``, ``unconfirmed`` or ``unchecked``). Buys nothing."""
+        answer = self._exchange(
+            "POST",
+            "/v1/vouchers/accounts/check",
+            body={
+                "item": item,
+                "account": {str(key): str(value) for key, value in (account or {}).items()},
+            },
+            relay_token=access_token,
+            timeout=timeout,
+        )
+        return answer.json()
 
     def get_voucher_purchase(self, *, access_token, idempotency_key, timeout=None):
         """A purchase read back by the key it was made under: ``{purchase,
@@ -1540,13 +1591,20 @@ def _advertised_origin(value):
 
 
 def issue_pairing_ticket(
-    installation, *, device_id="", device_name="", client=None, timeout=None
+    installation,
+    *,
+    device_id="",
+    device_name="",
+    not_after=None,
+    client=None,
+    timeout=None,
 ):
     relay_client = client or RelayControlClient()
     issued = relay_client.issue_ticket(
         access_token=installation.access_token,
         device_id=device_id,
         device_name=device_name,
+        not_after=not_after,
         timeout=timeout,
     )
     installation.last_pairing_issued_at = timezone.now()

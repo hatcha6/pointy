@@ -223,9 +223,13 @@ class SalesFiguresTests(ReportTestCase):
 
 
 class StockFiguresTests(ReportTestCase):
-    def _variant(self, sku):
+    def _variant(self, sku, threshold=5):
         return create_product_with_default_variant(
-            sku=sku, barcode="", name=f"صنف {sku}", unit_price=Decimal("10.00")
+            sku=sku,
+            barcode="",
+            name=f"صنف {sku}",
+            unit_price=Decimal("10.00"),
+            low_stock_threshold=threshold,
         ).default_variant
 
     def test_a_quantity_prints_as_digits(self):
@@ -237,9 +241,11 @@ class StockFiguresTests(ReportTestCase):
 
     def test_the_reorder_list_is_what_the_shop_restocks(self):
         wanted = self._variant("RE-1")
-        StockItem.objects.create(variant=wanted, quantity_on_hand=0, reorder_level=5)
+        StockItem.objects.create(variant=wanted, quantity_on_hand=0)
         transit = Warehouse.objects.get(pk=Warehouse.transit_id())
-        StockItem.objects.create(variant=wanted, warehouse=transit, reorder_level=5)
+        StockItem.objects.create(variant=wanted, warehouse=transit)
+        # Empty, but nobody asked to watch it: not a line to reorder.
+        StockItem.objects.create(variant=self._variant("RE-5", threshold=None))
         closed = Warehouse.objects.create(name="مخزن مغلق", code="closed", is_active=False)
         StockItem.objects.create(variant=self._variant("RE-2"), warehouse=closed)
         archived = self._variant("RE-3")

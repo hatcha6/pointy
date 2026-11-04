@@ -9,7 +9,7 @@ from .fulfillment import fulfillment_kind
 from .models import IntegrationAccount
 from .redeem import printed_receipt
 from .providers import is_implemented
-from .providers.base import without_figures
+from .providers.base import DETAIL_IN_PROGRESS, without_figures
 
 
 class IntegrationAccountSerializer(serializers.ModelSerializer):
@@ -526,6 +526,8 @@ def charge_payload(outcome, *, with_cost: bool = False, refunded=None) -> dict:
         "outcome": outcome.outcome,
         "status": fulfillment.status if fulfillment else "",
         "needs_attention": outcome.needs_attention,
+        # Unknown, but for a known reason: the provider took it and is working.
+        "in_progress": outcome.error_detail == DETAIL_IN_PROGRESS,
         "error_code": outcome.error_code,
         "error_detail": (
             outcome.error_detail if with_cost else without_figures(outcome.error_detail)

@@ -257,6 +257,7 @@ class PurchaseRepository {
     String discountCode = '',
     double extraDiscountAmount = 0,
     bool acknowledgeCostWarnings = false,
+    List<int> removedUnitIds = const [],
   }) async {
     if (lines.isEmpty) {
       return Error(Exception('purchase draft is empty'));
@@ -277,6 +278,7 @@ class PurchaseRepository {
         purchaseOrderId,
         draft,
         acknowledgeCostWarnings: acknowledgeCostWarnings,
+        removedUnitIds: removedUnitIds,
       );
     });
   }

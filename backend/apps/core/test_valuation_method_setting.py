@@ -162,12 +162,12 @@ class ValuationMethodSettingTests(TestCase):
             reverse("shop-settings"),
             {
                 "inventory_valuation_method": "moving_average",
-                "low_stock_threshold": 7,
+                "prevent_selling_at_loss": False,
             },
             format="json",
         )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(ShopSettings.load().low_stock_threshold, 7)
+        self.assertFalse(ShopSettings.load().prevent_selling_at_loss)
 
     def test_acknowledgement_is_never_stored_on_the_model(self):
         """It is a one-shot confirmation, not a setting that stays on."""

@@ -1005,7 +1005,11 @@ class IntegrationChargeView(APIView):
         # A refusal's detail can name what the provider charges the shop: only
         # for a reader who may see cost (``serializers.charge_payload``).
         with_cost = user_has_full_visibility(request.user)
-        outcomes = [recharge.charge(row.pk, user=request.user) for row in rows]
+        # A till with a requests panel does not wait for a slow supplier.
+        no_wait = request.data.get("no_wait") is True
+        outcomes = [
+            recharge.charge(row.pk, user=request.user, no_wait=no_wait) for row in rows
+        ]
         # Nothing was delivered, so the customer's money goes back — recorded,
         # in the drawer that took it, not left for the drawer to come up short.
         refunded = refusal_refund.refund_refused(outcomes)
@@ -1262,7 +1266,12 @@ class IntegrationVoucherMenuView(APIView):
         from .voucher_menu import menu_payload
 
         return Response(
-            menu_payload(request, with_cost=user_has_full_visibility(request.user))
+            menu_payload(
+                request,
+                with_cost=user_has_full_visibility(request.user),
+                # Only a till that can ask for an account is shown what needs one.
+                with_accounts=request.query_params.get("accounts") == "1",
+            )
         )
 
 

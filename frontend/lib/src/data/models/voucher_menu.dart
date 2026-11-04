@@ -13,6 +13,7 @@ import 'dart:typed_data';
 import 'product.dart';
 import 'product_variant.dart';
 import 'service_kinds.dart';
+import 'voucher_account.dart';
 
 class VoucherMenu {
   const VoucherMenu({
@@ -296,9 +297,15 @@ class VoucherBrand {
     this.aliases = const [],
     this.product,
     this.items = const [],
+    this.target,
+    this.sentToAccount = false,
   });
 
   factory VoucherBrand.fromJson(Map<String, Object?> json) {
+    final rawTarget = json['target'];
+    final target = rawTarget is Map<String, Object?>
+        ? VoucherTarget.fromJson(rawTarget)
+        : null;
     return VoucherBrand(
       key: _string(json['key']),
       name: _string(json['name']),
@@ -309,6 +316,8 @@ class VoucherBrand {
       redeemHint: _string(json['redeem_hint']),
       aliases: _strings(json['aliases']),
       product: _product(json['product']),
+      target: target,
+      sentToAccount: json['target'] is Map,
       items: _list(
         json['items'],
         VoucherItem.fromJson,
@@ -344,6 +353,15 @@ class VoucherBrand {
 
   /// In display order.
   final List<VoucherItem> items;
+
+  /// What the cashier asks for when its cards are sent to an account (a player
+  /// ID, a Telegram username). Null for a code card — and for a kind of account
+  /// this build cannot ask for, which [sentToAccount] tells apart.
+  final VoucherTarget? target;
+
+  /// The server says its cards go to an account. Without a [target] this till
+  /// cannot sell them, so they are never offered as if they were codes.
+  final bool sentToAccount;
 
   late final Map<int, ProductVariant> _variants = {
     for (final variant in product?.activeVariants ?? const <ProductVariant>[])
@@ -387,10 +405,36 @@ class VoucherBrand {
   /// The variant a cart line for [item] points at — the brand's own system
   /// product's, so the line's name and price are the server's. Null when it
   /// is not (or no longer) sellable.
-  ProductVariant? variantFor(VoucherItem item) => _variants[item.variantId];
+  ProductVariant? variantFor(VoucherItem item) {
+    final listed = _variants[item.variantId];
+    if (listed != null) {
+      return listed;
+    }
+    // A slim menu leaves the variants off the product (the shelf is thousands
+    // of cards), and each card carries what its line needs instead.
+    final detail = product;
+    if (detail == null || item.sku.isEmpty || item.variantId <= 0) {
+      return null;
+    }
+    return ProductVariant(
+      id: item.variantId,
+      productId: detail.id,
+      sku: item.sku,
+      unitPrice: item.price,
+      productName: displayName,
+      productDetail: detail,
+      name: item.name,
+      displayName: item.name,
+      fullName: item.name.isEmpty ? displayName : '$displayName - ${item.name}',
+      isService: true,
+    );
+  }
 
   /// Whether a cashier can sell [item] now.
-  bool canSell(VoucherItem item) => item.available && variantFor(item) != null;
+  bool canSell(VoucherItem item) =>
+      item.available &&
+      variantFor(item) != null &&
+      (!sentToAccount || target != null);
 
   /// Whether any of its cards can be sold now.
   bool get isAvailable => items.any(canSell);
@@ -448,6 +492,7 @@ class VoucherItem {
     this.available = false,
     this.exceedsFloat = false,
     this.cost,
+    this.sku = '',
   });
 
   factory VoucherItem.fromJson(Map<String, Object?> json) {
@@ -468,8 +513,12 @@ class VoucherItem {
       available: json['available'] == true,
       exceedsFloat: json['exceeds_float'] == true,
       cost: _amountOrNull(json['cost']),
+      sku: _string(json['sku']),
     );
   }
+
+  /// The variant's SKU, on a slim menu whose product lists no variants.
+  final String sku;
 
   /// The variant of the brand's product a cart line points at.
   final int variantId;

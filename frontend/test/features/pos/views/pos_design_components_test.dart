@@ -399,4 +399,5 @@ const _lowStockVariant = ProductVariant(
   productName: 'صنف مخزونه منخفض',
   displayName: 'صنف مخزونه منخفض',
   quantityOnHand: 4,
+  lowStockThreshold: 5,
 );

@@ -32,6 +32,7 @@ from apps.employees.models import Employee, EmployeeLoan, PayrollRun
 from apps.employees.reporting import payroll_cost
 from apps.expenses.models import Expense
 from apps.fraud.models import FraudFinding
+from apps.inventory.low_stock import low_stock_variants
 from apps.inventory.models import StockItem, StockMovement
 from apps.inventory.reporting import stock_cost_value
 from apps.payments.models import Payment
@@ -389,12 +390,17 @@ def _payments_section(request, period):
 
 def _inventory_section(period):
     stock = StockItem.objects.select_related("variant", "variant__product")
-    low_stock = stock.filter(quantity_on_hand__lte=F("reorder_level"))
+    # Watched variants only, on their shop-wide totals — the same list the
+    # low-stock notifications are raised from.
+    low_stock = (
+        low_stock_variants()
+        .select_related("product")
+        .order_by("on_hand", "product__name", "name", "pk")
+    )
     value_expr = F("quantity_on_hand") * F("variant__unit_price")
     # One pass over the stock table for every count and sum the summary needs.
     stock_totals = stock.aggregate(
         stock_item_count=Count("id"),
-        low_stock_count=Count("id", filter=Q(quantity_on_hand__lte=F("reorder_level"))),
         out_of_stock_count=Count("id", filter=Q(quantity_on_hand__lte=0)),
         committed_units=Coalesce(Sum("quantity_committed"), ZERO_QTY),
         expected_units=Coalesce(Sum("quantity_expected"), ZERO_QTY),
@@ -403,6 +409,11 @@ def _inventory_section(period):
             Value(Decimal("0.00")),
             output_field=MONEY_FIELD,
         ),
+    )
+    low_stock_rows = [_low_stock_row(variant) for variant in low_stock[:24]]
+    # A short list is its own count; only a full page needs a COUNT query.
+    low_stock_count = (
+        len(low_stock_rows) if len(low_stock_rows) < 24 else low_stock.count()
     )
     product_totals = Product.objects.aggregate(
         product_count=Count("id"),
@@ -438,7 +449,7 @@ def _inventory_section(period):
             "product_count": product_totals["product_count"],
             "active_product_count": product_totals["active_product_count"],
             "stock_item_count": stock_totals["stock_item_count"],
-            "low_stock_count": stock_totals["low_stock_count"],
+            "low_stock_count": low_stock_count,
             "out_of_stock_count": stock_totals["out_of_stock_count"],
             "committed_units": stock_totals["committed_units"],
             "expected_units": stock_totals["expected_units"],
@@ -447,22 +458,8 @@ def _inventory_section(period):
             # tied up in stock, read straight off the valuation ledger.
             "cost_stock_value": _money(stock_cost_value()),
         },
-        "low_stock_items": [
-            _stock_item_row(item)
-            for item in low_stock.order_by(
-                "quantity_on_hand",
-                "variant__product__name",
-                "variant__name",
-            )[:8]
-        ],
-        "low_stock_variants": [
-            _stock_item_row(item)
-            for item in low_stock.order_by(
-                "quantity_on_hand",
-                "variant__product__name",
-                "variant__name",
-            )[:24]
-        ],
+        "low_stock_items": low_stock_rows[:8],
+        "low_stock_variants": low_stock_rows,
         "dusty_items": [_stock_item_row(item) for item in dusty_items],
         "movement_mix": [
             {

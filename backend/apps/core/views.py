@@ -19,12 +19,23 @@ from apps.attachments.models import Attachment
 from apps.attachments.serializers import AttachmentSerializer
 from apps.attachments.services import active_attachments_for, content_type_for_upload
 
-from .models import ShopSettings
+from .models import RemoteSession, ShopSettings
 from .password_policy import password_policy
 from .permission_catalog import grouped_for
 from .permissions import HasPointyPermission
 from .relay import push_shop_name_to_relay, relay_ai_available
-from .remote_sign_in import remote_sign_in_refusal, request_is_remote_sign_in
+from .remote_session_views import (
+    remote_sessions_response,
+    revoke_remote_session_response,
+)
+from .remote_sessions import (
+    current_remote_session,
+    end_all_remote_sessions,
+    end_remote_session,
+    signs_in_remotely,
+    start_remote_session,
+)
+from .remote_sign_in import remote_sign_in_refusal
 from .roles import (
     create_initial_admin_user,
     ensure_role_groups,
@@ -123,13 +134,14 @@ def setup_initial_admin_view(request):
 @permission_classes([AllowAny])
 @throttle_classes([LoginRateThrottle, LoginUsernameRateThrottle])
 def login_view(request):
-    refusal = remote_sign_in_refusal(request)
+    remote = signs_in_remotely(request)
+    refusal = remote_sign_in_refusal(request, remote=remote)
     if refusal:
         return _remote_sign_in_refused(refusal)
     serializer = LoginSerializer(data=request.data, context={"request": request})
     serializer.is_valid(raise_exception=True)
     user = serializer.validated_data["user"]
-    refusal = remote_sign_in_refusal(request, user)
+    refusal = remote_sign_in_refusal(request, user, remote=remote)
     if refusal:
         record_domain_event(
             name="auth.remote_sign_in.refused",
@@ -142,7 +154,8 @@ def login_view(request):
         )
         return _remote_sign_in_refused(refusal)
     login(request, user)
-    if request_is_remote_sign_in(request):
+    if remote:
+        start_remote_session(request, user)
         record_domain_event(
             name="auth.remote_sign_in.succeeded",
             event_type=AnalyticsEvent.EventType.SECURITY,
@@ -211,6 +224,16 @@ def remote_sign_in_status_view(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def logout_view(request):
+    remote = current_remote_session(request)
+    if remote is not None:
+        # Signing out keeps the device's ticket: the next sign-in on it is
+        # still judged as a remote one (see remote_sessions).
+        end_remote_session(
+            remote,
+            RemoteSession.EndReason.SIGNED_OUT,
+            by=request.user,
+            revoke_tickets=False,
+        )
     logout(request)
     return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -322,6 +345,8 @@ class PosUserViewSet(viewsets.ModelViewSet):
         "list": ("auth.view_user",),
         "retrieve": ("auth.view_user",),
         "activity": ("auth.view_user",),
+        "remote_sessions": ("auth.view_user",),
+        "revoke_remote_session": ("auth.change_user",),
         "permission_catalog": ("auth.view_user",),
         "create": ("auth.add_user",),
         "update": ("auth.change_user",),
@@ -410,6 +435,18 @@ class PosUserViewSet(viewsets.ModelViewSet):
             }
         )
 
+    @action(detail=True, methods=["get"], url_path="remote-sessions")
+    def remote_sessions(self, request, pk=None):
+        return remote_sessions_response(request, self.get_object())
+
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path=r"remote-sessions/(?P<session_id>\d+)/revoke",
+    )
+    def revoke_remote_session(self, request, pk=None, session_id=None):
+        return revoke_remote_session_response(request, self.get_object(), session_id)
+
     @action(detail=False, methods=["get"], url_path="permission-catalog")
     def permission_catalog(self, request):
         """Grouped catalog of permissions an admin may grant per user, each
@@ -470,6 +507,11 @@ class ShopSettingsView(views.APIView):
 
         if set(changed_fields) & set(MODE_FIELDS.values()):
             sync_builtin_workflows(settings, fields=changed_fields)
+        if "allow_remote_sign_in" in changed_fields and not settings.allow_remote_sign_in:
+            # Closing the door ends every visit already through it.
+            end_all_remote_sessions(
+                RemoteSession.EndReason.REMOTE_SIGN_IN_DISABLED, by=request.user
+            )
         record_domain_event(
             name="settings.shop.updated",
             event_type=AnalyticsEvent.EventType.AUDIT,
@@ -494,7 +536,6 @@ class ShopSettingsView(views.APIView):
                 "enable_online_invoices": settings.enable_online_invoices,
                 "require_opening_cash": settings.require_opening_cash,
                 "cashier_return_window_hours": settings.cashier_return_window_hours,
-                "low_stock_threshold": settings.low_stock_threshold,
                 "inventory_valuation_method": settings.inventory_valuation_method,
                 "warn_low_stock_before_sale": settings.warn_low_stock_before_sale,
                 "enable_cash_payments": settings.enable_cash_payments,

@@ -30,6 +30,7 @@ import '../view_models/similar_product.dart';
 import '../view_models/variant_generation.dart';
 import 'auto_sku_filler.dart';
 import 'modifier_group_selector.dart';
+import 'low_stock_threshold_field.dart';
 import 'opening_stock_fields.dart';
 import 'pricing_currency_field.dart';
 import 'product_entry_pins.dart';
@@ -161,6 +162,10 @@ class _ProductFormState extends State<ProductForm> {
   final _priceController = TextEditingController();
   final _openingQuantityController = TextEditingController();
   final _openingCostController = TextEditingController();
+
+  /// One threshold for the product. On a product generating variants it is
+  /// written to each of them; the variant editor changes them one by one.
+  final _lowStockThresholdController = TextEditingController();
   final Map<String, TextEditingController> _generatedNameControllers = {};
   final Map<String, TextEditingController> _generatedSkuControllers = {};
   final Map<String, TextEditingController> _generatedBarcodeControllers = {};
@@ -294,6 +299,13 @@ class _ProductFormState extends State<ProductForm> {
   /// than letting somebody type a number that will be rejected.
   bool get _showsOpeningStock =>
       widget.showOpeningStock && !_isService && !_isPrepared;
+
+  /// For the same reason a service or a dish has no count to run low.
+  bool get _showsLowStockThreshold => !_isService && !_isPrepared;
+
+  ({double? value})? get _lowStockThreshold => _showsLowStockThreshold
+      ? (value: lowStockThresholdFromText(_lowStockThresholdController.text))
+      : null;
 
   /// The whole tracking choice, in its own section, once the shop identifies
   /// stock at all — or when the product in hand is serial anyway, copied from
@@ -453,6 +465,7 @@ class _ProductFormState extends State<ProductForm> {
     _priceController.removeListener(_onPriceChanged);
     _priceController.dispose();
     _openingQuantityController.dispose();
+    _lowStockThresholdController.dispose();
     _openingCostController.removeListener(_onOpeningCostChanged);
     _openingCostController.dispose();
     for (final controller in [
@@ -537,6 +550,7 @@ class _ProductFormState extends State<ProductForm> {
         _priceController.text.trim(),
         _openingQuantityController.text.trim(),
         _openingCostController.text.trim(),
+        _lowStockThresholdController.text.trim(),
         _pricingCurrency,
         _unit,
       ].join('\u0000'),
@@ -876,6 +890,14 @@ class _ProductFormState extends State<ProductForm> {
                     hintText: l10n.variantNameHint,
                     prefixIcon: const Icon(Icons.tune_outlined),
                   ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              if (_showsLowStockThreshold) ...[
+                LowStockThresholdField(
+                  controller: _lowStockThresholdController,
+                  enabled: !isSaving,
+                  appliesToEveryVariant: !_showsSellingFields,
                 ),
                 const SizedBox(height: 12),
               ],
@@ -1278,6 +1300,7 @@ class _ProductFormState extends State<ProductForm> {
                     _generatedActiveBySignature[combination.signature] ?? true,
                 isDefault: combination.signature == _defaultGeneratedSignature,
                 optionValueIds: combination.valueIds,
+                lowStockThreshold: _lowStockThreshold,
                 openingQuantity: _showsOpeningStock
                     ? _parseNumber(
                         _generatedOpeningQuantityControllers[combination
@@ -1334,6 +1357,7 @@ class _ProductFormState extends State<ProductForm> {
       openingUnitCost: _showsOpeningStock
           ? _parseNumber(_openingCostController.text)
           : null,
+      lowStockThreshold: _lowStockThreshold,
     );
 
     final imageSelection = _selectedImage;
@@ -1422,6 +1446,7 @@ class _ProductFormState extends State<ProductForm> {
     _variantNameController.clear();
     _descriptionController.clear();
     _openingQuantityController.clear();
+    _lowStockThresholdController.clear();
 
     setState(() {
       _pricingCurrency = carries(ProductCarryField.price)

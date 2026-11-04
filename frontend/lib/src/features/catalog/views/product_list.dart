@@ -29,6 +29,7 @@ import '../view_models/catalog_view_model.dart';
 import '../view_models/pricing_currency_options.dart';
 import '../view_models/product_details_view_model.dart';
 import 'bulk_price/bulk_price_editor_screen.dart';
+import 'bulk_tracking/bulk_tracking_screen.dart';
 import 'product_bulk_actions.dart';
 import 'product_details_screen.dart';
 
@@ -115,6 +116,9 @@ class ProductList extends StatelessWidget {
                     isViewingArchived: viewModel.isViewingArchived,
                     onBulkSelect: viewModel.enterSelectionMode,
                     onBulkPriceRules: () => _openBulkPriceEditor(context),
+                    onBulkTracking: capabilities.canChangeProductVariant
+                        ? () => _openBulkTracking(context)
+                        : null,
                     onToggleArchived: () => viewModel.setViewingArchived(
                       !viewModel.isViewingArchived,
                     ),
@@ -136,10 +140,11 @@ class ProductList extends StatelessWidget {
               isViewingArchived: viewModel.isViewingArchived,
               onArchive: () => _runArchive(context),
               onReprice: () => _openReprice(context),
-              onPriceRules: () => _openBulkPriceEditor(
-                context,
-                fromSelection: true,
-              ),
+              onPriceRules: () =>
+                  _openBulkPriceEditor(context, fromSelection: true),
+              onTracking: capabilities.canChangeProductVariant
+                  ? () => _openBulkTracking(context, fromSelection: true)
+                  : null,
               onCategorize: () => _openCategorize(context),
               onFlags: () => _openFlags(context),
             )
@@ -306,6 +311,27 @@ class ProductList extends StatelessWidget {
     );
   }
 
+  Future<void> _openBulkTracking(
+    BuildContext context, {
+    bool fromSelection = false,
+  }) {
+    final names = {
+      for (final product in viewModel.products) product.id: product.name,
+    };
+    return openBulkTracking(
+      context,
+      catalogRepository: viewModel.catalogRepository,
+      contactRepository: contactRepository,
+      selectedProducts: fromSelection
+          ? [
+              for (final id in viewModel.selectedIds)
+                BulkPriceRef(id: id, label: names[id] ?? '#$id'),
+            ]
+          : const <BulkPriceRef>[],
+      onChanged: viewModel.loadProducts,
+    );
+  }
+
   Future<void> _openCategorize(BuildContext context) async {
     final choice = await showBulkCategorizeSheet(
       context,
@@ -400,6 +426,7 @@ class _CatalogOverflowMenu extends StatelessWidget {
     required this.isViewingArchived,
     required this.onBulkSelect,
     required this.onBulkPriceRules,
+    required this.onBulkTracking,
     required this.onToggleArchived,
     required this.onRefresh,
   });
@@ -407,6 +434,9 @@ class _CatalogOverflowMenu extends StatelessWidget {
   final bool isViewingArchived;
   final VoidCallback onBulkSelect;
   final VoidCallback onBulkPriceRules;
+
+  /// Null hides the entry: the page changes variants too.
+  final VoidCallback? onBulkTracking;
   final VoidCallback onToggleArchived;
   final VoidCallback onRefresh;
 
@@ -422,6 +452,8 @@ class _CatalogOverflowMenu extends StatelessWidget {
             onBulkSelect();
           case _CatalogMenuAction.bulkPriceRules:
             onBulkPriceRules();
+          case _CatalogMenuAction.bulkTracking:
+            onBulkTracking?.call();
           case _CatalogMenuAction.toggleArchived:
             onToggleArchived();
           case _CatalogMenuAction.refresh:
@@ -446,6 +478,16 @@ class _CatalogOverflowMenu extends StatelessWidget {
             title: Text(l10n.bulkPriceEditorMenuAction),
           ),
         ),
+        if (onBulkTracking != null)
+          PopupMenuItem(
+            key: const ValueKey('catalog_menu_bulk_tracking'),
+            value: _CatalogMenuAction.bulkTracking,
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.event_available_outlined),
+              title: Text(l10n.bulkTrackingMenuAction),
+            ),
+          ),
         PopupMenuItem(
           value: _CatalogMenuAction.toggleArchived,
           child: ListTile(
@@ -475,7 +517,13 @@ class _CatalogOverflowMenu extends StatelessWidget {
   }
 }
 
-enum _CatalogMenuAction { bulkSelect, bulkPriceRules, toggleArchived, refresh }
+enum _CatalogMenuAction {
+  bulkSelect,
+  bulkPriceRules,
+  bulkTracking,
+  toggleArchived,
+  refresh,
+}
 
 class _BulkSelectionBar extends StatelessWidget {
   const _BulkSelectionBar({
@@ -484,6 +532,7 @@ class _BulkSelectionBar extends StatelessWidget {
     required this.onArchive,
     required this.onReprice,
     required this.onPriceRules,
+    required this.onTracking,
     required this.onCategorize,
     required this.onFlags,
   });
@@ -493,6 +542,7 @@ class _BulkSelectionBar extends StatelessWidget {
   final VoidCallback onArchive;
   final VoidCallback onReprice;
   final VoidCallback onPriceRules;
+  final VoidCallback? onTracking;
   final VoidCallback onCategorize;
   final VoidCallback onFlags;
 
@@ -577,6 +627,13 @@ class _BulkSelectionBar extends StatelessWidget {
               icon: const Icon(Icons.price_change_outlined),
               label: Text(l10n.bulkPriceEditorSelectionAction),
             ),
+            if (onTracking != null)
+              OutlinedButton.icon(
+                key: const ValueKey('catalog_bulk_tracking'),
+                onPressed: enabled ? onTracking : null,
+                icon: const Icon(Icons.event_available_outlined),
+                label: Text(l10n.bulkTrackingSelectionAction),
+              ),
             OutlinedButton.icon(
               onPressed: enabled ? onCategorize : null,
               icon: const Icon(Icons.category_outlined),

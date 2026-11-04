@@ -1,4 +1,5 @@
 import '../../core/result.dart';
+import '../models/card_request.dart';
 import '../models/integration_card.dart';
 import '../models/integration_provider.dart';
 import '../models/integration_recent_search.dart';
@@ -7,6 +8,7 @@ import '../models/service_country_detail.dart';
 import '../models/service_kinds.dart';
 import '../models/service_quote.dart';
 import '../models/services_directory.dart';
+import '../models/voucher_account.dart';
 import '../models/voucher_availability.dart';
 import '../models/voucher_menu.dart';
 import '../models/voucher_pricing.dart';
@@ -193,11 +195,52 @@ class IntegrationsRepository {
   /// Perform the recharges a sale sold. The guard lives on the server: a
   /// repeat of this call cannot produce a second charge, and a refused line
   /// is never tried again — it is given back.
-  Future<Result<List<IntegrationChargeResult>>> charge({required int orderId}) {
+  Future<Result<List<IntegrationChargeResult>>> charge({
+    required int orderId,
+    bool noWait = false,
+  }) {
     return Result.guard(
-      () => _service.chargeIntegrationRecharges(orderId: orderId),
+      () => _service.chargeIntegrationRecharges(
+        orderId: orderId,
+        noWait: noWait,
+      ),
     );
   }
+
+  // --- the till's requests panel and account book ----------------------------
+
+  Future<Result<List<CardRequest>>> loadCardRequests() =>
+      Result.guard(_service.fetchCardRequests);
+
+  Future<Result<List<CardRequest>>> settleCardRequests(List<int> lines) =>
+      Result.guard(() => _service.settleCardRequests(lines));
+
+  Future<Result<SavedVoucherAccountPage>> loadSavedVoucherAccounts({
+    required String brand,
+    String search = '',
+    int? customer,
+  }) => Result.guard(
+    () => _service.fetchSavedVoucherAccounts(
+      brand: brand,
+      search: search,
+      customer: customer,
+    ),
+  );
+
+  Future<Result<SavedVoucherAccount>> renameSavedVoucherAccount(
+    int id,
+    String label,
+  ) => Result.guard(() => _service.renameSavedVoucherAccount(id, label));
+
+  Future<Result<void>> deleteSavedVoucherAccount(int id) =>
+      Result.guard(() => _service.deleteSavedVoucherAccount(id));
+
+  Future<Result<VoucherAccountCheck>> checkVoucherAccount({
+    required int variantId,
+    required Map<String, String> values,
+  }) => Result.guard(
+    () => _service.checkVoucherAccount(variantId: variantId, values: values),
+  );
 
   Future<Result<IntegrationHistoryPage>> loadHistory({
     required String providerKey,

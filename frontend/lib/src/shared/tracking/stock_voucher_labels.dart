@@ -22,6 +22,7 @@ String stockVoucherLabel(AppLocalizations l10n, String voucherType) {
     'consignment_intake' => l10n.stockVoucherConsignmentIntake,
     'consignment_return' => l10n.stockVoucherConsignmentReturn,
     'refurbishment' => l10n.stockVoucherRefurbishment,
+    'catalog_merge' => l10n.stockVoucherCatalogMerge,
     _ => l10n.stockVoucherOther,
   };
 }

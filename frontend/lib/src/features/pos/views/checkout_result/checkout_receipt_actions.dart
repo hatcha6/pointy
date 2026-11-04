@@ -36,7 +36,11 @@ class CheckoutReceiptActions extends StatefulWidget {
     required this.initialPrintStatus,
     required this.handlers,
     this.customerPhone = '',
+    this.receiptFollows = false,
   });
+
+  /// The receipt prints by itself once the supplier has answered.
+  final bool receiptFollows;
 
   final InvoicePrintStatus initialPrintStatus;
   final CheckoutReceiptHandlers handlers;
@@ -200,7 +204,11 @@ class _CheckoutReceiptActionsState extends State<CheckoutReceiptActions> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _PrintStatusLine(status: _printStatus, printing: _busy == _Busy.print),
+        _PrintStatusLine(
+          status: _printStatus,
+          printing: _busy == _Busy.print,
+          receiptFollows: widget.receiptFollows,
+        ),
         const SizedBox(height: 8),
         LayoutBuilder(
           builder: (context, constraints) {
@@ -238,7 +246,13 @@ class _CheckoutReceiptActionsState extends State<CheckoutReceiptActions> {
 }
 
 class _PrintStatusLine extends StatelessWidget {
-  const _PrintStatusLine({required this.status, required this.printing});
+  const _PrintStatusLine({
+    required this.status,
+    required this.printing,
+    this.receiptFollows = false,
+  });
+
+  final bool receiptFollows;
 
   final InvoicePrintStatus status;
   final bool printing;
@@ -277,7 +291,9 @@ class _PrintStatusLine extends StatelessWidget {
             InvoicePrintStatus.notRequested => (
               colors.mutedInk,
               Icons.receipt_outlined,
-              l10n.checkoutResultNotPrinted,
+              receiptFollows
+                  ? l10n.cardRequestReceiptFollows
+                  : l10n.checkoutResultNotPrinted,
               null,
             ),
           };

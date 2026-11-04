@@ -36,8 +36,7 @@ import 'purchase_order_labels.dart';
 import 'receipt_labels.dart';
 
 import '../../../data/models/receipt_capture.dart';
-import '../../inventory/views/batch_capture_sheet.dart';
-import '../../inventory/views/unit_capture_sheet.dart';
+import '../../inventory/views/tracked_goods_capture.dart';
 part 'purchase_order_actions_panel.dart';
 part 'purchase_order_adjustment_dialogs.dart';
 part 'purchase_order_receive_dialog.dart';

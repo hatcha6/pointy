@@ -78,6 +78,11 @@ class StockItem(TimeStampedModel):
     quantity_on_hand = models.DecimalField(max_digits=12, decimal_places=3, default=0)
     quantity_committed = models.DecimalField(max_digits=12, decimal_places=3, default=0)
     quantity_expected = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    # Retired: nothing reads it. The threshold is per variant now —
+    # ``ProductVariant.low_stock_threshold``, read through
+    # ``apps.inventory.low_stock`` — and catalog 0043 carried the imported
+    # levels over. Kept one release so the backend still serving during a live
+    # update can insert stock rows, and so older clients still find the key.
     reorder_level = models.PositiveIntegerField(default=5)
 
     class Meta:
@@ -714,6 +719,12 @@ class StockLedgerEntry(TimeStampedModel):
         # capitalisation nobody posted leaves the two disagreeing until the sale
         # issues value the shelf never took in (§5.6).
         REFURBISHMENT = "refurbishment", "Refurbishment capitalised"
+        # Two records of one shelf became one (``apps.migration.flatten``), and
+        # the combined value differs from the two added up because one of them
+        # had been selling below zero. Value-only, and its own type on purpose:
+        # nothing was bought, sold, lost or found, so it is neither shrinkage nor
+        # profit, and no report may read it as either.
+        CATALOG_MERGE = "catalog_merge", "Catalog merge"
 
     variant = models.ForeignKey(
         ProductVariant,
@@ -1174,6 +1185,8 @@ ALLOWED_STATUS_TRANSITIONS = {
         StockUnit.Status.IN_STOCK,
         StockUnit.Status.RETURNED,
         StockUnit.Status.WRITTEN_OFF,
+        # The delivery that brought it was corrected: it never arrived at all.
+        StockUnit.Status.CANCELLED,
     },
     # Found again during a stock count. Rare, and the only way back.
     StockUnit.Status.WRITTEN_OFF: {StockUnit.Status.IN_STOCK},

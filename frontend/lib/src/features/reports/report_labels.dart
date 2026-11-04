@@ -443,6 +443,7 @@ const _valueLabels = {
   'consignment_intake': 'استلام أمانة',
   'consignment_return': 'إرجاع أمانة لصاحبها',
   'refurbishment': 'إصلاح أُضيف إلى التكلفة',
+  'catalog_merge': 'دمج أصناف فرعية',
   // How long an article has stood on the shelf. The bands include their lower
   // bound and stop short of the upper one.
   '0-30': 'أقل من ٣٠ يومًا',

@@ -274,6 +274,59 @@ void main() {
     expect(key('purchase_result_receive'), findsNothing);
     expect(find.text('تم'), findsOneWidget);
   });
+
+  testWidgets(
+    'lowering a received serial line asks which handsets never came',
+    (tester) async {
+      final purchases = _Purchases(
+        lines: [_line(1, 'هاتف', TrackingMode.serial, 3)],
+        status: 'received',
+        saveFailures: [
+          PosApiException(
+            message: 'units',
+            statusCode: 400,
+            responseBody: jsonEncode({
+              'code': 'purchase_edit_units_required',
+              'detail': 'اختر الوحدات',
+              'lines': [
+                {
+                  'line': '7',
+                  'product_name': 'هاتف',
+                  'remove_count': '1',
+                  'candidates': [
+                    {'id': '41', 'code': '351234567890116'},
+                    {'id': '42', 'code': '351234567890124'},
+                  ],
+                },
+              ],
+            }),
+          ),
+        ],
+      );
+      await _open(tester, purchases, mode: PurchaseResultMode.save);
+
+      expect(key('purchase_result_edit_units'), findsOneWidget);
+      expect(find.text('اختر 1 من هاتف'), findsOneWidget);
+      final confirm = tester.widget<FilledButton>(
+        key('purchase_result_edit_units_confirm'),
+      );
+      expect(confirm.onPressed, isNull);
+
+      await tester.tap(key('purchase_edit_unit_42'));
+      await tester.pump();
+      // One is all the line needs: a second tick is ignored.
+      await tester.tap(key('purchase_edit_unit_41'));
+      await tester.pump();
+      await tester.tap(key('purchase_result_edit_units_confirm'));
+      await tester.pumpAndSettle();
+
+      expect(purchases.removedUnitIds, [
+        <int>[],
+        [42],
+      ]);
+      expect(find.text('تم حفظ التعديلات'), findsOneWidget);
+    },
+  );
 }
 
 class _Host {
@@ -412,13 +465,17 @@ class _Purchases extends PurchaseRepository {
     required this.lines,
     this.status = 'submitted',
     List<Object> submitFailures = const [],
+    List<Exception> saveFailures = const [],
     this.receiveFailures = 0,
   }) : _submitFailures = List.of(submitFailures),
+       _saveFailures = List.of(saveFailures),
        super(PosApiService());
 
   final List<PurchaseOrderLine> lines;
   final String status;
   final List<Object> _submitFailures;
+  final List<Exception> _saveFailures;
+  final removedUnitIds = <List<int>>[];
   int receiveFailures;
   final receipts = <_Receipt>[];
   final submitKeys = <String?>[];
@@ -495,7 +552,12 @@ class _Purchases extends PurchaseRepository {
     String discountCode = '',
     double extraDiscountAmount = 0,
     bool acknowledgeCostWarnings = false,
-  }) async => Ok(order(status));
+    List<int> removedUnitIds = const [],
+  }) async {
+    this.removedUnitIds.add(removedUnitIds);
+    if (_saveFailures.isNotEmpty) return Error(_saveFailures.removeAt(0));
+    return Ok(order(status));
+  }
 
   @override
   Future<Result<PurchaseOrder>> receiveLines({

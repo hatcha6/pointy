@@ -30,7 +30,6 @@ void main() {
         autoPrintReceipts: false,
         allowOverselling: false,
         preventSellingAtLoss: true,
-        lowStockThreshold: 5,
         cashierReturnWindowHours: 42,
         enableCashPayments: true,
         enableCardPayments: true,

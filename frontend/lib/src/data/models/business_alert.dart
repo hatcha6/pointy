@@ -243,6 +243,7 @@ BusinessAlertType _typeFromCode(String code) {
     'inventory.low_stock' => BusinessAlertType.lowStock,
     'inventory.position_untrusted' => BusinessAlertType.stockPositionUntrusted,
     'inventory.expiring_batch' => BusinessAlertType.expiringStock,
+    'inventory.expiry_reminder' => BusinessAlertType.expiringStock,
     'inventory.missing_identifiers' => BusinessAlertType.missingIdentifiers,
     'inventory.open_custody_claims' => BusinessAlertType.openCustodyClaims,
     'inventory.unclaimed_payouts' => BusinessAlertType.unclaimedPayouts,

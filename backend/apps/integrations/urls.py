@@ -27,6 +27,12 @@ from .services_views import (
     ServicesQuoteView,
     ServicesRecentView,
 )
+from .card_request_views import CardRequestsSettleView, CardRequestsView
+from .voucher_account_views import (
+    VoucherAccountCheckView,
+    VoucherSavedAccountsView,
+    VoucherSavedAccountView,
+)
 from .views import (
     IntegrationAccountView,
     IntegrationCardView,
@@ -92,6 +98,27 @@ urlpatterns = [
     path("services/detect/", ServicesDetectView.as_view(), name="integrations-services-detect"),
     path("services/quote/", ServicesQuoteView.as_view(), name="integrations-services-quote"),
     path("services/recent/", ServicesRecentView.as_view(), name="integrations-services-recent"),
+    path(
+        "vouchers/check-account/",
+        VoucherAccountCheckView.as_view(),
+        name="integrations-voucher-check-account",
+    ),
+    path(
+        "vouchers/saved-accounts/",
+        VoucherSavedAccountsView.as_view(),
+        name="integrations-voucher-saved-accounts",
+    ),
+    path(
+        "vouchers/saved-accounts/<int:pk>/",
+        VoucherSavedAccountView.as_view(),
+        name="integrations-voucher-saved-account",
+    ),
+    path("card-requests/", CardRequestsView.as_view(), name="integrations-card-requests"),
+    path(
+        "card-requests/settle/",
+        CardRequestsSettleView.as_view(),
+        name="integrations-card-requests-settle",
+    ),
     path("pointy/pricing/", PricingView.as_view(), name="integrations-pricing"),
     path("pointy/pricing/cards/", PricingCardsView.as_view(), name="integrations-pricing-cards"),
     path(

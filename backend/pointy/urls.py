@@ -30,6 +30,7 @@ from apps.balances.views import (
     SupplierBalanceEntryViewSet,
 )
 from apps.catalog.bulk_pricing_views import BulkPriceChangeViewSet
+from apps.catalog.bulk_tracking_views import BulkTrackingChangeViewSet
 from apps.catalog.views import (
     ModifierGroupViewSet,
     ProductCategoryViewSet,
@@ -122,6 +123,10 @@ from apps.core.backup_views import (
 )
 from apps.core.dashboard import DashboardView
 from apps.core.factory_reset_views import FactoryResetView
+from apps.core.remote_session_views import (
+    my_remote_sessions_view,
+    revoke_my_remote_session_view,
+)
 from apps.core.state_views import state_view
 from apps.clients.views import (
     ClientFileView,
@@ -222,6 +227,11 @@ router.register(
     "bulk-price-changes",
     BulkPriceChangeViewSet,
     basename="bulk-price-change",
+)
+router.register(
+    "bulk-tracking-changes",
+    BulkTrackingChangeViewSet,
+    basename="bulk-tracking-change",
 )
 router.register(
     "product-variants",
@@ -411,6 +421,16 @@ urlpatterns = [
     path("api/auth/login/", login_view, name="auth-login"),
     path("api/auth/logout/", logout_view, name="auth-logout"),
     path("api/auth/me/", me_view, name="auth-me"),
+    path(
+        "api/auth/remote-sessions/",
+        my_remote_sessions_view,
+        name="auth-remote-sessions",
+    ),
+    path(
+        "api/auth/remote-sessions/<int:session_id>/revoke/",
+        revoke_my_remote_session_view,
+        name="auth-remote-session-revoke",
+    ),
     path(
         "api/auth/password/change/",
         password_change_view,

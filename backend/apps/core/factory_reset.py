@@ -176,6 +176,9 @@ WIPED_MODELS = (
     "integrations.integrationfulfillment",
     "integrations.integrationsearch",
     "integrations.integrationsubscriber",
+    # The shop's book of player IDs and usernames: its customers' accounts, last
+    # sold to by the recharges above, and it points at the customers going too.
+    "integrations.integrationsavedaccount",
     # A provider's shelf as last read, and the catalog products it made. The
     # products go with the catalog; the next sweep reads the shelf again.
     "integrations.integrationvoucher",
@@ -232,6 +235,7 @@ WIPED_MODELS = (
     "migration.migrationissue",
     "migration.migrationrun",
     "migration.migrationsource",
+    "migration.variantmerge",
     # notifications — business alerts about numbers that are going.
     "notifications.businessnotification",
     "notifications.businessnotificationuserstate",
@@ -292,6 +296,9 @@ WIPED_MODELS = (
     # catalogue of deleted products must come back through the login screen,
     # not carry on. The account running the reset is signed in again at the end.
     "sessions.session",
+    # remote sessions — their Django sessions go above, so the records of them
+    # would describe sign-ins that no longer exist.
+    "core.remotesession",
     # surveillance — footage kept from FTP uploads is footage OF the invoices
     # this wipes (its files go with it, see _stored_files_to_discard), and the
     # uploads still waiting for a decision would be decided against sales that

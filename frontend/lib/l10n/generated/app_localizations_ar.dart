@@ -59,6 +59,10 @@ class AppLocalizationsAr extends AppLocalizations {
   String get commandPaletteActionNewSale => 'بيع جديد';
 
   @override
+  String get commandPaletteActionPurchaseOrderWorkspace =>
+      'متابعة أمر الشراء الحالي';
+
+  @override
   String get commandPaletteActionNewPurchaseOrder => 'أمر شراء جديد';
 
   @override
@@ -1998,10 +2002,15 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String dashboardStockItemSubtitle(
     String sku,
-    int reorderLevel,
+    String reorderLevel,
     int expected,
   ) {
     return '$sku، حد الطلب $reorderLevel، المتوقع $expected';
+  }
+
+  @override
+  String dashboardStockItemSubtitleUnwatched(String sku, int expected) {
+    return '$sku، بلا حد تنبيه، المتوقع $expected';
   }
 
   @override
@@ -3174,6 +3183,214 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get userDetailsRecentActivityTitle => 'آخر النشاطات';
+
+  @override
+  String get remoteSessionsTitle => 'الجلسات عن بُعد';
+
+  @override
+  String get remoteSessionsOwnSubtitle =>
+      'الأجهزة التي دخلتَ منها إلى المتجر من خارج شبكته عبر دفتر. أنهِ أي جلسة لا تعرفها.';
+
+  @override
+  String get remoteSessionsUserSubtitle =>
+      'الأجهزة التي دخل منها هذا المستخدم إلى المتجر من خارج شبكته عبر دفتر.';
+
+  @override
+  String get remoteSessionsEmpty => 'لا توجد جلسات عن بُعد';
+
+  @override
+  String get remoteSessionsEmptyDescription =>
+      'تظهر هنا كل جلسة دخول من خارج شبكة المتجر، مع جهازها ومكانها.';
+
+  @override
+  String get remoteSessionsLoadError => 'تعذّر تحميل الجلسات عن بُعد.';
+
+  @override
+  String get remoteSessionsRefreshTooltip => 'تحديث الجلسات عن بُعد';
+
+  @override
+  String remoteSessionsActiveCount(String count) {
+    return 'النشطة: $count';
+  }
+
+  @override
+  String get remoteSessionStatusActive => 'نشطة';
+
+  @override
+  String get remoteSessionStatusExpired => 'انتهت مدتها';
+
+  @override
+  String get remoteSessionStatusRevoked => 'أُنهيت';
+
+  @override
+  String get remoteSessionStatusSignedOut => 'سُجِّل الخروج';
+
+  @override
+  String get remoteSessionStatusDisabled => 'أُوقف الدخول عن بُعد';
+
+  @override
+  String get remoteSessionThisDevice => 'هذا الجهاز';
+
+  @override
+  String get remoteSessionFactAddress => 'العنوان';
+
+  @override
+  String get remoteSessionFactSignedIn => 'الدخول';
+
+  @override
+  String get remoteSessionFactLastSeen => 'آخر نشاط';
+
+  @override
+  String get remoteSessionFactExpires => 'تنتهي';
+
+  @override
+  String get remoteSessionFactEnded => 'انتهت';
+
+  @override
+  String get remoteSessionFactEndedBy => 'أنهاها';
+
+  @override
+  String get remoteSessionJustNow => 'الآن';
+
+  @override
+  String remoteSessionMinutesAgo(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'منذ $count دقيقة',
+      few: 'منذ $count دقائق',
+      two: 'منذ دقيقتين',
+      one: 'منذ دقيقة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String remoteSessionHoursAgo(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'منذ $count ساعة',
+      few: 'منذ $count ساعات',
+      two: 'منذ ساعتين',
+      one: 'منذ ساعة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String remoteSessionDaysAgo(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'منذ $count يومًا',
+      few: 'منذ $count أيام',
+      two: 'منذ يومين',
+      one: 'منذ يوم',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String remoteSessionInHours(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'بعد $count ساعة',
+      few: 'بعد $count ساعات',
+      two: 'بعد ساعتين',
+      one: 'بعد ساعة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String remoteSessionInDays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'بعد $count يومًا',
+      few: 'بعد $count أيام',
+      two: 'بعد يومين',
+      one: 'بعد يوم',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String remoteSessionDeviceTitle(String platform, String browser) {
+    return '$platform · $browser';
+  }
+
+  @override
+  String get remoteSessionPlatformIphone => 'آيفون';
+
+  @override
+  String get remoteSessionPlatformIpad => 'آيباد';
+
+  @override
+  String get remoteSessionPlatformAndroid => 'أندرويد';
+
+  @override
+  String get remoteSessionPlatformWindows => 'ويندوز';
+
+  @override
+  String get remoteSessionPlatformMac => 'ماك';
+
+  @override
+  String get remoteSessionPlatformChromeOs => 'كروم أو إس';
+
+  @override
+  String get remoteSessionPlatformLinux => 'لينكس';
+
+  @override
+  String get remoteSessionPlatformOther => 'جهاز غير معروف';
+
+  @override
+  String get remoteSessionBrowserSafari => 'سفاري';
+
+  @override
+  String get remoteSessionBrowserChrome => 'كروم';
+
+  @override
+  String get remoteSessionBrowserEdge => 'إيدج';
+
+  @override
+  String get remoteSessionBrowserFirefox => 'فايرفوكس';
+
+  @override
+  String get remoteSessionBrowserSamsung => 'متصفح سامسونج';
+
+  @override
+  String get remoteSessionBrowserOpera => 'أوبرا';
+
+  @override
+  String get remoteSessionRevokeButton => 'إنهاء';
+
+  @override
+  String get remoteSessionRevokeTooltip =>
+      'إنهاء هذه الجلسة وتسجيل خروج الجهاز';
+
+  @override
+  String get remoteSessionRevokeTitle => 'إنهاء الجلسة؟';
+
+  @override
+  String remoteSessionRevokeMessage(String device) {
+    return 'سيُسجَّل خروج «$device» فورًا، ولن يدخل إلى المتجر مجددًا إلا بكلمة المرور.';
+  }
+
+  @override
+  String get remoteSessionRevokeCurrentMessage =>
+      'هذه هي الجلسة التي تستخدمها الآن. سيُسجَّل خروجك من هذا الجهاز فورًا.';
+
+  @override
+  String get remoteSessionRevokeConfirm => 'إنهاء الجلسة';
+
+  @override
+  String get remoteSessionRevokeError => 'تعذّر إنهاء الجلسة. حاول مرة أخرى.';
+
+  @override
+  String get remoteSessionRevoked => 'أُنهيت الجلسة وسُجِّل خروج الجهاز.';
 
   @override
   String get userActivityNetSalesMetric => 'صافي المبيعات';
@@ -5461,12 +5678,8 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String inventorySettingsSummary(
-    int count,
-    String oversellStatus,
-    String lossStatus,
-  ) {
-    return 'تنبيه عند $count قطع أو أقل، البيع فوق المخزون: $oversellStatus، منع الخسارة: $lossStatus';
+  String inventorySettingsSummary(String oversellStatus, String lossStatus) {
+    return 'البيع فوق المخزون: $oversellStatus، منع الخسارة: $lossStatus';
   }
 
   @override
@@ -6390,6 +6603,18 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get lowStockThresholdLabel => 'حد تنبيه المخزون المنخفض';
+
+  @override
+  String get lowStockThresholdHelper =>
+      'ننبّهك عندما يصل مخزون هذا الصنف في كل الفروع إلى هذا العدد أو أقل. اتركه فارغًا لإيقاف التنبيه.';
+
+  @override
+  String get lowStockThresholdMovedHint =>
+      'حد تنبيه المخزون المنخفض يُضبط الآن لكل صنف على حدة من شاشة المنتج، ولا يُنبَّه إلا عن الأصناف التي ضُبط لها حد.';
+
+  @override
+  String get lowStockThresholdGeneratedHelper =>
+      'يُطبَّق على كل صنف مولَّد، ويمكن تعديله لكل صنف لاحقًا. اتركه فارغًا لإيقاف التنبيه.';
 
   @override
   String get printerTransportLabel => 'طريقة الاتصال';
@@ -7977,6 +8202,9 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get stockVoucherRefurbishment => 'إصلاح أُضيف إلى التكلفة';
+
+  @override
+  String get stockVoucherCatalogMerge => 'دمج أصناف فرعية';
 
   @override
   String get stockVoucherOther => 'حركة مخزون';
@@ -10042,10 +10270,6 @@ class AppLocalizationsAr extends AppLocalizations {
       'يظهر هنا بديل مطابق لكل عنصر صادر، ويمكنك تعديله أو إضافة غيره.';
 
   @override
-  String get purchaseAdjustmentUnitsReplacementLotRequired =>
-      'البديل صنف مسلسل بدفعة: امسح رقم الدفعة قبل التأكيد.';
-
-  @override
   String get unitPickSearchHint => 'امسح أو اكتب الرقم التسلسلي / IMEI';
 
   @override
@@ -11881,10 +12105,6 @@ class AppLocalizationsAr extends AppLocalizations {
   String posCashPurchaseLotsCountLabel(int count) {
     return 'الدفعات: $count';
   }
-
-  @override
-  String get posCashPurchaseLotRequiredError =>
-      'هذا الصنف يُشترى برقم دفعة — أدخل رقم الدفعة.';
 
   @override
   String get posCashPurchaseLotsMismatchError =>
@@ -15810,6 +16030,23 @@ class AppLocalizationsAr extends AppLocalizations {
   String get batchCaptureLotCode => 'رقم الدفعة';
 
   @override
+  String get batchCaptureLotCodeOptional => 'رقم الدفعة (اختياري)';
+
+  @override
+  String get batchCaptureLotCodeGenerated =>
+      'يُولَّد رقم تلقائيًا إن تُرك فارغًا';
+
+  @override
+  String get expiryFieldHint => '12/27';
+
+  @override
+  String get expiryFieldInvalid =>
+      'تاريخ غير مفهوم — اكتب الشهر/السنة مثل 12/27';
+
+  @override
+  String get expiryFieldPickTooltip => 'اختيار من التقويم';
+
+  @override
   String get batchCaptureQuantity => 'الكمية';
 
   @override
@@ -15869,6 +16106,39 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get purchaseLineLotsNoExpiryAtReceipt =>
       'تُسجَّل أرقام الدفعات عند الاستلام.';
+
+  @override
+  String get purchaseLineCaptureLotNumber => 'رقم الدفعة / تقسيم';
+
+  @override
+  String purchaseLineCaptureLotCode(String code) {
+    return 'الدفعة $code';
+  }
+
+  @override
+  String purchaseLineCaptureLotsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count دفعة',
+      few: '$count دفعات',
+      two: 'دفعتان',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String purchaseLineCaptureSerials(int captured, int expected) {
+    return 'الأرقام التسلسلية $captured/$expected';
+  }
+
+  @override
+  String get purchaseLineCaptureLater =>
+      'اختياري — ما لا يُدخل الآن يُطلب عند الاستلام.';
+
+  @override
+  String get purchaseLineCaptureMismatch =>
+      'ما أُدخل أكثر من كمية السطر — عدّل الدفعات أو الأرقام.';
 
   @override
   String get purchaseLineSerialLotAtReceipt =>
@@ -15977,9 +16247,6 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get batchCaptureBlockedExpiry => 'أدخل تاريخ صلاحية كل دفعة.';
-
-  @override
-  String get batchCaptureBlockedCode => 'أدخل رقم كل دفعة.';
 
   @override
   String batchCaptureBlockedResidual(String captured, String expected) {
@@ -19026,6 +19293,13 @@ class AppLocalizationsAr extends AppLocalizations {
       'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx';
 
   @override
+  String get connectionRemotePasteButton => 'لصق';
+
+  @override
+  String get connectionRemoteClipboardHasNoId =>
+      'لا يوجد رقم تثبيت في الحافظة. انسخ الرقم من الإعدادات ← الاشتراك على جهاز المتجر، ثم اضغط «لصق».';
+
+  @override
   String get connectionRemoteConnectButton => 'متابعة';
 
   @override
@@ -19743,7 +20017,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get purchasingShortcutDeleteLine => 'حذف السطر المحدد (مع التراجع)';
 
   @override
-  String get purchasingShortcutTypeQuantity => 'اكتب الكمية ثم Enter لتطبيقها';
+  String get purchasingShortcutTypeQuantity =>
+      'اكتب الكمية ثم Enter للانتقال إلى التكلفة';
 
   @override
   String get purchasingShortcutStepQuantity => 'زيادة أو إنقاص واحد';
@@ -19757,6 +20032,38 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get purchasingShortcutSubmit => 'حفظ أو تسجيل أمر الشراء';
+
+  @override
+  String get purchasingShortcutsSectionSearch => 'البحث والإضافة';
+
+  @override
+  String get purchasingShortcutSearchEnter =>
+      'باركود ثم Enter يضيف المنتج، والاسم ثم Enter يبحث';
+
+  @override
+  String get purchasingShortcutResults =>
+      'التنقل بين نتائج البحث، وEnter يضيف المنتج المحدد';
+
+  @override
+  String get purchasingShortcutBackToSearch => 'العودة إلى خانة البحث';
+
+  @override
+  String get purchasingShortcutWalkLine =>
+      'إدخال السطر المحدد: الكمية ثم التكلفة ثم الصلاحية';
+
+  @override
+  String get purchasingShortcutWalkNext => 'تأكيد الحقل والانتقال إلى التالي';
+
+  @override
+  String get purchasingShortcutAdjacentLine => 'السطر التالي أو السابق';
+
+  @override
+  String get purchasingShortcutCaptureLine =>
+      'الدفعات وتواريخ الصلاحية والأرقام التسلسلية للسطر';
+
+  @override
+  String get purchasingShortcutOpenWorkspace =>
+      'فتح أمر الشراء الحالي من أي شاشة';
 
   @override
   String get purchaseDraftLineRemovedMessage => 'تم حذف السطر.';
@@ -28936,6 +29243,25 @@ class AppLocalizationsAr extends AppLocalizations {
       'بقي جزء من الأمر مفتوحًا. استلمه من صفحة الأمر حين يصل.';
 
   @override
+  String get purchaseEditUnitsTitle => 'أي الوحدات لم تصل؟';
+
+  @override
+  String get purchaseEditUnitsSubtitle =>
+      'أنقصت كمية صنف له أرقام تسلسلية. اختر الوحدات التي ستُحذف من المخزون مع هذا التعديل.';
+
+  @override
+  String purchaseEditUnitsPick(int count, String product) {
+    return 'اختر $count من $product';
+  }
+
+  @override
+  String get purchaseEditUnitsConfirm => 'حذف المختارة وحفظ';
+
+  @override
+  String get purchaseEditUnitsTip =>
+      'الوحدات المبيعة لا تظهر هنا: لا يمكن حذفها من أمر الشراء.';
+
+  @override
   String get bulkPriceEditorTitle => 'تعديل الأسعار بالقواعد';
 
   @override
@@ -29489,4 +29815,550 @@ class AppLocalizationsAr extends AppLocalizations {
   String bulkPriceStepExampleCost(String before, String cost, String after) {
     return 'مثال: $before بتكلفة $cost ← $after';
   }
+
+  @override
+  String get bulkTrackingTitle => 'تتبّع الصلاحية بالجملة';
+
+  @override
+  String get bulkTrackingMenuAction => 'تتبّع الصلاحية بالجملة';
+
+  @override
+  String get bulkTrackingSelectionAction => 'تتبّع الصلاحية';
+
+  @override
+  String get bulkTrackingScopeAllHint =>
+      'كل المنتجات غير المؤرشفة. منتجات النظام لا تتغيّر أبدًا.';
+
+  @override
+  String get bulkTrackingWhatTitle => 'ماذا تريد؟';
+
+  @override
+  String get bulkTrackingTrackingLabel => 'التتبّع';
+
+  @override
+  String get bulkTrackingKeep => 'بدون تغيير';
+
+  @override
+  String get bulkTrackingExpiry => 'تتبّع الصلاحية';
+
+  @override
+  String get bulkTrackingExpiryHint =>
+      'يُسجَّل الرصيد في دفعات لها تاريخ انتهاء.';
+
+  @override
+  String get bulkTrackingLots => 'تتبّع الدفعات بلا صلاحية';
+
+  @override
+  String get bulkTrackingLotsHint =>
+      'يُسجَّل الرصيد في دفعات بلا تاريخ انتهاء.';
+
+  @override
+  String get bulkTrackingReminderLabel => 'تذكير الصلاحية';
+
+  @override
+  String get bulkTrackingReminderSet => 'تحديد تاريخ تذكير';
+
+  @override
+  String get bulkTrackingReminderClear => 'مسح التذكير';
+
+  @override
+  String get bulkTrackingReminderHint =>
+      'التذكير تنبيه فقط: لا يمنع البيع ولا ينشئ دفعة.';
+
+  @override
+  String get bulkTrackingReminderDateLabel => 'تاريخ التذكير';
+
+  @override
+  String get bulkTrackingPreviewTitle => 'المعاينة';
+
+  @override
+  String get bulkTrackingPreviewButton => 'معاينة التغيير';
+
+  @override
+  String get bulkTrackingPreviewRefresh => 'تحديث المعاينة';
+
+  @override
+  String get bulkTrackingPreviewStale =>
+      'تغيّرت الخيارات بعد المعاينة. حدّثها قبل التطبيق.';
+
+  @override
+  String get bulkTrackingPreviewFailed =>
+      'تعذّرت المعاينة. تحقّق من الاتصال وحاول مجددًا.';
+
+  @override
+  String get bulkTrackingNothingChosen =>
+      'اختر تغييرًا واحدًا على الأقل: التتبّع أو التذكير.';
+
+  @override
+  String get bulkTrackingIncomplete =>
+      'أكمل شروط التصفية وتاريخ التذكير أولًا.';
+
+  @override
+  String get bulkTrackingSummaryMatched => 'المطابقة';
+
+  @override
+  String get bulkTrackingSummaryChange => 'ستتغيّر';
+
+  @override
+  String get bulkTrackingSummarySame => 'كما هي بالفعل';
+
+  @override
+  String get bulkTrackingSummaryBlocked => 'مرفوضة';
+
+  @override
+  String get bulkTrackingEmptyView => 'لا شيء في هذه القائمة.';
+
+  @override
+  String get bulkTrackingNoMatch => 'لا منتجات تطابق الشروط.';
+
+  @override
+  String bulkTrackingRowDetail(String onHand, int variants) {
+    return 'الرصيد $onHand · $variants متغيّرًا';
+  }
+
+  @override
+  String get bulkTrackingTagEmptyShelf => 'بلا رصيد';
+
+  @override
+  String get bulkTrackingTagUndated => 'رصيد بلا تاريخ';
+
+  @override
+  String get bulkTrackingShowMore => 'عرض المزيد';
+
+  @override
+  String bulkTrackingWarningsTitle(int count) {
+    return '$count تنبيهًا قبل التطبيق';
+  }
+
+  @override
+  String bulkTrackingEmptyShelfWarning(int count) {
+    return '$count صنفًا بلا رصيد مسجَّل: لن يقبل الصندوق بيعها بعد التفعيل حتى تُستلم دفعة. راجع الجرد أولًا أو استثنها';
+  }
+
+  @override
+  String bulkTrackingUndatedWarning(int count) {
+    return '$count صنفًا سيدخل رصيدها في دفعة واحدة بلا تاريخ، ولن يصل عنها تنبيه إلا إذا حدّدت تاريخ تذكير';
+  }
+
+  @override
+  String get bulkTrackingExcludeEmpty => 'استثناء الأصناف بلا رصيد';
+
+  @override
+  String bulkTrackingExcludeEmptyHint(int count) {
+    return 'سيُترك $count صنفًا بلا رصيد كما هو.';
+  }
+
+  @override
+  String bulkTrackingApplyButton(int count) {
+    return 'تطبيق على $count منتجًا';
+  }
+
+  @override
+  String get bulkTrackingApplyIncomplete => 'أكمل الخيارات أولًا';
+
+  @override
+  String get bulkTrackingApplyWaiting => 'اضغط «معاينة التغيير» أولًا';
+
+  @override
+  String get bulkTrackingApplyNothing => 'لا يوجد ما يتغيّر';
+
+  @override
+  String get bulkTrackingConfirmTitle => 'تأكيد التغيير';
+
+  @override
+  String bulkTrackingConfirmBody(int count) {
+    return 'سيُغيَّر $count منتجًا. لا يمكن التراجع عن ذلك بنقرة واحدة: العودة إلى الحالة السابقة تتطلب تعديل المنتجات يدويًا.';
+  }
+
+  @override
+  String bulkTrackingConfirmSkipped(int count) {
+    return '$count صنفًا بلا رصيد لن يُمسّ.';
+  }
+
+  @override
+  String get bulkTrackingConfirmAction => 'نعم، طبّق';
+
+  @override
+  String get bulkTrackingSending => 'جارٍ التطبيق. أبقِ هذه الصفحة مفتوحة.';
+
+  @override
+  String bulkTrackingProgress(int sent, int total) {
+    return 'تمّ إرسال $sent من $total';
+  }
+
+  @override
+  String bulkTrackingInterrupted(int sent, int total, int remaining) {
+    return 'انقطع الاتصال بعد $sent من $total. المتبقي $remaining منتجًا ولم يُرسل بعد.';
+  }
+
+  @override
+  String get bulkTrackingResume => 'إكمال الباقي';
+
+  @override
+  String get bulkTrackingResultTitle => 'نتيجة التطبيق';
+
+  @override
+  String bulkTrackingResultDone(int count) {
+    return 'تغيّر $count منتجًا';
+  }
+
+  @override
+  String bulkTrackingResultBlocked(int count) {
+    return 'رُفض $count منتجًا';
+  }
+
+  @override
+  String bulkTrackingFailuresTitle(int count) {
+    return 'تعذّر تغيير $count منتجًا';
+  }
+
+  @override
+  String get expiryReminderTitle => 'تذكير انتهاء الصلاحية';
+
+  @override
+  String get expiryReminderHelp =>
+      'تنبيه فقط: يصلك إشعار حين يقترب هذا التاريخ ما دام عند الصنف رصيد بلا تاريخ. لا يمنع البيع ولا ينشئ دفعة.';
+
+  @override
+  String get expiryReminderNone => 'لم يُحدَّد';
+
+  @override
+  String get expiryReminderSetAction => 'تحديد التاريخ';
+
+  @override
+  String get expiryReminderChangeAction => 'تغيير';
+
+  @override
+  String get expiryReminderClearAction => 'مسح التذكير';
+
+  @override
+  String get expiryReminderSaveFailed => 'تعذّر حفظ التذكير. حاول مجددًا.';
+
+  @override
+  String get reorderDrawerLabel => 'إعادة الطلب';
+
+  @override
+  String get reorderTitle => 'إعادة الطلب';
+
+  @override
+  String get reorderSearchHint => 'ابحث بالاسم أو الرمز';
+
+  @override
+  String get reorderChooseSupplier => 'اختر موردًا';
+
+  @override
+  String get reorderApproachingLabel => 'إظهار ما سينخفض قريبًا';
+
+  @override
+  String get reorderApproachingHint =>
+      'يضيف الأصناف التي تزيد على حدها بقطعة أو قطعتين، أو التي ستبلغه خلال أسبوع حسب مبيعاتها. عند الإيقاف يظهر فقط ما بلغ حده أو نزل عنه.';
+
+  @override
+  String get reorderColumnProduct => 'المنتج';
+
+  @override
+  String get reorderColumnStatus => 'الحالة';
+
+  @override
+  String get reorderColumnOnHand => 'المتوفر';
+
+  @override
+  String get reorderColumnThreshold => 'الحد';
+
+  @override
+  String get reorderColumnExpected => 'قيد الطلب';
+
+  @override
+  String get reorderColumnQuantity => 'الكمية';
+
+  @override
+  String get reorderStatusApproaching => 'قريب من الحد';
+
+  @override
+  String reorderDaysLeft(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'يبلغ الحد خلال نحو $days يومًا',
+      few: 'يبلغ الحد خلال نحو $days أيام',
+      two: 'يبلغ الحد خلال نحو يومين',
+      one: 'يبلغ الحد خلال نحو يوم',
+      zero: 'يبلغ الحد خلال أقل من يوم',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String reorderLastSupplier(String supplier) {
+    return 'آخر شراء من $supplier';
+  }
+
+  @override
+  String reorderInDraft(String quantity) {
+    return 'في مسودة: $quantity';
+  }
+
+  @override
+  String get reorderEmptyTitle => 'لا شيء يحتاج إلى إعادة الطلب الآن';
+
+  @override
+  String get reorderEmptySupplierTitle =>
+      'لا شيء من منتجات هذا المورد يحتاج إلى إعادة الطلب';
+
+  @override
+  String get reorderEmptyMessage =>
+      'تظهر هنا الأصناف التي حددت لها حد مخزون منخفض في صفحة المنتج.';
+
+  @override
+  String get reorderLoadError => 'تعذّر تحميل قائمة إعادة الطلب.';
+
+  @override
+  String reorderMoreRowsHidden(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count صنفًا آخر غير معروضة، والأكثر إلحاحًا أولًا.',
+      two: 'يوجد صنفان آخران غير معروضين، والأكثر إلحاحًا أولًا.',
+      one: 'يوجد صنف آخر غير معروض، والأكثر إلحاحًا أولًا.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get reorderSupplierRequiredHint => 'اختر موردًا لإنشاء أمر شراء';
+
+  @override
+  String get reorderCreateOrderAction => 'إنشاء أمر شراء';
+
+  @override
+  String get reorderCreateOrderError => 'تعذّر إنشاء أمر الشراء. حاول مجددًا.';
+
+  @override
+  String posAccountCartSubtitle(String account, String item) {
+    return 'إلى $account · $item';
+  }
+
+  @override
+  String get posVoucherStickerById => 'بالمعرّف';
+
+  @override
+  String get posVoucherStickerTelegram => 'إلى تيليجرام';
+
+  @override
+  String get posVoucherStickerSteamLogin => 'إلى حساب ستيم';
+
+  @override
+  String get posVoucherStickerSteamGift => 'هدية برابط';
+
+  @override
+  String get posShortcutCardRequests => 'طلبات الكروت';
+
+  @override
+  String get voucherAccountSectionTitle => 'حساب الزبون';
+
+  @override
+  String get voucherAccountPickAmount => 'اختر الكمية';
+
+  @override
+  String get voucherAccountSavedTitle => 'حسابات سابقة';
+
+  @override
+  String get voucherAccountSavedForCustomer => 'حسابات الزبون أولاً';
+
+  @override
+  String get voucherAccountSavedEmpty =>
+      'لا حسابات محفوظة بعد. يُحفظ الحساب تلقائياً بعد أول بيع له.';
+
+  @override
+  String get voucherAccountSavedNoMatch =>
+      'لا حساب محفوظ بهذا. تابع إن كان حساباً جديداً.';
+
+  @override
+  String get voucherAccountSavedMore =>
+      'توجد حسابات أخرى: اكتب المعرّف أو الاسم لتجدها.';
+
+  @override
+  String get voucherAccountSearchHint => 'اكتب المعرّف أو ابحث بالاسم';
+
+  @override
+  String get voucherAccountOther => 'حساب آخر';
+
+  @override
+  String get voucherAccountRename => 'تسمية';
+
+  @override
+  String get voucherAccountRenameTitle => 'اسم هذا الحساب عندك';
+
+  @override
+  String get voucherAccountRenameHint => 'مثلاً: أحمد الجار';
+
+  @override
+  String get voucherAccountForget => 'حذف من القائمة';
+
+  @override
+  String get voucherAccountSave => 'حفظ';
+
+  @override
+  String get voucherAccountCancel => 'إلغاء';
+
+  @override
+  String voucherAccountUsedTimes(int count) {
+    return '$count مرة';
+  }
+
+  @override
+  String get voucherAccountChecking => 'جارٍ التحقق من الحساب…';
+
+  @override
+  String voucherAccountFound(String name) {
+    return 'الحساب: $name';
+  }
+
+  @override
+  String get voucherAccountFoundNoName => 'الحساب موجود';
+
+  @override
+  String get voucherAccountNotFound =>
+      'لا يوجد حساب بهذا المعرّف. راجعه مع الزبون.';
+
+  @override
+  String get voucherAccountCouldNotTell =>
+      'تعذّر التحقق الآن. تأكد من المعرّف مع الزبون: لا يُسترجع الشحن من حساب خاطئ.';
+
+  @override
+  String get voucherAccountNoCheck =>
+      'راجع المعرّف مع الزبون: لا يُسترجع الشحن من حساب خاطئ.';
+
+  @override
+  String get voucherAccountEnterFirst => 'أدخل الحساب أولاً';
+
+  @override
+  String voucherAccountProblemRequired(String label) {
+    return 'أدخل $label.';
+  }
+
+  @override
+  String voucherAccountProblemTooLong(String label) {
+    return '$label أطول من المسموح.';
+  }
+
+  @override
+  String voucherAccountProblemChoice(String label) {
+    return 'اختر $label من القائمة.';
+  }
+
+  @override
+  String get voucherAccountProblemTelegram =>
+      'اسم مستخدم تيليجرام غير صحيح: من 4 إلى 32 حرفاً إنجليزياً أو رقماً أو _.';
+
+  @override
+  String get voucherAccountProblemSteamLogin =>
+      'اسم دخول ستيم غير صحيح: حروف إنجليزية وأرقام و _ فقط.';
+
+  @override
+  String get voucherAccountProblemInvite =>
+      'رابط دعوة ستيم غير صحيح: انسخه كما هو، ويبدأ بـ https://s.team/p/';
+
+  @override
+  String get cardRequestFollowingTitle => 'أُرسل الطلب، وما زال قيد التنفيذ';
+
+  @override
+  String get cardRequestFollowingHint =>
+      'لا تنتظر ولا تُعد العملية: تابع البيع، وستصلك النتيجة في لوحة طلبات الكروت.';
+
+  @override
+  String get cardRequestFollowingHintPrint =>
+      'لا تنتظر ولا تُعد العملية: تابع البيع. ستصلك النتيجة في لوحة طلبات الكروت، ويُطبع الإيصال عند الاكتمال.';
+
+  @override
+  String get cardRequestDelivered => 'تم الشحن';
+
+  @override
+  String get cardRequestsTitle => 'طلبات الكروت';
+
+  @override
+  String get cardRequestsEmpty => 'لا طلبات بعد.';
+
+  @override
+  String get cardRequestsClose => 'إغلاق';
+
+  @override
+  String get cardRequestsPillIdle => 'الطلبات';
+
+  @override
+  String cardRequestsPillOpen(int count) {
+    return '$count قيد التنفيذ';
+  }
+
+  @override
+  String get cardRequestStateQueued => 'لم يُرسل بعد';
+
+  @override
+  String get cardRequestStateWorking => 'قيد التنفيذ';
+
+  @override
+  String get cardRequestStateLate => 'متأخر: لا تُعد العملية';
+
+  @override
+  String get cardRequestStateSucceeded => 'تم';
+
+  @override
+  String get cardRequestStateFailed => 'فشل';
+
+  @override
+  String get cardRequestStateCancelled => 'أُلغي';
+
+  @override
+  String get cardRequestSend => 'إرسال الآن';
+
+  @override
+  String cardRequestElapsed(String time) {
+    return 'منذ $time';
+  }
+
+  @override
+  String cardRequestReceipt(String number) {
+    return 'فاتورة $number';
+  }
+
+  @override
+  String get cardRequestPrint => 'طباعة الإيصال';
+
+  @override
+  String get cardRequestCopy => 'نسخ';
+
+  @override
+  String get cardRequestCopied => 'نُسخ الرمز';
+
+  @override
+  String get cardRequestLateHint =>
+      'يتأخر المزوّد أكثر من المعتاد. النتيجة ستظهر هنا؛ لا تبع الطلب مرة أخرى ولا تُرجع المبلغ.';
+
+  @override
+  String cardRequestRefunded(String amount) {
+    return 'أعد للزبون $amount: سُجّل الإرجاع في الدرج.';
+  }
+
+  @override
+  String get cardRequestNotRefunded =>
+      'لم يُرجع المبلغ تلقائياً (الدرج مغلق أو البيع آجل): راجع الفاتورة.';
+
+  @override
+  String cardRequestNoticeDone(String label) {
+    return 'تم: $label';
+  }
+
+  @override
+  String cardRequestNoticeFailed(String label) {
+    return 'فشل: $label';
+  }
+
+  @override
+  String get cardRequestNoticeDismiss => 'إخفاء';
+
+  @override
+  String get cardRequestNoticeOpen => 'عرض';
+
+  @override
+  String get cardRequestReceiptFollows => 'يُطبع الإيصال عند اكتمال الطلب';
 }

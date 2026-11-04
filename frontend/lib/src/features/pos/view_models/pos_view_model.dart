@@ -10,6 +10,7 @@ import '../../../core/analytics_engine.dart';
 import '../../../core/result.dart';
 import '../../../core/typed_lookup_text.dart';
 import '../../../data/models/barcode_resolution.dart';
+import '../../../data/models/card_request.dart';
 import '../../../data/models/cart_line.dart';
 import '../../../data/models/integration_card.dart';
 import '../../../data/models/integration_provider.dart';
@@ -55,6 +56,7 @@ import '../../../data/services/performed_recharges.dart';
 import '../../../shared/unit_options.dart';
 import '../../../shared/catalog/catalog_layout_controller.dart';
 import '../../../core/analytics_burst_coalescer.dart';
+import 'pos_card_requests_controller.dart';
 import 'pos_service_shelves.dart';
 import 'pos_voucher_menu_controller.dart';
 
@@ -240,6 +242,7 @@ class PosViewModel extends ChangeNotifier {
     this.cartQuantityIdleTimeout = const Duration(milliseconds: 700),
     Duration chargeRetryDelay = const Duration(milliseconds: 800),
     Duration serviceQuoteFreshFor = const Duration(minutes: 2),
+    Duration cardHandOffAfter = const Duration(seconds: 6),
   }) : _trackedStockRepository = trackedStockRepository,
        _integrationsRepository = integrationsRepository,
        _analyticsEngine = analyticsEngine,
@@ -247,7 +250,13 @@ class PosViewModel extends ChangeNotifier {
        _scanFeedback = scanFeedback,
        _checkoutPrintDeadline = checkoutPrintDeadline,
        _chargeRetryDelay = chargeRetryDelay,
-       _serviceQuoteFreshFor = serviceQuoteFreshFor;
+       _serviceQuoteFreshFor = serviceQuoteFreshFor,
+       _cardHandOffAfter = cardHandOffAfter;
+
+  /// How long a sale's result waits for the company's cards before the requests
+  /// panel takes over. Long enough for a card that answers at once to be handed
+  /// over as ever; short enough that a slow supplier never holds up the queue.
+  final Duration _cardHandOffAfter;
 
   /// How long a +/- run may pause before it counts as finished.
   ///
@@ -336,6 +345,14 @@ class PosViewModel extends ChangeNotifier {
   /// not be read again — or flash empty — each time.
   late final PosVoucherMenuController voucherMenu = PosVoucherMenuController(
     load: _integrationsRepository?.loadVoucherMenu,
+  );
+
+  /// What the till sold from the company's shelf, followed in a floating panel
+  /// while the cashier carries on selling.
+  late final PosCardRequestsController cardRequests = PosCardRequestsController(
+    load: _integrationsRepository?.loadCardRequests,
+    settle: _integrationsRepository?.settleCardRequests,
+    charge: _integrationsRepository?.charge,
   );
 
   /// The direct services — airtime to a phone abroad, bills paid abroad —
@@ -942,6 +959,7 @@ class PosViewModel extends ChangeNotifier {
     serviceRequotes.dispose();
     catalogLayout.dispose();
     voucherMenu.dispose();
+    cardRequests.dispose();
     _serviceShelves?.dispose();
     super.dispose();
   }

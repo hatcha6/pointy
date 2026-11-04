@@ -1085,7 +1085,12 @@ class _RecorderFormPageState extends State<RecorderFormPage> {
       _pickedHost = '${recorder.host}:${recorder.port}';
       _host.text = recorder.host;
       _port.text = '${recorder.port}';
-      _draft = _draft.copyWith(brand: recorder.brand);
+      _draft = _draft.copyWith(
+        brand: recorder.brand,
+        // Replaced, never merged: a path left from a previous pick would
+        // send this device's driver to the other device's service.
+        onvifServicePath: recorder.onvifServicePath,
+      );
       if (_username.text.trim().isEmpty) {
         _username.text = 'admin';
       }

@@ -53,6 +53,7 @@ from .relay_serializers import (
     RelayPairingResponseSerializer,
 )
 from .relay_transport import resolver_snapshot
+from .remote_sessions import attach_device, current_remote_session, remote_session_lifetime
 from .remote_sign_in import remote_sign_in_refusal, request_is_remote_sign_in
 
 
@@ -208,11 +209,21 @@ class RelayPairingView(views.APIView):
             return Response(
                 self._inactive_payload(installation, reason="relay_unavailable")
             )
+        remote = current_remote_session(request) if remote_sign_in else None
+        not_after = None
+        if remote_sign_in:
+            # A remote sign-in's tickets end with its session.
+            not_after = (
+                remote.expires_at
+                if remote is not None
+                else timezone.now() + remote_session_lifetime()
+            )
         try:
             issued = issue_pairing_ticket(
                 installation,
                 device_id=serializer.validated_data.get("device_id", ""),
                 device_name=serializer.validated_data.get("device_name", ""),
+                not_after=not_after,
                 timeout=ticket_timeout,
             )
         except (ImproperlyConfigured, RelayControlError):
@@ -221,6 +232,12 @@ class RelayPairingView(views.APIView):
             )
 
         device_id = serializer.validated_data.get("device_id", "")
+        if remote is not None:
+            attach_device(
+                remote,
+                device_id=device_id,
+                device_name=serializer.validated_data.get("device_name", ""),
+            )
         record_domain_event(
             name="relay.pairing.ticket_issued",
             event_type=AnalyticsEvent.EventType.AUDIT,

@@ -12,3 +12,5 @@ export 'pointy_product_image_frame.dart';
 export 'pointy_product_row.dart';
 export 'pointy_product_table.dart';
 export 'stock_status_label.dart';
+export 'catalog_results_focus.dart';
+export 'catalog_results_keyboard_region.dart';

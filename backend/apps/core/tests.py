@@ -96,6 +96,7 @@ class FakeRelayControlClient:
         self.subscription_ends_at = subscription_ends_at
         self.provisioned_shop_name = ""
         self.issued_ticket_request = None
+        self.revoked_device_ids = []
         self.issued_connector_certificate_request = None
         self.enrolled_with_token = None
         self.metadata_update = None
@@ -161,12 +162,19 @@ class FakeRelayControlClient:
             "subscription_ends_at": None,
         }
 
-    def issue_ticket(self, *, access_token, device_id="", device_name="", timeout=None):
+    def revoke_device_tickets(self, *, access_token, device_id, timeout=None):
+        self.revoked_device_ids.append(device_id)
+        return {"revoked": True}
+
+    def issue_ticket(
+        self, *, access_token, device_id="", device_name="", not_after=None, timeout=None
+    ):
         self.last_issue_ticket_timeout = timeout
         self.issued_ticket_request = {
             "access_token": access_token,
             "device_id": device_id,
             "device_name": device_name,
+            "not_after": not_after,
         }
         return {
             "token": "ptt1.installation-1.ticket-secret",
@@ -642,6 +650,8 @@ class ShopSettingsApiTests(TestCase):
                 "require_opening_cash": False,
                 "auto_print_receipts": True,
                 "prevent_selling_at_loss": False,
+                # Retired for the per-variant threshold. An older client still
+                # sends it; the save must ignore it rather than fail.
                 "low_stock_threshold": 12,
                 "cashier_return_window_hours": 42,
                 "enable_cash_payments": True,
@@ -662,7 +672,7 @@ class ShopSettingsApiTests(TestCase):
         self.assertFalse(update_response.data["require_opening_cash"])
         self.assertTrue(update_response.data["auto_print_receipts"])
         self.assertFalse(update_response.data["prevent_selling_at_loss"])
-        self.assertEqual(update_response.data["low_stock_threshold"], 12)
+        self.assertNotIn("low_stock_threshold", update_response.data)
         self.assertEqual(update_response.data["cashier_return_window_hours"], 42)
         self.assertTrue(update_response.data["enable_cash_payments"])
         self.assertFalse(update_response.data["enable_card_payments"])
@@ -953,7 +963,7 @@ class RelayBackendApiTests(TestCase):
         with mock.patch("apps.core.relay.RelayControlClient", return_value=fake_relay):
             response = client.patch(
                 reverse("shop-settings"),
-                {"low_stock_threshold": 7},
+                {"prevent_selling_at_loss": False},
                 format="json",
             )
 
@@ -1248,6 +1258,8 @@ class RelayBackendApiTests(TestCase):
                 "access_token": "ptr1.installation-1.access-secret",
                 "device_id": "phone-1",
                 "device_name": "هاتف المدير",
+                # A till paired on the shop's network keeps the full lifetimes.
+                "not_after": None,
             },
         )
         installation.refresh_from_db()
@@ -2425,12 +2437,12 @@ class DashboardApiTests(TestCase):
             sku="DASH-COF",
             name="قهوة لوحة التحكم",
             unit_price=Decimal("5.00"),
+            low_stock_threshold=3,
         )
         self.variant = self.product.default_variant
         self.stock_item = StockItem.objects.create(
             variant=self.variant,
             quantity_on_hand=2,
-            reorder_level=3,
         )
         StockMovement.objects.create(
             variant=self.variant,
@@ -2598,11 +2610,11 @@ class DashboardApiTests(TestCase):
             name="كبير",
             sku="DASH-COF-L",
             unit_price=Decimal("7.00"),
+            low_stock_threshold=Decimal("2"),
         )
         StockItem.objects.create(
             variant=large_variant,
             quantity_on_hand=1,
-            reorder_level=2,
         )
         self._create_paid_order(
             user=self.cashier,

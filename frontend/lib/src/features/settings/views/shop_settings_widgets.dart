@@ -1075,13 +1075,10 @@ class _EditableTrustedCardTerminalRow extends StatelessWidget {
 
 class _InventorySettingsFields extends StatelessWidget {
   const _InventorySettingsFields({
-    required this.controller,
     required this.enabled,
-    required this.errorText,
     required this.allowOverselling,
     required this.warnLowStockBeforeSale,
     required this.preventSellingAtLoss,
-    required this.onThresholdChanged,
     required this.onAllowOversellingChanged,
     required this.onWarnLowStockBeforeSaleChanged,
     required this.onPreventSellingAtLossChanged,
@@ -1091,14 +1088,11 @@ class _InventorySettingsFields extends StatelessWidget {
     required this.onEnablePurchaseSuggestionsChanged,
   });
 
-  final TextEditingController controller;
   final bool enabled;
-  final String? errorText;
   final bool allowOverselling;
   final bool warnLowStockBeforeSale;
   final bool preventSellingAtLoss;
   final InventoryValuationMethod valuationMethod;
-  final VoidCallback onThresholdChanged;
   final ValueChanged<bool> onAllowOversellingChanged;
   final ValueChanged<bool> onWarnLowStockBeforeSaleChanged;
   final ValueChanged<bool> onPreventSellingAtLossChanged;
@@ -1112,17 +1106,12 @@ class _InventorySettingsFields extends StatelessWidget {
 
     return Column(
       children: [
-        TextFormField(
-          controller: controller,
-          enabled: enabled,
-          keyboardType: TextInputType.number,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          onChanged: (_) => onThresholdChanged(),
-          decoration: InputDecoration(
-            labelText: l10n.lowStockThresholdLabel,
-            errorText: errorText,
-            prefixIcon: const Icon(Icons.inventory_outlined),
-          ),
+        // The shop-wide threshold is gone: it is set per variant now. Said
+        // here because this is where an owner who knew the old field looks.
+        PointyInlineMessage(
+          message: l10n.lowStockThresholdMovedHint,
+          icon: Icons.info_outline,
+          compact: true,
         ),
         const SizedBox(height: 4),
         SwitchListTile(

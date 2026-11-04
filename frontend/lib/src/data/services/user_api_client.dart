@@ -1,5 +1,6 @@
 import '../models/permission_catalog.dart';
 import '../models/pos_user.dart';
+import '../models/remote_session.dart';
 import '../models/user_activity.dart';
 import 'api_session.dart';
 
@@ -65,6 +66,33 @@ class UserApiClient {
       _session.decodedBody(response) as Map<String, Object?>,
     );
   }
+
+  /// [userId]'s remote sessions, or the signed-in person's own with none.
+  Future<List<RemoteSession>> fetchRemoteSessions({int? userId}) async {
+    final response = await _session.get(_remoteSessionsPath(userId));
+    _session.ensureSuccess(
+      response,
+      'Remote sessions request failed with status',
+    );
+    return RemoteSession.listFromJson(_session.decodedBody(response));
+  }
+
+  Future<RemoteSession> revokeRemoteSession(int id, {int? userId}) async {
+    final response = await _session.post(
+      '${_remoteSessionsPath(userId)}$id/revoke/',
+    );
+    _session.throwApiException(
+      response,
+      'Remote session revoke failed with status',
+    );
+    return RemoteSession.fromJson(
+      _session.decodedBody(response) as Map<String, Object?>,
+    );
+  }
+
+  String _remoteSessionsPath(int? userId) => userId == null
+      ? 'auth/remote-sessions/'
+      : 'users/$userId/remote-sessions/';
 
   Future<UserActivityOverview> fetchUserActivity(int id) async {
     final response = await _session.get('users/$id/activity/');

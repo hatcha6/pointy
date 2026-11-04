@@ -673,7 +673,9 @@ class StockItemInsight {
   final int quantityOnHand;
   final int quantityExpected;
   final int quantityCommitted;
-  final int reorderLevel;
+
+  /// The variant's low-stock threshold; null when it is not watched.
+  final double? reorderLevel;
 
   factory StockItemInsight.fromJson(Map<String, Object?> json) {
     return StockItemInsight(
@@ -685,7 +687,11 @@ class StockItemInsight {
       quantityOnHand: _intFromJson(json['quantity_on_hand']),
       quantityExpected: _intFromJson(json['quantity_expected']),
       quantityCommitted: _intFromJson(json['quantity_committed']),
-      reorderLevel: _intFromJson(json['reorder_level']),
+      reorderLevel: switch (json['reorder_level']) {
+        null => null,
+        final num value => value.toDouble(),
+        final Object value => double.tryParse(value.toString()),
+      },
     );
   }
 }

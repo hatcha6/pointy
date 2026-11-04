@@ -1,10 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../../shared/barcode/keystroke_wedge.dart';
-import '../../../shared/barcode/scan_burst_guard.dart';
 import '../../card_verification/moamalat_scope.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
@@ -480,10 +478,9 @@ class _CartScrollContentState extends State<_CartScrollContent> {
   // a line is focused, +/- step its quantity and digits set an exact quantity.
   final FocusNode _focusNode = FocusNode(debugLabel: 'pos_cart_keyboard');
   String? _focusedLineKey;
-  String _pendingQuantity = '';
-  // Rejects scanner-speed keystrokes so a wedge burst can never become a
-  // line quantity (the scan itself is BarcodeScanListener's job).
-  final ScanBurstGuard _scanBurstGuard = ScanBurstGuard();
+  // Shared with the purchase draft: digits, +/-, Enter, Esc and the scanner
+  // burst guard (see LineQuantityEntry).
+  final LineQuantityEntry _quantityEntry = LineQuantityEntry();
   int _lastLineCount = -1;
 
   PosViewModel get _viewModel => widget.viewModel;
@@ -504,7 +501,7 @@ class _CartScrollContentState extends State<_CartScrollContent> {
   void _onFocusChanged() {
     setState(() {
       if (!_focusNode.hasFocus) {
-        _pendingQuantity = '';
+        _quantityEntry.clear();
       }
     });
   }
@@ -530,7 +527,7 @@ class _CartScrollContentState extends State<_CartScrollContent> {
   void _focusLine(CartLine line) {
     setState(() {
       _focusedLineKey = line.lineKey;
-      _pendingQuantity = '';
+      _quantityEntry.clear();
     });
     // Mirror the selection into the view model so the workspace F2/F4 shortcuts
     // (which read activeCartLine) act on the line the cashier just tapped.
@@ -539,146 +536,50 @@ class _CartScrollContentState extends State<_CartScrollContent> {
   }
 
   KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
-    if (event is KeyUpEvent || widget.isCartLocked) {
-      return KeyEventResult.ignored;
-    }
-    // Let modified combos (e.g. Ctrl/Cmd+Enter for checkout) bubble up to the
-    // workspace shortcuts instead of being treated as quantity entry.
-    if (HardwareKeyboard.instance.isControlPressed ||
-        HardwareKeyboard.instance.isAltPressed ||
-        HardwareKeyboard.instance.isMetaPressed) {
-      return KeyEventResult.ignored;
-    }
-    // Only treat keystrokes as line-quantity entry when this scope itself holds
-    // the primary focus. Tapping into a text field inside the pane moves the
-    // primary focus to that field; its digits must reach the field, not be
-    // hijacked as quantity.
-    if (!node.hasPrimaryFocus) {
+    if (widget.isCartLocked) {
       return KeyEventResult.ignored;
     }
     final line = _focusedLine(_visibleLines);
     if (line == null) {
       return KeyEventResult.ignored;
     }
-    final key = event.logicalKey;
-
-    final digit = _digitFor(key);
-    if (digit != null) {
-      final rollback = _scanBurstGuard.onDigit(
-        _pendingQuantity,
-        DateTime.now(),
-      );
-      if (rollback != null) {
-        // A wedge is typing, not the cashier — roll the pending entry back to
-        // its pre-burst value and swallow the keystroke. The scan itself is
-        // recognized (or safely dropped) by BarcodeScanListener.
-        if (_pendingQuantity != rollback) {
-          setState(() => _pendingQuantity = rollback);
-        }
-        return KeyEventResult.handled;
-      }
-      if (_pendingQuantity.length < 7) {
-        setState(() => _pendingQuantity = '$_pendingQuantity$digit');
-      }
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.period ||
-        key == LogicalKeyboardKey.numpadDecimal) {
-      // Fractional entry (2.5 of anything) is the cashier's choice — allowed for
-      // every product; at most one decimal point.
-      final rollback = _scanBurstGuard.onDigit(
-        _pendingQuantity,
-        DateTime.now(),
-      );
-      if (rollback != null) {
-        if (_pendingQuantity != rollback) {
-          setState(() => _pendingQuantity = rollback);
-        }
-        return KeyEventResult.handled;
-      }
-      if (!_pendingQuantity.contains('.') && _pendingQuantity.length < 6) {
-        setState(
-          () => _pendingQuantity = _pendingQuantity.isEmpty
-              ? '0.'
-              : '$_pendingQuantity.',
-        );
-      }
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.backspace) {
-      if (_pendingQuantity.isEmpty) {
-        return KeyEventResult.ignored;
-      }
-      setState(
-        () => _pendingQuantity = _pendingQuantity.substring(
-          0,
-          _pendingQuantity.length - 1,
-        ),
-      );
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.enter ||
-        key == LogicalKeyboardKey.numpadEnter) {
-      if (_scanBurstGuard.shouldSwallowCommit(DateTime.now())) {
-        // Tail of a scanner burst (reaches here only when the listener is
-        // disabled or the code was too short) — never commit it as quantity.
-        return KeyEventResult.handled;
-      }
-      _applyPendingQuantity(line);
-      // Done editing this line — return focus to the search field so the next
-      // item can be searched or scanned immediately. Requesting search focus
-      // blurs this scope (deselecting the line), which is the intended "done"
-      // state. Only ever fires on the deliberate Enter commit, never mid-typing.
-      _viewModel.requestSearchFocus();
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.add ||
-        key == LogicalKeyboardKey.numpadAdd ||
-        key == LogicalKeyboardKey.equal) {
-      setState(() => _pendingQuantity = '');
-      _viewModel.incrementCartLine(line.lineKey, source: 'keyboard');
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.minus ||
-        key == LogicalKeyboardKey.numpadSubtract) {
-      setState(() => _pendingQuantity = '');
-      _viewModel.decrementCartLine(line.lineKey, source: 'keyboard');
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.escape) {
-      if (_pendingQuantity.isNotEmpty) {
-        // First Esc just clears the half-typed quantity; the line stays focused
-        // so the cashier can retype without losing their place.
-        setState(() => _pendingQuantity = '');
-      } else {
-        // Nothing pending: the cashier is done with this line. Drop the cart
-        // scope and hand focus back to the search field (the request is a no-op
-        // if the search field can't take focus right now, e.g. behind a sheet).
-        _focusNode.unfocus();
-        _viewModel.requestSearchFocus();
-      }
-      return KeyEventResult.handled;
-    }
-    return KeyEventResult.ignored;
-  }
-
-  void _applyPendingQuantity(CartLine line) {
-    final quantity = double.tryParse(_pendingQuantity);
-    setState(() => _pendingQuantity = '');
-    if (quantity != null && quantity > 0) {
-      _viewModel.setCartLineQuantity(
-        line.lineKey,
-        quantity,
-        source: 'keyboard',
-      );
-    }
+    return _quantityEntry.handle(
+      node,
+      event,
+      LineQuantityActions(
+        onPendingChanged: () => setState(() {}),
+        onIncrement: () =>
+            _viewModel.incrementCartLine(line.lineKey, source: 'keyboard'),
+        onDecrement: () =>
+            _viewModel.decrementCartLine(line.lineKey, source: 'keyboard'),
+        onCommit: (quantity) {
+          if (quantity != null) {
+            _viewModel.setCartLineQuantity(
+              line.lineKey,
+              quantity,
+              source: 'keyboard',
+            );
+          }
+          // Done editing this line — return focus to the search field so the
+          // next item can be searched or scanned immediately. Requesting
+          // search focus blurs this scope (deselecting the line), which is
+          // the intended "done" state.
+          _viewModel.requestSearchFocus();
+        },
+        onDismiss: () {
+          // Nothing pending: the cashier is done with this line. Drop the
+          // cart scope and hand focus back to the search field (a no-op if
+          // the search field can't take focus right now, e.g. behind a sheet).
+          _focusNode.unfocus();
+          _viewModel.requestSearchFocus();
+        },
+      ),
+    );
   }
 
   /// Removes a cart line and surfaces a SnackBar with an Undo action, so a
   /// mis-tap on a customer's in-progress order is one tap to recover.
   void _deleteCartLineWithUndo(String lineKey) {
-    final l10n = AppLocalizations.of(context)!;
-    final messenger = ScaffoldMessenger.of(context);
     final removed = _viewModel.removeCartLine(
       lineKey,
       source: 'cart_delete_button',
@@ -686,18 +587,11 @@ class _CartScrollContentState extends State<_CartScrollContent> {
     if (removed == null) {
       return;
     }
-    messenger
-      ..clearSnackBars()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(l10n.cartLineRemovedMessage),
-          action: SnackBarAction(
-            label: l10n.undoButton,
-            onPressed: () =>
-                _viewModel.restoreCartLine(removed.line, removed.index),
-          ),
-        ),
-      );
+    showLineRemovedUndo(
+      context,
+      message: AppLocalizations.of(context)!.cartLineRemovedMessage,
+      onUndo: () => _viewModel.restoreCartLine(removed.line, removed.index),
+    );
   }
 
   @override
@@ -710,7 +604,7 @@ class _CartScrollContentState extends State<_CartScrollContent> {
     // any half-typed quantity, so the banner can't show stale scanned digits.
     if (visibleLines.length != _lastLineCount) {
       _lastLineCount = visibleLines.length;
-      _pendingQuantity = '';
+      _quantityEntry.clear();
     }
     final focusedLine = _focusedLine(visibleLines);
     final scopeFocused = _focusNode.hasFocus;
@@ -825,9 +719,9 @@ class _CartScrollContentState extends State<_CartScrollContent> {
                     },
                   ),
           ),
-          if (_pendingQuantity.isNotEmpty && focusedLine != null)
+          if (_quantityEntry.pending.isNotEmpty && focusedLine != null)
             PendingQuantityBanner(
-              quantity: _pendingQuantity,
+              quantity: _quantityEntry.pending,
               productName: focusedLine.variant.productLabel,
             ),
         ],
@@ -914,32 +808,7 @@ class _CartScrollContentState extends State<_CartScrollContent> {
       _viewModel.setCartLineNote(line.lineKey, note);
     }
   }
-
-  static String? _digitFor(LogicalKeyboardKey key) => _digitKeys[key];
 }
-
-final Map<LogicalKeyboardKey, String> _digitKeys = {
-  LogicalKeyboardKey.digit0: '0',
-  LogicalKeyboardKey.digit1: '1',
-  LogicalKeyboardKey.digit2: '2',
-  LogicalKeyboardKey.digit3: '3',
-  LogicalKeyboardKey.digit4: '4',
-  LogicalKeyboardKey.digit5: '5',
-  LogicalKeyboardKey.digit6: '6',
-  LogicalKeyboardKey.digit7: '7',
-  LogicalKeyboardKey.digit8: '8',
-  LogicalKeyboardKey.digit9: '9',
-  LogicalKeyboardKey.numpad0: '0',
-  LogicalKeyboardKey.numpad1: '1',
-  LogicalKeyboardKey.numpad2: '2',
-  LogicalKeyboardKey.numpad3: '3',
-  LogicalKeyboardKey.numpad4: '4',
-  LogicalKeyboardKey.numpad5: '5',
-  LogicalKeyboardKey.numpad6: '6',
-  LogicalKeyboardKey.numpad7: '7',
-  LogicalKeyboardKey.numpad8: '8',
-  LogicalKeyboardKey.numpad9: '9',
-};
 
 class _PosCartHeaderActions extends StatelessWidget {
   const _PosCartHeaderActions({

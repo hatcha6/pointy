@@ -1,16 +1,20 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
+import '../../../core/typed_lookup_text.dart';
 import '../../../data/models/product_variant.dart';
+import '../../../shared/barcode/barcode_scan_listener.dart';
 import '../../../shared/barcode/camera_barcode_scanner_sheet.dart';
 import '../../../shared/barcode/scan_feedback_sounds.dart';
 import '../../../shared/catalog/catalog.dart';
 import '../../../shared/components/components.dart';
 import '../../../shared/design/design.dart';
 import '../../../shared/infinite_scroll_grid.dart';
+import '../../../shared/order/order.dart';
 import '../../../shared/product_query_controls.dart';
 import '../../../shared/product_tile.dart';
 import '../../../shared/responsive/responsive.dart';
@@ -35,6 +39,33 @@ class PurchaseCatalogPane extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final draftQuantities = _draftQuantitiesByVariant();
 
+    // Arrows in here move between results; Esc anywhere outside the search
+    // box goes back to it.
+    return ArrowKeyNavigationRegion(
+      child: Focus(
+        canRequestFocus: false,
+        skipTraversal: true,
+        onKeyEvent: (node, event) {
+          if (event is KeyDownEvent &&
+              event.logicalKey == LogicalKeyboardKey.escape &&
+              FocusManager.instance.primaryFocus?.context
+                      ?.findAncestorWidgetOfExactType<EditableText>() ==
+                  null) {
+            viewModel.requestSearchFocus();
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
+        },
+        child: _pane(context, l10n, draftQuantities),
+      ),
+    );
+  }
+
+  Widget _pane(
+    BuildContext context,
+    AppLocalizations l10n,
+    Map<int, double> draftQuantities,
+  ) {
     return PointyCatalogPane(
       title: l10n.purchaseCatalogTitle,
       isLoading: viewModel.isLoading,
@@ -73,65 +104,81 @@ class PurchaseCatalogPane extends StatelessWidget {
       statusLine: viewModel.scanStatus != PurchaseScanStatus.idle
           ? _PurchaseScanStatusLine(viewModel: viewModel)
           : null,
-      grid: LayoutBuilder(
-        builder: (context, constraints) {
-          final spacing = AdaptiveSpacing.of(context);
-          return InfiniteScrollGrid<ProductVariant>(
-            items: viewModel.variants,
-            onLoadMore: viewModel.loadMoreCatalog,
-            hasMore: viewModel.hasMoreProducts,
-            isLoadingInitial: viewModel.isLoading,
-            isLoadingMore: viewModel.isLoadingMore,
-            loadMoreExtent: PointyProductCardGrid.loadMoreExtent,
-            skeletonItemBuilder: (_) => const PointySkeletonCard(),
-            skeletonItemCount: 12,
-            emptyBuilder: (context) => CatalogEmptyState(
-              query: viewModel.query,
-              emptyMessage: l10n.emptyCatalog,
-              allowAvailabilityFilter: false,
-              onClear: viewModel.applyQuery,
-            ),
-            gridDelegate: PointyProductCardGrid.delegateFor(
-              width: constraints.maxWidth,
-              spacing: spacing.gutter,
-              short: AppBreakpoints.isShortHeight(context),
-            ),
-            itemBuilder: (context, variant) {
-              return TutorTarget(
-                anchor: TutorAnchor.purchaseProductTile,
-                // The SKU, as on the till: a lesson that says "order more أرز"
-                // must point at أرز, not at whichever tile mounted first.
-                id: variant.sku,
-                child: ProductTile.variant(
-                  key: ValueKey(variant.id),
-                  variant: variant,
-                  showPrice: false,
-                  showStock: true,
-                  cartQuantity: draftQuantities[variant.id] ?? 0,
-                  onTap: viewModel.isSubmitting
-                      ? null
-                      : () {
-                          unawaited(
-                            viewModel
-                                .addVariant(
-                                  variant,
-                                  source: 'purchase_catalog_tile',
-                                )
-                                // Focus goes back to the search field once the
-                                // line lands, so the next product can be looked
-                                // up or scanned without a tap. (It used to be
-                                // dropped outright, which left the buyer with no
-                                // focused field at all.)
-                                .then((_) => viewModel.requestSearchFocus()),
-                          );
-                        },
-                ),
-              );
-            },
-          );
-        },
+      grid: CatalogResultsKeyboardRegion(
+        focus: viewModel.resultsFocus,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final spacing = AdaptiveSpacing.of(context);
+            return InfiniteScrollGrid<ProductVariant>(
+              items: viewModel.variants,
+              onLoadMore: viewModel.loadMoreCatalog,
+              hasMore: viewModel.hasMoreProducts,
+              isLoadingInitial: viewModel.isLoading,
+              isLoadingMore: viewModel.isLoadingMore,
+              loadMoreExtent: PointyProductCardGrid.loadMoreExtent,
+              skeletonItemBuilder: (_) => const PointySkeletonCard(),
+              skeletonItemCount: 12,
+              emptyBuilder: (context) => CatalogEmptyState(
+                query: viewModel.query,
+                emptyMessage: l10n.emptyCatalog,
+                allowAvailabilityFilter: false,
+                onClear: viewModel.applyQuery,
+              ),
+              gridDelegate: PointyProductCardGrid.delegateFor(
+                width: constraints.maxWidth,
+                spacing: spacing.gutter,
+                short: AppBreakpoints.isShortHeight(context),
+              ),
+              itemBuilder: (context, variant) {
+                return TutorTarget(
+                  anchor: TutorAnchor.purchaseProductTile,
+                  // The SKU, as on the till: a lesson that says "order more أرز"
+                  // must point at أرز, not at whichever tile mounted first.
+                  id: variant.sku,
+                  child: ProductTile.variant(
+                    key: ValueKey(variant.id),
+                    variant: variant,
+                    showPrice: false,
+                    showStock: true,
+                    cartQuantity: draftQuantities[variant.id] ?? 0,
+                    onTap: viewModel.isSubmitting
+                        ? null
+                        : () {
+                            // Enter on a result reached with the arrows: the
+                            // buyer is typing an invoice, so walk the new line
+                            // (quantity, cost, expiry). A click goes back to the
+                            // search field instead, so the next product can be
+                            // looked up or scanned without a tap.
+                            final viaKeyboard = _activatedByKeyboard();
+                            unawaited(
+                              viewModel
+                                  .addVariant(
+                                    variant,
+                                    source: 'purchase_catalog_tile',
+                                  )
+                                  .then(
+                                    (_) => viaKeyboard
+                                        ? viewModel.requestLineEntry(variant.id)
+                                        : viewModel.requestSearchFocus(),
+                                  ),
+                            );
+                          },
+                  ),
+                );
+              },
+            );
+          },
+        ),
       ),
     );
+  }
+
+  /// Whether a tile's tap is really Enter or Space on a focused tile.
+  static bool _activatedByKeyboard() {
+    final pressed = HardwareKeyboard.instance.logicalKeysPressed;
+    return pressed.contains(LogicalKeyboardKey.enter) ||
+        pressed.contains(LogicalKeyboardKey.numpadEnter) ||
+        pressed.contains(LogicalKeyboardKey.space);
   }
 
   /// Maps each variant in the draft to its quantity so catalog cards can show a
@@ -144,11 +191,22 @@ class PurchaseCatalogPane extends StatelessWidget {
     return quantities;
   }
 
+  /// Enter in the search box. A code is looked up exactly; a NAME is not —
+  /// «حليب» + Enter used to go to the barcode lookup, miss, and open the new
+  /// product wizard with «حليب» as its barcode. Returning false hands the text
+  /// back to the search box, which runs the search; ↓ then walks the results.
+  /// The POS reads Enter the same way (`PosBarcodeActions.submitLookup`).
   Future<bool> _addBarcode(BuildContext context, String barcode) async {
+    if (looksLikeTypedName(barcode)) {
+      return false;
+    }
     await addScannedPurchaseBarcode(
       context,
       viewModel: viewModel,
       barcode: barcode,
+      // Typed by a person (a wedge's Enter never reaches the field): walk the
+      // line it landed on.
+      walkLine: true,
     );
     return viewModel.scanStatus == PurchaseScanStatus.found;
   }
@@ -290,47 +348,47 @@ class _PurchaseProductLookupControlsState
   /// request usually fires mid-rebuild) and suppressed while a sheet or dialog
   /// is up, or on a phone layout — so it never steals the caret from the
   /// pricing sheet or pops a soft keyboard unbidden.
-  void _handleFocusRequest() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      final route = ModalRoute.of(context);
-      if (route != null && !route.isCurrent) {
-        return;
-      }
-      if (AppBreakpoints.of(context).index < AppBreakpoint.tablet.index) {
-        return;
-      }
-      _searchFocusNode.requestFocus();
-    });
-  }
+  void _handleFocusRequest() =>
+      focusSearchAfterFrame(context, _searchFocusNode);
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final viewModel = widget.viewModel;
 
-    return TutorTarget(
-      anchor: TutorAnchor.purchaseCatalogSearchField,
-      child: ProductQueryControls(
-        query: viewModel.query,
-        catalogRepository: viewModel.catalogRepository,
-        allowAvailabilityFilter: false,
-        searchHint: l10n.purchaseProductLookupHint,
-        searchFieldKey: const ValueKey('purchase_product_lookup_field'),
-        searchFocusNode: _searchFocusNode,
-        searchResetSignal: viewModel.searchResetController,
-        autofocus:
-            AppBreakpoints.of(context).index >= AppBreakpoint.tablet.index,
-        onSearchChanged: viewModel.updateSearch,
-        onOpenCameraScanner: viewModel.isSubmitting
-            ? null
-            : widget.onOpenCameraScanner,
-        onSearchSubmitted: viewModel.isSubmitting
-            ? null
-            : (barcode) => widget.onSearchSubmitted(barcode),
-        onQueryChanged: viewModel.applyQuery,
+    return CallbackShortcuts(
+      // ↓ from the search box to the first result (or, with none on screen,
+      // whatever sits below — a category chip). Caught here,
+      // above the field, before the app-wide text shortcuts treat it as caret
+      // movement.
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.arrowDown): () {
+          if (!_viewModel.resultsFocus.focusFirst()) {
+            _searchFocusNode.focusInDirection(TraversalDirection.down);
+          }
+        },
+      },
+      child: TutorTarget(
+        anchor: TutorAnchor.purchaseCatalogSearchField,
+        child: ProductQueryControls(
+          query: viewModel.query,
+          catalogRepository: viewModel.catalogRepository,
+          allowAvailabilityFilter: false,
+          searchHint: l10n.purchaseProductLookupHint,
+          searchFieldKey: const ValueKey('purchase_product_lookup_field'),
+          searchFocusNode: _searchFocusNode,
+          searchResetSignal: viewModel.searchResetController,
+          autofocus:
+              AppBreakpoints.of(context).index >= AppBreakpoint.tablet.index,
+          onSearchChanged: viewModel.updateSearch,
+          onOpenCameraScanner: viewModel.isSubmitting
+              ? null
+              : widget.onOpenCameraScanner,
+          onSearchSubmitted: viewModel.isSubmitting
+              ? null
+              : (barcode) => widget.onSearchSubmitted(barcode),
+          onQueryChanged: viewModel.applyQuery,
+        ),
       ),
     );
   }

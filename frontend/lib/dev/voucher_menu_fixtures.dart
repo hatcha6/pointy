@@ -89,6 +89,7 @@ Map<String, Object?> voucherPreviewMenuJson({bool withCost = true}) {
     String badge = '',
     String redeemHint = '',
     bool art = false,
+    Map<String, Object?>? target,
   }) {
     final variants = <Map<String, Object?>>[];
     final items = <Map<String, Object?>>[];
@@ -126,6 +127,7 @@ Map<String, Object?> voucherPreviewMenuJson({bool withCost = true}) {
       'key': key,
       'name': name,
       'category': category,
+      'target': ?target,
       'featured': featured,
       'badge': badge,
       'has_promo': cards.any((card) => card.badge.isNotEmpty),
@@ -164,6 +166,9 @@ Map<String, Object?> voucherPreviewMenuJson({bool withCost = true}) {
       {'key': 'games', 'name': 'الألعاب'},
       {'key': 'telecom', 'name': 'الاتصالات'},
       {'key': 'streaming', 'name': 'الترفيه'},
+      {'key': 'game_topup', 'name': 'شحن الألعاب بالمعرّف'},
+      {'key': 'apps_topup', 'name': 'شحن التطبيقات'},
+      {'key': 'steam_gifts', 'name': 'هدايا ستيم'},
     ],
     'countries': [
       for (final code in const ['US', 'GB', 'AE', 'SA', 'TR', 'LY', 'EU', 'WW'])
@@ -293,6 +298,77 @@ Map<String, Object?> voucherPreviewMenuJson({bool withCost = true}) {
           _Card('TR', '200 ليرة', '200', 'TRY', 43, 37),
           _Card('EU', '25 يورو', '25', 'EUR', 165, 145),
         ],
+      ),
+      brand(
+        productId: 9101,
+        key: 'pubg-id',
+        name: 'ببجي موبايل بالمعرّف',
+        category: 'game_topup',
+        target: const {
+          'kind': 'game_account',
+          'check': 'pubg_mobile',
+          'hint': 'اكتب المعرّف كما يظهر في الملف الشخصي داخل اللعبة.',
+          'fields': [
+            {'key': 'player_id', 'label': 'معرّف اللاعب (ID)'},
+          ],
+        },
+        cards: const [
+          _Card('WW', '60 شدة', '60', 'UC', 11, 9),
+          _Card('WW', '325 شدة', '325', 'UC', 52, 46),
+          _Card('WW', '660 شدة', '660', 'UC', 100, 92),
+          _Card('WW', '1800 شدة', '1800', 'UC', 255, 238),
+          _Card('WW', '3850 شدة', '3850', 'UC', 500, 470),
+          _Card('WW', '8100 شدة', '8100', 'UC', 990, 930),
+        ],
+      ),
+      brand(
+        productId: 9102,
+        key: 'ml-id',
+        name: 'موبايل ليجندز',
+        category: 'game_topup',
+        target: const {
+          'kind': 'game_account',
+          'hint': 'المعرّف ورقم الخادم من الملف الشخصي داخل اللعبة.',
+          'fields': [
+            {'key': 'user_id', 'label': 'معرّف المستخدم'},
+            {'key': 'zone_id', 'label': 'رقم الخادم'},
+          ],
+        },
+        cards: const [
+          _Card('WW', '86 ماسة', '86', 'DM', 16, 14),
+          _Card('WW', '172 ماسة', '172', 'DM', 31, 28),
+        ],
+      ),
+      brand(
+        productId: 9103,
+        key: 'tg-stars',
+        name: 'نجوم تيليجرام',
+        category: 'apps_topup',
+        target: const {
+          'kind': 'telegram_username',
+          'hint': 'اسم المستخدم في تيليجرام، بلا @.',
+          'fields': [
+            {'key': 'username', 'label': 'اسم المستخدم'},
+          ],
+        },
+        cards: const [
+          _Card('WW', '100 نجمة', '100', 'XTR', 18, 16),
+          _Card('WW', '500 نجمة', '500', 'XTR', 86, 80),
+        ],
+      ),
+      brand(
+        productId: 9104,
+        key: 'steam-gift',
+        name: 'Elden Ring',
+        category: 'steam_gifts',
+        target: const {
+          'kind': 'steam_invite',
+          'hint': 'رابط دعوة صديق من ستيم، يبدأ بـ https://s.team/p/',
+          'fields': [
+            {'key': 'invite_url', 'label': 'رابط الدعوة'},
+          ],
+        },
+        cards: const [_Card('WW', 'اللعبة الأساسية', '', '', 390, 360)],
       ),
       brand(
         productId: 9008,
