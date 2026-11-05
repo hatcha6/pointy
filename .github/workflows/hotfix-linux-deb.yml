@@ -32,6 +32,17 @@ jobs:
             libgtk-3-dev liblzma-dev libstdc++-12-dev \
             libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
 
+      # Clang 14 cannot compile zxing-cpp's C++20 ranges against libstdc++ 12.
+      - name: Use a newer clang
+        run: |
+          wget -q https://apt.llvm.org/llvm.sh
+          sudo bash llvm.sh 18
+          mkdir -p "$HOME/clang-bin"
+          ln -s /usr/bin/clang-18 "$HOME/clang-bin/clang"
+          ln -s /usr/bin/clang++-18 "$HOME/clang-bin/clang++"
+          echo "$HOME/clang-bin" >> "$GITHUB_PATH"
+          "$HOME/clang-bin/clang++" --version
+
       - name: Set up Flutter ${{ env.FLUTTER_VERSION }}
         uses: subosito/flutter-action@v2
         with:
