@@ -494,7 +494,9 @@ class SubscriberWriteSerializer(serializers.Serializer):
     note = serializers.CharField(max_length=255, required=False, allow_blank=True)
 
 
-def charge_payload(outcome, *, with_cost: bool = False, refunded=None) -> dict:
+def charge_payload(
+    outcome, *, with_cost: bool = False, refunded=None, refunded_to_account=()
+) -> dict:
     """The result of one attempted write, as the till needs to read it.
 
     ``outcome`` is the honest word and ``status`` is the row it left behind;
@@ -510,6 +512,8 @@ def charge_payload(outcome, *, with_cost: bool = False, refunded=None) -> dict:
     ``refunded`` maps an order line to what was given back for it when the
     refusal returned the line (:mod:`.refusal_refund`); ``refund_amount`` is
     then what the cashier hands back, and null when nothing was returned.
+    ``refunded_to_account`` is the lines given back off a credit sale's debt
+    instead: ``refund_to_account`` says so, and nobody hands any money back.
     """
     fulfillment = outcome.fulfillment
     printed = printed_receipt(fulfillment)
@@ -537,6 +541,9 @@ def charge_payload(outcome, *, with_cost: bool = False, refunded=None) -> dict:
         "receipt": printed or {},
         "refunded": refund_amount is not None,
         "refund_amount": refund_amount,
+        "refund_to_account": bool(
+            fulfillment and fulfillment.order_line_id in refunded_to_account
+        ),
     }
 
 

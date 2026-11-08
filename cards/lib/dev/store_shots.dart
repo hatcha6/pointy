@@ -20,6 +20,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../src/app.dart';
+import '../src/core/esim/esim_device.dart';
 import '../src/core/result.dart';
 import '../src/data/models/catalog.dart';
 import '../src/data/models/order.dart';
@@ -43,6 +44,7 @@ Future<void> main() async {
   const relay = String.fromEnvironment('CARDS_PREVIEW_RELAY');
   const channel = String.fromEnvironment('CARDS_CHANNEL', defaultValue: 'ios');
   final dependencies = fixtureDependencies(
+    esim: screen.startsWith('esim'),
     signedIn: screen != 'signed-out' && !screen.startsWith('sign-in'),
     shelfRelay: relay.isEmpty ? null : Uri.parse(relay),
     // Every purchase delivers its card: the film's story.
@@ -50,6 +52,13 @@ Future<void> main() async {
     channel: channel,
   );
   dependencies.settings.setLanguage('ar');
+  // The simulator has no eSIM chip: the pages as a phone that has one shows them.
+  dependencies.overrideEsimCompatibility(
+    EsimCompatibility(
+      repository: dependencies.esim,
+      device: const _ShotPhone(),
+    ),
+  );
   // `STORE_SPLASH=1`: the full opening first, as a first launch has it.
   final film = screen == 'film';
   final opening = film || env['STORE_SPLASH'] == '1'
@@ -74,6 +83,24 @@ Future<void> main() async {
   if (film) {
     await playFilm();
   }
+}
+
+/// An eSIM-capable iPhone, as the eSIM pages see it.
+class _ShotPhone extends EsimDevice {
+  const _ShotPhone();
+
+  @override
+  Future<EsimDeviceFacts> facts() async => const EsimDeviceFacts(
+    platform: 'ios',
+    model: 'iPhone19,1',
+    osVersion: '27.0',
+    supportsEsim: true,
+    simulator: false,
+    directInstall: true,
+  );
+
+  @override
+  Future<bool> install(String url) async => true;
 }
 
 /// Every purchase delivers its card: the film's story.

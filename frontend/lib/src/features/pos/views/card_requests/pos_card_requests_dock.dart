@@ -327,8 +327,11 @@ String? _accountText(CardRequest request) {
 
 String _refundText(AppLocalizations l10n, CardRequest request) {
   final refund = request.refundAmount;
-  return refund == null
-      ? l10n.cardRequestNotRefunded
+  if (refund == null) {
+    return l10n.cardRequestNotRefunded;
+  }
+  return request.refundToAccount
+      ? l10n.cardRequestRefundedToAccount(formatMoney(refund))
       : l10n.cardRequestRefunded(formatMoney(refund));
 }
 

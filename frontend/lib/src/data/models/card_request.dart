@@ -42,6 +42,7 @@ class CardRequest {
     this.errorDetail = '',
     this.receipt = const {},
     this.refundAmount,
+    this.refundToAccount = false,
   });
 
   factory CardRequest.fromJson(Map<String, Object?> json) {
@@ -78,6 +79,7 @@ class CardRequest {
       refundAmount: json['refunded'] == true
           ? double.tryParse(json['refund_amount']?.toString() ?? '')
           : null,
+      refundToAccount: json['refund_to_account'] == true,
     );
   }
 
@@ -110,6 +112,9 @@ class CardRequest {
   /// What went back to the customer; null when nothing was given back.
   final double? refundAmount;
 
+  /// Given back off the debt of a sale on account: nothing to hand back.
+  final bool refundToAccount;
+
   bool get isOpen =>
       state == CardRequestState.queued || state == CardRequestState.working;
   bool get isSucceeded => state == CardRequestState.succeeded;
@@ -136,6 +141,7 @@ class CardRequest {
     errorDetail: errorDetail,
     receipt: receipt,
     refundAmount: refundAmount,
+    refundToAccount: refundToAccount,
   );
 
   /// The same request, as a charge's answer left it.
@@ -162,5 +168,6 @@ class CardRequest {
     errorDetail: result.errorDetail,
     receipt: result.receipt,
     refundAmount: result.refundAmount,
+    refundToAccount: result.refundToAccount,
   );
 }

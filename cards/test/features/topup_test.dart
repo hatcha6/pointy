@@ -2,6 +2,10 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pointy_cards/src/features/orders/order_report_sheet.dart';
+import 'package:pointy_cards/src/data/models/order_report.dart';
+import 'package:pointy_cards/l10n/generated/app_localizations.dart';
+import 'package:pointy_cards/src/features/topup/topup_order_page.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:pointy_cards/dev/cards_fixtures.dart';
@@ -371,7 +375,7 @@ void main() {
       ),
     );
     await tester.pump(const Duration(milliseconds: 500));
-    expect(find.text('نشحن الحساب…'), findsOneWidget);
+    expect(find.text('نشحن حساب اللاعب…'), findsOneWidget);
     expect(find.text('5123456789'), findsOneWidget);
 
     watcher.start();
@@ -410,8 +414,78 @@ void main() {
 
     await tester.tap(find.text('فري فاير · 520 جوهرة'));
     await tester.pumpAndSettle();
-    expect(find.byType(TopUpDonePage), findsOneWidget);
+    // Where it stands, step by step, and the receipt: not a celebration.
+    expect(find.byType(TopUpOrderPage), findsOneWidget);
+    expect(find.text('حالة الطلب'), findsOneWidget);
+    expect(find.text('تم الطلب'), findsOneWidget);
     expect(find.text('5123456789'), findsOneWidget);
+
+    // Something went wrong: say what, and the page shows it is being looked at.
+    await tester.scrollUntilVisible(find.text('الإبلاغ عن مشكلة'), 200);
+    await tester.tap(find.text('الإبلاغ عن مشكلة'));
+    await tester.pumpAndSettle();
+    expect(find.text('ما المشكلة؟'), findsOneWidget);
+    await tester.tap(find.text('لم يصل الشحن'));
+    await tester.pump();
+    await tester.tap(find.text('إرسال البلاغ'));
+    await tester.pumpAndSettle();
+    expect(find.text('وصلنا بلاغك. نراجعه ونرد عليك.'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('بلاغك قيد المراجعة'), -200);
+    expect(find.text('بلاغك قيد المراجعة'), findsOneWidget);
+    // One report at a time: no button to file another while it is open.
+    expect(find.text('الإبلاغ عن مشكلة'), findsNothing);
+  });
+
+  testWidgets("a top-up still on its way turns slow past the relay's wait", (
+    tester,
+  ) async {
+    await phone(tester);
+    final dependencies = fixtureDependencies(topUps: true);
+    await dependencies.catalog.refresh();
+    final watcher = OrderWatcher(
+      orders: dependencies.orders,
+      vault: dependencies.vault,
+      order: CardOrder.fromJson(fixtureTopUpById('topup-fulfilling')),
+    );
+    await tester.pumpWidget(
+      CardsApp(
+        dependencies: dependencies,
+        home: TopUpOrderPage(watcher: watcher),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('نشحن حساب اللاعب…'), findsOneWidget);
+    expect(find.text('يتأخر الشحن هذه المرة'), findsNothing);
+    // Paid twenty seconds ago, the relay waits three minutes.
+    await tester.pump(const Duration(minutes: 3));
+    expect(find.text('يتأخر الشحن هذه المرة'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    watcher.dispose();
+  });
+
+  testWidgets('our reply to a report shows on the top-up, and another may be '
+      'reported', (tester) async {
+    await phone(tester);
+    final dependencies = fixtureDependencies(topUps: true);
+    await dependencies.catalog.refresh();
+    final watcher = OrderWatcher(
+      orders: dependencies.orders,
+      vault: dependencies.vault,
+      order: CardOrder.fromJson(fixtureTopUpById('topup-delivered-replied')),
+    );
+    await tester.pumpWidget(
+      CardsApp(
+        dependencies: dependencies,
+        home: TopUpOrderPage(watcher: watcher),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('ردّنا على بلاغك'), findsOneWidget);
+    expect(find.textContaining('تأكدنا من المورّد'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('الإبلاغ عن مشكلة أخرى'), 200);
+    expect(find.text('الإبلاغ عن مشكلة أخرى'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    watcher.dispose();
   });
 
   testWidgets('a Steam gift of one edition asks only for the account', (
@@ -448,5 +522,37 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(TextField), findsNothing);
     expect(find.text('اختر الكمية'), findsOneWidget);
+  });
+
+  test('a top-up names the account as the customer knows it', () {
+    final l10n = lookupAppLocalizations(const Locale('ar'));
+    // A player ID, a Telegram username, a Steam wallet, a Steam gift.
+    expect(
+      reportReasonText(l10n, ReportReason.wrongAccount, 'game'),
+      'وصل إلى معرّف لاعب آخر',
+    );
+    expect(
+      reportReasonText(l10n, ReportReason.wrongAccount, 'telegram'),
+      'وصل إلى اسم مستخدم آخر',
+    );
+    expect(
+      reportReasonText(l10n, ReportReason.wrongAccount, 'steam'),
+      'أُضيف إلى حساب ستيم آخر',
+    );
+    expect(
+      reportReasonText(l10n, ReportReason.notArrived, 'invite'),
+      'لم تصل الهدية',
+    );
+    expect(l10n.orderStepSending('telegram'), 'الإرسال إلى حساب تيليجرام');
+    expect(l10n.topUpPreparingTitle('steam'), 'نضيف الرصيد إلى محفظة ستيم…');
+    expect(
+      l10n.topUpRefundedBody('telegram', '5.00 د.ل'),
+      contains('تأكد من اسم المستخدم'),
+    );
+    expect(
+      l10n.topUpRefundedBody('game', '5.00 د.ل'),
+      contains('تأكد من المعرّف'),
+    );
+    expect(l10n.topUpSlowTitle('invite'), 'تتأخر الهدية هذه المرة');
   });
 }

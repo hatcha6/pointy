@@ -67,6 +67,8 @@ export type CardOrder = {
   updated_at: string;
   paid_at?: string;
   completed_at?: string;
+  /** What the customer typed for a card sent to an account (a player ID). */
+  account?: Record<string, string>;
 };
 
 export type CardCreditEntry = {
@@ -135,6 +137,7 @@ export const cardKeys = {
   orders: (filter: Record<string, string>) => ["cards", "orders", filter],
   notifications: (filter: Record<string, string>) => ["cards", "notifications", filter],
   campaigns: ["cards", "campaigns"],
+  reports: (filter: Record<string, string>) => ["cards", "reports", filter],
 };
 
 export function useCardSummary() {
@@ -316,4 +319,37 @@ export const cardAttributionVia: Record<string, string> = {
   code: "كتب الرمز",
   referrer: "رابط جوجل بلاي",
   web: "رابط الموقع",
+};
+
+/** A customer reporting a problem with an order, and our reply. */
+export type CardReport = {
+  id: string;
+  order_id: string;
+  customer_id: string;
+  reason: string;
+  note?: string;
+  status: "open" | "resolved";
+  reply?: string;
+  resolved_by?: string;
+  created_at: string;
+  resolved_at?: string;
+};
+
+export type CardReportView = { report: CardReport; order?: CardOrder };
+
+export function useCardReports(filter: Record<string, string>) {
+  return useQuery({
+    queryKey: cardKeys.reports(filter),
+    queryFn: () => api.get<{ reports: CardReportView[] }>(`${BASE}/reports${qs(filter)}`),
+    placeholderData: (previous) => previous,
+    refetchInterval: 30_000,
+  });
+}
+
+/** What the customer said went wrong, as the app offered it. */
+export const cardReportReason: Record<string, string> = {
+  not_arrived: "لم يصل الشحن",
+  wrong_account: "وصل إلى حساب آخر",
+  wrong_amount: "الكمية غير صحيحة",
+  other: "مشكلة أخرى",
 };

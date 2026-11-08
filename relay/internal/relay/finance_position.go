@@ -24,8 +24,9 @@ import (
 
 // financeServiceCosts says which tracked cost belongs to which service.
 var financeServiceCosts = map[string]string{
-	"vouchers": "supplier_cost",
-	"sms":      "sms_cost",
+	"vouchers":                     "supplier_cost",
+	control.FinanceServiceCardsApp: financeCardsAppCost,
+	"sms":                          "sms_cost",
 }
 
 type financeServiceLine struct {

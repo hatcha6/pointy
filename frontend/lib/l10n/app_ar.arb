@@ -16826,6 +16826,15 @@
       }
     }
   },
+  "rechargeRefundedToAccountLine": "أُلغي من الفاتورة تلقائياً — حُذف {amount} من الحساب الآجل، ولا يُعاد شيء نقداً.",
+  "@rechargeRefundedToAccountLine": {
+    "description": "Under a refused provider line sold on account (a staff account or a customer's tab): the server took it off what is owed, so no money is handed back.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
   "rechargeRefundedTotal": "المبلغ المُعاد للزبون: {amount}",
   "@rechargeRefundedTotal": {
     "description": "Bold line at the end of the refused-recharge dialog: the total the cashier hands back for every refused line of this sale.",
@@ -25639,10 +25648,10 @@
   "@voucherAccountSavedEmpty": {"description": "Till: game top-ups by account and the card requests panel."},
   "voucherAccountSavedNoMatch": "لا حساب محفوظ بهذا. تابع إن كان حساباً جديداً.",
   "@voucherAccountSavedNoMatch": {"description": "Till: game top-ups by account and the card requests panel."},
-  "voucherAccountSavedMore": "توجد حسابات أخرى: اكتب المعرّف أو الاسم لتجدها.",
-  "@voucherAccountSavedMore": {"description": "Till: game top-ups by account and the card requests panel."},
-  "voucherAccountSearchHint": "اكتب المعرّف أو ابحث بالاسم",
-  "@voucherAccountSearchHint": {"description": "Till: game top-ups by account and the card requests panel."},
+  "voucherAccountSavedMore": "{kind, select, telegram{توجد حسابات أخرى: اكتب اسم المستخدم أو الاسم لتجدها.} steam{توجد حسابات أخرى: اكتب اسم الدخول أو الاسم لتجدها.} other{توجد حسابات أخرى: اكتب المعرّف أو الاسم لتجدها.}}",
+  "@voucherAccountSavedMore": {"description": "Till: account top-ups; kind is game, telegram, steam or invite.", "placeholders": {"kind": {"type": "String"}}},
+  "voucherAccountSearchHint": "{kind, select, telegram{اكتب اسم المستخدم أو ابحث بالاسم} steam{اكتب اسم الدخول أو ابحث بالاسم} other{اكتب المعرّف أو ابحث بالاسم}}",
+  "@voucherAccountSearchHint": {"description": "Till: account top-ups; kind is game, telegram, steam or invite.", "placeholders": {"kind": {"type": "String"}}},
   "voucherAccountOther": "حساب آخر",
   "@voucherAccountOther": {"description": "Till: game top-ups by account and the card requests panel."},
   "voucherAccountRename": "تسمية",
@@ -25663,14 +25672,14 @@
   "@voucherAccountChecking": {"description": "Till: game top-ups by account and the card requests panel."},
   "voucherAccountFound": "الحساب: {name}",
   "@voucherAccountFound": {"description": "Till: game top-ups by account and the card requests panel.", "placeholders": {"name": {"type": "String"}}},
-  "voucherAccountFoundNoName": "الحساب موجود",
-  "@voucherAccountFoundNoName": {"description": "Till: game top-ups by account and the card requests panel."},
-  "voucherAccountNotFound": "لا يوجد حساب بهذا المعرّف. راجعه مع الزبون.",
-  "@voucherAccountNotFound": {"description": "Till: game top-ups by account and the card requests panel."},
-  "voucherAccountCouldNotTell": "تعذّر التحقق الآن. تأكد من المعرّف مع الزبون: لا يُسترجع الشحن من حساب خاطئ.",
-  "@voucherAccountCouldNotTell": {"description": "Till: game top-ups by account and the card requests panel."},
-  "voucherAccountNoCheck": "راجع المعرّف مع الزبون: لا يُسترجع الشحن من حساب خاطئ.",
-  "@voucherAccountNoCheck": {"description": "Till: game top-ups by account and the card requests panel."},
+  "voucherAccountFoundNoName": "{kind, select, steam{يمكن شحن هذا الحساب} other{الحساب موجود}}",
+  "@voucherAccountFoundNoName": {"description": "Till: account top-ups; kind is game, telegram, steam or invite.", "placeholders": {"kind": {"type": "String"}}},
+  "voucherAccountNotFound": "{kind, select, steam{لا يمكن شحن حساب ستيم هذا. راجع اسم الدخول مع الزبون.} other{لا يوجد حساب بهذا المعرّف. راجعه مع الزبون.}}",
+  "@voucherAccountNotFound": {"description": "Till: account top-ups; kind is game, telegram, steam or invite.", "placeholders": {"kind": {"type": "String"}}},
+  "voucherAccountCouldNotTell": "{kind, select, telegram{تعذّر التحقق الآن. تأكد من اسم المستخدم مع الزبون: لا يُسترجع الشحن من حساب خاطئ.} steam{تعذّر التحقق الآن. تأكد من اسم الدخول مع الزبون: لا يُسترجع الرصيد من حساب خاطئ.} invite{تعذّر التحقق الآن. تأكد من رابط الدعوة مع الزبون: تُرسل الهدية إلى صاحبه ولا تُسترجع.} other{تعذّر التحقق الآن. تأكد من المعرّف مع الزبون: لا يُسترجع الشحن من حساب خاطئ.}}",
+  "@voucherAccountCouldNotTell": {"description": "Till: account top-ups; kind is game, telegram, steam or invite.", "placeholders": {"kind": {"type": "String"}}},
+  "voucherAccountNoCheck": "{kind, select, telegram{راجع اسم المستخدم مع الزبون: لا يُسترجع الشحن من حساب خاطئ.} steam{راجع اسم الدخول مع الزبون: لا يُسترجع الرصيد من حساب خاطئ.} invite{راجع رابط الدعوة مع الزبون: تُرسل الهدية إلى صاحبه ولا تُسترجع.} other{راجع المعرّف مع الزبون: لا يُسترجع الشحن من حساب خاطئ.}}",
+  "@voucherAccountNoCheck": {"description": "Till: account top-ups; kind is game, telegram, steam or invite.", "placeholders": {"kind": {"type": "String"}}},
   "voucherAccountEnterFirst": "أدخل الحساب أولاً",
   "@voucherAccountEnterFirst": {"description": "Till: game top-ups by account and the card requests panel."},
   "voucherAccountProblemRequired": "أدخل {label}.",
@@ -25731,7 +25740,9 @@
   "@cardRequestLateHint": {"description": "Till: game top-ups by account and the card requests panel."},
   "cardRequestRefunded": "أعد للزبون {amount}: سُجّل الإرجاع في الدرج.",
   "@cardRequestRefunded": {"description": "Till: game top-ups by account and the card requests panel.", "placeholders": {"amount": {"type": "String"}}},
-  "cardRequestNotRefunded": "لم يُرجع المبلغ تلقائياً (الدرج مغلق أو البيع آجل): راجع الفاتورة.",
+  "cardRequestRefundedToAccount": "حُذف {amount} من الحساب الآجل: لا يُعاد شيء نقداً.",
+  "@cardRequestRefundedToAccount": {"description": "Till card requests panel: a failed card sold on account came off the debt.", "placeholders": {"amount": {"type": "String"}}},
+  "cardRequestNotRefunded": "لم يُرجع المبلغ تلقائياً (الدرج مغلق): راجع الفاتورة.",
   "@cardRequestNotRefunded": {"description": "Till: game top-ups by account and the card requests panel."},
   "cardRequestNoticeDone": "تم: {label}",
   "@cardRequestNoticeDone": {"description": "Till: game top-ups by account and the card requests panel.", "placeholders": {"label": {"type": "String"}}},

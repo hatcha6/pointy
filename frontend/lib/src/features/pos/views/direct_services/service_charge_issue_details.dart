@@ -4,6 +4,7 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import '../../../../data/models/integration_card.dart';
 import '../../../../shared/design/design.dart';
 import '../../../../shared/formatters.dart';
+import '../recharge_outcome_details.dart';
 import 'service_texts.dart';
 
 /// Tells the cashier what a sale's airtime and bill lines did when the
@@ -92,7 +93,7 @@ class ServiceChargeIssueDetails extends StatelessWidget {
               // much goes back, so it is not rung up again on the same money.
               if (row.refundAmount case final amount?)
                 Text(
-                  l10n.rechargeRefundedLine(formatMoney(amount)),
+                  rechargeRefundText(l10n, row, amount),
                   style: textTheme.bodySmall?.copyWith(color: colors.danger),
                 ),
             ],

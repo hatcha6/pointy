@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../l10n/generated/app_localizations.dart';
 import '../../core/result.dart';
+import '../../data/models/esim.dart';
 import '../../data/models/order.dart';
 import '../../design/cards_layout.dart';
 import '../../design/cards_tokens.dart';
@@ -17,9 +18,11 @@ import '../../shared/money_text.dart';
 import '../../shared/native_glass_chips.dart';
 import '../../shared/relay_error_text.dart';
 import '../../shared/skeleton.dart';
+import '../esim/esim_page.dart';
+import '../esim/esim_store_page.dart';
 import '../orders/order_progress_page.dart';
 import '../reveal/reveal_page.dart';
-import '../topup/topup_done_page.dart';
+import '../topup/topup_order_page.dart';
 import '../topup/topup_text.dart';
 import '../sign_in/sign_in_sheet.dart';
 import '../../shared/haptics.dart';
@@ -65,6 +68,7 @@ class _MyCardsPageState extends State<MyCardsPage> {
   Set<String> _used = {};
   _Filter _filter = _Filter.all;
   Map<String, List<CardCode>> _saved = {};
+  List<CustomerEsim> _esims = const [];
 
   @override
   void didChangeDependencies() {
@@ -80,6 +84,7 @@ class _MyCardsPageState extends State<MyCardsPage> {
       return;
     }
     final result = await dependencies.orders.orders();
+    final esims = await dependencies.esim.esims();
     final used = await dependencies.vault.usedCodes();
     final saved = <String, List<CardCode>>{};
     if (result case Ok(:final value)) {
@@ -98,10 +103,18 @@ class _MyCardsPageState extends State<MyCardsPage> {
     setState(() {
       _used = used;
       _saved = saved;
+      if (esims case Ok(:final value)) {
+        _esims = value;
+      }
       switch (result) {
         case Ok(:final value):
+          // A delivered eSIM lives in its own section, not as a card.
           _orders = value
-              .where((o) => o.status != OrderStatus.cancelled)
+              .where(
+                (o) =>
+                    o.status != OrderStatus.cancelled &&
+                    !(o.isEsim && o.status == OrderStatus.delivered),
+              )
               .toList();
           _error = null;
         case Error(:final exception):
@@ -177,7 +190,7 @@ class _MyCardsPageState extends State<MyCardsPage> {
         onAction: _load,
       );
     }
-    if (orders != null && orders.isEmpty) {
+    if (orders != null && orders.isEmpty && _esims.isEmpty) {
       return EmptyState(
         key: const ValueKey('empty'),
         icon: Icons.style_rounded,
@@ -307,6 +320,17 @@ class _MyCardsPageState extends State<MyCardsPage> {
                                 radius: CardsRadii.card,
                               ),
                             ),
+                        // The filters are about cards' codes; an eSIM is neither.
+                        if (_esims.isNotEmpty && _filter == _Filter.all) ...[
+                          SectionHeader(
+                            title: l10n.esimMineTitle,
+                            padding: const EdgeInsets.only(
+                              top: CardsSpace.md,
+                              bottom: CardsSpace.sm,
+                            ),
+                          ),
+                          EsimMineList(esims: _esims, onChanged: _load),
+                        ],
                         if (open.isNotEmpty) ...[
                           SectionHeader(
                             title: l10n.inProgressSection,
@@ -347,6 +371,12 @@ class _MyCardsPageState extends State<MyCardsPage> {
                               ),
                             ),
                         ],
+                        // A filter with nothing in it says why, rather than
+                        // leaving a blank page.
+                        if (orders != null &&
+                            done.isEmpty &&
+                            _filter != _Filter.all)
+                          _FilterEmpty(filter: _filter),
                       ],
                     ),
                   ),
@@ -355,6 +385,62 @@ class _MyCardsPageState extends State<MyCardsPage> {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+/// What an empty filter says: what would be there, and how it gets there.
+class _FilterEmpty extends StatelessWidget {
+  const _FilterEmpty({required this.filter});
+
+  final _Filter filter;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final (icon, title, body) = switch (filter) {
+      _Filter.unused => (
+        Icons.credit_card_rounded,
+        l10n.myCardsNoneUnusedTitle,
+        l10n.myCardsNoneUnusedBody,
+      ),
+      _Filter.used => (
+        Icons.check_circle_outline_rounded,
+        l10n.myCardsNoneUsedTitle,
+        l10n.myCardsNoneUsedBody,
+      ),
+      _Filter.incomplete || _Filter.all => (
+        Icons.verified_outlined,
+        l10n.myCardsNoneIncompleteTitle,
+        l10n.myCardsNoneIncompleteBody,
+      ),
+    };
+    return Padding(
+      key: ValueKey('filter-empty-${filter.name}'),
+      padding: const EdgeInsets.symmetric(
+        horizontal: CardsSpace.xl,
+        vertical: CardsSpace.xxl,
+      ),
+      child: Column(
+        children: [
+          Icon(icon, size: 40, color: theme.colorScheme.onSurfaceVariant),
+          const SizedBox(height: CardsSpace.md),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.titleMedium,
+          ),
+          const SizedBox(height: CardsSpace.xs),
+          Text(
+            body,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -476,14 +562,14 @@ class _OrderRow extends StatelessWidget {
 /// the phone's lock, when the customer set one), and an order still on its
 /// way shows how it is going.
 Future<void> openCardOrder(BuildContext context, CardOrder order) async {
+  if (order.isEsim && order.status == OrderStatus.delivered) {
+    await EsimPage.openDelivered(context, order);
+    return;
+  }
   final brand = CardsScope.of(context).catalog.brandOf(order.brandKey);
-  if (order.toppedUp) {
-    await TopUpDonePage.open(
-      context,
-      order: order,
-      brand: brand,
-      fromHistory: true,
-    );
+  // A top-up past paying: where it stands, live, with a way to report it.
+  if (order.toAccount && order.status != OrderStatus.awaitingPayment) {
+    await TopUpOrderPage.open(context, order: order, brand: brand);
   } else if (order.status == OrderStatus.delivered) {
     await Navigator.of(context).push(
       MaterialPageRoute(

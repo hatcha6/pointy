@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../l10n/generated/app_localizations.dart';
 import '../../core/result.dart';
@@ -15,6 +14,9 @@ import '../../shared/cards_scope.dart';
 import '../../shared/haptics.dart';
 import '../../shared/money_text.dart';
 import '../card_payment/card_payment_page.dart';
+import '../card_payment/payment_page_view.dart';
+import '../esim/esim_checkout.dart';
+import '../esim/esim_page.dart';
 import '../links/cards_link.dart';
 import '../reveal/reveal_page.dart';
 import '../topup/topup_done_page.dart';
@@ -45,15 +47,21 @@ class OrderProgressPage extends StatefulWidget {
   final bool openPaymentPage;
 
   /// Past this a card is late (most come in seconds), and the page says the
-  /// customer need not wait for it.
+  /// customer need not wait for it. The relay sets it with each order
+  /// ([CardOrder.wait]), as it pushes an ending only past the same time;
+  /// this is for an older relay that does not say.
   static const slowAfter = Duration(minutes: 3);
 
   static Future<void> open(
     BuildContext context, {
     required CardOrder order,
     CardBrand? brand,
+    bool fresh = false,
   }) {
     final dependencies = CardsScope.of(context);
+    if (order.isEsim && order.status == OrderStatus.delivered) {
+      return EsimPage.openDelivered(context, order, fresh: fresh);
+    }
     if (order.toppedUp) {
       return TopUpDonePage.open(context, order: order, brand: brand);
     }
@@ -66,6 +74,8 @@ class OrderProgressPage extends StatefulWidget {
         ),
       );
     }
+    // No brand in the catalog is an eSIM's: its card has the flag.
+    brand ??= order.isEsim ? esimBrandOfOrder(order) : null;
     final watcher = OrderWatcher(
       orders: dependencies.orders,
       vault: dependencies.vault,
@@ -93,12 +103,15 @@ class _OrderProgressPageState extends State<OrderProgressPage>
   /// the page opens: an order that is already refunded then is not news.
   late String _lastOutcome;
 
-  /// Dafa's page is open over the app (in-app browser).
-  bool _paymentPageOpen = false;
+  /// Dafa's page, while it is open over this one.
+  Route<PaymentPageResult>? _paymentRoute;
 
-  /// Dafa's page was opened for this order: the payer may have paid there,
-  /// out of the app's sight, so the page waits for the relay to say.
-  bool _usedPaymentPage = false;
+  /// Dafa's page said paid («المتابعة»): the page waits for the relay to
+  /// confirm it, and then the card arrives as after any payment.
+  bool _confirming = false;
+
+  /// Asking the relay after the payer closed Dafa's page by hand.
+  bool _checking = false;
 
   /// Calling the order off after the customer closed the card form.
   bool _cancelling = false;
@@ -171,7 +184,8 @@ class _OrderProgressPageState extends State<OrderProgressPage>
     final now = DateTime.now();
     _preparingSince ??= now;
     final since = order.paidAt ?? _preparingSince!;
-    final left = OrderProgressPage.slowAfter - now.difference(since);
+    final left =
+        (order.wait ?? OrderProgressPage.slowAfter) - now.difference(since);
     _slowTimer = Timer(left.isNegative ? Duration.zero : left, () {
       if (mounted && _outcomeOf(widget.watcher.order) == 'preparing') {
         setState(() => _slow = true);
@@ -207,7 +221,7 @@ class _OrderProgressPageState extends State<OrderProgressPage>
         Haptics.warning();
       }
     }
-    if (_paymentPageOpen && order.status != OrderStatus.awaitingPayment) {
+    if (order.status != OrderStatus.awaitingPayment) {
       _closePaymentPage();
     }
     if (!_revealed && order.toppedUp) {
@@ -219,6 +233,11 @@ class _OrderProgressPageState extends State<OrderProgressPage>
         brand: widget.brand,
         replace: true,
       );
+      return;
+    }
+    if (!_revealed && order.isEsim && order.status == OrderStatus.delivered) {
+      _revealed = true;
+      EsimPage.openDelivered(context, order, replace: true);
       return;
     }
     if (!_revealed &&
@@ -296,30 +315,50 @@ class _OrderProgressPageState extends State<OrderProgressPage>
     }
   }
 
-  /// Dafa's bank-card page opens inside the app: Safari's sheet on iOS,
-  /// a Chrome Custom Tab on Android (a real browser, so the bank's 3-D Secure
-  /// step and the address bar work as the payer expects; a web view would
-  /// hide the address and some banks refuse it). A web build has no in-app
-  /// browser and opens a tab.
+  /// Dafa's bank-card page, inside the app on every platform
+  /// ([PaymentPageView]), over this page, which follows the order all along.
+  /// However it closes, the checkout carries on here: a payment the relay
+  /// heard of goes on to the card, «المتابعة» waits for the relay to confirm,
+  /// and a page closed by hand asks the relay once, then offers to pay again
+  /// or call the order off.
   Future<void> _openPaymentPage() async {
     final url = Uri.tryParse(widget.watcher.order.checkoutUrl);
-    if (url != null) {
-      setState(() => _usedPaymentPage = true);
-      _paymentPageOpen = await launchUrl(
-        url,
-        mode: LaunchMode.inAppBrowserView,
-      );
+    if (url == null) {
+      return;
+    }
+    final result = await PaymentPageView.open(
+      context,
+      url: url,
+      changes: widget.watcher,
+      settled: () => widget.watcher.order.status != OrderStatus.awaitingPayment,
+      onRoute: (route) => _paymentRoute = route,
+    );
+    _paymentRoute = null;
+    if (!mounted) {
+      return;
+    }
+    switch (result) {
+      case PaymentPageResult.settled:
+        return;
+      case PaymentPageResult.returned:
+        setState(() => _confirming = true);
+        await widget.watcher.poll();
+      case PaymentPageResult.closed:
+        setState(() => _checking = true);
+        await widget.watcher.poll();
+        if (mounted) {
+          setState(() => _checking = false);
+        }
     }
   }
 
-  /// Dafa only tells the relay, never sends the payer back, so its page
-  /// would stay up over the result. Close it as soon as the payment is
-  /// settled where the platform allows (iOS); an Android tab is closed by
-  /// the payer, and coming back asks the relay at once.
-  Future<void> _closePaymentPage() async {
-    _paymentPageOpen = false;
-    if (await supportsCloseForLaunchMode(LaunchMode.inAppBrowserView)) {
-      await closeInAppWebView();
+  /// Takes the payment page away at once, so the card's own page replaces
+  /// this one rather than the payment page above it.
+  void _closePaymentPage() {
+    final route = _paymentRoute;
+    _paymentRoute = null;
+    if (route != null && route.isActive) {
+      Navigator.of(context).removeRoute(route);
     }
   }
 
@@ -363,30 +402,37 @@ class _OrderProgressPageState extends State<OrderProgressPage>
     final l10n = AppLocalizations.of(context);
     final topUp = _topUp(context, order);
     return switch (_outcomeOf(order)) {
-      // Paying on Dafa's page: only the relay can tell when it is done.
-      'paying' when _usedPaymentPage => OrderOutcomePanel(
+      // Dafa's page said paid: the relay is confirming it.
+      'paying' when _confirming => OrderOutcomePanel(
         brand: widget.brand,
         busy: true,
         icon: Icons.credit_card_rounded,
         title: l10n.hostedTitle,
         body: l10n.hostedBody,
-        secondaryLabel: order.checkoutUrl.isEmpty ? null : l10n.openPaymentPage,
-        onSecondary: _pay,
       ),
-      // The app's own card form, not finished: nothing is on its way, so
-      // nothing spins. Pay, or call the order off.
+      // Paying not finished (the card form or Dafa's page closed): nothing
+      // is on its way, so nothing spins once the relay has said so. Pay, or
+      // call the order off.
       'paying' => OrderOutcomePanel(
         brand: widget.brand,
-        busy: _cancelling,
+        busy: _cancelling || _checking,
         icon: Icons.credit_card_rounded,
         title: l10n.payNotFinishedTitle,
         body: l10n.payNotFinishedBody,
-        primaryLabel: _cancelling ? null : l10n.finishPaying,
+        primaryLabel: _cancelling || _checking ? null : l10n.finishPaying,
         onPrimary: _pay,
-        secondaryLabel: _cancelling ? null : l10n.cancelOrder,
+        secondaryLabel: _cancelling || _checking ? null : l10n.cancelOrder,
         onSecondary: _cancel,
       ),
-      'preparing' when _slow => _slowPanel(context, topUp != null),
+      // An eSIM has no code, and may take a moment longer: the same words stay.
+      'preparing' when order.isEsim => OrderOutcomePanel(
+        brand: widget.brand,
+        busy: true,
+        icon: Icons.sim_card_rounded,
+        title: l10n.esimPreparingTitle,
+        body: l10n.esimPreparingBody,
+      ),
+      'preparing' when _slow => _slowPanel(context, topUp?.kind),
       'preparing' when topUp != null => OrderOutcomePanel(
         brand: widget.brand,
         busy: true,
@@ -410,10 +456,17 @@ class _OrderProgressPageState extends State<OrderProgressPage>
         brand: widget.brand,
         tone: OutcomeTone.safe,
         icon: Icons.verified_user_rounded,
-        title: topUp == null ? l10n.refundedTitle : l10n.topUpRefundedTitle,
+        title: order.isEsim
+            ? l10n.esimRefundedTitle
+            : topUp == null
+            ? l10n.refundedTitle
+            : l10n.topUpRefundedTitle(topUp.kind),
         body: topUp == null
             ? l10n.refundedBody(formatMoney(l10n, order.total))
-            : l10n.topUpRefundedBody(formatMoney(l10n, order.total)),
+            : l10n.topUpRefundedBody(
+                topUp.kind,
+                formatMoney(l10n, order.total),
+              ),
         detail: topUp?.account,
         credited: order.total,
         primaryLabel: l10n.backToShop,
@@ -442,7 +495,8 @@ class _OrderProgressPageState extends State<OrderProgressPage>
   }
 
   /// A card running late: the customer may go, and hears when it lands.
-  Widget _slowPanel(BuildContext context, bool topUp) {
+  /// [topUpKind] is the account's kind for a top-up, null for a card.
+  Widget _slowPanel(BuildContext context, String? topUpKind) {
     final l10n = AppLocalizations.of(context);
     final push = CardsScope.of(context).push;
     final ask = push.available && !push.enabled;
@@ -450,7 +504,9 @@ class _OrderProgressPageState extends State<OrderProgressPage>
       brand: widget.brand,
       busy: true,
       icon: Icons.schedule_rounded,
-      title: topUp ? l10n.topUpSlowTitle : l10n.preparingSlowTitle,
+      title: topUpKind != null
+          ? l10n.topUpSlowTitle(topUpKind)
+          : l10n.preparingSlowTitle,
       body: push.enabled
           ? l10n.preparingSlowNotify
           : ask

@@ -45,8 +45,8 @@ const PromotionGrace = 30 * time.Minute
 const (
 	maxCategories        = 50
 	maxBrands            = 1000
-	maxItemsPerBrand     = 100
-	maxCountries         = 250
+	maxItemsPerBrand     = 500
+	maxCountries         = 300
 	maxAliases           = 10
 	maxNameRunes         = 60
 	maxCategoryNameRunes = 40

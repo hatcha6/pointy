@@ -37,6 +37,7 @@ Future<void> showCheckout(
   String? heroTag,
   AccountFormModel? account,
   VoidCallback? onEditAccount,
+  Map<String, String> orderAccount = const {},
 }) async {
   final dependencies = CardsScope.of(context);
   final model = CheckoutModel(
@@ -46,6 +47,7 @@ Future<void> showCheckout(
     quantity: quantity,
     preferences: dependencies.preferences,
     account: account,
+    orderAccount: orderAccount,
   )..load();
   final order = await showModalBottomSheet<CardOrder>(
     context: context,
@@ -58,7 +60,12 @@ Future<void> showCheckout(
   if (order == null || !context.mounted) {
     return;
   }
-  await OrderProgressPage.open(context, order: order, brand: brand);
+  await OrderProgressPage.open(
+    context,
+    order: order,
+    brand: brand,
+    fresh: true,
+  );
 }
 
 class CheckoutSheet extends StatefulWidget {

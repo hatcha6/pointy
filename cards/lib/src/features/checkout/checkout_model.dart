@@ -24,6 +24,7 @@ class CheckoutModel extends ChangeNotifier {
     this.quantity = 1,
     this.preferences,
     this.account,
+    this.orderAccount = const {},
   }) : _key = _newKey();
 
   final OrdersRepository orders;
@@ -34,6 +35,9 @@ class CheckoutModel extends ChangeNotifier {
 
   /// Where a top-up goes, as typed on the brand's page; null for a code.
   final AccountFormModel? account;
+
+  /// What an eSIM order says about who it is for.
+  final Map<String, String> orderAccount;
 
   CheckoutOptions? options;
   Money credit = Money.zero;
@@ -130,7 +134,7 @@ class CheckoutModel extends ChangeNotifier {
         method: creditCovers ? '' : method?.key ?? '',
         payerIdentifier: payer,
         birthYear: birthYear,
-        account: account?.values ?? const {},
+        account: account?.values ?? orderAccount,
       ),
     );
     busy = false;

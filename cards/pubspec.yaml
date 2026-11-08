@@ -103,6 +103,9 @@ flutter:
     # Steam's symbol (Valve's mark, from ops/catalog/source/marks/steam.svg)
     # for the «ستيم» pill on games played there (shared/pill.dart).
     - assets/brands/
+    # Every country's flag (circle-flags, MIT), for the eSIM pages: baked in, so
+    # a destination shows its flag at once, with no network.
+    - assets/flags/
 
   # The pinned headers' glass (shared/glass_edge.dart).
   shaders:

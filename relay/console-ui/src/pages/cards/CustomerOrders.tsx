@@ -10,7 +10,7 @@ import { Dialog } from "../../components/dialog";
 import { Unavailable } from "../../components/Unavailable";
 import { Phone } from "../../components/cards/Phone";
 
-function StatusBadge({ order }: { order: CardOrder }) {
+export function StatusBadge({ order }: { order: CardOrder }) {
   const status = cardOrderStatus[order.status] ?? { label: order.status, tone: "neutral" as const };
   return <Badge tone={status.tone}>{status.label}</Badge>;
 }
@@ -72,7 +72,7 @@ export function CardOrdersTable({ orders, loading, showCustomer = true }: { orde
   );
 }
 
-function OrderDialog({ order, onClose }: { order: CardOrder; onClose: () => void }) {
+export function OrderDialog({ order, onClose }: { order: CardOrder; onClose: () => void }) {
   const facts: [string, React.ReactNode][] = [
     ["الحالة", <StatusBadge order={order} />],
     ["الزبون", <Link to={`/cards/customers/${order.customer_id}`} onClick={onClose}><Phone value={order.customer_phone} /></Link>],

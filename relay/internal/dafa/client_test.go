@@ -107,6 +107,7 @@ func TestInitiateSendsJSONWithTheKeyAndReadsThePayment(t *testing.T) {
 		UserIdentifier: "912345678",
 		BirthYear:      "1995",
 		CallbackURL:    "https://relay.example/hook",
+		ReturnURL:      "https://cards.example/my-cards/o-1",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -121,7 +122,8 @@ func TestInitiateSendsJSONWithTheKeyAndReadsThePayment(t *testing.T) {
 	}
 	// birthyear must be a string: Dafa refuses a number.
 	want := map[string]any{"provider": "sadad", "amount": "10.000", "user_identifier": "912345678",
-		"birthyear": "1995", "callback_url": "https://relay.example/hook"}
+		"birthyear": "1995", "callback_url": "https://relay.example/hook",
+		"return_url": "https://cards.example/my-cards/o-1"}
 	for key, value := range want {
 		if call.body[key] != value {
 			t.Errorf("body[%s] = %#v, want %#v", key, call.body[key], value)
@@ -142,7 +144,7 @@ func TestInitiateOmitsWhatAMethodDoesNotTake(t *testing.T) {
 		t.Fatal(err)
 	}
 	body := (*calls)[0].body
-	for _, absent := range []string{"user_identifier", "birthyear", "callback_url"} {
+	for _, absent := range []string{"user_identifier", "birthyear", "callback_url", "return_url"} {
 		if _, ok := body[absent]; ok {
 			t.Errorf("%s must be left out when empty: %v", absent, body)
 		}

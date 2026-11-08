@@ -56,18 +56,35 @@ class RelayApi {
     );
   }
 
+  /// [withSession] sends the session when there is one, for a public route
+  /// whose answer can depend on who asks; signed out, it goes without.
   Future<Map<String, dynamic>> get(
     String path, {
     Map<String, String>? query,
     bool signedIn = false,
+    bool withSession = false,
     Map<String, String>? headers,
-  }) => _send('GET', path, query: query, signedIn: signedIn, headers: headers);
+  }) => _send(
+    'GET',
+    path,
+    query: query,
+    signedIn: signedIn,
+    withSession: withSession,
+    headers: headers,
+  );
 
   Future<Map<String, dynamic>> post(
     String path, {
     Object? body,
     bool signedIn = false,
-  }) => _send('POST', path, body: body ?? const {}, signedIn: signedIn);
+    bool withSession = false,
+  }) => _send(
+    'POST',
+    path,
+    body: body ?? const {},
+    signedIn: signedIn,
+    withSession: withSession,
+  );
 
   Future<Map<String, dynamic>> put(
     String path, {
@@ -99,6 +116,7 @@ class RelayApi {
     Map<String, String>? query,
     Object? body,
     bool signedIn = false,
+    bool withSession = false,
     Map<String, String>? headers,
     bool retried = false,
   }) async {
@@ -111,12 +129,17 @@ class RelayApi {
       request.headers['Content-Type'] = 'application/json';
       request.body = jsonEncode(body);
     }
-    if (signedIn) {
+    var sentSession = false;
+    if (signedIn || withSession) {
       final session = await sessions.read();
       if (session == null) {
-        throw const RelayApiException(status: 401, code: 'unauthorized');
+        if (signedIn) {
+          throw const RelayApiException(status: 401, code: 'unauthorized');
+        }
+      } else {
+        request.headers['Authorization'] = 'Bearer ${session.accessToken}';
+        sentSession = true;
       }
-      request.headers['Authorization'] = 'Bearer ${session.accessToken}';
     }
     final http.Response response;
     try {
@@ -131,17 +154,20 @@ class RelayApi {
       return decoded;
     }
     final code = decoded['code'] as String? ?? 'http_${response.statusCode}';
-    if (signedIn &&
+    if (sentSession &&
         !retried &&
         response.statusCode == 401 &&
         code == 'token_expired') {
-      if (await _refresh()) {
+      // A public route asked once more without a session that could not be
+      // renewed: it was signed out, and is answered as anyone.
+      if (await _refresh() || (withSession && !signedIn)) {
         return _send(
           method,
           path,
           query: query,
           body: body,
           signedIn: signedIn,
+          withSession: withSession,
           headers: headers,
           retried: true,
         );

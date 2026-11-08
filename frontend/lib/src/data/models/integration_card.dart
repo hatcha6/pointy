@@ -884,6 +884,7 @@ class IntegrationChargeResult {
     this.receipt = const {},
     this.testMode = false,
     this.refundAmount,
+    this.refundToAccount = false,
     this.inProgress = false,
   });
 
@@ -947,6 +948,10 @@ class IntegrationChargeResult {
   final double? refundAmount;
   bool get isRefunded => refundAmount != null;
 
+  /// The line was sold on account (a staff account, a customer's tab) and
+  /// came off what is owed: no money was taken, so none is handed back.
+  final bool refundToAccount;
+
   factory IntegrationChargeResult.fromJson(Map<String, Object?> json) {
     return IntegrationChargeResult(
       fulfillment: int.tryParse(json['fulfillment']?.toString() ?? ''),
@@ -970,6 +975,7 @@ class IntegrationChargeResult {
       refundAmount: json['refunded'] == true
           ? double.tryParse(json['refund_amount']?.toString() ?? '')
           : null,
+      refundToAccount: json['refund_to_account'] == true,
       inProgress: json['in_progress'] == true,
     );
   }

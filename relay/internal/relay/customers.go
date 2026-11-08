@@ -226,6 +226,8 @@ func (s HTTPServer) handleCustomerRoutes(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	switch {
+	case strings.HasPrefix(path, "/v1/customers/esim"):
+		s.routeCustomerESIM(w, r, store, path)
 	case path == "/v1/customers/catalog" && r.Method == http.MethodGet:
 		s.handleCustomerCatalog(w, r)
 	case strings.HasPrefix(path, "/v1/customers/images/") && r.Method == http.MethodGet:
@@ -236,6 +238,8 @@ func (s HTTPServer) handleCustomerRoutes(w http.ResponseWriter, r *http.Request)
 		s.handleCustomerDafaWebhook(w, r, strings.TrimPrefix(path, customerWebhookPrefix))
 	case path == customerCardReturnPath && (r.Method == http.MethodGet || r.Method == http.MethodPost):
 		handleCustomerCardReturn(w, r)
+	case path == customerPaymentReturnPath && r.Method == http.MethodGet:
+		handleCustomerPaymentReturn(w, r)
 	case path == "/v1/customers/orders" && r.Method == http.MethodPost:
 		s.withCustomer(w, r, store, func(customer control.Customer, _ control.CustomerSession) {
 			s.handleCustomerOrderCreate(w, r, customer)
@@ -278,6 +282,12 @@ func (s HTTPServer) handleCustomerRoutes(w http.ResponseWriter, r *http.Request)
 				s.customerInternalError(w, "customer delete failed", err)
 				return
 			}
+			if esims, ok := s.Store.(control.CustomerESIMStore); ok {
+				if err := esims.ForgetCustomerESIMs(r.Context(), customer.ID); err != nil {
+					s.logger().Warn("forgetting a deleted customer's eSIMs failed", "customer_id", customer.ID, "error", err)
+				}
+			}
+			s.forgetCustomerReports(r.Context(), customer.ID)
 			s.logger().Info("customer deleted their account", "customer_id", customer.ID)
 			w.WriteHeader(http.StatusNoContent)
 		})
@@ -349,7 +359,7 @@ func (s HTTPServer) handleCustomerRoutes(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-// routeCustomerOrder serves /v1/customers/orders/{id}[/confirm|/cancel|/card|/card/complete].
+// routeCustomerOrder serves /v1/customers/orders/{id}[/confirm|/cancel|/card|/card/complete|/report].
 func (s HTTPServer) routeCustomerOrder(w http.ResponseWriter, r *http.Request, store control.CustomerStore, rest string) {
 	id, action, _ := strings.Cut(rest, "/")
 	if id == "" {
@@ -376,6 +386,10 @@ func (s HTTPServer) routeCustomerOrder(w http.ResponseWriter, r *http.Request, s
 	case action == "card/complete" && r.Method == http.MethodPost:
 		s.withCustomer(w, r, store, func(customer control.Customer, _ control.CustomerSession) {
 			s.handleCustomerOrderCardComplete(w, r, customer, id)
+		})
+	case action == "report" && r.Method == http.MethodPost:
+		s.withCustomer(w, r, store, func(customer control.Customer, _ control.CustomerSession) {
+			s.handleCustomerOrderReport(w, r, customer, id)
 		})
 	default:
 		writeNotFound(w)

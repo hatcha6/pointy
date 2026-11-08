@@ -16,6 +16,7 @@ void main() {
     required String provider,
     String errorCode = 'provider_error',
     String? refundAmount,
+    bool toAccount = false,
   }) => IntegrationChargeResult.fromJson({
     'fulfillment': 1,
     'order_line': 7,
@@ -27,6 +28,7 @@ void main() {
     'error_code': errorCode,
     'refunded': refundAmount != null,
     'refund_amount': refundAmount,
+    'refund_to_account': toAccount,
   });
 
   Future<void> open(
@@ -58,6 +60,27 @@ void main() {
     expect(
       find.textContaining('المبلغ المُعاد للزبون: 3838.00'),
       findsOneWidget,
+    );
+  });
+
+  testServices('a refused card sold on account is not handed back in cash', (
+    tester,
+  ) async {
+    // Annaseem 2026-11-05: a cashier's own cards on their staff account.
+    await open(tester, [
+      refused(provider: 'qareeb', refundAmount: '50.00', toAccount: true),
+      refused(provider: 'qareeb', refundAmount: '25.00', toAccount: true),
+    ]);
+
+    expect(find.textContaining('حُذف 50.00'), findsOneWidget);
+    expect(
+      find.textContaining('من الحساب الآجل، ولا يُعاد شيء نقداً'),
+      findsNWidgets(2),
+    );
+    expect(find.textContaining('أعِد'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('recharge_outcome_refund_total')),
+      findsNothing,
     );
   });
 

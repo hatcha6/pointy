@@ -1293,6 +1293,87 @@ CREATE INDEX IF NOT EXISTS relay_customer_credit_entries_campaign_idx
 ALTER TABLE relay_customer_orders ADD COLUMN IF NOT EXISTS account jsonb NOT NULL DEFAULT '{}'::jsonb;
 `,
 	},
+	{
+		version: 41,
+		name:    "daftar cards: eSIMs and the eSIM shelf's catalog",
+		sql: `
+-- A customer's eSIM after its order: whose it is, the plan as sold, the usage
+-- as last read. What installs it stays with the supplier. New tables only:
+-- older relays never read them.
+CREATE TABLE IF NOT EXISTS relay_customer_esims (
+	iccid text PRIMARY KEY,
+	customer_id text NOT NULL,
+	order_id text NOT NULL,
+	package_id text NOT NULL,
+	title text NOT NULL DEFAULT '',
+	data text NOT NULL DEFAULT '',
+	days integer NOT NULL DEFAULT 0,
+	operator text NOT NULL DEFAULT '',
+	destination text NOT NULL DEFAULT '',
+	destination_name text NOT NULL DEFAULT '',
+	country text NOT NULL DEFAULT '',
+	image text NOT NULL DEFAULT '',
+	unlimited boolean NOT NULL DEFAULT false,
+	rechargeable boolean NOT NULL DEFAULT true,
+	label text NOT NULL DEFAULT '',
+	gift boolean NOT NULL DEFAULT false,
+	simulated boolean NOT NULL DEFAULT false,
+	test_mode boolean NOT NULL DEFAULT false,
+	usage_status text NOT NULL DEFAULT '',
+	remaining_mb integer NOT NULL DEFAULT 0,
+	total_mb integer NOT NULL DEFAULT 0,
+	expires_at timestamptz,
+	usage_at timestamptz,
+	created_at timestamptz NOT NULL,
+	updated_at timestamptz NOT NULL
+);
+CREATE INDEX IF NOT EXISTS relay_customer_esims_customer ON relay_customer_esims (customer_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS relay_customer_esims_order ON relay_customer_esims (order_id);
+-- One row per low-data alert told to a customer: Airalo may repeat a delivery.
+CREATE TABLE IF NOT EXISTS relay_customer_esim_notices (
+	iccid text NOT NULL REFERENCES relay_customer_esims (iccid) ON DELETE CASCADE,
+	level text NOT NULL,
+	package_name text NOT NULL,
+	sent_at timestamptz NOT NULL,
+	PRIMARY KEY (iccid, level, package_name)
+);
+-- The shelf's catalog, synced hourly, shared by every node.
+CREATE TABLE IF NOT EXISTS relay_esim_catalog (
+	id integer PRIMARY KEY CHECK (id = 1),
+	version text NOT NULL,
+	document text NOT NULL,
+	synced_at timestamptz NOT NULL
+);
+`,
+	},
+	{
+		version: 42,
+		name:    "daftar cards: customers reporting a problem with an order",
+		sql: `
+-- A customer's report about one of their orders, and the operator's reply.
+-- New table only: older relays never read it. One open report per order.
+CREATE TABLE IF NOT EXISTS relay_customer_order_reports (
+	id text PRIMARY KEY,
+	order_id text NOT NULL,
+	customer_id text NOT NULL,
+	reason text NOT NULL,
+	note text NOT NULL DEFAULT '',
+	status text NOT NULL DEFAULT 'open',
+	reply text NOT NULL DEFAULT '',
+	resolved_by text NOT NULL DEFAULT '',
+	created_at timestamptz NOT NULL,
+	resolved_at timestamptz
+);
+CREATE UNIQUE INDEX IF NOT EXISTS relay_customer_order_reports_open
+	ON relay_customer_order_reports (order_id) WHERE status = 'open';
+CREATE INDEX IF NOT EXISTS relay_customer_order_reports_recent
+	ON relay_customer_order_reports (status, created_at DESC);
+CREATE INDEX IF NOT EXISTS relay_customer_order_reports_order
+	ON relay_customer_order_reports (order_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS relay_customer_order_reports_customer
+	ON relay_customer_order_reports (customer_id);
+`,
+	},
 }
 
 // migrationsAdvisoryLockKey serializes concurrent migrators (e.g. autoscaled

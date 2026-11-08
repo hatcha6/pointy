@@ -685,6 +685,41 @@ func runServer(args []string) error {
 		envString("POINTY_RELAY_FAZER_STEAM_FEE_PERCENT", ""),
 		"what a FazerCards Steam wallet top-up costs over its face value, in percent, as the account's plan charges it; empty: Steam top-ups are not sold",
 	)
+	airaloClientID := flags.String(
+		"airalo-client-id",
+		envString("POINTY_RELAY_AIRALO_CLIENT_ID", ""),
+		"the company's Airalo Partner API client id; with the secret, turns on the card app's eSIM shelf",
+	)
+	airaloClientSecret := flags.String(
+		"airalo-client-secret",
+		envString("POINTY_RELAY_AIRALO_CLIENT_SECRET", ""),
+		"the company's Airalo Partner API client secret; also what Airalo's webhooks are signed with",
+	)
+	airaloBaseURL := flags.String(
+		"airalo-url",
+		envString("POINTY_RELAY_AIRALO_URL", ""),
+		"Airalo's Partner API host (empty: https://partners-api.airalo.com)",
+	)
+	airaloBrand := flags.String(
+		"airalo-brand",
+		envString("POINTY_RELAY_AIRALO_BRAND", ""),
+		"the brand (Partner Platform, brand settings) a shared eSIM's page shows; empty: unbranded",
+	)
+	airaloSandbox := flags.Bool(
+		"airalo-sandbox",
+		envBool("POINTY_RELAY_AIRALO_SANDBOX", false),
+		"the Airalo account is in Sandbox mode: its orders are test money on the books. Sandbox and production share a host and credentials, so only this flag says which",
+	)
+	airaloRRPPercent := flags.String(
+		"airalo-rrp-percent",
+		envString("POINTY_RELAY_AIRALO_RRP_PERCENT", "100"),
+		"the share of Airalo's recommended retail price the eSIM shelf sells at, in percent; the card margin on the net cost is always the floor",
+	)
+	airaloWebhookURL := flags.String(
+		"airalo-webhook-url",
+		envString("POINTY_RELAY_AIRALO_WEBHOOK_URL", ""),
+		"this relay's public address for Airalo's webhooks (…/v1/customers/esim/webhook); empty: never opted in, so no low-data alerts",
+	)
 	reloadlyRequestTimeout := flags.Duration(
 		"reloadly-request-timeout",
 		envDuration("POINTY_RELAY_RELOADLY_REQUEST_TIMEOUT", 45*time.Second),
@@ -1502,6 +1537,20 @@ func runServer(args []string) error {
 		logger.Warn(warning)
 	}
 
+	// Airalo: the card app's eSIM shelf.
+	esimConfig, airaloWarnings := attachAiraloSupplier(&voucherConfig, airaloSettings{
+		ClientID:     *airaloClientID,
+		ClientSecret: *airaloClientSecret,
+		BaseURL:      *airaloBaseURL,
+		Brand:        *airaloBrand,
+		Sandbox:      *airaloSandbox,
+		RRPPercent:   *airaloRRPPercent,
+		WebhookURL:   *airaloWebhookURL,
+	}, &http.Client{Timeout: 60 * time.Second, Transport: outboundTransport}, logger)
+	for _, warning := range airaloWarnings {
+		logger.Warn(warning)
+	}
+
 	// The company's alert channel; built after the suppliers so their clients
 	// can be watched, and before the wallet config is handed out so every
 	// top-up path (requests, webhook, reconciler) announces payments.
@@ -1605,6 +1654,7 @@ func runServer(args []string) error {
 		MoamalatSealer:       moamalatSealer,
 		Balances:             balanceWatcher,
 		Vouchers:             voucherConfig,
+		ESIM:                 esimConfig,
 		VoucherCache:         &relayserver.VoucherCatalogCache{},
 		VoucherSettingsCache: &relayserver.VoucherSettingsCache{},
 		Services:             servicesService,
@@ -1872,6 +1922,11 @@ func runServer(args []string) error {
 				Logger:   logger,
 			}
 			go offerSync.Run(ctx)
+		}
+		// The eSIM shelf's catalog, an hour fresh, and Airalo's webhooks opted in.
+		if esimConfig.Client != nil {
+			esimSync := &relayserver.ESIMCatalogSync{Server: baseHTTPHandler, Logger: logger}
+			go esimSync.Run(ctx)
 		}
 		// FazerCards' connection kept open between customers: see
 		// FazerSupplier.KeepWarm.

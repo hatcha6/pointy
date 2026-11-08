@@ -1,9 +1,10 @@
 import '../../dependencies.dart';
+import 'events.dart';
 
 /// Joins analytics to the signed-in customer: their customer id once they
 /// sign in (or at launch, already signed in), and a fresh nobody once they
 /// sign out. Only a sign-out starts over, not a launch signed out, so a
-/// visitor stays one visitor.
+/// visitor stays one visitor. Where they heard of the app goes with them.
 void followCustomer(CardsDependencies dependencies) {
   final session = dependencies.auth.session;
   final analytics = dependencies.analytics;
@@ -17,9 +18,17 @@ void followCustomer(CardsDependencies dependencies) {
       analytics.share(sharing);
     }
   });
+  final attribution = dependencies.attribution;
+  void join(String customer) {
+    analytics.identify(customer);
+    if (attribution.heardFrom.isNotEmpty) {
+      analytics.heardFrom(attribution.heardFrom);
+    }
+  }
+
   var known = session.value?.customerId;
   if (known != null) {
-    analytics.identify(known);
+    join(known);
   }
   session.addListener(() {
     final customer = session.value?.customerId;
@@ -28,8 +37,9 @@ void followCustomer(CardsDependencies dependencies) {
     }
     if (customer == null) {
       analytics.reset();
+      attribution.signedOut();
     } else {
-      analytics.identify(customer);
+      join(customer);
     }
     known = customer;
   });

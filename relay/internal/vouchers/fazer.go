@@ -40,6 +40,8 @@ const (
 	// DefaultFazerCacheTTL is how long a category's offers, read for the offer
 	// sync, are reused.
 	DefaultFazerCacheTTL = 10 * time.Minute
+	// fazerOfferReaders is how many categories the offer sync reads at once.
+	fazerOfferReaders = 4
 	// fazerSettle is how long Buy waits for an order to finish before
 	// answering pending: most codes and top-ups take seconds, and a code in
 	// hand now saves the shop a read back.
@@ -539,9 +541,18 @@ func (s *FazerSupplier) OffersFor(ctx context.Context, wanted []Ref) ([]Offer, e
 	s.readBalance(ctx)
 	now := s.now().UTC()
 	seen := map[string]bool{}
-	offers := make([]Offer, 0, len(wanted))
-	var firstErr error
-	failed := 0
+	type priced struct {
+		ref   Ref
+		fazer fazerRef
+		offer Offer
+		found bool
+		err   error
+	}
+	var rows []*priced
+	// One read per category, so a category's refs stay together: two readers
+	// of one category would each miss the cache and read it twice.
+	var groups [][]*priced
+	groupOf := map[string]int{}
 	for _, ref := range wanted {
 		if ref.Supplier != "" && ref.Supplier != SupplierFazer || seen[ref.ID] {
 			continue
@@ -551,18 +562,54 @@ func (s *FazerSupplier) OffersFor(ctx context.Context, wanted []Ref) ([]Offer, e
 		if err != nil {
 			continue
 		}
-		offer, found, err := s.price(ctx, parsed)
-		if err != nil {
+		row := &priced{ref: ref, fazer: parsed}
+		rows = append(rows, row)
+		name := parsed.Product + "/" + parsed.Category
+		index, known := groupOf[name]
+		if !known {
+			index = len(groups)
+			groupOf[name] = index
+			groups = append(groups, nil)
+		}
+		groups[index] = append(groups[index], row)
+	}
+	// The catalog names hundreds of categories and the offer sync has a deadline:
+	// read one after another, the last of them would be read as no longer sold.
+	work := make(chan []*priced)
+	var readers sync.WaitGroup
+	for range fazerOfferReaders {
+		readers.Add(1)
+		go func() {
+			defer readers.Done()
+			for group := range work {
+				for _, row := range group {
+					row.offer, row.found, row.err = s.price(ctx, row.fazer)
+				}
+			}
+		}()
+	}
+	for _, group := range groups {
+		work <- group
+	}
+	close(work)
+	readers.Wait()
+
+	offers := make([]Offer, 0, len(rows))
+	var firstErr error
+	failed := 0
+	for _, row := range rows {
+		if row.err != nil {
 			failed++
 			if firstErr == nil {
-				firstErr = err
+				firstErr = row.err
 			}
 			continue
 		}
-		if !found {
+		if !row.found {
 			continue
 		}
-		offer.Ref, offer.Currency, offer.SyncedAt = ref.ID, fazerCurrency, now
+		offer := row.offer
+		offer.Ref, offer.Currency, offer.SyncedAt = row.ref.ID, fazerCurrency, now
 		offers = append(offers, offer)
 	}
 	if failed > 0 && len(offers) == 0 {

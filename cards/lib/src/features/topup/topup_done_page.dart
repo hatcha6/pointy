@@ -2,58 +2,44 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:pointy_brand/pointy_brand.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../l10n/generated/app_localizations.dart';
 import '../../core/analytics/analytics.dart';
-import '../../core/support.dart';
-import '../../data/models/account_target.dart';
 import '../../data/models/catalog.dart';
 import '../../data/models/order.dart';
 import '../../design/cards_tokens.dart';
 import '../../shared/art_palette.dart';
 import '../../shared/card_art.dart';
 import '../../shared/cards_scope.dart';
-import '../../shared/grouped.dart';
 import '../../shared/haptics.dart';
-import '../../shared/money_text.dart';
 import '../../shared/name_text.dart';
 import '../../shared/side_back.dart';
 import '../../shared/success_seal.dart';
 import '../brand/brand_page.dart';
 import '../links/cards_link.dart';
+import '../orders/order_report_sheet.dart';
+import 'topup_receipt.dart';
 import 'topup_text.dart';
 
 /// A top-up that arrived: there is no code to turn over, so the moment is
 /// the receipt itself. A seal, «تمّ الشحن», the card, whose account it went
 /// to (field by field, as the game named them), what to do now, and the way
-/// to top up again. Opened from «كروتي» it is the same receipt, without the
-/// celebration.
+/// to top up again. Opened later from «كروتي», a top-up is [TopUpOrderPage].
 class TopUpDonePage extends StatefulWidget {
-  const TopUpDonePage({
-    super.key,
-    required this.order,
-    this.brand,
-    this.fromHistory = false,
-  });
+  const TopUpDonePage({super.key, required this.order, this.brand});
 
   final CardOrder order;
   final CardBrand? brand;
-  final bool fromHistory;
 
   static Future<void> open(
     BuildContext context, {
     required CardOrder order,
     CardBrand? brand,
-    bool fromHistory = false,
     bool replace = false,
   }) {
     final route = MaterialPageRoute<void>(
       settings: screenSettings('topped_up'),
-      builder: (_) =>
-          TopUpDonePage(order: order, brand: brand, fromHistory: fromHistory),
+      builder: (_) => TopUpDonePage(order: order, brand: brand),
     );
     final navigator = Navigator.of(context);
     return replace ? navigator.pushReplacement(route) : navigator.push(route);
@@ -104,7 +90,7 @@ class _TopUpDonePageState extends State<TopUpDonePage>
       return;
     }
     final dependencies = CardsScope.of(context);
-    if (widget.fromHistory || MediaQuery.of(context).disableAnimations) {
+    if (MediaQuery.of(context).disableAnimations) {
       _seal.value = 1;
     } else {
       Haptics.success();
@@ -148,12 +134,17 @@ class _TopUpDonePageState extends State<TopUpDonePage>
     }
   }
 
-  Future<void> _help() async {
+  Future<void> _report() async {
     final l10n = AppLocalizations.of(context);
-    final url = Support.whatsAppUrl.replace(
-      queryParameters: {'text': l10n.topUpHelpMessage(widget.order.id)},
+    final messenger = ScaffoldMessenger.of(context);
+    final report = await showOrderReportSheet(
+      context,
+      widget.order,
+      kind: kindKey(_brand?.target?.kind),
     );
-    await launchUrl(url, mode: LaunchMode.externalApplication);
+    if (report != null) {
+      messenger.showSnackBar(SnackBar(content: Text(l10n.reportSent)));
+    }
   }
 
   @override
@@ -171,20 +162,18 @@ class _TopUpDonePageState extends State<TopUpDonePage>
     final order = widget.order;
     final target = brand?.target;
     final kind = kindKey(target?.kind);
-    final history = widget.fromHistory;
     final width = math.min(MediaQuery.sizeOf(context).width * 0.64, 300.0);
     return SideBack(
       edgeToEdge: true,
-      close: !history,
-      tooltip: history ? null : l10n.closeAction,
-      onPressed: history ? null : _done,
+      close: true,
+      tooltip: l10n.closeAction,
+      onPressed: _done,
       child: Scaffold(
         extendBodyBehindAppBar: true,
         appBar: AppBar(
           backgroundColor: Colors.transparent,
-          title: history ? NameText(order.name, maxLines: 1) : null,
           automaticallyImplyLeading: !SideBack.active(context),
-          leading: history || SideBack.active(context)
+          leading: SideBack.active(context)
               ? null
               : IconButton(
                   tooltip: l10n.closeAction,
@@ -241,33 +230,26 @@ class _TopUpDonePageState extends State<TopUpDonePage>
                       ),
                     ],
                     const SizedBox(height: CardsSpace.xl),
-                    _Receipt(order: order, target: target, player: _player),
+                    TopUpReceipt(order: order, target: target, player: _player),
                     const SizedBox(height: CardsSpace.lg),
-                    _WhatNext(kind: kind, icon: kindIcon(target?.kind)),
+                    TopUpWhatNext(kind: kind, icon: kindIcon(target?.kind)),
                     const SizedBox(height: CardsSpace.xl),
-                    if (!history)
-                      FilledButton(
-                        onPressed: _done,
-                        child: Text(l10n.doneAction),
-                      ),
+                    FilledButton(
+                      onPressed: _done,
+                      child: Text(l10n.doneAction),
+                    ),
                     if (brand != null && brand.items.isNotEmpty) ...[
-                      if (!history) const SizedBox(height: CardsSpace.sm),
-                      if (history)
-                        FilledButton(
-                          onPressed: () => _again(brand),
-                          child: Text(l10n.topUpAgain(kind)),
-                        )
-                      else
-                        OutlinedButton(
-                          onPressed: () => _again(brand),
-                          child: Text(l10n.topUpAgain(kind)),
-                        ),
+                      const SizedBox(height: CardsSpace.sm),
+                      OutlinedButton(
+                        onPressed: () => _again(brand),
+                        child: Text(l10n.topUpAgain(kind)),
+                      ),
                     ],
                     const SizedBox(height: CardsSpace.sm),
                     TextButton.icon(
-                      onPressed: _help,
-                      icon: const Icon(Icons.support_agent_rounded, size: 18),
-                      label: Text(l10n.topUpHelp),
+                      onPressed: _report,
+                      icon: const Icon(Icons.flag_outlined, size: 18),
+                      label: Text(l10n.reportProblem),
                     ),
                   ],
                 ),
@@ -280,153 +262,9 @@ class _TopUpDonePageState extends State<TopUpDonePage>
   }
 }
 
-/// The receipt: the account part by part under the game's own labels, the
-/// player, what was paid, when, and the order's number to quote.
-class _Receipt extends StatelessWidget {
-  const _Receipt({
-    required this.order,
-    required this.target,
-    required this.player,
-  });
-
-  final CardOrder order;
-  final AccountTarget? target;
-  final String player;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final local = MaterialLocalizations.of(context);
-    final when = (order.completedAt ?? order.paidAt ?? order.createdAt)
-        ?.toLocal();
-    final values = order.accountValues;
-    final fields = target?.fields
-        .where((f) => (values[f.key] ?? '').isNotEmpty)
-        .toList();
-    return Grouped(
-      children: [
-        if (fields != null && fields.isNotEmpty)
-          for (final field in fields)
-            _Row(
-              label: field.label,
-              value: _shown(field, values[field.key]!),
-              ltr: !field.isSelect,
-            )
-        else if (order.account.isNotEmpty)
-          _Row(label: l10n.receiptTo, value: order.account, ltr: true),
-        if (player.isNotEmpty)
-          _Row(label: l10n.receiptPlayer, value: player, ltr: true),
-        _Row(label: l10n.receiptPaid, value: formatMoney(l10n, order.total)),
-        if (when != null)
-          _Row(
-            label: l10n.receiptWhen,
-            // The app's digits are 0–9 throughout; the date names come in
-            // the reader's language.
-            value: asciiDigits(
-              '${local.formatMediumDate(when)} · '
-              '${local.formatTimeOfDay(TimeOfDay.fromDateTime(when))}',
-            ),
-          ),
-        _Row(
-          label: l10n.receiptOrder,
-          value: order.id,
-          ltr: true,
-          small: true,
-          onTap: () {
-            Clipboard.setData(ClipboardData(text: order.id));
-            Haptics.select();
-            ScaffoldMessenger.of(context)
-                .showSnackBar(SnackBar(content: Text(l10n.orderIdCopied)));
-          },
-        ),
-      ],
-    );
-  }
-
-  /// A value as the receipt shows it: a choice by its label, and an invite
-  /// link by its friend code alone (its token is what lets anyone in).
-  String _shown(TargetField field, String value) {
-    if (field.isSelect) {
-      return field.optionLabel(value);
-    }
-    if (target?.kind == TargetKind.steamInvite) {
-      final match = RegExp(r's\.team/p/[^/\s]+').firstMatch(value);
-      return match?.group(0) ?? value;
-    }
-    if (target?.kind == TargetKind.telegram) {
-      return '@$value';
-    }
-    return value;
-  }
-}
-
-class _Row extends StatelessWidget {
-  const _Row({
-    required this.label,
-    required this.value,
-    this.ltr = false,
-    this.small = false,
-    this.onTap,
-  });
-
-  final String label;
-  final String value;
-  final bool ltr;
-  final bool small;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final style = small
-        ? theme.textTheme.bodySmall
-        : theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600);
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: CardsSpace.lg,
-          vertical: CardsSpace.md,
-        ),
-        child: Row(
-          children: [
-            Text(
-              label,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(width: CardsSpace.lg),
-            Expanded(
-              child: Text(
-                value,
-                // Every value against the row's far edge, an ID's too.
-                textAlign: Directionality.of(context) == TextDirection.rtl
-                    ? TextAlign.left
-                    : TextAlign.right,
-                textDirection: ltr ? TextDirection.ltr : null,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: style == null ? null : PointyTypography.numeric(style),
-              ),
-            ),
-            if (onTap != null) ...[
-              const SizedBox(width: CardsSpace.sm),
-              Icon(
-                Icons.copy_rounded,
-                size: 16,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _WhatNext extends StatelessWidget {
-  const _WhatNext({required this.kind, required this.icon});
+/// What to do now that the top-up went through.
+class TopUpWhatNext extends StatelessWidget {
+  const TopUpWhatNext({super.key, required this.kind, required this.icon});
 
   final String kind;
   final IconData icon;

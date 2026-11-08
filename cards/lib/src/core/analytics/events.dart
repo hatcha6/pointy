@@ -112,6 +112,9 @@ extension CardsEvents on Analytics {
     'has_code': hasCode,
   });
 
+  /// «من أين سمعت عنا؟» as a fact about the customer, not only an event.
+  void heardFrom(String answer) => setPersonOnce({'heard_from': answer});
+
   void campaignCodeChecked({required bool valid}) =>
       capture('campaign_code_checked', {'valid': valid});
 

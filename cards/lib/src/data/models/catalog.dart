@@ -115,6 +115,7 @@ class CardBrand {
     this.webOnly = false,
     this.platform = '',
     this.target,
+    this.flagCountry = '',
   });
 
   factory CardBrand.fromJson(Map<String, dynamic> json) => CardBrand(
@@ -138,6 +139,10 @@ class CardBrand {
         ? AccountTarget.fromJson(json['target'] as Map<String, dynamic>)
         : null,
   );
+
+  /// An eSIM's destination (ISO code; empty for a region): its card is drawn
+  /// with this flag. Never comes from the catalog.
+  final String flagCountry;
 
   final String key;
   final String name;
@@ -178,10 +183,14 @@ class CardBrand {
 
   bool get anyAvailable => items.any((item) => item.available);
 
-  /// The cheapest price among the sellable cards (all, when none is).
+  /// The cheapest price among the sellable cards (all, when none is). Sold
+  /// per country or region, the one its page opens on: a cheaper price in a
+  /// store the buyer cannot use says nothing.
   Money? get fromPrice {
-    final available = items.where((item) => item.available).toList();
-    return (available.isEmpty ? items : available)
+    final first = items.firstOrNull?.country ?? '';
+    final shown = items.where((item) => item.country == first).toList();
+    final available = shown.where((item) => item.available).toList();
+    return (available.isEmpty ? shown : available)
         .map((item) => item.price)
         .fold<Money?>(
           null,

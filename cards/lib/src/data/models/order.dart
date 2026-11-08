@@ -1,4 +1,6 @@
+import 'order_report.dart';
 import '../../core/money.dart';
+import 'esim.dart';
 import 'json.dart';
 
 /// A customer's card order as the relay answers it.
@@ -26,6 +28,8 @@ class CardOrder {
     required this.createdAt,
     this.paidAt,
     this.completedAt,
+    this.wait,
+    this.report,
     this.account = '',
     this.accountValues = const {},
     this.toAccount = false,
@@ -54,6 +58,13 @@ class CardOrder {
     createdAt: readTime(json, 'created_at'),
     paidAt: readTime(json, 'paid_at'),
     completedAt: readTime(json, 'completed_at'),
+    wait: readInt(json, 'wait_seconds') > 0
+        ? Duration(seconds: readInt(json, 'wait_seconds'))
+        : null,
+    report: switch (json['report']) {
+      final Map<String, dynamic> report => OrderReport.fromJson(report),
+      _ => null,
+    },
     account: readString(json, 'account'),
     accountValues: {
       for (final MapEntry(:key, :value) in readMap(
@@ -64,6 +75,13 @@ class CardOrder {
     },
     toAccount: readString(json, 'delivery') == 'account',
   );
+
+  /// An eSIM or a top-up of one: no code to show, its own pages.
+  bool get isEsim => EsimItems.isEsim(itemKey);
+
+  /// An eSIM order's destination flag: its brand reads "esim:TR".
+  String get esimCountry =>
+      brandKey.startsWith('esim:') ? brandKey.substring(5) : '';
 
   final String id;
   final OrderStatus status;
@@ -95,6 +113,14 @@ class CardOrder {
 
   /// When it was delivered (or ended without a card).
   final DateTime? completedAt;
+
+  /// How long the waiting page asks the customer to stay, from the relay,
+  /// which pushes an ending only past it. Null from an older relay.
+  final Duration? wait;
+
+  /// The customer's latest report about this order, with our reply once we
+  /// looked at it; null when they never reported it.
+  final OrderReport? report;
 
   /// Whose account a top-up went to, on one line, as the customer typed it.
   final String account;

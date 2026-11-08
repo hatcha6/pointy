@@ -58,7 +58,7 @@ def _visible(user):
     if not user_has_full_visibility(user):
         rows = rows.filter(order_line__order__register_session__owner=user)
     return rows.select_related("order_line__order", "order_line__order__customer").prefetch_related(
-        "order_line__adjustment_lines"
+        "order_line__adjustment_lines__adjustment"
     )
 
 
@@ -100,13 +100,23 @@ def settle(user, line_ids, *, now=None) -> list[dict]:
 
 def _refund(row):
     """What was given back for the line because it was not delivered; ``None``
-    when nothing was (a credit sale, a drawer already closed)."""
+    when nothing was (a drawer already closed)."""
     from apps.sales.services import line_refund_amount
 
     line = row.order_line
     if row.status != IntegrationFulfillment.Status.FAILED or not list(line.adjustment_lines.all()):
         return None
     return line_refund_amount(line, line.quantity)
+
+
+def _refunded_to_account(row) -> bool:
+    """Given back off a credit sale's debt: nobody hands that money back."""
+    from apps.payments.models import Payment
+
+    return any(
+        adjustment_line.adjustment.refund_method == Payment.Method.ACCOUNT_CREDIT
+        for adjustment_line in row.order_line.adjustment_lines.all()
+    )
 
 
 def payload(row, *, with_cost: bool, now) -> dict:
@@ -147,4 +157,5 @@ def payload(row, *, with_cost: bool, now) -> dict:
         "receipt": printed_receipt(row) if state == STATE_SUCCEEDED else {},
         "refunded": refund is not None,
         "refund_amount": refund,
+        "refund_to_account": refund is not None and _refunded_to_account(row),
     }

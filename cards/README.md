@@ -188,6 +188,39 @@ and every tap answers. The rules live in `src/design/`:
     تحديث» date with any change, and publish the same text on the web for
     the store listings.
 
+## eSIMs
+
+Sold from Airalo through the relay (`relay/README.md`, «Card App eSIMs»), in
+`lib/src/features/esim/`. The shelf hides itself until the relay says eSIMs are on
+sale. Go-live steps: [`ESIM_GO_LIVE.md`](ESIM_GO_LIVE.md).
+
+- **Install:** `EsimBridge.swift` and `MainActivity.kt` (channel
+  `ly.dftr.cards/esim`) open Apple's universal link (iOS 17.4+) or Google's
+  activation link (Android 10+ with Play services), so the system shows its own
+  sheet. Adding a plan from inside the app needs a carrier entitlement resellers do
+  not get. Older systems and the web get a QR and the details to type.
+  The channel opens only `esimsetup.apple.com` / `esimsetup.android.com`. On Android,
+  `direct_install` is true only if something other than a browser takes the link
+  (Play services' `EsimSetupProvisioningActivity`); otherwise the page shows the QR.
+  To see what the channel answers on a device: `flutter run -t lib/dev/esim_native_probe.dart`.
+- **Does this phone take eSIMs?** `esimSupportOf` weighs the phone's own word
+  against Airalo's list. It warns and never blocks: a phone that looks unable starts
+  on «لشخص آخر», and the customer can change that.
+- **The eSIM page has one job at a time** (`esim_page_mode.dart`): install, send,
+  in use, low or ended, each with one button pinned at the bottom. An "active" status
+  alone does not count as installed: the customer's word or data used does.
+- **Flags and card art are in the app:** `assets/flags/` (circle-flags, MIT) and
+  `shared/esim_card_art.dart`, so the checkout, order page and destination pages
+  draw at once and offline. A region or the world gets a globe. Any page taking a
+  `CardBrand` with category `esim` draws this art.
+- **For someone else:** the eSIMs Cloud link and its code go through the share sheet.
+- **Previews:** `esim`, `esim-destination`, `esim-plan`, `esim-install`, `esim-gift`,
+  `esim-low`, `esim-active`, `esim-ended`, `esim-checkout`, `esim-preparing`; `&phone=none` is a phone without eSIM, `&phone=old` one too old to
+  install from a link.
+  `&duo=1` adds the iPhone Duo's side column for a browser sized 466 x 678 (closed) or
+  951 x 669 (open on its side); confirm on the simulator. `STORE_SCREEN` in `lib/dev/store_shots.dart`
+  takes the same `esim*` names on the Duo simulator.
+
 Previews: `make cards-preview`, then `?screen=board`, or any single screen:
 `home`, `brand`, `brand-itunes`, `sign-in`, `sign-in-code`, `checkout`,
 `wallet-code`, `preparing`, `refunded`, `reveal`, `my-cards`, `account`,

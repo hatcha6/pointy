@@ -3,8 +3,10 @@ package relay
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -236,8 +238,32 @@ func TestCustomerOrderPaidWithSadadIsDelivered(t *testing.T) {
 		t.Fatalf("books = %+v %v", months, err)
 	}
 	month := months[0]
-	if month.Revenue[control.FinanceServiceCardsApp] != "20.000" || len(month.CompanyCost) != 0 || month.SupplierCost["USD"] != "9.700" {
+	// Its cost is the app's own, not the shops' cards': a card bought for a
+	// customer once made the shops' line read as a loss and the app's as all
+	// profit.
+	if month.Revenue[control.FinanceServiceCardsApp] != "20.000" || len(month.CompanyCost) != 0 ||
+		len(month.SupplierCost) != 0 || month.CardsAppCost["USD"] != "9.700" {
 		t.Fatalf("books month = %+v", month)
+	}
+	// At ten dinars a dollar, so the app's 9.700 USD reads as 97 dinars.
+	rated := []byte(`{"usd_rate":"10"}`)
+	if _, err := h.store.PublishVoucherSettings(context.Background(), control.VoucherSettingsRecord{
+		Document: rated, SHA256: fmt.Sprintf("%x", sha256.Sum256(rated)), Actor: "test"}); err != nil {
+		t.Fatal(err)
+	}
+	server := h.server
+	server.AdminToken = "admin-token"
+	server.VoucherSettingsCache = nil
+	_, position := financeRequest(t, server, http.MethodGet, "/v1/finance/position", "")
+	lines := map[string]map[string]any{}
+	for _, line := range position["services"].([]any) {
+		lines[line.(map[string]any)["key"].(string)] = line.(map[string]any)
+	}
+	if app := lines[control.FinanceServiceCardsApp]; app == nil || app["cost"] != "97.000" || app["sales"] != "20.000" {
+		t.Fatalf("cards app line %v (position %v)", app, position)
+	}
+	if shops := lines["vouchers"]; shops != nil && shops["cost"] != "0.000" {
+		t.Fatalf("the shops' line carries the app's cost: %v", shops)
 	}
 }
 

@@ -25,6 +25,7 @@ never refunded here — reconciliation settles it against the provider's log.
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass, field
 from decimal import Decimal
 
 from django.db import transaction
@@ -39,12 +40,26 @@ logger = logging.getLogger(__name__)
 REFUSAL_REFUND_REASON = "لم ينفّذ المزوّد العملية — أُعيد المبلغ تلقائياً"
 
 
-def refund_refused(outcomes) -> dict[int, Decimal]:
-    """Return every refused line in ``outcomes``; ``{order_line_id: amount}``.
+@dataclass
+class Refunds:
+    """What :func:`refund_refused` gave back.
 
-    A line that cannot be given back here — a credit sale still open, a drawer
-    already closed, a line already returned — is left as it was and logged:
-    a refund is never worth failing the till's charge call over.
+    ``amounts`` maps each order line returned to its value. ``to_account`` is
+    the lines that came off what a credit sale still owed rather than out of
+    the drawer: the till must not tell the cashier to hand that money back.
+    """
+
+    amounts: dict[int, Decimal] = field(default_factory=dict)
+    to_account: set[int] = field(default_factory=set)
+
+
+def refund_refused(outcomes) -> Refunds:
+    """Return every refused line in ``outcomes``.
+
+    A line on a credit sale still owed comes off the debt, not out of the
+    drawer. A line that cannot be given back here — money owed back from a
+    drawer already closed, a line already returned — is left as it was and
+    logged: a refund is never worth failing the till's charge call over.
     """
     lines_by_order: dict[int, list[int]] = {}
     for outcome in outcomes:
@@ -55,10 +70,10 @@ def refund_refused(outcomes) -> dict[int, Decimal]:
             row.order_line_id
         )
 
-    refunded: dict[int, Decimal] = {}
+    refunds = Refunds()
     for order_id, line_ids in lines_by_order.items():
         try:
-            refunded.update(_refund_order_lines(order_id, line_ids))
+            _refund_order_lines(order_id, line_ids, refunds)
         except serializers.ValidationError as exc:
             logger.warning(
                 "refused provider lines %s of order %s not refunded: %s",
@@ -66,12 +81,16 @@ def refund_refused(outcomes) -> dict[int, Decimal]:
                 order_id,
                 exc.detail,
             )
-    return refunded
+    return refunds
 
 
-def _refund_order_lines(order_id: int, line_ids: list[int]) -> dict[int, Decimal]:
+def _refund_order_lines(order_id: int, line_ids: list[int], refunds: Refunds) -> None:
     from apps.sales.models import Order, RegisterSession
-    from apps.sales.services import line_refund_amount, return_order_items
+    from apps.sales.services import (
+        credit_debt_relief,
+        line_refund_amount,
+        return_order_items,
+    )
 
     with transaction.atomic():
         order = (
@@ -80,14 +99,16 @@ def _refund_order_lines(order_id: int, line_ids: list[int]) -> dict[int, Decimal
             .get(pk=order_id)
         )
         session = order.register_session
-        # A paid sale in a drawer that is still counting. A credit sale owes
-        # nothing back in cash, and a closed drawer is not this one's to change.
-        if (
-            order.status != Order.Status.PAID
-            or session is None
-            or session.status != RegisterSession.Status.OPEN
-        ):
-            return {}
+        # A credit sale still owed — a staff account, a customer's tab — is
+        # given back off the debt. Left alone, the invoice kept owing for a
+        # card nobody received, and payroll took it out of the cashier's wages
+        # (Annaseem, 2026-11-05).
+        open_credit = (
+            order.sale_type == Order.SaleType.CREDIT
+            and order.status == Order.Status.OPEN
+        )
+        if session is None or (not open_credit and order.status != Order.Status.PAID):
+            return
         # Refused for good: a refusal is final (``recharge``), so nothing in
         # between can have charged it.
         unperformed = set(
@@ -102,15 +123,25 @@ def _refund_order_lines(order_id: int, line_ids: list[int]) -> dict[int, Decimal
             if line.returnable_quantity > 0
         ]
         if not lines:
-            return {}
+            return
         amounts = {
             line.pk: line_refund_amount(line, quantity) for line, quantity in lines
         }
+        total = sum(amounts.values(), Decimal("0.00"))
+        wholly_owed = open_credit and credit_debt_relief(order, total) >= total
+        # Money going back leaves only a drawer that is still counting: a
+        # closed drawer is not this one's to change. Struck off a debt, nothing
+        # leaves any drawer, so the drawer's state does not matter.
+        if session.status != RegisterSession.Status.OPEN and not wholly_owed:
+            return
         return_order_items(
             order=order,
             lines=lines,
             reason=REFUSAL_REFUND_REASON,
             request=None,
             register_session=session,
+            allow_open_credit=open_credit,
         )
-    return amounts
+    refunds.amounts.update(amounts)
+    if wholly_owed:
+        refunds.to_account.update(amounts)

@@ -177,12 +177,14 @@ const trackedIncome: Record<string, Category> = {
   sms: { id: "sms", label: "مبيع الرسائل النصية", icon: MessageSquare },
   ai: { id: "ai", label: "المساعد الذكي", icon: Sparkles },
   remote_access: { id: "remote_access", label: "الوصول عن بعد", icon: Wifi },
-  vouchers: { id: "vouchers", label: "البطاقات والشحن والفواتير", icon: CreditCard },
+  vouchers: { id: "vouchers", label: "البطاقات والشحن والفواتير", icon: CreditCard, hint: "ما اشترته المتاجر" },
+  cards_app: { id: "cards_app", label: "تطبيق دفتر كروت", icon: Sparkles, hint: "ما اشتراه الزبائن من التطبيق" },
   topup_fee: { id: "topup_fee", label: "رسوم الدفع على شحن المحافظ", icon: Wallet, hint: "ما يُخصم من شحن المتجر ليغطي عمولة دفع" },
 };
 
 const trackedExpense: Record<string, Category> = {
-  supplier_cost: { id: "supplier_cost", label: "تكلفة الموردين", icon: Truck, hint: "ما دفعناه لموردي البطاقات والشحن" },
+  supplier_cost: { id: "supplier_cost", label: "تكلفة الموردين", icon: Truck, hint: "ما دفعناه للموردين عمّا اشترته المتاجر" },
+  cards_app_cost: { id: "cards_app_cost", label: "تكلفة كروت التطبيق", icon: Truck, hint: "ما دفعناه للموردين عمّا اشتراه زبائن دفتر كروت" },
   sms_cost: { id: "sms_cost", label: "تكلفة الرسائل", icon: MessageSquare, hint: "ما تخصمه رسالة عن كل جزء" },
   gateway_fee: { id: "gateway_fee", label: "عمولة بوابة الدفع (دفع)", icon: Wallet, hint: "ما تقتطعه دفع من كل شحن تحصّله لنا" },
   company_purchases: { id: "company_purchases", label: "مشتريات الشركة", icon: ShoppingBag, hint: "بطاقات وشحن وفواتير اشتريناها لأنفسنا" },

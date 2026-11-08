@@ -3558,7 +3558,7 @@ class IntegrationChargeApiTests(TransactionTestCase):
         self.account = make_account()
         self.variant = service_variant_for("hdbox")
 
-    def _order(self, cards=("210906803499",)):
+    def _order(self, cards=("210906803499",), *, on_account=False, down_payment=None):
         lines = []
         for card in cards:
             resolved = resolve_line_integration(
@@ -3580,12 +3580,24 @@ class IntegrationChargeApiTests(TransactionTestCase):
                     "integration": resolved,
                 }
             )
+        if not on_account:
+            return checkout_order(
+                register_session=self.register,
+                lines_data=lines,
+                payments_data=[
+                    {"method": "cash", "amount": Decimal("25.00") * len(lines)}
+                ],
+                request=None,
+            )
+        # On account — a cashier's own staff account, a customer's tab.
         return checkout_order(
             register_session=self.register,
             lines_data=lines,
-            payments_data=[
-                {"method": "cash", "amount": Decimal("25.00") * len(lines)}
-            ],
+            payments_data=(
+                [{"method": "cash", "amount": down_payment}] if down_payment else []
+            ),
+            customer=Customer.objects.create(full_name="حساب الموظف"),
+            sale_type=Order.SaleType.CREDIT,
             request=None,
         )
 
@@ -3721,6 +3733,114 @@ class IntegrationChargeApiTests(TransactionTestCase):
         order.refresh_from_db()
         self.assertEqual(order.status, Order.Status.PAID)
         self.assertFalse(order.adjustments.exists())
+
+    def test_a_refused_card_on_account_comes_off_the_debt_not_the_drawer(self):
+        # Annaseem 2026-11-05: Qareeb refused a cashier's cards bought on their
+        # staff account; the invoice kept owing them and payroll took it.
+        order = self._order(on_account=True)
+        self.assertEqual(order.balance_due, Decimal("25.00"))
+        expected_before = self.register.expected_cash
+        with patch_session(self._session(renew=_FakeResponse(RENEW_BROKE))):
+            response = self.client.post(
+                "/api/integrations/fulfillments/charge/", {"order": order.pk}, format="json"
+            )
+
+        result = response.data["results"][0]
+        self.assertTrue(result["refunded"])
+        self.assertTrue(result["refund_to_account"])
+        self.assertEqual(result["refund_amount"], Decimal("25.00"))
+        order.refresh_from_db()
+        self.assertEqual(order.balance_due, Decimal("0.00"))
+        self.assertEqual(order.status, Order.Status.VOID)
+        self.assertFalse(Order.objects.open_credit().filter(pk=order.pk).exists())
+        # Nothing was taken, so nothing leaves the drawer.
+        self.assertFalse(order.payments.exists())
+        adjustment = order.adjustments.get()
+        self.assertEqual(adjustment.cash_amount, Decimal("0.00"))
+        self.assertEqual(adjustment.refund_method, "account_credit")
+        self.register.refresh_from_db()
+        self.assertEqual(self.register.expected_cash, expected_before)
+
+    def test_only_the_refused_card_comes_off_a_mixed_debt(self):
+        order = self._order(cards=("210906803499", "210906803500"), on_account=True)
+        with mock.patch("apps.integrations.recharge.provider_for") as provider:
+            provider.return_value.recharge.side_effect = [
+                RechargeResult(ok=True, reference="558032"),
+                RechargeResult(ok=False, error_code="insufficient_float"),
+            ]
+            response = self.client.post(
+                "/api/integrations/fulfillments/charge/", {"order": order.pk}, format="json"
+            )
+
+        charged, refused = response.data["results"]
+        self.assertFalse(charged["refunded"])
+        self.assertTrue(refused["refund_to_account"])
+        order.refresh_from_db()
+        # The delivered card is still owed; the refused one is not.
+        self.assertEqual(order.status, Order.Status.OPEN)
+        self.assertEqual(order.balance_due, Decimal("25.00"))
+
+    def test_a_down_payment_beyond_the_debt_goes_back_as_money(self):
+        order = self._order(
+            cards=("210906803499", "210906803500"),
+            on_account=True,
+            down_payment=Decimal("40.00"),
+        )
+        expected_before = self.register.expected_cash
+        with mock.patch("apps.integrations.recharge.provider_for") as provider:
+            provider.return_value.recharge.side_effect = [
+                RechargeResult(ok=False, error_code="insufficient_float"),
+                RechargeResult(ok=False, error_code="insufficient_float"),
+            ]
+            response = self.client.post(
+                "/api/integrations/fulfillments/charge/", {"order": order.pk}, format="json"
+            )
+
+        self.assertTrue(all(row["refunded"] for row in response.data["results"]))
+        order.refresh_from_db()
+        # 10 was still owed and is struck off; the 40 paid comes back in cash.
+        self.assertEqual(order.balance_due, Decimal("0.00"))
+        self.assertEqual(order.status, Order.Status.VOID)
+        self.register.refresh_from_db()
+        self.assertEqual(
+            self.register.expected_cash, expected_before - Decimal("40.00")
+        )
+
+    def test_a_refused_card_on_account_comes_off_even_after_the_drawer_closed(self):
+        order = self._order(on_account=True)
+        fulfillment = IntegrationFulfillment.objects.get(order_line__order=order)
+        fulfillment.status = IntegrationFulfillment.Status.FAILED
+        fulfillment.save(update_fields=["status"])
+        self.register.status = RegisterSession.Status.CLOSED
+        self.register.save(update_fields=["status"])
+
+        from . import credit_refusal_repair
+
+        result = credit_refusal_repair.repair()
+
+        self.assertEqual(result["struck_off"], {fulfillment.order_line_id: Decimal("25.00")})
+        order.refresh_from_db()
+        self.assertEqual(order.balance_due, Decimal("0.00"))
+        # Run again: nothing left to do.
+        self.assertEqual(credit_refusal_repair.repair()["struck_off"], {})
+
+    def test_the_repair_leaves_paid_sales_and_delivered_cards_alone(self):
+        paid = self._order()
+        delivered = self._order(cards=("210906803500",), on_account=True)
+        IntegrationFulfillment.objects.filter(order_line__order=paid).update(
+            status=IntegrationFulfillment.Status.FAILED
+        )
+        IntegrationFulfillment.objects.filter(order_line__order=delivered).update(
+            status=IntegrationFulfillment.Status.CONFIRMED
+        )
+
+        from . import credit_refusal_repair
+
+        self.assertEqual(credit_refusal_repair.repair()["struck_off"], {})
+        paid.refresh_from_db()
+        delivered.refresh_from_db()
+        self.assertEqual(paid.status, Order.Status.PAID)
+        self.assertEqual(delivered.balance_due, Decimal("25.00"))
 
     def test_naming_neither_an_order_nor_a_line_is_a_bad_request(self):
         response = self.client.post(

@@ -333,3 +333,22 @@ func TestCountryAndCurrencyNames(t *testing.T) {
 		t.Fatal("face labels")
 	}
 }
+
+func TestRegionsAreCodesAFirstClassItemCanCarry(t *testing.T) {
+	for _, code := range []string{"MENA", "SEA", "ASIA", "CIS", "LATAM", "AMER", "NORAM", "NAEU", "MYSG", "TWHKMO", "EXCL", "SPECIAL"} {
+		if CountryName(code) == "" {
+			t.Errorf("region %s has no name", code)
+		}
+		// The shop's mirror keeps a code in eight letters.
+		if len(code) > 8 {
+			t.Errorf("region %s does not fit the shop's mirror", code)
+		}
+		if countryNames[code] != "" {
+			t.Errorf("region %s collides with a country", code)
+		}
+	}
+	// NA is Namibia: North America must never be written that way.
+	if CountryName("NA") != "ناميبيا" {
+		t.Errorf("NA = %q", CountryName("NA"))
+	}
+}

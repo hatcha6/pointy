@@ -1,4 +1,5 @@
 import {
+  Flag,
   Activity,
   BellRing,
   Megaphone,
@@ -63,6 +64,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { to: "/cards/customers", label: "الزبائن", icon: UserRound, hint: "من دخل التطبيق وما اشتراه ورصيده وأجهزته" },
       { to: "/cards/orders", label: "طلبات التطبيق", icon: ReceiptText, hint: "كل ما اشتراه الزبائن، وحالة كل طلب" },
+      { to: "/cards/reports", label: "البلاغات", icon: Flag, hint: "مشكلة أبلغ عنها زبون في طلب، وردّنا عليها" },
       { to: "/cards/campaigns", label: "الحملات", icon: Megaphone, hint: "روابط ورموز الإعلانات، ومن أين جاء الزبائن" },
       { to: "/cards/notifications", label: "الإشعارات", icon: BellRing, hint: "رسالة لكل المستخدمين أو لتطبيق واحد" },
       { to: "/cards/shelf", label: "رف تطبيقات الهاتف", icon: Smartphone, hint: "الألعاب وبطاقات الهدايا في تطبيقي الآيفون وجوجل بلاي" },

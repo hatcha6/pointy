@@ -12,6 +12,10 @@ import UIKit
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    // eSIM support and direct install (EsimBridge).
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "CardsEsim") {
+      EsimBridge.register(with: registrar.messenger())
+    }
     // The iPhone Duo's side tab bar, drawn by the system (SideTabBarView).
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "CardsSideTabBar") {
       registrar.register(

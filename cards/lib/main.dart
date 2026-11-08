@@ -5,25 +5,31 @@ import 'package:flutter/material.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 
 import 'src/app.dart';
+import 'src/shared/esim_card_art.dart';
 import 'src/config.dart';
 import 'src/core/analytics/follow_customer.dart';
 import 'src/core/push/follow_push_token.dart';
 import 'src/dependencies.dart';
 import 'src/features/splash/splash_overlay.dart';
+import 'src/shared/art_preloader.dart';
 
 Future<void> main() async {
   // cards.dftr.ly/brand/pubg, not /#/brand/pubg: the web build answers to
   // the same addresses that open the app on a phone.
   usePathUrlStrategy();
   WidgetsFlutterBinding.ensureInitialized();
+  registerFlagLicense();
+  ArtPreloader.prepareMemory();
   final dependencies = CardsDependencies.live(CardsConfig.fromEnvironment());
   // The system's splash covers all of it; none waits on another.
   // The customer's language and theme are known before the first frame.
-  final (_, _, _, opening) = await (
+  // So is the art it opens on, under the same splash.
+  final (_, _, _, opening, _) = await (
     dependencies.settings.load(),
     dependencies.auth.restore(),
     dependencies.attribution.load(),
     _opening(),
+    dependencies.art?.prepareFirstScreen() ?? Future<void>.value(),
   ).wait;
   // A campaign code an earlier run could not hand over goes now.
   unawaited(dependencies.attribution.flush());

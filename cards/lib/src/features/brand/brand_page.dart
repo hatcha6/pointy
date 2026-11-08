@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:pointy_brand/pointy_brand.dart';
 
@@ -11,7 +10,7 @@ import '../../data/models/account_target.dart';
 import '../../data/models/catalog.dart';
 import '../../design/cards_layout.dart';
 import '../../design/cards_tokens.dart';
-import '../../shared/art_cache.dart';
+import '../../shared/art_image.dart';
 import '../../shared/card_art.dart';
 import '../../shared/cards_scope.dart';
 import '../../shared/money_text.dart';
@@ -225,7 +224,7 @@ class _BrandPageState extends State<BrandPage> {
         BrandCardStage.padding.vertical +
         cardHeight +
         56;
-    final cheapest = brand.items
+    final cheapest = _items
         .where((i) => i.available)
         .map((i) => i.price)
         .fold<Money?>(
@@ -701,14 +700,13 @@ class _CountryChip extends StatelessWidget {
                       size: 18,
                       color: selected ? theme.colorScheme.surface : null,
                     )
-                  : CachedNetworkImage(
-                      imageUrl: catalog.imageUrl(flag).toString(),
-                      cacheManager: artCache,
+                  : SizedBox(
                       width: 22,
                       height: 16,
-                      fit: BoxFit.cover,
-                      errorWidget: (_, _, _) =>
-                          const Icon(Icons.public_rounded, size: 18),
+                      child: ArtImage(
+                        url: catalog.imageUrl(flag).toString(),
+                        fallback: const Icon(Icons.public_rounded, size: 18),
+                      ),
                     ),
             ),
             const SizedBox(width: CardsSpace.sm),

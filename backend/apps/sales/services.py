@@ -2440,7 +2440,9 @@ def mark_order_paid(order, *, request=None, stock_already_recorded=False):
     return locked_order
 
 
-def validate_order_adjustment_allowed(order, *, request=None, allow_window_override=False):
+def validate_order_adjustment_allowed(
+    order, *, request=None, allow_window_override=False, allow_open_credit=False
+):
     if order.sale_type == Order.SaleType.ACCOUNT_ENTRY:
         # Nothing was sold, so nothing can come back. The entry that wrote this
         # debt is what gets cancelled — through its own rules, not a void.
@@ -2452,7 +2454,15 @@ def validate_order_adjustment_allowed(order, *, request=None, allow_window_overr
                 )
             }
         )
-    if order.status != Order.Status.PAID:
+    # ``allow_open_credit``: a caller that knows the goods never went — a
+    # provider refusing a card sold on account — may give back an invoice still
+    # owed; ``credit_debt_relief`` takes that off the debt instead of the drawer.
+    open_credit = (
+        allow_open_credit
+        and order.sale_type == Order.SaleType.CREDIT
+        and order.status == Order.Status.OPEN
+    )
+    if order.status != Order.Status.PAID and not open_credit:
         raise serializers.ValidationError({"detail": "Only paid orders can be adjusted."})
     if order.register_session is None:
         raise serializers.ValidationError(
@@ -2498,6 +2508,18 @@ def refund_tender(method):
     if method in Payment.NON_MONEY_METHODS:
         return Payment.Method.CASH
     return method
+
+
+def credit_debt_relief(order, amount) -> Decimal:
+    """How much of a return of ``amount`` comes off what ``order`` still owes.
+
+    Zero for anything but an open credit invoice, so every paid sale refunds
+    exactly as it always has. ``balance_due`` already counts earlier returns,
+    so two part returns never strike off more than was owed.
+    """
+    if order.sale_type != Order.SaleType.CREDIT or order.status != Order.Status.OPEN:
+        return Decimal("0.00")
+    return min(money(amount), order.balance_due)
 
 
 def adjustment_register_session(order, context_session):
@@ -2675,14 +2697,30 @@ def create_order_adjustment(
     # reads it off the request.
     created_by = created_by or adjustment_created_by(request)
     amount = adjustment_amount(lines)
-    allocations = refund_tender_allocations(order, amount)
+    # What comes back off a credit invoice still owed is struck off the debt,
+    # not paid out: the customer never handed that money over. Only the rest —
+    # what a down payment or a collection actually settled — goes back as
+    # money. Annaseem, 2026-11-05: a cashier's own Qareeb cards on their staff
+    # account were refused, and the 90 د.ل stayed on their wages.
+    debt_relief = credit_debt_relief(order, amount)
+    allocations = (
+        refund_tender_allocations(order, amount - debt_relief)
+        if amount > debt_relief
+        else []
+    )
     cash_amount = sum(
         (alloc for method, alloc in allocations if method == Payment.Method.CASH),
         Decimal("0.00"),
     )
     # The displayed refund method is the tender that absorbed the largest share;
-    # for a single-tender sale that is simply the one method that was used.
-    primary_method = max(allocations, key=lambda item: item[1])[0]
+    # for a single-tender sale that is simply the one method that was used. A
+    # return taken wholly off the debt moved no money: it reads as the
+    # customer's account.
+    primary_method = (
+        max(allocations, key=lambda item: item[1])[0]
+        if allocations
+        else Payment.Method.ACCOUNT_CREDIT
+    )
 
     adjustment = OrderAdjustment.objects.create(
         order=order,
@@ -2915,10 +2953,14 @@ def return_order_items(
     register_session=None,
     allow_window_override=False,
     consignment_action=BUY_IN,
+    allow_open_credit=False,
 ):
     locked_order = Order.objects.select_for_update().get(pk=order.pk)
     validate_order_adjustment_allowed(
-        locked_order, request=request, allow_window_override=allow_window_override
+        locked_order,
+        request=request,
+        allow_window_override=allow_window_override,
+        allow_open_credit=allow_open_credit,
     )
     locked_lines = lock_order_lines_for_update(locked_order)
     lines = fresh_order_adjustment_lines(

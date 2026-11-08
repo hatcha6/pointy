@@ -372,17 +372,78 @@ Map<String, dynamic> fixtureTopUpOrder({
   String status = 'delivered',
   String errorCode = '',
   String createdAt = '2026-10-25T18:30:00Z',
-}) => fixtureOrder(
-  id: id,
-  status: status,
-  item: 'tu-free-fire-520',
-  brand: 'tu-free-fire',
-  name: 'فري فاير · 520 جوهرة',
-  total: '31.000',
-  errorCode: errorCode,
-  createdAt: createdAt,
-  account: const {'player_id': '5123456789'},
-);
+  Map<String, dynamic>? report,
+}) => {
+  ...fixtureOrder(
+    id: id,
+    status: status,
+    item: 'tu-free-fire-520',
+    brand: 'tu-free-fire',
+    name: 'فري فاير · 520 جوهرة',
+    total: '31.000',
+    errorCode: errorCode,
+    createdAt: createdAt,
+    account: const {'player_id': '5123456789'},
+  ),
+  'report': ?report,
+};
+
+/// A top-up order as its id describes it, so the fake relay answers the
+/// same order each time it is read: `topup-<status>[-reported|-replied]`
+/// (`topup-fulfilling`, `topup-delivered-replied`); any other id is
+/// [fallback]. A `-slow` order was paid minutes ago and is still on its way.
+Map<String, dynamic> fixtureTopUpById(
+  String id, {
+  String fallback = 'delivered',
+}) {
+  const statuses = ['paid', 'fulfilling', 'delivered', 'refunded'];
+  final parts = id.split('-');
+  final status = parts.length > 1 && statuses.contains(parts[1])
+      ? parts[1]
+      : fallback;
+  final now = DateTime.now().toUtc();
+  final placed = parts.contains('slow')
+      ? now.subtract(const Duration(minutes: 4))
+      : status == 'delivered' || status == 'refunded'
+      ? now.subtract(const Duration(minutes: 12))
+      : now.subtract(const Duration(seconds: 20));
+  final order = fixtureTopUpOrder(
+    id: id,
+    status: status,
+    createdAt: placed.toIso8601String(),
+    report: parts.contains('reported')
+        ? {
+            'id': 'report-1',
+            'reason': 'not_arrived',
+            'note': 'لم يظهر الرصيد في اللعبة',
+            'status': 'open',
+            'created_at': now
+                .subtract(const Duration(minutes: 3))
+                .toIso8601String(),
+          }
+        : parts.contains('replied')
+        ? {
+            'id': 'report-1',
+            'reason': 'not_arrived',
+            'status': 'resolved',
+            'reply': 'تأكدنا من المورّد: وصل الشحن الساعة 18:32. أغلق اللعبة وافتحها من جديد.',
+            'created_at': now
+                .subtract(const Duration(hours: 2))
+                .toIso8601String(),
+            'resolved_at': now
+                .subtract(const Duration(minutes: 30))
+                .toIso8601String(),
+          }
+        : null,
+  );
+  return {
+    ...order,
+    'paid_at': placed.add(const Duration(seconds: 8)).toIso8601String(),
+    if (status == 'delivered' || status == 'refunded')
+      'completed_at': placed.add(const Duration(seconds: 50)).toIso8601String(),
+    'wait_seconds': 180,
+  };
+}
 
 Map<String, dynamic> fixtureOrder({
   String id = 'order-1',
@@ -435,6 +496,7 @@ Map<String, dynamic> fixtureOrder({
 /// codes, so every screen can be tried on real brands without a phone or a
 /// payment.
 http.Client fixtureRelay({
+  bool esim = false,
   String confirmStatus = 'delivered',
   String orderStatus = 'delivered',
   http.Client? shelf,
@@ -612,6 +674,28 @@ http.Client fixtureRelay({
             account: account,
           ),
         }, 201);
+      case ('GET', '/v1/customers/esim/destinations'):
+        return json(
+          esim
+              ? fixtureEsimShelf
+              : const {'available': false, 'destinations': <Object>[]},
+        );
+      case ('POST', '/v1/customers/esim/device'):
+        return json({'known': true, 'supported': false, 'listed': false});
+      case ('GET', '/v1/customers/esims'):
+        return json({
+          'esims': [
+            if (esim) ...[
+              fixtureEsim(),
+              fixtureEsim(
+                iccid: '8900000000000000002',
+                label: 'أمي',
+                gift: true,
+                low: true,
+              ),
+            ],
+          ],
+        });
       case ('POST', '/v1/customers/auth/otp'):
         return json({
           'phone': '218912345678',
@@ -622,6 +706,42 @@ http.Client fixtureRelay({
               .toUtc()
               .toIso8601String(),
         });
+    }
+    if (request.method == 'GET' &&
+        path.startsWith('/v1/customers/esim/destinations/')) {
+      return json(fixtureEsimDestination);
+    }
+    if (path.startsWith('/v1/customers/esims/')) {
+      final parts = path.split('/');
+      final iccid = parts[4];
+      if (parts.length > 5 && parts[5] == 'topups') {
+        return json({
+          'plans': [
+            for (final plan in (fixtureEsimDestination['plans'] as List).take(
+              2,
+            ))
+              {
+                ...(plan as Map<String, dynamic>),
+                'item': 'esim-topup:$iccid:${plan['id']}-topup',
+              },
+          ],
+        });
+      }
+      final low = iccid.endsWith('2');
+      final gift = low || iccid.endsWith('3');
+      return json({
+        'esim': {
+          ...fixtureEsim(
+            iccid: iccid,
+            label: gift ? 'أمي' : '',
+            gift: gift,
+            low: low,
+            inUse: iccid.endsWith('4'),
+            ended: iccid.endsWith('5'),
+          ),
+          'install': fixtureEsimInstall,
+        },
+      });
     }
     // Campaigns: UNI1 (the university flyers) gives 5 LYD; anything else
     // is unknown. Answering where one heard of the app is always taken.
@@ -671,11 +791,23 @@ http.Client fixtureRelay({
             : fixtureOrder(id: 'order-new', status: confirmStatus),
       });
     }
+    if (request.method == 'POST' && path.endsWith('/report')) {
+      final body = jsonDecode(request.body) as Map<String, dynamic>;
+      return json({
+        'report': {
+          'id': 'report-new',
+          'reason': body['reason'],
+          'note': body['note'] ?? '',
+          'status': 'open',
+          'created_at': DateTime.now().toUtc().toIso8601String(),
+        },
+      }, 201);
+    }
     if (request.method == 'GET' && path.startsWith('/v1/customers/orders/')) {
       final id = path.split('/').last;
       return json({
         'order': id.startsWith('topup')
-            ? fixtureTopUpOrder(id: id, status: orderStatus)
+            ? fixtureTopUpById(id, fallback: orderStatus)
             : fixtureOrder(id: id, status: orderStatus),
       });
     }
@@ -694,6 +826,183 @@ const Map<String, Object> fixtureCampaign = {
 
 /// The credit a campaign just gave, as the relay says it: [kind] and [via]
 /// pick the reason the sheet gives.
+const _esimFlag = 'https://cdn-revamp.airalo.com/images/fixture.png';
+
+/// The eSIM shelf: a few destinations of each kind.
+const Map<String, dynamic> fixtureEsimShelf = {
+  'available': true,
+  'test_mode': false,
+  'destinations': [
+    {
+      'key': 'turkey',
+      'kind': 'local',
+      'country': 'TR',
+      'name': 'تركيا',
+      'image': _esimFlag,
+      'plans': 3,
+      'countries': 1,
+      'from_price': '33.750',
+    },
+    {
+      'key': 'egypt',
+      'kind': 'local',
+      'country': 'EG',
+      'name': 'مصر',
+      'image': _esimFlag,
+      'plans': 2,
+      'countries': 1,
+      'from_price': '45.000',
+    },
+    {
+      'key': 'tunisia',
+      'kind': 'local',
+      'country': 'TN',
+      'name': 'تونس',
+      'image': _esimFlag,
+      'plans': 2,
+      'countries': 1,
+      'from_price': '37.500',
+    },
+    {
+      'key': 'malaysia',
+      'kind': 'local',
+      'country': 'MY',
+      'name': 'ماليزيا',
+      'image': _esimFlag,
+      'plans': 2,
+      'countries': 1,
+      'from_price': '30.000',
+    },
+    {
+      'key': 'europe',
+      'kind': 'regional',
+      'country': '',
+      'name': 'أوروبا',
+      'image': _esimFlag,
+      'plans': 4,
+      'countries': 39,
+      'from_price': '37.500',
+    },
+    {
+      'key': 'world',
+      'kind': 'global',
+      'country': '',
+      'name': 'العالم',
+      'image': _esimFlag,
+      'plans': 3,
+      'countries': 130,
+      'from_price': '67.500',
+    },
+  ],
+};
+
+Map<String, dynamic> _esimPlan(
+  String id,
+  String data,
+  int mb,
+  int days,
+  String price,
+) => {
+  'item': 'esim:$id',
+  'id': id,
+  'title': '$data - $days يوماً',
+  'data': data,
+  'amount_mb': mb,
+  'days': days,
+  'unlimited': false,
+  'voice': 0,
+  'text': 0,
+  'info': 'بيانات فقط',
+  'operator': 'Merhaba',
+  'plan_type': 'data',
+  'rechargeable': true,
+  'activation_policy': 'first-usage',
+  'install_window_days': 90,
+  'topup_grace_days': 30,
+  'other_info': '',
+  'price': price,
+};
+
+final Map<String, dynamic> fixtureEsimDestination = {
+  'key': 'turkey',
+  'kind': 'local',
+  'country': 'TR',
+  'name': 'تركيا',
+  'image': _esimFlag,
+  'countries': [
+    {
+      'code': 'TR',
+      'name': 'تركيا',
+      'networks': ['Turkcell', 'Vodafone'],
+    },
+  ],
+  'plans': [
+    _esimPlan('merhaba-7days-1gb', '1 GB', 1024, 7, '33.750'),
+    _esimPlan('merhaba-30days-3gb', '3 GB', 3072, 30, '82.500'),
+    _esimPlan('merhaba-30days-10gb', '10 GB', 10240, 30, '195.000'),
+  ],
+};
+
+Map<String, dynamic> fixtureEsim({
+  String iccid = '8900000000000000001',
+  String label = '',
+  bool gift = false,
+  bool low = false,
+  bool inUse = false,
+  bool ended = false,
+}) => {
+  'iccid': iccid,
+  'order_id': 'esim-order-$iccid',
+  'package_id': 'merhaba-30days-3gb',
+  'title': '3 GB - 30 يوماً',
+  'data': '3 GB',
+  'days': 30,
+  'operator': 'Merhaba',
+  'destination': 'turkey',
+  'destination_name': 'تركيا',
+  'country': 'TR',
+  'image': _esimFlag,
+  'unlimited': false,
+  'rechargeable': true,
+  'label': label,
+  'gift': gift,
+  'test_mode': false,
+  'usage': {
+    'status': ended
+        ? 'EXPIRED'
+        : low || inUse
+        ? 'ACTIVE'
+        : 'NOT_ACTIVE',
+    'remaining_mb': low
+        ? 300
+        : inUse
+        ? 1800
+        : 3072,
+    'total_mb': 3072,
+    'expires_at': low
+        ? DateTime.now().add(const Duration(days: 2)).toUtc().toIso8601String()
+        : null,
+  },
+  'created_at': '2026-11-01T10:00:00Z',
+};
+
+const Map<String, dynamic> fixtureEsimInstall = {
+  'qr': r'LPA:1$lpa.fixture.test$ABC123',
+  'smdp': 'lpa.fixture.test',
+  'activation_code': 'ABC123',
+  'confirmation_code': '',
+  'apple_url': r'https://esimsetup.apple.com/esim_qrcode_provisioning?carddata=LPA:1$lpa.fixture.test$ABC123',
+  'android_url': r'https://esimsetup.android.com/esim_qrcode_provisioning?carddata=LPA:1$lpa.fixture.test$ABC123',
+  'roaming': true,
+  'android_apn_type': 'manual',
+  'android_apn_value': 'fixture.apn',
+  'ios_apn_type': 'automatic',
+  'ios_apn_value': '',
+  'share_link': 'https://esims.cloud/fixture',
+  'share_code': '1234',
+  'recycled': false,
+};
+
 Map<String, Object> fixtureReward({
   String kind = 'flyer',
   String via = 'link',
@@ -765,6 +1074,7 @@ class FakeMoamalatClient extends MoamalatClient {
 /// The app's dependencies on the fake relay, signed in or not. With
 /// [shelfRelay], the catalog and its art come from that real relay.
 CardsDependencies fixtureDependencies({
+  bool esim = false,
   bool signedIn = true,
   http.Client? client,
   Uri? shelfRelay,
@@ -786,6 +1096,7 @@ CardsDependencies fixtureDependencies({
     client:
         client ??
         fixtureRelay(
+          esim: esim,
           shelf: shelfRelay == null ? null : http.Client(),
           scripted: scenarios == null ? null : ScriptedOrders(scenarios),
           topUps: topUps,

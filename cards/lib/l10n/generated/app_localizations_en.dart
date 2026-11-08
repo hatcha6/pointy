@@ -106,7 +106,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chooseValue => 'Choose a value';
 
   @override
-  String get chooseCountry => 'Country';
+  String get chooseCountry => 'Country or region';
 
   @override
   String get howToRedeem => 'How to use';
@@ -305,14 +305,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get errInvalidPayer => 'Check your payment details.';
 
   @override
-  String get hostedTitle => 'Finish paying on the card page';
+  String get hostedTitle => 'Checking your payment';
 
   @override
   String get hostedBody =>
-      'We opened the secure payment page. Once you\'ve paid, come back here and your card will appear by itself.';
-
-  @override
-  String get openPaymentPage => 'Open payment page';
+      'Your card payment went through and we\'re confirming it. Your card will appear here in a moment.';
 
   @override
   String get cancelOrder => 'Cancel order';
@@ -894,6 +891,27 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filterIncomplete => 'Incomplete';
 
   @override
+  String get myCardsNoneUnusedTitle => 'استخدمت كل كروتك';
+
+  @override
+  String get myCardsNoneUnusedBody =>
+      'الكروت التي لم تستخدم رمزها بعد تظهر هنا.';
+
+  @override
+  String get myCardsNoneUsedTitle => 'لا كروت مستخدمة بعد';
+
+  @override
+  String get myCardsNoneUsedBody =>
+      'بعد أن تشحن كرتاً، اضغط «استخدمته» في صفحته لينتقل إلى هنا.';
+
+  @override
+  String get myCardsNoneIncompleteTitle => 'كل طلباتك اكتملت';
+
+  @override
+  String get myCardsNoneIncompleteBody =>
+      'إن تعذّر طلب يوماً يظهر هنا، ويعود ثمنه إلى رصيدك.';
+
+  @override
   String get webOnlyBadge => 'Web only';
 
   @override
@@ -1193,7 +1211,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String topUpPreparingTitle(String kind) {
     String _temp0 = intl.Intl.selectLogic(kind, {
       'invite': 'Sending your gift…',
-      'other': 'Topping up the account…',
+      'telegram': 'Topping up the Telegram account…',
+      'steam': 'Adding funds to the Steam wallet…',
+      'other': 'Topping up the player\'s account…',
     });
     return '$_temp0';
   }
@@ -1208,14 +1228,38 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get topUpSlowTitle => 'The top-up is taking longer this time';
+  String topUpSlowTitle(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'invite': 'Your gift is taking longer this time',
+      'steam': 'The funds are taking longer this time',
+      'other': 'The top-up is taking longer this time',
+    });
+    return '$_temp0';
+  }
 
   @override
-  String get topUpRefundedTitle => 'The top-up did not go through';
+  String topUpRefundedTitle(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'invite': 'The gift wasn\'t sent',
+      'steam': 'The funds weren\'t added',
+      'other': 'The top-up didn\'t go through',
+    });
+    return '$_temp0';
+  }
 
   @override
-  String topUpRefundedBody(String amount) {
-    return 'The top-up did not reach the account, so we put $amount back in your credit. Check the account and try again.';
+  String topUpRefundedBody(String kind, String amount) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'invite':
+          'The gift wasn\'t sent, so we put $amount back in your credit. Check the invite link and try again.',
+      'telegram':
+          'The top-up didn\'t reach the Telegram account, so we put $amount back in your credit. Check the username and try again.',
+      'steam':
+          'The funds weren\'t added to the Steam wallet, so we put $amount back in your credit. Check the login name and try again.',
+      'other':
+          'The top-up didn\'t reach the player\'s account, so we put $amount back in your credit. Check the player ID and try again.',
+    });
+    return '$_temp0';
   }
 
   @override
@@ -1269,8 +1313,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get topUpHelp => 'Not arrived? Message us on WhatsApp';
 
   @override
-  String topUpHelpMessage(String order) {
-    return 'Hello, order $order has not reached the account.';
+  String topUpHelpMessage(String kind, String order) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'invite': 'Hello, order $order: the gift didn\'t arrive.',
+      'telegram': 'Hello, order $order didn\'t reach the Telegram account.',
+      'steam': 'Hello, order $order wasn\'t added to the Steam wallet.',
+      'other': 'Hello, order $order didn\'t reach the player\'s account.',
+    });
+    return '$_temp0';
   }
 
   @override
@@ -1306,4 +1356,624 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chooseEdition => 'Choose an edition';
+
+  @override
+  String get esimStoreTitle => 'إلى أين تسافر؟';
+
+  @override
+  String get esimEntryTitle => 'سافر متصلاً من أول لحظة';
+
+  @override
+  String get esimEntryBody => 'إنترنت لأكثر من 200 وجهة، تثبّته بلمسة واحدة.';
+
+  @override
+  String get esimEntryAction => 'اختر وجهتك';
+
+  @override
+  String get esimMineTitle => 'شرائحي';
+
+  @override
+  String get esimSearchHint => 'ابحث عن دولة أو منطقة';
+
+  @override
+  String get esimSearchClear => 'مسح البحث';
+
+  @override
+  String get esimKindLocal => 'دول';
+
+  @override
+  String get esimKindRegional => 'مناطق';
+
+  @override
+  String get esimKindGlobal => 'عالمية';
+
+  @override
+  String get esimPopular => 'الأكثر طلباً';
+
+  @override
+  String get esimAllCountries => 'كل الدول';
+
+  @override
+  String get esimNoMatch => 'لا توجد وجهة بهذا الاسم.';
+
+  @override
+  String get esimFrom => 'تبدأ من';
+
+  @override
+  String get esimClosedTitle => 'الشرائح غير متاحة الآن';
+
+  @override
+  String get esimClosedBody =>
+      'عُد بعد قليل، أو تواصل معنا إذا كنت تحتاجها الآن.';
+
+  @override
+  String get esimLoadFailed => 'تعذّر التحميل';
+
+  @override
+  String get esimTryAgain => 'أعد المحاولة';
+
+  @override
+  String get esimPhoneSupported => 'هاتفك يدعم الشرائح الإلكترونية';
+
+  @override
+  String get esimPhoneNotSupported =>
+      'يبدو أن هاتفك لا يدعم الشرائح الإلكترونية';
+
+  @override
+  String get esimPhoneNotSupportedBody =>
+      'ما زال بإمكانك شراء شريحة لشخص تعرفه وإرسالها إليه. وإن كنت متأكداً أن هاتفك يدعمها، فتحقق من إعدادات الهاتف أولاً.';
+
+  @override
+  String get esimUnlimited => 'غير محدودة';
+
+  @override
+  String get esimNetworks => 'الشبكات';
+
+  @override
+  String get esimFactData => 'البيانات';
+
+  @override
+  String get esimFactValidity => 'الصلاحية';
+
+  @override
+  String get esimFactNetwork => 'الشبكة';
+
+  @override
+  String get esimFactTopUp => 'الشحن';
+
+  @override
+  String get esimTopUpYes => 'يمكن شحنها';
+
+  @override
+  String get esimTopUpNo => 'لا يمكن شحنها';
+
+  @override
+  String get esimStartsOnFirstUse =>
+      'تبدأ الصلاحية عند أول اتصال بالشبكة في وجهتك، لا عند الشراء ولا عند التثبيت.';
+
+  @override
+  String get esimUnlockedNote =>
+      'يجب أن يكون هاتفك غير مقفل على شركة اتصالات. الهواتف المقفلة قد لا تقبل الشريحة.';
+
+  @override
+  String get esimDataOnlyNote =>
+      'بيانات فقط: لا تتضمن رقم هاتف ولا مكالمات عادية.';
+
+  @override
+  String get esimWhoFor => 'لمن هذه الشريحة؟';
+
+  @override
+  String get esimForMe => 'لهاتفي';
+
+  @override
+  String get esimForSomeoneElse => 'لشخص آخر';
+
+  @override
+  String get esimRecipientName => 'اسمه (اختياري)';
+
+  @override
+  String get esimForSomeoneElseNote =>
+      'بعد الدفع نعطيك رابطاً ترسله إليه، ويثبّتها من هاتفه بلمسة. الشريحة تعمل على هاتف واحد فقط.';
+
+  @override
+  String get esimForMeUnsupportedNote =>
+      'قد لا تعمل الشريحة على هذا الهاتف، ولا يمكن استرداد شريحة بعد تثبيتها. تأكد أولاً من الإعدادات.';
+
+  @override
+  String get esimStatusNotActive => 'لم تُفعَّل بعد';
+
+  @override
+  String get esimStatusActive => 'فعّالة';
+
+  @override
+  String get esimStatusFinished => 'نفدت';
+
+  @override
+  String get esimStatusExpired => 'انتهت';
+
+  @override
+  String get esimStatusUnknown => 'قيد التحقق';
+
+  @override
+  String get esimLeftOf => 'متبقية من';
+
+  @override
+  String get esimEndsToday => 'تنتهي اليوم';
+
+  @override
+  String get esimRunningOutTopUp => 'قاربت على الانتهاء: اشحنها لتبقى متصلاً.';
+
+  @override
+  String get esimRunningOutNew =>
+      'قاربت على الانتهاء: اشترِ شريحة جديدة لتبقى متصلاً.';
+
+  @override
+  String get esimReadyTitle => 'شريحتك جاهزة';
+
+  @override
+  String get esimReadyBody =>
+      'بقيت خطوة واحدة: ثبّتها الآن أثناء اتصالك بالإنترنت، وستبدأ العمل عند وصولك.';
+
+  @override
+  String get esimReadyBodyGift =>
+      'أرسلها الآن، وسيثبّتها صاحبها من هاتفه بلمسة.';
+
+  @override
+  String get esimInstallNow => 'ثبّت الشريحة الآن';
+
+  @override
+  String get esimInstallHere => 'ثبّتها على هذا الهاتف';
+
+  @override
+  String get esimInstallHint =>
+      'سيفتح هاتفك شاشة إضافة الشريحة، ولا تحتاج إلى مسح أي رمز.';
+
+  @override
+  String get esimInstallFailedNote =>
+      'لم يفتح هاتفك شاشة التثبيت. استخدم الرمز أو أدخل البيانات يدوياً.';
+
+  @override
+  String get esimSendTo => 'أرسلها إلى شخص آخر';
+
+  @override
+  String get esimOtherWays => 'طرق أخرى للتثبيت';
+
+  @override
+  String get esimAlreadyInstalled => 'ثبّتها بالفعل';
+
+  @override
+  String get esimShowInstallAgain => 'عرض طرق التثبيت مجدداً';
+
+  @override
+  String get esimNeedsInternetNote =>
+      'تحتاج إلى اتصال بالإنترنت أثناء التثبيت.';
+
+  @override
+  String get esimOneDeviceNote =>
+      'تعمل الشريحة على هاتف واحد ولا تُنقل إلى غيره. لا تحذفها بعد تثبيتها.';
+
+  @override
+  String get esimInstallAskTitle => 'هل أُضيفت الشريحة؟';
+
+  @override
+  String get esimInstallAskBody =>
+      'إذا ظهرت في إعدادات الهاتف ضمن شرائح الجوال، فقد تم التثبيت.';
+
+  @override
+  String get esimInstallAskYes => 'نعم، أُضيفت';
+
+  @override
+  String get esimInstallAskNo => 'لم تُضَف';
+
+  @override
+  String get esimInstallUnreadable => 'تعذّر تحميل بيانات التثبيت.';
+
+  @override
+  String get esimQrTitle => 'امسح الرمز من هاتف آخر';
+
+  @override
+  String get esimQrStepsIos =>
+      'افتح هذا الرمز على شاشة أخرى، ثم في الهاتف: الإعدادات ← شبكة الجوال ← إضافة شريحة eSIM ← استخدام رمز QR.';
+
+  @override
+  String get esimQrStepsAndroid =>
+      'افتح هذا الرمز على شاشة أخرى، ثم في الهاتف: الإعدادات ← الشبكة والإنترنت ← شرائح SIM ← إضافة شريحة eSIM.';
+
+  @override
+  String get esimQrStepsOther =>
+      'في الهاتف الذي ستعمل عليه الشريحة، افتح إعدادات شبكة الجوال، واختر إضافة شريحة eSIM، ثم امسح هذا الرمز.';
+
+  @override
+  String get esimManualTitle => 'أو أدخل البيانات يدوياً';
+
+  @override
+  String get esimSmdp => 'عنوان SM-DP+';
+
+  @override
+  String get esimActivationCode => 'رمز التفعيل';
+
+  @override
+  String get esimConfirmationCode => 'رمز التأكيد';
+
+  @override
+  String get esimCopy => 'نسخ';
+
+  @override
+  String get esimCopied => 'تم النسخ';
+
+  @override
+  String get esimNextStepsTitle => 'لتعمل الشريحة';
+
+  @override
+  String get esimStepDataLine =>
+      'في إعدادات شبكة الجوال، اختر هذه الشريحة لبيانات الجوال.';
+
+  @override
+  String get esimStepRoaming => 'شغّل «تجوال البيانات» لهذه الشريحة.';
+
+  @override
+  String get esimStepApn =>
+      'أدخل نقطة الوصول (APN) التالية في إعدادات الشريحة:';
+
+  @override
+  String get esimStepArrive =>
+      'عند وصولك إلى وجهتك، ستتصل الشريحة بالشبكة تلقائياً.';
+
+  @override
+  String get esimApn => 'نقطة الوصول (APN)';
+
+  @override
+  String get esimEndedNote => 'انتهت هذه الشريحة ولا يمكن استخدامها مجدداً.';
+
+  @override
+  String get esimBuyAnother => 'اشترِ شريحة جديدة';
+
+  @override
+  String get esimTopUpTitle => 'اشحن هذه الشريحة';
+
+  @override
+  String get esimNoTopUps => 'لا تتوفر باقات شحن لهذه الشريحة الآن.';
+
+  @override
+  String get esimTopUpDone => 'أُضيفت الباقة إلى شريحتك.';
+
+  @override
+  String get esimRenameTitle => 'تسمية الشريحة';
+
+  @override
+  String get esimCancel => 'إلغاء';
+
+  @override
+  String get esimSave => 'حفظ';
+
+  @override
+  String get esimNumber => 'رقم الشريحة (ICCID)';
+
+  @override
+  String get esimHelp => 'تحتاج إلى مساعدة؟';
+
+  @override
+  String esimCountriesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count دولة',
+      few: '$count دول',
+      two: 'دولتان',
+      one: 'دولة واحدة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String esimValidDays(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days يوماً',
+      few: '$days أيام',
+      two: 'ليومين',
+      one: 'ليوم واحد',
+    );
+    return 'صالحة $_temp0';
+  }
+
+  @override
+  String esimVoiceAndText(int voice, int text) {
+    return '$voice دقيقة · $text رسالة';
+  }
+
+  @override
+  String esimInstallWithin(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days يوماً',
+      few: '$days أيام',
+      two: 'يومين',
+      one: 'يوم واحد',
+    );
+    return 'ثبّتها خلال $_temp0 من الشراء، وإلا فلن تعود صالحة.';
+  }
+
+  @override
+  String esimBuyFor(String price) {
+    return 'متابعة · $price';
+  }
+
+  @override
+  String esimForName(String name) {
+    return 'لـ $name';
+  }
+
+  @override
+  String esimEndsInDays(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days يوماً',
+      few: '$days أيام',
+      two: 'يومين',
+      one: 'يوم واحد',
+    );
+    return 'تنتهي بعد $_temp0';
+  }
+
+  @override
+  String esimShareText(
+    String destination,
+    String plan,
+    String link,
+    String code,
+  ) {
+    return 'شريحة إنترنت (eSIM) لـ $destination: $plan\nافتح هذا الرابط من الهاتف الذي ستعمل عليه:\n$link\nرمز الدخول: $code';
+  }
+
+  @override
+  String esimPlanDays(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days يوماً',
+      few: '$days أيام',
+      two: 'يومان',
+      one: 'يوم واحد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get esimPreparingTitle => 'نجهّز شريحتك…';
+
+  @override
+  String get esimPreparingBody =>
+      'عادةً خلال ثوانٍ. يمكنك إغلاق التطبيق، وستجدها في «كروتي» وسنخبرك حين تصبح جاهزة.';
+
+  @override
+  String get esimRefundedTitle => 'لم نتمكن من إصدار الشريحة';
+
+  @override
+  String get esimEntryKicker => 'شرائح eSIM';
+
+  @override
+  String esimEntryFrom(String price) {
+    return 'من $price';
+  }
+
+  @override
+  String get esimStoreSubtitle => 'إنترنت فور وصولك، بلا شريحة بلاستيكية.';
+
+  @override
+  String get esimHowTitle => 'كيف تعمل؟';
+
+  @override
+  String get esimHow1Title => 'اختر وجهتك';
+
+  @override
+  String get esimHow1Body => 'دولة، أو منطقة، أو باقة عالمية تناسب رحلتك.';
+
+  @override
+  String get esimHow2Title => 'ثبّتها بلمسة';
+
+  @override
+  String get esimHow2Body => 'يضيفها هاتفك بنفسه، بلا رمز ولا خطوات طويلة.';
+
+  @override
+  String get esimHow3Title => 'اتصل عند وصولك';
+
+  @override
+  String get esimHow3Body => 'تعمل الشريحة بجانب خطك، ويبقى رقمك كما هو.';
+
+  @override
+  String get esimTapToInstall => 'اضغط لتثبيتها';
+
+  @override
+  String get esimTapToSend => 'اضغط لإرسالها أو تثبيتها';
+
+  @override
+  String get esimSearchSection => 'شرائح eSIM للسفر';
+
+  @override
+  String get esimSearchTag => 'شريحة eSIM';
+
+  @override
+  String esimSearchRowLabel(String name) {
+    return 'شريحة eSIM إلى $name';
+  }
+
+  @override
+  String get esimOneStepTitle => 'بقيت خطوة واحدة';
+
+  @override
+  String get esimInstallAction => 'ثبّت الشريحة';
+
+  @override
+  String get esimScanBody =>
+      'هذا الهاتف لا يثبّتها بلمسة. امسح الرمز من الهاتف الذي ستعمل عليه.';
+
+  @override
+  String get esimSendNow => 'أرسلها الآن';
+
+  @override
+  String get esimSendAgain => 'أرسلها مرة أخرى';
+
+  @override
+  String get esimSendBody => 'يصله رابط ورمز، ويثبّتها من هاتفه بلمسة.';
+
+  @override
+  String get esimSentBody => 'أرسلتها. إن لم تصله، أرسلها مرة أخرى.';
+
+  @override
+  String get esimGiftKicker => 'هدية';
+
+  @override
+  String get esimGiftTo => 'هدية إلى';
+
+  @override
+  String get esimShareLink => 'رابط الشريحة';
+
+  @override
+  String get esimShareCode => 'رمز الدخول';
+
+  @override
+  String get esimShowQr => 'إظهار رمز QR ليمسحه';
+
+  @override
+  String get esimTopUpNow => 'اشحنها الآن';
+
+  @override
+  String get esimTopUpAction => 'اشحن الشريحة';
+
+  @override
+  String get esimLowTitle => 'قاربت على الانتهاء';
+
+  @override
+  String get esimWhoForTitle => 'لمن سترسلها؟';
+
+  @override
+  String get esimContinue => 'متابعة';
+
+  @override
+  String get esimDetailsTitle => 'التفاصيل';
+
+  @override
+  String esimSendToName(String name) {
+    return 'أرسلها إلى $name';
+  }
+
+  @override
+  String get esimLowBodyTopUp => 'اشحنها الآن لتبقى متصلاً.';
+
+  @override
+  String get esimLowBodyNew =>
+      'لا تُشحن هذه الباقة. اشترِ شريحة جديدة لتبقى متصلاً.';
+
+  @override
+  String get orderStatusHeading => 'Order status';
+
+  @override
+  String get orderDetailsHeading => 'Details';
+
+  @override
+  String get orderStepPlaced => 'Ordered';
+
+  @override
+  String get orderStepPaid => 'Paid';
+
+  @override
+  String orderStepSending(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'invite': 'Sending the gift',
+      'telegram': 'Sending to the Telegram account',
+      'steam': 'Adding to the Steam wallet',
+      'other': 'Sending to the player\'s account',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get orderStepRefunded => 'Refunded to your credit';
+
+  @override
+  String get reportProblem => 'Report a problem';
+
+  @override
+  String get reportAgain => 'Report another problem';
+
+  @override
+  String get reportTitle => 'What went wrong?';
+
+  @override
+  String get reportBody =>
+      'Tell us what happened. We\'ll check your order and reply here and in a notification.';
+
+  @override
+  String reportNotArrived(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'invite': 'The gift didn\'t arrive',
+      'steam': 'The funds weren\'t added',
+      'other': 'It didn\'t arrive',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String reportWrongAccount(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'invite': 'The gift went to another account',
+      'telegram': 'It went to another username',
+      'steam': 'It went to another Steam account',
+      'other': 'It went to another player ID',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String reportWrongAmount(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'invite': 'A different game or edition arrived',
+      'other': 'The amount is wrong',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get reportOther => 'Something else';
+
+  @override
+  String get reportNote => 'Details that help us (optional)';
+
+  @override
+  String reportNoteHint(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'invite': 'For example: no friend request came',
+      'steam': 'For example: only part of the funds arrived',
+      'other': 'For example: only part of it arrived',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get reportSend => 'Send report';
+
+  @override
+  String get reportSent => 'We got your report. We\'ll check and reply.';
+
+  @override
+  String get reportOpenTitle => 'We\'re looking into your report';
+
+  @override
+  String reportOpenBody(String reason) {
+    return 'You reported: $reason. We\'ll reply here and in a notification.';
+  }
+
+  @override
+  String get reportReplyTitle => 'Our reply to your report';
+
+  @override
+  String get reportResolvedBody =>
+      'We looked into your report about this order.';
+
+  @override
+  String get reportWhatsApp => 'Or message us on WhatsApp';
 }

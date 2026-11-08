@@ -132,6 +132,10 @@ type InitiateRequest struct {
 	BirthYear string
 	// CallbackURL receives Dafa's webhook when the payment completes.
 	CallbackURL string
+	// ReturnURL is where the bank-card page's «المتابعة» button sends the
+	// payer after a successful payment (the page's ReturnUrl). Dafa shows no
+	// button without it, and sends the payer nowhere after a failure.
+	ReturnURL string
 }
 
 // Payment is Dafa's view of one payment.
@@ -216,6 +220,7 @@ type initiateBody struct {
 	UserIdentifier string `json:"user_identifier,omitempty"`
 	BirthYear      string `json:"birthyear,omitempty"`
 	CallbackURL    string `json:"callback_url,omitempty"`
+	ReturnURL      string `json:"return_url,omitempty"`
 }
 
 // Initiate starts a payment. For an OTP method the provider texts the payer a
@@ -228,6 +233,7 @@ func (c *Client) Initiate(ctx context.Context, request InitiateRequest) (Payment
 		UserIdentifier: strings.TrimSpace(request.UserIdentifier),
 		BirthYear:      strings.TrimSpace(request.BirthYear),
 		CallbackURL:    strings.TrimSpace(request.CallbackURL),
+		ReturnURL:      strings.TrimSpace(request.ReturnURL),
 	}
 	return c.call(ctx, http.MethodPost, "/payments/initiate", body)
 }

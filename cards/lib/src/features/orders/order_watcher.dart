@@ -34,7 +34,8 @@ class OrderWatcher extends ChangeNotifier {
       !_order.status.isOpen &&
       !(_order.status == OrderStatus.delivered &&
           _order.codes.isEmpty &&
-          !_order.toAccount);
+          !_order.toAccount &&
+          !_order.isEsim);
 
   void start() {
     _startedAt ??= DateTime.now();

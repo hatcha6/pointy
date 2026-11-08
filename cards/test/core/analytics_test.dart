@@ -8,6 +8,7 @@ import 'package:pointy_cards/src/core/money.dart';
 import 'package:pointy_cards/src/core/result.dart';
 import 'package:pointy_cards/src/data/models/order.dart';
 import 'package:pointy_cards/src/data/repositories/orders_repository.dart';
+import 'package:pointy_cards/src/data/session/session_store.dart';
 
 /// Writes down what the app tells analytics.
 class RecordingAnalytics extends NoAnalytics {
@@ -27,6 +28,10 @@ class RecordingAnalytics extends NoAnalytics {
 
   @override
   void share(bool on) => calls.add('share $on');
+
+  @override
+  void setPersonOnce(Map<String, Object> properties) =>
+      calls.add('person $properties');
 
   final events = <(String, Map<String, Object>)>[];
 
@@ -49,6 +54,21 @@ class _Names extends NavigatorObserver {
   }
 }
 
+const _customer = CustomerSession(
+  sessionId: 's1',
+  customerId: 'customer-1',
+  phone: '218912345678',
+  accessToken: 'a',
+  refreshToken: 'r',
+);
+const _customer2 = CustomerSession(
+  sessionId: 's2',
+  customerId: 'customer-2',
+  phone: '218912345679',
+  accessToken: 'a',
+  refreshToken: 'r',
+);
+
 void main() {
   test('a sign-in joins the customer; a sign-out, and only that, '
       'starts over', () {
@@ -66,6 +86,35 @@ void main() {
       'reset',
       'identify ${signedIn.customerId}',
     ]);
+  });
+
+  test('an answer given before sign-in reaches the customer once known, '
+      'and is not the next customer\'s', () async {
+    final analytics = RecordingAnalytics();
+    final dependencies = fixtureDependencies(
+      analytics: analytics,
+      signedIn: false,
+    );
+    final session = dependencies.auth.session;
+    followCustomer(dependencies);
+
+    await dependencies.attribution.answer(heardFrom: 'tiktok');
+    expect(analytics.calls, ['share true']);
+
+    session.value = _customer;
+    expect(analytics.calls, [
+      'share true',
+      'identify customer-1',
+      'person {heard_from: tiktok}',
+    ]);
+
+    // The relay took it; then someone else signs in on this phone.
+    dependencies.attribution.signedIn(const {
+      'attribution': <String, Object>{},
+    });
+    session.value = null;
+    session.value = _customer2;
+    expect(analytics.calls.last, 'identify customer-2');
   });
 
   test('a launch signed out is one visitor, not a new one', () {

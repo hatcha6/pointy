@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 
 import '../../../l10n/generated/app_localizations.dart';
 import '../../design/cards_layout.dart';
 import '../../design/cards_tokens.dart';
+import '../../shared/cards_scope.dart';
 import '../../shared/category_icon.dart';
 import '../../shared/empty_state.dart';
 import '../../shared/grouped.dart';
 import '../../shared/search_field.dart';
 import '../../shared/section_header.dart';
 import '../../shared/side_back.dart';
+import '../esim/esim_search.dart';
+import '../esim/esim_store_page.dart';
 import '../shelf/shelf_model.dart';
 import 'search_result_row.dart';
 import '../../core/analytics/analytics.dart';
@@ -77,6 +81,7 @@ class _SearchPageState extends State<SearchPage> {
               return ListenableBuilder(
                 listenable: Listenable.merge([widget.shelf, _query]),
                 builder: (context, _) => CustomScrollView(
+                  scrollCacheExtent: const ScrollCacheExtent.pixels(1200),
                   keyboardDismissBehavior:
                       ScrollViewKeyboardDismissBehavior.onDrag,
                   slivers: [
@@ -131,6 +136,7 @@ class _SearchPageState extends State<SearchPage> {
     final l10n = AppLocalizations.of(context);
     final shelf = widget.shelf;
     final text = _query.text.trim();
+    final esimShelf = CardsScope.of(context).esim.shelf.value;
     if (text.isEmpty) {
       final categories = [...shelf.shelf.categories]
         ..sort((a, b) => a.rank.compareTo(b.rank));
@@ -152,13 +158,21 @@ class _SearchPageState extends State<SearchPage> {
                   trailing: const Icon(Icons.chevron_right_rounded),
                   onTap: () => _browse(category.key),
                 ),
+              if (esimShelf.available)
+                ListTile(
+                  leading: const Icon(Icons.sim_card_rounded),
+                  title: Text(l10n.esimSearchSection),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => EsimStorePage.open(context),
+                ),
             ],
           ),
         ),
       );
     }
     final found = shelf.find(text);
-    if (found.isEmpty) {
+    final esims = esimSearch(esimShelf, text);
+    if (found.isEmpty && esims.isEmpty) {
       return SliverFillRemaining(
         hasScrollBody: false,
         child: EmptyState(
@@ -170,13 +184,17 @@ class _SearchPageState extends State<SearchPage> {
     }
     return SliverMainAxisGroup(
       slivers: [
-        SliverToBoxAdapter(child: SectionHeader(title: l10n.searchResults)),
-        SliverList.separated(
-          itemCount: found.length,
-          separatorBuilder: (_, _) => const SizedBox(height: CardsSpace.xs),
-          itemBuilder: (context, index) =>
-              SearchResultRow(brand: found[index], shelf: shelf),
-        ),
+        if (found.isNotEmpty) ...[
+          SliverToBoxAdapter(child: SectionHeader(title: l10n.searchResults)),
+          SliverList.separated(
+            itemCount: found.length,
+            separatorBuilder: (_, _) => const SizedBox(height: CardsSpace.xs),
+            itemBuilder: (context, index) =>
+                SearchResultRow(brand: found[index], shelf: shelf),
+          ),
+        ],
+        if (esims.isNotEmpty)
+          SliverToBoxAdapter(child: EsimSearchSection(rows: esims)),
       ],
     );
   }

@@ -30,6 +30,10 @@ abstract class Analytics {
   /// The customer signed in: their events join their customer id.
   void identify(String customerId);
 
+  /// Facts about the signed-in customer, to break any event down by. What is
+  /// already known of them stays: the first answer is the one that counts.
+  void setPersonOnce(Map<String, Object> properties);
+
   /// The customer signed out: this device starts over as nobody.
   void reset();
 
@@ -100,6 +104,9 @@ class NoAnalytics implements Analytics {
 
   @override
   void identify(String customerId) {}
+
+  @override
+  void setPersonOnce(Map<String, Object> properties) {}
 
   @override
   void reset() {}
@@ -204,6 +211,11 @@ class PostHogAnalytics implements Analytics {
   @override
   void identify(String customerId) =>
       _quietly(() => Posthog().identify(userId: customerId));
+
+  @override
+  void setPersonOnce(Map<String, Object> properties) => _quietly(
+    () => Posthog().setPersonProperties(userPropertiesToSetOnce: properties),
+  );
 
   @override
   void reset() => _quietly(() => Posthog().reset());

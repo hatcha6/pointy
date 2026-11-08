@@ -4,7 +4,7 @@
 //   make cards-preview, then ?screen=board | home | brand | brand-itunes |
 //   sign-in | sign-in-code | checkout | wallet-code | preparing |
 //   preparing-slow | refunded | reveal | my-cards | account | signed-out |
-//   notice | splash ; top-ups by ID: topup (a game the relay looks up) |
+//   notice | splash | payment-page (&url=) ; top-ups by ID: topup (a game the relay looks up) |
 //   topup-saved | topup-zone | topup-server | topup-telegram | topup-steam |
 //   topup-gift | topup-checkout | topup-preparing | topup-done |
 //   topup-receipt | topup-refunded | topup-board ;
@@ -34,6 +34,7 @@ import '../src/data/models/catalog.dart';
 import '../src/data/models/customer.dart';
 import '../src/data/models/order.dart';
 import '../src/design/cards_theme.dart';
+import '../src/features/card_payment/payment_page_view.dart';
 import '../src/features/brand/brand_page.dart';
 import '../src/features/card_payment/card_payment_page.dart';
 import '../src/features/checkout/checkout_model.dart';
@@ -51,9 +52,18 @@ import '../src/features/shell/cards_shell.dart';
 import '../src/features/sign_in/sign_in_sheet.dart';
 import '../src/features/topup/account_form_model.dart';
 import '../src/features/topup/topup_done_page.dart';
+import '../src/features/topup/topup_order_page.dart';
 import '../src/dependencies.dart';
 import '../src/shared/cards_scope.dart';
 import 'cards_fixtures.dart';
+import '../src/core/esim/esim_device.dart';
+import '../src/core/money.dart';
+import '../src/data/models/esim.dart';
+import '../src/features/esim/esim_checkout.dart';
+import '../src/features/esim/esim_destination_page.dart';
+import '../src/features/esim/esim_page.dart';
+import '../src/features/esim/esim_plan_sheet.dart';
+import '../src/features/esim/esim_store_page.dart';
 import 'preview_scenarios.dart';
 import 'scenario_chip.dart';
 import 'splash_lab.dart';
@@ -70,15 +80,20 @@ Future<void> main() async {
   // `&platform=ios` or `android`: the page as that phone's browser has it
   // (the web «get the app» bar). A desktop browser's phone emulation still
   // reports a Mac, so it has to be said.
-  debugDefaultTargetPlatformOverride = switch (query['platform']) {
-    'ios' => TargetPlatform.iOS,
-    'android' => TargetPlatform.android,
-    _ => null,
-  };
+  // Only a debug build may set it: a release build of the harness (fast to
+  // load on a phone's Safari) leaves the platform alone.
+  if (kDebugMode) {
+    debugDefaultTargetPlatformOverride = switch (query['platform']) {
+      'ios' => TargetPlatform.iOS,
+      'android' => TargetPlatform.android,
+      _ => null,
+    };
+  }
   const shelfRelay = String.fromEnvironment('CARDS_PREVIEW_RELAY');
   // The whole app plays scripted purchases: each one ends the next way.
   final scenarios = screen == 'home' ? PreviewScenarios() : null;
   final dependencies = fixtureDependencies(
+    esim: true,
     signedIn:
         screen != 'signed-out' &&
         !screen.startsWith('sign-in') &&
@@ -109,6 +124,14 @@ Future<void> main() async {
     channel: query['channel'] ?? 'apk',
   );
   dependencies.settings.setLanguage(query['lang'] ?? 'ar');
+  // `&phone=none`: a phone with no eSIM. `&phone=old`: one too old to install
+  // from a link. Otherwise a current iPhone.
+  dependencies.overrideEsimCompatibility(
+    EsimCompatibility(
+      repository: dependencies.esim,
+      device: _PreviewPhone(query['phone'] ?? ''),
+    ),
+  );
   if (screen != 'topup') {
     // Two Free Fire players this phone topped up before.
     await dependencies.accounts.remember('tu-free-fire', {
@@ -139,29 +162,32 @@ Future<void> main() async {
     });
   }
   runApp(
-    CardsApp(
-      dependencies: dependencies,
-      overlay: scenarios == null
-          ? null
-          : (context, child) => Stack(
-              children: [
-                child!,
-                Positioned(
-                  top: MediaQuery.paddingOf(context).top + 6,
-                  left: 12,
-                  right: 12,
-                  child: Align(
-                    alignment: Alignment.topCenter,
-                    child: ScenarioChip(scenarios: scenarios),
+    _DuoColumn(
+      on: query['duo'] != null,
+      child: CardsApp(
+        dependencies: dependencies,
+        overlay: scenarios == null
+            ? null
+            : (context, child) => Stack(
+                children: [
+                  child!,
+                  Positioned(
+                    top: MediaQuery.paddingOf(context).top + 6,
+                    left: 12,
+                    right: 12,
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      child: ScenarioChip(scenarios: scenarios),
+                    ),
                   ),
-                ),
-              ],
-            ),
-      home: Theme(
-        data: dark ? CardsTheme.dark() : CardsTheme.light(),
-        child: screen == 'board'
-            ? const _Board()
-            : PreviewSurface(screen: screen),
+                ],
+              ),
+        home: Theme(
+          data: dark ? CardsTheme.dark() : CardsTheme.light(),
+          child: screen == 'board'
+              ? const _Board()
+              : PreviewSurface(screen: screen),
+        ),
       ),
     ),
   );
@@ -199,6 +225,57 @@ class PreviewSurface extends StatelessWidget {
     final dependencies = CardsScope.of(context);
     return switch (screen) {
       'home' || 'signed-out' => const CardsShell(),
+      'esim' => const EsimStorePage(),
+      'esim-destination' => const EsimDestinationPage(
+        destination: 'turkey',
+        name: 'تركيا',
+      ),
+      'esim-plan' => _SheetHost(
+        sheet: EsimPlanSheet(
+          destination: EsimDestination.fromJson(fixtureEsimDestination),
+          plan: EsimDestination.fromJson(fixtureEsimDestination).plans[1],
+        ),
+      ),
+      'esim-checkout' => _SheetHost(
+        sheet: CheckoutSheet(
+          model: CheckoutModel(
+            orders: dependencies.orders,
+            brand: esimBrand('تركيا', 'TR'),
+            item: CardItem(
+              key: 'esim:merhaba-30days-3gb',
+              country: '',
+              // As the real checkout writes it: the amount isolated.
+              label: '\u20663 GB\u2069 · 30 يوماً',
+              faceValue: '',
+              faceCurrency: '',
+              price: Money.parse('82.500'),
+              regularPrice: Money.parse('82.500'),
+              promoBadge: '',
+              available: true,
+              rank: 0,
+            ),
+          )..load(),
+        ),
+      ),
+      'esim-preparing' => OrderProgressPage(
+        brand: esimBrand('أوروبا', ''),
+        openPaymentPage: false,
+        watcher: OrderWatcher(
+          orders: dependencies.orders,
+          vault: dependencies.vault,
+          order: CardOrder.fromJson(
+            fixtureOrder(id: 'esim-2', status: 'fulfilling', item: 'esim:x'),
+          ),
+        ),
+      ),
+      'esim-install' => const EsimPage(
+        iccid: '8900000000000000001',
+        justBought: true,
+      ),
+      'esim-gift' => const EsimPage(iccid: '8900000000000000003'),
+      'esim-low' => const EsimPage(iccid: '8900000000000000002'),
+      'esim-active' => const EsimPage(iccid: '8900000000000000004'),
+      'esim-ended' => const EsimPage(iccid: '8900000000000000005'),
       'my-cards' => const CardsShell(initialTab: 1),
       'account' => const CardsShell(initialTab: 2),
       'brand' => BrandPage(brand: _libyana),
@@ -230,10 +307,24 @@ class PreviewSurface extends StatelessWidget {
           ),
         )..start(),
       ),
-      'topup-done' || 'topup-receipt' => TopUpDonePage(
+      'topup-done' => TopUpDonePage(
         order: CardOrder.fromJson(fixtureTopUpOrder()),
         brand: _topUp(0),
-        fromHistory: screen == 'topup-receipt',
+      ),
+      // A top-up from «كروتي»: `topup-receipt` arrived; `&order=` any id
+      // fixtureTopUpById knows (topup-fulfilling, topup-paid-slow,
+      // topup-delivered-reported, topup-delivered-replied, topup-refunded).
+      'topup-receipt' => TopUpOrderPage(
+        brand: _topUp(0),
+        watcher: OrderWatcher(
+          orders: dependencies.orders,
+          vault: dependencies.vault,
+          order: CardOrder.fromJson(
+            fixtureTopUpById(
+              Uri.base.queryParameters['order'] ?? 'topup-delivered',
+            ),
+          ),
+        ),
       ),
       'topup-refunded' => OrderProgressPage(
         brand: _topUp(0),
@@ -328,6 +419,14 @@ class PreviewSurface extends StatelessWidget {
           ),
         ),
       ),
+      // Dafa's card page over the shelf, as the order opens it: `&url=` a
+      // test payment's page (a made-up one shows Dafa's error page).
+      'payment-page' => _PaymentPageHost(
+        url: Uri.parse(
+          Uri.base.queryParameters['url'] ??
+              'https://localbankcards.dafa.ly/pay-1',
+        ),
+      ),
       'about' => const AboutPage(),
       'onboarding' => OnboardingPage(onDone: () {}),
       // The onboarding ending on «من أين سمعت عنا؟»: `onboarding-question`
@@ -392,6 +491,35 @@ class _SheetHostState extends State<_SheetHost> {
         builder: (_) => widget.sheet,
       );
     });
+  }
+
+  @override
+  Widget build(BuildContext context) => const CardsShell();
+}
+
+class _PaymentPageHost extends StatefulWidget {
+  const _PaymentPageHost({required this.url});
+
+  final Uri url;
+
+  @override
+  State<_PaymentPageHost> createState() => _PaymentPageHostState();
+}
+
+class _PaymentPageHostState extends State<_PaymentPageHost> {
+  final _settled = ValueNotifier(false);
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => PaymentPageView.open(
+        context,
+        url: widget.url,
+        changes: _settled,
+        settled: () => _settled.value,
+      ),
+    );
   }
 
   @override
@@ -528,4 +656,48 @@ class _PhoneFrame extends StatelessWidget {
       ],
     );
   }
+}
+
+/// `&duo=1`: the system column the iPhone Duo keeps down its right edge
+/// (closed, and open on its side), for a browser sized as that screen:
+/// 466 x 678 closed, 951 x 669 open on its side. The real column is the
+/// system's: confirm on the simulator.
+class _DuoColumn extends StatelessWidget {
+  const _DuoColumn({required this.on, required this.child});
+
+  final bool on;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!on) {
+      return child;
+    }
+    const column = EdgeInsets.only(right: 88);
+    final view = MediaQueryData.fromView(View.of(context));
+    return MediaQuery(
+      data: view.copyWith(padding: column, viewPadding: column),
+      child: child,
+    );
+  }
+}
+
+/// The eSIM pages' phone, in a browser that has none.
+class _PreviewPhone extends EsimDevice {
+  const _PreviewPhone(this.kind);
+
+  final String kind;
+
+  @override
+  Future<EsimDeviceFacts> facts() async => EsimDeviceFacts(
+    platform: 'ios',
+    model: 'iPhone13,2',
+    osVersion: '18.0',
+    supportsEsim: kind != 'none',
+    simulator: false,
+    directInstall: kind != 'old',
+  );
+
+  @override
+  Future<bool> install(String url) async => true;
 }

@@ -387,7 +387,7 @@ class _TextField extends StatelessWidget {
         decoration: InputDecoration(
           labelText: field.label,
           hintText: isSearch && form.target.remembers
-              ? l10n.voucherAccountSearchHint
+              ? l10n.voucherAccountSearchHint(form.target.kind.textKey)
               : null,
           errorText: _problem(l10n),
           errorMaxLines: 2,
@@ -484,7 +484,7 @@ class _CheckLine extends StatelessWidget {
           Icons.check_circle_rounded,
           colors.success,
           (checked?.name ?? '').isEmpty
-              ? l10n.voucherAccountFoundNoName
+              ? l10n.voucherAccountFoundNoName(form.target.kind.textKey)
               : l10n.voucherAccountFound(checked!.name),
         ),
         VoucherAccountStatus.invalid => (
@@ -492,23 +492,23 @@ class _CheckLine extends StatelessWidget {
           colors.danger,
           (checked?.detail ?? '').isNotEmpty
               ? checked!.detail
-              : l10n.voucherAccountNotFound,
+              : l10n.voucherAccountNotFound(form.target.kind.textKey),
         ),
         VoucherAccountStatus.unchecked => (
           Icons.info_outline_rounded,
           colors.warning,
-          l10n.voucherAccountNoCheck,
+          l10n.voucherAccountNoCheck(form.target.kind.textKey),
         ),
         _ => (
           Icons.help_outline_rounded,
           colors.warning,
-          l10n.voucherAccountCouldNotTell,
+          l10n.voucherAccountCouldNotTell(form.target.kind.textKey),
         ),
       },
       VoucherAccountCheckState.failed => (
         Icons.help_outline_rounded,
         colors.warning,
-        l10n.voucherAccountCouldNotTell,
+        l10n.voucherAccountCouldNotTell(form.target.kind.textKey),
       ),
       VoucherAccountCheckState.idle =>
         form.target.checkable
@@ -516,7 +516,7 @@ class _CheckLine extends StatelessWidget {
             : (
                 Icons.info_outline_rounded,
                 colors.warning,
-                l10n.voucherAccountNoCheck,
+                l10n.voucherAccountNoCheck(form.target.kind.textKey),
               ),
     };
     return Row(
@@ -615,7 +615,10 @@ class _SavedList extends StatelessWidget {
         ),
         if (form.savedHasMore) ...[
           const SizedBox(height: 4),
-          Text(l10n.voucherAccountSavedMore, style: muted),
+          Text(
+            l10n.voucherAccountSavedMore(form.target.kind.textKey),
+            style: muted,
+          ),
         ],
       ],
     );

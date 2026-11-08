@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:ui' as ui;
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
@@ -70,10 +69,10 @@ class ArtPalette {
 
   static Future<Color?> _dominantOf(String url) async {
     final completer = Completer<ui.Image?>();
-    final stream = CachedNetworkImageProvider(
-      url,
-      cacheManager: artCache,
-    ).resolve(ImageConfiguration.empty);
+    // The tile's own picture: most likely in memory already, and plenty to
+    // read a colour from.
+    final picture = artImage(url, width: artTileWidth);
+    final stream = picture.resolve(ImageConfiguration.empty);
     late final ImageStreamListener listener;
     listener = ImageStreamListener(
       (info, _) {
@@ -81,6 +80,7 @@ class ArtPalette {
         stream.removeListener(listener);
       },
       onError: (_, _) {
+        picture.evict();
         completer.complete(null);
         stream.removeListener(listener);
       },

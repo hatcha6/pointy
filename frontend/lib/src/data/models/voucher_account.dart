@@ -18,6 +18,15 @@ enum VoucherTargetKind {
     'steam_invite' => steamInvite,
     _ => null,
   };
+
+  /// The word the till's `kind` strings choose by, as the cards app does: what
+  /// the cashier checks is a username, a login or a link, not always an ID.
+  String get textKey => switch (this) {
+    telegram => 'telegram',
+    steamLogin => 'steam',
+    steamInvite => 'invite',
+    gameAccount => 'game',
+  };
 }
 
 class VoucherTarget {

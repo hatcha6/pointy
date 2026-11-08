@@ -315,6 +315,7 @@ func (b *financeBook) addTracked(months []control.FinanceTrackedMonth) {
 		}
 		b.add(month.Month, control.FinanceExpense, "tracked:sms_cost", ratOf(month.SMSCost))
 		b.addSupplierCosts(month.Month, "tracked:supplier_cost", month.SupplierCost)
+		b.addSupplierCosts(month.Month, "tracked:"+financeCardsAppCost, month.CardsAppCost)
 		// What the company bought for itself: its own spending, beside the
 		// services' costs, not inside them.
 		b.addSupplierCosts(month.Month, "tracked:"+financeCompanyPurchases, month.CompanyCost)
@@ -329,6 +330,10 @@ func (b *financeBook) addTracked(months []control.FinanceTrackedMonth) {
 		b.add(month.Month, control.FinanceExpense, "tracked:gateway_fee", new(big.Rat).Set(fees))
 	}
 }
+
+// financeCardsAppCost is the book's key for what «دفتر كروت» customers'
+// cards cost the company: the cards_app service's own cost.
+const financeCardsAppCost = "cards_app_cost"
 
 // financeCompanyPurchases is the book's key for what the company bought for
 // itself (cards, top-ups, bills) from its own suppliers.

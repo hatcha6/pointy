@@ -1390,6 +1390,41 @@ pointy-relay sms config                                    # templates (MISSING 
   (`sms_deliveries_by_outcome`). Per-shop numbers live in the ledger
   (`pointy-relay sms usage`), not in metric labels.
 
+## Card App eSIMs (Airalo)
+
+The eSIM shelf of «دفتر كروت», from Airalo's Partner API. Routes:
+
+```
+GET  /v1/customers/esim/destinations         where eSIMs are sold, with a "from" price (public)
+GET  /v1/customers/esim/destinations/{key}   a destination's plans (public)
+POST /v1/customers/esim/device               {model}: does this phone take eSIMs? (public)
+GET  /v1/customers/esims[?order=]            the customer's eSIMs (Bearer)
+GET  /v1/customers/esims/{iccid}             one eSIM: how to install it, what is left (Bearer)
+PUT  /v1/customers/esims/{iccid}             {label}: who it is for (Bearer)
+GET  /v1/customers/esims/{iccid}/topups      what it can be topped up with (Bearer)
+HEAD|POST /v1/customers/esim/webhook         Airalo's low-data and credit alerts (signed)
+```
+
+- **Buying** is `POST /v1/customers/orders` with item `esim:<package>` or
+  `esim-topup:<iccid>:<package>`: the same payment, credit, fee, refund and
+  reconciler as a card. The purchase is an ordinary voucher purchase with supplier
+  `airalo`, so it reaches the books the same way.
+- **No duplicates.** The purchase is claimed once per order, an order is never
+  resent, and an unanswered one is looked up by its reference (the purchase id, in
+  Airalo's order description) before anything else happens.
+- **What installs an eSIM is not stored.** Like a card's code it is read from
+  Airalo on demand; `relay_customer_esims` holds whose it is, the plan and the usage.
+- **The catalog** syncs hourly into `relay_esim_catalog`, shared by every node. An
+  empty answer keeps what is stored.
+- **Prices** are `RRP × dollar rate × POINTY_RELAY_AIRALO_RRP_PERCENT`, never under
+  the card margin on the net cost. No dollar rate closes the shelf.
+- **Alerts** at 75%, 90%, 3 days and 1 day are pushed to the buyer once per level
+  and package (a top-up starts them over), opening the eSIM's page. Credit alerts go
+  to the operator's alert channel.
+- **Local runs:** `make relay-airalo-fake` serves a fake Partner API on :8097 (with
+  Airalo's documented sandbox error packages); point `POINTY_RELAY_AIRALO_URL` at it.
+- **Go-live:** [`cards/ESIM_GO_LIVE.md`](../cards/ESIM_GO_LIVE.md).
+
 ## Card App Customers («دفتر كروت» phone sign-in)
 
 The company's own card app (`DAFTAR_CARDS_APP_PLAN.md`) signs people in with
@@ -2213,6 +2248,12 @@ owners may take; cash from a resale is a ledger income line
 | `POINTY_RELAY_FAZER_API_KEY` | empty | the company's FazerCards reseller key (`fc_…`). Turns FazerCards on: another supplier of the gift cards it sells identically, and the only one of game keys and of cards sent to an account (below). Its paid plan must be active (a lapsed one answers 403, `supplier_unauthorized`) |
 | `POINTY_RELAY_FAZER_URL` | `https://api.fzr.cards` | `/api/v2` is appended |
 | `POINTY_RELAY_FAZER_STEAM_FEE_PERCENT` | empty | what a Steam wallet top-up costs over its face, as the account's plan charges it. FazerCards publishes no Steam price, so until this is set Steam top-ups are listed out of stock rather than priced blind |
+| `POINTY_RELAY_AIRALO_CLIENT_ID` / `_CLIENT_SECRET` | empty | the company's Airalo Partner API pair; both or none. Turns on the card app's eSIM shelf (below) |
+| `POINTY_RELAY_AIRALO_URL` | `https://partners-api.airalo.com` | another host: the fake one, for local runs |
+| `POINTY_RELAY_AIRALO_SANDBOX` | `false` | the Airalo account is in Sandbox mode. Airalo uses one host and one set of credentials for both modes, so only this flag says its orders are test money |
+| `POINTY_RELAY_AIRALO_RRP_PERCENT` | `100` | the share of Airalo's recommended retail price the shelf sells at; the card margin on the net cost is always the floor |
+| `POINTY_RELAY_AIRALO_BRAND` | empty | the brand (Partner Platform) a shared eSIM's page shows |
+| `POINTY_RELAY_AIRALO_WEBHOOK_URL` | empty | this relay's public `…/v1/customers/esim/webhook`; the sync opts it in. Empty: no low-data or expiry alerts reach customers |
 | `POINTY_RELAY_RELOADLY_SANDBOX` | `false` | `true` uses Reloadly's SANDBOX hosts: fake money, a different catalog, sandbox keys only (the startup log says `SANDBOX` loudly, and everything the relay sells is marked test) |
 | `POINTY_RELAY_RELOADLY_REQUEST_TIMEOUT` | `45s` | one Reloadly purchase call (the relay's per-call limit is the larger of this and the BN Plus one) |
 | `POINTY_RELAY_RELOADLY_DIRECTORY_INTERVAL` | `15m` | how often the countries, operators and billers of direct top-up and bill payments are read from Reloadly again; `0` reads them once |

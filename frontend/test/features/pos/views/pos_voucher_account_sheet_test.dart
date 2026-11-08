@@ -269,6 +269,41 @@ void main() {
     });
   });
 
+  testWidgets('a Telegram top-up asks to check the username, not an ID', (
+    tester,
+  ) async {
+    // The cards app names each kind of account (2026-11-07); so does the till.
+    tester.view.physicalSize = const Size(1100, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    const telegram = VoucherTarget(
+      kind: VoucherTargetKind.telegram,
+      fields: [VoucherTargetField(key: 'username', label: 'اسم المستخدم')],
+    );
+    await tester.pumpWidget(
+      _app(
+        PosVoucherAccountPicker(
+          brand: _brand(),
+          target: telegram,
+          onPicked: (_) {},
+          loadSaved: ({required brand, search = '', customer}) async =>
+              const Ok(SavedVoucherAccountPage(accounts: [])),
+          check: ({required variantId, required values}) async =>
+              const Ok(VoucherAccountCheck(status: VoucherAccountStatus.valid)),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.enterText(
+      find.byKey(const ValueKey('voucher_account_field_username')),
+      'ahmed_ly',
+    );
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(find.textContaining('راجع اسم المستخدم مع الزبون'), findsOneWidget);
+    expect(find.textContaining('المعرّف'), findsNothing);
+  });
+
   group('the dock', () {
     PosCardRequestsController controllerWith(List<CardRequest> rows) {
       return PosCardRequestsController(load: () async => Ok(rows));

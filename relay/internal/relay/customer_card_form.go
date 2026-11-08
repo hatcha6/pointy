@@ -185,3 +185,30 @@ func handleCustomerCardReturn(w http.ResponseWriter, r *http.Request) {
 		`<body style="font-family:system-ui;text-align:center;padding:48px 16px">` +
 		`<p>تم التحقق. ارجع إلى تطبيق دفتر كروت لإكمال الدفع.</p></body></html>`))
 }
+
+const customerPaymentReturnPath = "/v1/customers/payment-return"
+
+// paymentReturnMessage is what the payment-return page tells the frame or
+// web view it is in; the card app listens for it (PaymentFrame).
+const paymentReturnMessage = "pointy-payment-return"
+
+// handleCustomerPaymentReturn serves the page Dafa's «المتابعة» opens after
+// a payment. The app never shows it: a phone's web view stops at the address,
+// and on the web the page tells the frame's owner (the app) and the frame
+// closes. It carries nothing about the order, so it may tell any parent. A
+// browser that opened Dafa's page by itself (an older app) sees one line.
+func handleCustomerPaymentReturn(w http.ResponseWriter, _ *http.Request) {
+	header := w.Header()
+	header.Set("Content-Type", "text/html; charset=utf-8")
+	header.Set("Cache-Control", "no-store")
+	header.Set("Referrer-Policy", "no-referrer")
+	header.Set("X-Content-Type-Options", "nosniff")
+	header.Set("Content-Security-Policy",
+		"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'")
+	_, _ = w.Write([]byte(`<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8">` +
+		`<meta name="viewport" content="width=device-width,initial-scale=1"><title>دفتر كروت</title>` +
+		`<body style="font-family:system-ui;text-align:center;padding:48px 16px">` +
+		`<p>تم الدفع. ارجع إلى دفتر كروت ليظهر كرتك.</p>` +
+		`<script>try{if(window.parent!==window)window.parent.postMessage("` + paymentReturnMessage + `","*")}catch(e){}</script>` +
+		`</body></html>`))
+}

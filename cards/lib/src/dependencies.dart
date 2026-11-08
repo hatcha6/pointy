@@ -1,13 +1,16 @@
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'config.dart';
 import 'core/analytics/analytics.dart';
+import 'core/esim/esim_device.dart';
 import 'core/push/push.dart';
 import 'data/accounts/saved_accounts.dart';
 import 'data/api/relay_api.dart';
 import 'data/repositories/attribution_repository.dart';
 import 'data/repositories/auth_repository.dart';
 import 'data/repositories/catalog_repository.dart';
+import 'data/repositories/esim_repository.dart';
 import 'data/repositories/orders_repository.dart';
 import 'data/session/session_store.dart';
 import 'data/settings/app_settings.dart';
@@ -15,6 +18,7 @@ import 'data/vault/card_vault.dart';
 import 'data/vault/code_vault.dart';
 import 'features/card_payment/moamalat_client.dart';
 import 'features/links/link_inbox.dart';
+import 'shared/art_preloader.dart';
 
 /// Everything the screens use, built once at launch. Screens get it from
 /// [CardsScope]; tests and the preview harness build it with fakes.
@@ -34,9 +38,13 @@ class CardsDependencies {
     Analytics? analytics,
     Push? push,
     SavedAccounts? accounts,
+    EsimRepository? esim,
+    EsimCompatibility? esimCompatibility,
     this.preferences,
+    this.art,
   }) : settings = settings ?? AppSettings(),
        accounts = accounts ?? SavedAccounts(preferences: preferences),
+       esim = esim ?? EsimRepository(api: auth.api),
        analytics = analytics ?? NoAnalytics(),
        push = push ?? NoPush(),
        moamalat = moamalat ?? MoamalatClient(),
@@ -48,12 +56,24 @@ class CardsDependencies {
              api: auth.api,
              isSignedIn: () => auth.isSignedIn,
            ) {
+    _esimCompatibility = esimCompatibility;
     // A link's campaign code is taken as the link arrives; a followed
     // campaign's own page opens after it.
     this.links.onOpen ??= this.attribution.openedLink;
     this.attribution.onLanding ??= (landing) =>
         this.links.open(Uri.parse(landing));
   }
+
+  final EsimRepository esim;
+  EsimCompatibility? _esimCompatibility;
+
+  /// A phone other than this one: tests and the preview harness.
+  void overrideEsimCompatibility(EsimCompatibility compatibility) =>
+      _esimCompatibility = compatibility;
+
+  /// What this phone says about eSIMs, read once.
+  EsimCompatibility get esimCompatibility =>
+      _esimCompatibility ??= EsimCompatibility(repository: esim);
 
   /// The real thing: the relay over HTTPS, the session in the keychain.
   factory CardsDependencies.live(CardsConfig config) {
@@ -76,15 +96,18 @@ class CardsDependencies {
       attribution: attribution,
       analytics: analytics,
     );
+    final catalog = CatalogRepository(
+      api: api,
+      channel: config.channel,
+      preferences: preferences,
+    );
     return CardsDependencies(
       config: config,
       auth: auth,
       attribution: attribution,
-      catalog: CatalogRepository(
-        api: api,
-        channel: config.channel,
-        preferences: preferences,
-      ),
+      catalog: catalog,
+      // A browser keeps art in its own store, out of the app's reach.
+      art: kIsWeb ? null : ArtPreloader(catalog: catalog),
       orders: OrdersRepository(
         api: api,
         channel: config.channel,
@@ -107,6 +130,9 @@ class CardsDependencies {
   final CardsConfig config;
   final AuthRepository auth;
   final CatalogRepository catalog;
+
+  /// Readies stored art ahead of the shelf; none in tests.
+  final ArtPreloader? art;
   final OrdersRepository orders;
 
   /// Delivered codes on the device, and the biometric lock in front of them.

@@ -33,10 +33,10 @@ class RechargeOutcomeDetails extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final unresolved = rows.where((row) => row.needsAttention).toList();
     final failed = rows.where((row) => row.isRefused).toList();
-    final refundTotal = failed.fold<double>(
-      0,
-      (sum, row) => sum + (row.refundAmount ?? 0),
-    );
+    // Only what is handed back: a line sold on account came off the debt.
+    final refundTotal = failed
+        .where((row) => !row.refundToAccount)
+        .fold<double>(0, (sum, row) => sum + (row.refundAmount ?? 0));
 
     return Column(
       key: const ValueKey('recharge_outcome_details'),
@@ -97,7 +97,7 @@ class RechargeOutcomeDetails extends StatelessWidget {
                     ),
                     if (row.refundAmount case final amount?)
                       Text(
-                        l10n.rechargeRefundedLine(formatMoney(amount)),
+                        rechargeRefundText(l10n, row, amount),
                         style: textTheme.bodySmall?.copyWith(
                           color: colors.danger,
                         ),
@@ -121,3 +121,13 @@ class RechargeOutcomeDetails extends StatelessWidget {
     );
   }
 }
+
+/// Under a refused line the server gave back: hand the money back, or — sold
+/// on account — say it came off the debt, so nobody pays out cash never taken.
+String rechargeRefundText(
+  AppLocalizations l10n,
+  IntegrationChargeResult row,
+  double amount,
+) => row.refundToAccount
+    ? l10n.rechargeRefundedToAccountLine(formatMoney(amount))
+    : l10n.rechargeRefundedLine(formatMoney(amount));

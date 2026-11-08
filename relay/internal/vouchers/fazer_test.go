@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -17,15 +18,16 @@ import (
 
 // fakeFazer answers like FazerCards' public API.
 type fakeFazer struct {
-	mu       sync.Mutex
-	orders   map[string]map[string]any
-	posted   []map[string]any
-	keys     []string
-	reads    int
-	settleAt int // completed after this many reads
-	refund   bool
-	checks   int // player checks asked
-	balances int // balance reads
+	mu        sync.Mutex
+	orders    map[string]map[string]any
+	posted    []map[string]any
+	keys      []string
+	reads     int
+	settleAt  int // completed after this many reads
+	refund    bool
+	checks    int            // player checks asked
+	balances  int            // balance reads
+	giftReads map[string]int // gift card category reads
 }
 
 func newFakeFazer(t *testing.T) (*fakeFazer, *fazer.Client) {
@@ -41,6 +43,12 @@ func (f *fakeFazer) serve(w http.ResponseWriter, r *http.Request) {
 	defer f.mu.Unlock()
 	write := func(body any) { _ = json.NewEncoder(w).Encode(body) }
 	path := strings.TrimPrefix(r.URL.Path, "/api/v2")
+	if path == "/giftcards/cards" {
+		if f.giftReads == nil {
+			f.giftReads = map[string]int{}
+		}
+		f.giftReads[r.URL.Query().Get("category_id")]++
+	}
 	switch {
 	case r.Method == http.MethodPost && (path == "/giftcards/order" || path == "/topups/order" || path == "/telegram/stars/buy" ||
 		path == "/steam-gifts/order"):
@@ -333,6 +341,38 @@ func TestFazerOffers(t *testing.T) {
 	offers, _ = supplier.OffersFor(context.Background(), refs[5:])
 	if len(offers) != 1 || offers[0].Price != "10.30" || !offers[0].InStock {
 		t.Fatalf("steam with its fee = %+v", offers)
+	}
+}
+
+// The offer sync reads categories at once, or the catalog's hundreds would not
+// fit its deadline: each is still read once, and the answer keeps the asked order.
+func TestFazerOffersReadEachCategoryOnce(t *testing.T) {
+	fake, client := newFakeFazer(t)
+	supplier := instantSupplier(client)
+	var refs []Ref
+	for _, category := range []string{"app_store_itunes_us", "app_store_itunes_uk", "google_play_us", "twitch_usd", "netflix_us", "airbnb_us"} {
+		for _, offer := range []string{"c10", "c25"} {
+			refs = append(refs, fazerRefOf(t, fmt.Sprintf(`{"key": "fazer", "product": "giftcard", "category": %q, "offer": %q}`, category, offer)))
+		}
+	}
+	offers, err := supplier.OffersFor(context.Background(), refs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fake.mu.Lock()
+	defer fake.mu.Unlock()
+	for category, reads := range fake.giftReads {
+		if reads != 1 {
+			t.Errorf("%s was read %d times", category, reads)
+		}
+	}
+	if len(fake.giftReads) != 6 {
+		t.Errorf("read %d categories: %v", len(fake.giftReads), fake.giftReads)
+	}
+	for i, offer := range offers {
+		if offer.Ref != refs[i].ID {
+			t.Fatalf("offer %d is %s, want %s", i, offer.Ref, refs[i].ID)
+		}
 	}
 }
 

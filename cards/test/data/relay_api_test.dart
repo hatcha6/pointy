@@ -127,4 +127,40 @@ void main() {
       );
     },
   );
+
+  test('a public route asks with the session when there is one', () async {
+    final seen = <String?>[];
+    final client = MockClient((request) async {
+      if (request.url.path == '/v1/customers/auth/refresh') {
+        return _json(401, {'code': 'invalid_refresh'});
+      }
+      final auth = request.headers['Authorization'];
+      seen.add(auth);
+      if (auth == 'Bearer pca1.old') {
+        return _json(401, {'code': 'token_expired'});
+      }
+      return _json(200, {'available': false});
+    });
+    final sessions = MemorySessionStore(_session);
+    final api = RelayApi(
+      baseUrl: Uri.parse('https://relay.test'),
+      sessions: sessions,
+      client: client,
+    );
+
+    // A session that cannot be renewed is dropped, and the route answered as
+    // anyone's, not failed.
+    final answer = await api.get(
+      '/v1/customers/esim/destinations',
+      withSession: true,
+    );
+    expect(answer['available'], isFalse);
+    expect(seen, ['Bearer pca1.old', null]);
+    expect(await sessions.read(), isNull);
+
+    // Signed out, it simply goes without.
+    seen.clear();
+    await api.get('/v1/customers/esim/destinations', withSession: true);
+    expect(seen, [null]);
+  });
 }

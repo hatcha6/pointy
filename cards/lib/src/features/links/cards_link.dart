@@ -12,6 +12,9 @@ import 'package:flutter/foundation.dart';
 /// | `/brand/pubg`                      | a brand's page                       |
 /// | `/brand/pubg?item=pubg-325`        | a brand's page on one card           |
 /// | `/my-cards`, `/account`            | the other two tabs                   |
+/// | `/esim`                            | the eSIM shelf                       |
+/// | `/esim/turkey`                     | a destination's eSIM plans           |
+/// | `/esims/8944…`                     | one of the customer's eSIMs          |
 /// | `/privacy`, `/terms`, `/about`     | the legal pages and «عن التطبيق»       |
 ///
 /// Anything else (an old or mistyped address) opens the shelf. Extra query
@@ -45,6 +48,9 @@ sealed class CardsLink {
       'my-cards' when second() != null => OrderLink(second()!),
       'my-cards' => const TabLink(CardsTab.myCards),
       'account' => const TabLink(CardsTab.account),
+      'esim' => EsimShelfLink(destination: second()),
+      'esims' when second() != null => EsimLink(second()!),
+      'esims' => const TabLink(CardsTab.myCards),
       'privacy' => const PageLink(LinkedPage.privacy),
       'terms' => const PageLink(LinkedPage.terms),
       'about' => const PageLink(LinkedPage.about),
@@ -146,6 +152,41 @@ final class OrderLink extends CardsLink {
 
   @override
   int get hashCode => order.hashCode;
+}
+
+/// The eSIM shelf, or one destination on it.
+final class EsimShelfLink extends CardsLink {
+  const EsimShelfLink({this.destination});
+
+  final String? destination;
+
+  @override
+  String get location => destination == null
+      ? '/esim'
+      : '/esim/${Uri.encodeComponent(destination!)}';
+
+  @override
+  bool operator ==(Object other) =>
+      other is EsimShelfLink && other.destination == destination;
+
+  @override
+  int get hashCode => destination.hashCode;
+}
+
+/// One eSIM the customer bought: a low-data alert opens this, to top up.
+final class EsimLink extends CardsLink {
+  const EsimLink(this.iccid);
+
+  final String iccid;
+
+  @override
+  String get location => '/esims/${Uri.encodeComponent(iccid)}';
+
+  @override
+  bool operator ==(Object other) => other is EsimLink && other.iccid == iccid;
+
+  @override
+  int get hashCode => iccid.hashCode;
 }
 
 enum LinkedPage { privacy, terms, about }

@@ -38758,6 +38758,12 @@ abstract class AppLocalizations {
   /// **'أُلغي من الفاتورة تلقائياً — أعِد {amount} للزبون.'**
   String rechargeRefundedLine(String amount);
 
+  /// Under a refused provider line sold on account (a staff account or a customer's tab): the server took it off what is owed, so no money is handed back.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُلغي من الفاتورة تلقائياً — حُذف {amount} من الحساب الآجل، ولا يُعاد شيء نقداً.'**
+  String rechargeRefundedToAccountLine(String amount);
+
   /// Bold line at the end of the refused-recharge dialog: the total the cashier hands back for every refused line of this sale.
   ///
   /// In ar, this message translates to:
@@ -50805,17 +50811,17 @@ abstract class AppLocalizations {
   /// **'لا حساب محفوظ بهذا. تابع إن كان حساباً جديداً.'**
   String get voucherAccountSavedNoMatch;
 
-  /// Till: game top-ups by account and the card requests panel.
+  /// Till: account top-ups; kind is game, telegram, steam or invite.
   ///
   /// In ar, this message translates to:
-  /// **'توجد حسابات أخرى: اكتب المعرّف أو الاسم لتجدها.'**
-  String get voucherAccountSavedMore;
+  /// **'{kind, select, telegram{توجد حسابات أخرى: اكتب اسم المستخدم أو الاسم لتجدها.} steam{توجد حسابات أخرى: اكتب اسم الدخول أو الاسم لتجدها.} other{توجد حسابات أخرى: اكتب المعرّف أو الاسم لتجدها.}}'**
+  String voucherAccountSavedMore(String kind);
 
-  /// Till: game top-ups by account and the card requests panel.
+  /// Till: account top-ups; kind is game, telegram, steam or invite.
   ///
   /// In ar, this message translates to:
-  /// **'اكتب المعرّف أو ابحث بالاسم'**
-  String get voucherAccountSearchHint;
+  /// **'{kind, select, telegram{اكتب اسم المستخدم أو ابحث بالاسم} steam{اكتب اسم الدخول أو ابحث بالاسم} other{اكتب المعرّف أو ابحث بالاسم}}'**
+  String voucherAccountSearchHint(String kind);
 
   /// Till: game top-ups by account and the card requests panel.
   ///
@@ -50877,29 +50883,29 @@ abstract class AppLocalizations {
   /// **'الحساب: {name}'**
   String voucherAccountFound(String name);
 
-  /// Till: game top-ups by account and the card requests panel.
+  /// Till: account top-ups; kind is game, telegram, steam or invite.
   ///
   /// In ar, this message translates to:
-  /// **'الحساب موجود'**
-  String get voucherAccountFoundNoName;
+  /// **'{kind, select, steam{يمكن شحن هذا الحساب} other{الحساب موجود}}'**
+  String voucherAccountFoundNoName(String kind);
 
-  /// Till: game top-ups by account and the card requests panel.
+  /// Till: account top-ups; kind is game, telegram, steam or invite.
   ///
   /// In ar, this message translates to:
-  /// **'لا يوجد حساب بهذا المعرّف. راجعه مع الزبون.'**
-  String get voucherAccountNotFound;
+  /// **'{kind, select, steam{لا يمكن شحن حساب ستيم هذا. راجع اسم الدخول مع الزبون.} other{لا يوجد حساب بهذا المعرّف. راجعه مع الزبون.}}'**
+  String voucherAccountNotFound(String kind);
 
-  /// Till: game top-ups by account and the card requests panel.
+  /// Till: account top-ups; kind is game, telegram, steam or invite.
   ///
   /// In ar, this message translates to:
-  /// **'تعذّر التحقق الآن. تأكد من المعرّف مع الزبون: لا يُسترجع الشحن من حساب خاطئ.'**
-  String get voucherAccountCouldNotTell;
+  /// **'{kind, select, telegram{تعذّر التحقق الآن. تأكد من اسم المستخدم مع الزبون: لا يُسترجع الشحن من حساب خاطئ.} steam{تعذّر التحقق الآن. تأكد من اسم الدخول مع الزبون: لا يُسترجع الرصيد من حساب خاطئ.} invite{تعذّر التحقق الآن. تأكد من رابط الدعوة مع الزبون: تُرسل الهدية إلى صاحبه ولا تُسترجع.} other{تعذّر التحقق الآن. تأكد من المعرّف مع الزبون: لا يُسترجع الشحن من حساب خاطئ.}}'**
+  String voucherAccountCouldNotTell(String kind);
 
-  /// Till: game top-ups by account and the card requests panel.
+  /// Till: account top-ups; kind is game, telegram, steam or invite.
   ///
   /// In ar, this message translates to:
-  /// **'راجع المعرّف مع الزبون: لا يُسترجع الشحن من حساب خاطئ.'**
-  String get voucherAccountNoCheck;
+  /// **'{kind, select, telegram{راجع اسم المستخدم مع الزبون: لا يُسترجع الشحن من حساب خاطئ.} steam{راجع اسم الدخول مع الزبون: لا يُسترجع الرصيد من حساب خاطئ.} invite{راجع رابط الدعوة مع الزبون: تُرسل الهدية إلى صاحبه ولا تُسترجع.} other{راجع المعرّف مع الزبون: لا يُسترجع الشحن من حساب خاطئ.}}'**
+  String voucherAccountNoCheck(String kind);
 
   /// Till: game top-ups by account and the card requests panel.
   ///
@@ -51081,10 +51087,16 @@ abstract class AppLocalizations {
   /// **'أعد للزبون {amount}: سُجّل الإرجاع في الدرج.'**
   String cardRequestRefunded(String amount);
 
+  /// Till card requests panel: a failed card sold on account came off the debt.
+  ///
+  /// In ar, this message translates to:
+  /// **'حُذف {amount} من الحساب الآجل: لا يُعاد شيء نقداً.'**
+  String cardRequestRefundedToAccount(String amount);
+
   /// Till: game top-ups by account and the card requests panel.
   ///
   /// In ar, this message translates to:
-  /// **'لم يُرجع المبلغ تلقائياً (الدرج مغلق أو البيع آجل): راجع الفاتورة.'**
+  /// **'لم يُرجع المبلغ تلقائياً (الدرج مغلق): راجع الفاتورة.'**
   String get cardRequestNotRefunded;
 
   /// Till: game top-ups by account and the card requests panel.

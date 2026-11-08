@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
 	"math/big"
 	"net/http"
 	"net/url"
@@ -17,6 +18,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"pointy/relay/internal/airalo"
 	"pointy/relay/internal/bnplus"
 	"pointy/relay/internal/fazer"
 	"pointy/relay/internal/ratelimit"
@@ -240,6 +242,52 @@ func attachFazerSupplier(config *relayserver.VoucherConfig, settings voucherSett
 	config.FazerWebhookToken = relayserver.FazerWebhookToken(key)
 	config.FazerSigning = &relayserver.FazerSigning{}
 	return warnings
+}
+
+// airaloSettings is the eSIM shelf's part of the relay's flags.
+type airaloSettings struct {
+	ClientID, ClientSecret, BaseURL, Brand, RRPPercent, WebhookURL string
+	Sandbox                                                        bool
+}
+
+// attachAiraloSupplier builds Airalo's client and registers it. Without
+// credentials the shelf stays off, unless the vouchers run in test mode, when a
+// stored catalog sells test eSIMs.
+func attachAiraloSupplier(config *relayserver.VoucherConfig, settings airaloSettings, client *http.Client, logger *slog.Logger) (relayserver.ESIMConfig, []string) {
+	var warnings []string
+	esim := relayserver.ESIMConfig{
+		Sandbox:         settings.Sandbox,
+		WebhookURL:      strings.TrimSpace(settings.WebhookURL),
+		DeviceRateLimit: ratelimit.Policy{Limit: 30, Window: time.Minute},
+	}
+	if percent, ok := new(big.Rat).SetString(strings.TrimSpace(settings.RRPPercent)); ok && percent.Sign() > 0 {
+		esim.RRPPercent = percent
+	} else if strings.TrimSpace(settings.RRPPercent) != "" {
+		warnings = append(warnings, fmt.Sprintf("POINTY_RELAY_AIRALO_RRP_PERCENT %q is not a percentage; selling at 100%%", settings.RRPPercent))
+	}
+	credentials := airalo.Config{
+		BaseURL:      settings.BaseURL,
+		ClientID:     strings.TrimSpace(settings.ClientID),
+		ClientSecret: strings.TrimSpace(settings.ClientSecret),
+		HTTPClient:   withoutRedirects(client),
+		Logger:       logger,
+	}
+	if credentials.Configured() {
+		esim.Client = airalo.New(credentials)
+		if config.Suppliers == nil {
+			config.Suppliers = map[string]vouchers.Supplier{}
+		}
+		config.Suppliers[vouchers.SupplierAiralo] = &vouchers.AiraloSupplier{Client: esim.Client, Brand: strings.TrimSpace(settings.Brand)}
+		if esim.WebhookURL == "" {
+			warnings = append(warnings, "POINTY_RELAY_AIRALO_WEBHOOK_URL is empty: customers get no low-data or expiry alerts")
+		}
+		if settings.Sandbox {
+			warnings = append(warnings, "Airalo is in Sandbox mode: eSIMs are simulated and cannot be installed")
+		}
+	} else if settings.ClientID != "" || settings.ClientSecret != "" {
+		warnings = append(warnings, "Airalo needs both a client id and a client secret; the eSIM shelf is off")
+	}
+	return relayserver.NewESIMConfig(esim), warnings
 }
 
 // reloadlyStartupMode is how the startup log says which Reloadly the relay talks

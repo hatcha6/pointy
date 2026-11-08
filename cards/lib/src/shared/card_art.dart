@@ -1,11 +1,11 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:pointy_brand/pointy_brand.dart';
 
 import '../data/models/catalog.dart';
 import '../design/cards_tokens.dart';
-import 'art_cache.dart';
+import 'art_image.dart';
 import 'cards_scope.dart';
+import 'esim_card_art.dart';
 import 'name_text.dart';
 
 /// Card art is 16:10, like a gift card on a rack.
@@ -69,17 +69,16 @@ class CardArtImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (brand.category == esimCategory) {
+      return EsimCardArt(name: brand.name, country: brand.flagCountry);
+    }
     final fallback = DrawnCard(brand: brand);
     if (brand.logo.isEmpty) {
       return fallback;
     }
-    return CachedNetworkImage(
-      imageUrl: CardsScope.of(context).catalog.imageUrl(brand.logo).toString(),
-      cacheManager: artCache,
-      fit: BoxFit.cover,
-      fadeInDuration: CardsMotion.fast,
-      placeholder: (_, _) => fallback,
-      errorWidget: (_, _, _) => fallback,
+    return ArtImage(
+      url: CardsScope.of(context).catalog.imageUrl(brand.logo).toString(),
+      fallback: fallback,
     );
   }
 }
@@ -94,6 +93,7 @@ class DrawnCard extends StatelessWidget {
   final CardBrand brand;
 
   static (Color, Color) palette(String category) => switch (category) {
+    esimCategory ||
     'telecom' ||
     'intl_topup' => (const Color(0xFF0F766E), const Color(0xFF064E3B)),
     'internet' => (const Color(0xFF1D4ED8), const Color(0xFF1E3A8A)),

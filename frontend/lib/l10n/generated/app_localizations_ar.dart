@@ -22819,6 +22819,11 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String rechargeRefundedToAccountLine(String amount) {
+    return 'أُلغي من الفاتورة تلقائياً — حُذف $amount من الحساب الآجل، ولا يُعاد شيء نقداً.';
+  }
+
+  @override
   String rechargeRefundedTotal(String amount) {
     return 'المبلغ المُعاد للزبون: $amount';
   }
@@ -30174,11 +30179,24 @@ class AppLocalizationsAr extends AppLocalizations {
       'لا حساب محفوظ بهذا. تابع إن كان حساباً جديداً.';
 
   @override
-  String get voucherAccountSavedMore =>
-      'توجد حسابات أخرى: اكتب المعرّف أو الاسم لتجدها.';
+  String voucherAccountSavedMore(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'telegram': 'توجد حسابات أخرى: اكتب اسم المستخدم أو الاسم لتجدها.',
+      'steam': 'توجد حسابات أخرى: اكتب اسم الدخول أو الاسم لتجدها.',
+      'other': 'توجد حسابات أخرى: اكتب المعرّف أو الاسم لتجدها.',
+    });
+    return '$_temp0';
+  }
 
   @override
-  String get voucherAccountSearchHint => 'اكتب المعرّف أو ابحث بالاسم';
+  String voucherAccountSearchHint(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'telegram': 'اكتب اسم المستخدم أو ابحث بالاسم',
+      'steam': 'اكتب اسم الدخول أو ابحث بالاسم',
+      'other': 'اكتب المعرّف أو ابحث بالاسم',
+    });
+    return '$_temp0';
+  }
 
   @override
   String get voucherAccountOther => 'حساب آخر';
@@ -30215,19 +30233,49 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
-  String get voucherAccountFoundNoName => 'الحساب موجود';
+  String voucherAccountFoundNoName(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'steam': 'يمكن شحن هذا الحساب',
+      'other': 'الحساب موجود',
+    });
+    return '$_temp0';
+  }
 
   @override
-  String get voucherAccountNotFound =>
-      'لا يوجد حساب بهذا المعرّف. راجعه مع الزبون.';
+  String voucherAccountNotFound(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'steam': 'لا يمكن شحن حساب ستيم هذا. راجع اسم الدخول مع الزبون.',
+      'other': 'لا يوجد حساب بهذا المعرّف. راجعه مع الزبون.',
+    });
+    return '$_temp0';
+  }
 
   @override
-  String get voucherAccountCouldNotTell =>
-      'تعذّر التحقق الآن. تأكد من المعرّف مع الزبون: لا يُسترجع الشحن من حساب خاطئ.';
+  String voucherAccountCouldNotTell(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'telegram':
+          'تعذّر التحقق الآن. تأكد من اسم المستخدم مع الزبون: لا يُسترجع الشحن من حساب خاطئ.',
+      'steam':
+          'تعذّر التحقق الآن. تأكد من اسم الدخول مع الزبون: لا يُسترجع الرصيد من حساب خاطئ.',
+      'invite':
+          'تعذّر التحقق الآن. تأكد من رابط الدعوة مع الزبون: تُرسل الهدية إلى صاحبه ولا تُسترجع.',
+      'other':
+          'تعذّر التحقق الآن. تأكد من المعرّف مع الزبون: لا يُسترجع الشحن من حساب خاطئ.',
+    });
+    return '$_temp0';
+  }
 
   @override
-  String get voucherAccountNoCheck =>
-      'راجع المعرّف مع الزبون: لا يُسترجع الشحن من حساب خاطئ.';
+  String voucherAccountNoCheck(String kind) {
+    String _temp0 = intl.Intl.selectLogic(kind, {
+      'telegram': 'راجع اسم المستخدم مع الزبون: لا يُسترجع الشحن من حساب خاطئ.',
+      'steam': 'راجع اسم الدخول مع الزبون: لا يُسترجع الرصيد من حساب خاطئ.',
+      'invite':
+          'راجع رابط الدعوة مع الزبون: تُرسل الهدية إلى صاحبه ولا تُسترجع.',
+      'other': 'راجع المعرّف مع الزبون: لا يُسترجع الشحن من حساب خاطئ.',
+    });
+    return '$_temp0';
+  }
 
   @override
   String get voucherAccountEnterFirst => 'أدخل الحساب أولاً';
@@ -30340,8 +30388,13 @@ class AppLocalizationsAr extends AppLocalizations {
   }
 
   @override
+  String cardRequestRefundedToAccount(String amount) {
+    return 'حُذف $amount من الحساب الآجل: لا يُعاد شيء نقداً.';
+  }
+
+  @override
   String get cardRequestNotRefunded =>
-      'لم يُرجع المبلغ تلقائياً (الدرج مغلق أو البيع آجل): راجع الفاتورة.';
+      'لم يُرجع المبلغ تلقائياً (الدرج مغلق): راجع الفاتورة.';
 
   @override
   String cardRequestNoticeDone(String label) {

@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:pointy_brand/pointy_brand.dart';
 
 import '../../../l10n/generated/app_localizations.dart';
@@ -22,6 +23,10 @@ import '../../shared/search_field.dart';
 import '../../shared/skeleton.dart';
 import '../brand/brand_page.dart';
 import '../search/search_result_row.dart';
+import '../../data/models/esim.dart';
+import '../../shared/cards_scope.dart';
+import '../esim/esim_entry.dart';
+import '../esim/esim_search.dart';
 import '../shelf/shelf_model.dart';
 import '../../shared/haptics.dart';
 import '../shell/cards_sidebar.dart';
@@ -180,6 +185,8 @@ class _HomePageState extends State<HomePage>
               onRefresh: shelf.refresh,
               child: CustomScrollView(
                 controller: _scroll,
+                // Cards start loading well before a fast scroll reaches them.
+                scrollCacheExtent: const ScrollCacheExtent.pixels(1600),
                 // Unclipped where the header draws a scroll edge to match: the
                 // shelf runs on under the status bar (and any side column),
                 // as Apple's pages do.
@@ -246,7 +253,10 @@ class _HomePageState extends State<HomePage>
       return [const SliverToBoxAdapter(child: _SkeletonShelves())];
     }
     final brands = shelf.brands;
-    if (brands.isEmpty) {
+    final esims = shelf.searching
+        ? esimSearch(CardsScope.of(context).esim.shelf.value, shelf.query)
+        : const <EsimDestinationRow>[];
+    if (brands.isEmpty && esims.isEmpty) {
       return [
         SliverFillRemaining(hasScrollBody: false, child: _emptyState(context)),
       ];
@@ -256,21 +266,27 @@ class _HomePageState extends State<HomePage>
     // title that already says what they are.
     if (shelf.searching && !desktop) {
       return [
-        SliverToBoxAdapter(child: SectionHeader(title: l10n.searchResults)),
-        SliverList.separated(
-          itemCount: brands.length,
-          separatorBuilder: (_, _) => const SizedBox(height: CardsSpace.xs),
-          itemBuilder: (context, index) => ShelfRise(
-            reveal: _reveal,
-            order: index,
-            child: SearchResultRow(brand: brands[index], shelf: shelf),
+        if (brands.isNotEmpty) ...[
+          SliverToBoxAdapter(child: SectionHeader(title: l10n.searchResults)),
+          SliverList.separated(
+            itemCount: brands.length,
+            separatorBuilder: (_, _) => const SizedBox(height: CardsSpace.xs),
+            itemBuilder: (context, index) => ShelfRise(
+              reveal: _reveal,
+              order: index,
+              child: SearchResultRow(brand: brands[index], shelf: shelf),
+            ),
           ),
-        ),
+        ],
+        if (esims.isNotEmpty)
+          SliverToBoxAdapter(child: EsimSearchSection(rows: esims)),
       ];
     }
     if (shelf.category != null || shelf.searching) {
       final columns = HomePage.columnsFor(width);
       return [
+        if (esims.isNotEmpty)
+          SliverToBoxAdapter(child: EsimSearchSection(rows: esims)),
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(
             CardsSpace.gutter,
@@ -319,24 +335,21 @@ class _HomePageState extends State<HomePage>
         piece(SectionHeader(title: l10n.featuredTitle)),
         piece(_FeaturedCarousel(brands: featured)),
       ],
+      piece(const EsimEntry()),
       if (shelf.buyAgain.isNotEmpty) ...[
         piece(SectionHeader(title: l10n.buyAgainTitle)),
         piece(_BuyAgainShelf(entries: shelf.buyAgain)),
       ],
       for (final category in categories)
-        if (brands.any((b) => b.category == category.key)) ...[
+        if (brands.where((b) => b.category == category.key).toList()
+            case final inCategory when inCategory.isNotEmpty) ...[
           piece(
             SectionHeader(
               title: names[category.key] ?? category.key,
               onSeeAll: () => _pickCategory(category.key),
             ),
           ),
-          piece(
-            _BrandShelf(
-              brands: brands.where((b) => b.category == category.key).toList(),
-              scope: category.key,
-            ),
-          ),
+          piece(_BrandShelf(brands: inCategory, scope: category.key)),
         ],
     ];
   }
@@ -665,8 +678,9 @@ class _CategoryBarState extends State<_CategoryBar> {
 }
 
 /// The badge a brand wears: unavailable, bought on the website, its own, or
-/// a running promotion's.
-Widget? _badge(BuildContext context, CardBrand brand) {
+/// a running promotion's. None when it would only repeat [section], the title
+/// the tile already sits under («الأكثر طلباً» on «الأكثر طلباً»).
+Widget? _badge(BuildContext context, CardBrand brand, {String? section}) {
   if (!brand.anyAvailable) {
     return Pill(
       text: AppLocalizations.of(context).unavailableNow,
@@ -679,7 +693,9 @@ Widget? _badge(BuildContext context, CardBrand brand) {
   final text = brand.badge.isNotEmpty
       ? brand.badge
       : brand.items.where((i) => i.onPromo).firstOrNull?.promoBadge ?? '';
-  return text.isEmpty ? null : Pill(text: text, tone: PillTone.promo);
+  return text.isEmpty || text.trim() == section?.trim()
+      ? null
+      : Pill(text: text, tone: PillTone.promo);
 }
 
 class _FeaturedCarousel extends StatefulWidget {
@@ -788,6 +804,7 @@ class _BrandShelf extends StatelessWidget {
       child: ColumnBleed(
         builder: (extra) => ListView.separated(
           scrollDirection: Axis.horizontal,
+          scrollCacheExtent: const ScrollCacheExtent.pixels(900),
           padding:
               const EdgeInsets.symmetric(horizontal: CardsSpace.gutter) + extra,
           itemCount: brands.length,
@@ -828,7 +845,12 @@ class _BrandTile extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final from = brand.fromPrice;
-    final badge = _badge(context, brand);
+    // A large tile sits on the featured carousel.
+    final badge = _badge(
+      context,
+      brand,
+      section: large ? l10n.featuredTitle : null,
+    );
     final tag = 'brand-${brand.key}-$heroScope';
     return Pressable(
       semanticLabel: brand.name,

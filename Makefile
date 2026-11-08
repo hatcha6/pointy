@@ -138,7 +138,7 @@ ENDURANCE_WORKERS ?= 4
 	frontend-install frontend-l10n frontend-run frontend-web frontend-web-build frontend-test frontend-camera-wedge-test frontend-camera-wedge-linux frontend-camera-wedge-linux-clean frontend-camera-wedge-preview frontend-calculator-preview frontend-e2e frontend-analyze frontend-format frontend-navigation-preview frontend-balances-preview frontend-employee-loans-preview frontend-scales-preview frontend-invoice-attribution-preview frontend-learning-preview frontend-integrations-preview frontend-moamalat-preview frontend-bulk-price-preview frontend-bulk-tracking-preview frontend-reorder-preview frontend-recharge-preview frontend-portal-payments-preview frontend-printers-preview frontend-reports-preview frontend-marketing-preview frontend-app-update-preview frontend-remote-sessions-preview \
 	marketing-site marketing-site-capture marketing-site-dist marketing-pos-tour \
 	camera-rig camera-rig-stop camera-rig-logs camera-rig-test \
-	relay-install relay-format relay-check relay-test relay-production-test relay-fleet-test relay-run relay-openserp relay-openserp-stop relay-connector relay-connector-remote relay-migrate relay-provision relay-subscription-update relay-remote-mint relay-remote-activate relay-remote-provision relay-cli \
+	relay-install relay-airalo-fake relay-format relay-check relay-test relay-production-test relay-fleet-test relay-run relay-openserp relay-openserp-stop relay-connector relay-connector-remote relay-migrate relay-provision relay-subscription-update relay-remote-mint relay-remote-activate relay-remote-provision relay-cli \
 	onprem-test onprem-keeper-revision onprem-rehearsal onprem-rehearsal-clean onprem-move-test upgrade-rehearsal upgrade-check android-release-key \
 	format check test e2e dev dev-local dev-no-redis dev-ai dev-remote ai-enable ai-enable-remote postgres-ready clean
 
@@ -634,6 +634,9 @@ relay-install: ## Download relay Go modules.
 
 relay-format: ## Format relay source.
 	cd "$(RELAY_DIR)" && GOCACHE="$(abspath $(GO_CACHE))" GOMODCACHE="$(abspath $(GO_MOD_CACHE))" $(GO) fmt ./...
+
+relay-airalo-fake: ## Serve a fake Airalo Partner API on :8097 for local eSIM runs (POINTY_RELAY_AIRALO_URL=http://127.0.0.1:8097).
+	cd "$(RELAY_DIR)" && GOCACHE="$(abspath $(GO_CACHE))" GOMODCACHE="$(abspath $(GO_MOD_CACHE))" go run ./internal/airalo/airalofake/serve
 
 relay-check: ## Run relay static checks.
 	cd "$(RELAY_DIR)" && GOCACHE="$(abspath $(GO_CACHE))" GOMODCACHE="$(abspath $(GO_MOD_CACHE))" $(GO) vet ./...

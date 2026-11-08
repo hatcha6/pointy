@@ -132,34 +132,63 @@ func (s HTTPServer) handleCustomerOrderCreate(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	located, ranking, failure := s.locateCustomerCard(ctx, cards, request.Item, review)
-	if failure != "" {
-		status := http.StatusConflict
-		if failure == "unknown_item" {
-			status = http.StatusNotFound
+	// What is sold, and at what price: a card from the catalog, or an eSIM plan.
+	var (
+		itemKey, brandKey, itemName string
+		account                     map[string]string
+		price                       *big.Rat
+		sandbox                     bool
+	)
+	if item, isESIM := parseESIMItem(request.Item); isESIM {
+		if request.Quantity != 1 {
+			writeCustomerError(w, http.StatusBadRequest, "invalid_quantity", "an eSIM is ordered one at a time",
+				map[string]any{"max_quantity": 1})
+			return
 		}
-		writeCustomerError(w, status, failure, "this card cannot be bought right now", nil)
-		return
-	}
-	brand := shelfBrand{Key: located.Brand.Key, Category: located.Brand.Category, Target: located.Brand.Target}
-	if _, sell := s.Customers.shelf(request.Channel, brand, s.mobileGiftCards(ctx)); !sell {
-		writeCustomerError(w, http.StatusNotFound, "unknown_item", "this card is not sold in this app", nil)
-		return
-	}
-	if reason, _ := ranking.unavailable(); reason != "" {
-		writeCustomerError(w, http.StatusConflict, "item_unavailable", "this card cannot be bought right now", nil)
-		return
-	}
-	account, refusal := readPurchaseAccount(located, request.Account, request.Quantity)
-	if refusal != nil {
-		refusal.writeCustomer(w)
-		return
-	}
-	now := s.clock().Now()
-	price, err := control.ParseWalletAmount(vouchers.PriceAt(located.Item, now).RetailPrice)
-	if err != nil || price.Sign() <= 0 {
-		writeCustomerError(w, http.StatusConflict, "item_unavailable", "this card has no price right now", nil)
-		return
+		if !s.esimOpenTo(customer) {
+			writeCustomerError(w, http.StatusConflict, "item_unavailable", "this eSIM cannot be bought right now", nil)
+			return
+		}
+		quote, status, failure := s.quoteESIMOrder(ctx, customer, item)
+		if failure != "" {
+			writeCustomerError(w, status, failure, "this eSIM cannot be bought right now", nil)
+			return
+		}
+		itemKey, brandKey, itemName, price = request.Item, esimOrderBrand(quote.Details.Country), quote.Name, quote.Price
+		account = esimOrderAccount(request.Account)
+		sandbox = s.ESIM.Sandbox
+	} else {
+		located, ranking, failure := s.locateCustomerCard(ctx, cards, request.Item, review)
+		if failure != "" {
+			status := http.StatusConflict
+			if failure == "unknown_item" {
+				status = http.StatusNotFound
+			}
+			writeCustomerError(w, status, failure, "this card cannot be bought right now", nil)
+			return
+		}
+		brand := shelfBrand{Key: located.Brand.Key, Category: located.Brand.Category, Target: located.Brand.Target}
+		if _, sell := s.Customers.shelf(request.Channel, brand, s.mobileGiftCards(ctx)); !sell {
+			writeCustomerError(w, http.StatusNotFound, "unknown_item", "this card is not sold in this app", nil)
+			return
+		}
+		if reason, _ := ranking.unavailable(); reason != "" {
+			writeCustomerError(w, http.StatusConflict, "item_unavailable", "this card cannot be bought right now", nil)
+			return
+		}
+		typed, refusal := readPurchaseAccount(located, request.Account, request.Quantity)
+		if refusal != nil {
+			refusal.writeCustomer(w)
+			return
+		}
+		account = typed
+		var err error
+		price, err = control.ParseWalletAmount(vouchers.PriceAt(located.Item, s.clock().Now()).RetailPrice)
+		if err != nil || price.Sign() <= 0 {
+			writeCustomerError(w, http.StatusConflict, "item_unavailable", "this card has no price right now", nil)
+			return
+		}
+		itemKey, brandKey, itemName = located.Item.Key, located.Brand.Key, located.Name()
 	}
 	if shown, err := control.ParseWalletAmount(request.UnitPrice); err != nil || shown.Cmp(price) != 0 {
 		writeCustomerError(w, http.StatusConflict, "price_changed", "the price changed; check it and try again",
@@ -209,9 +238,9 @@ func (s HTTPServer) handleCustomerOrderCreate(w http.ResponseWriter, r *http.Req
 		CustomerID:     customer.ID,
 		IdempotencyKey: request.IdempotencyKey,
 		Channel:        request.Channel,
-		ItemKey:        located.Item.Key,
-		BrandKey:       located.Brand.Key,
-		ItemName:       located.Name(),
+		ItemKey:        itemKey,
+		BrandKey:       brandKey,
+		ItemName:       itemName,
 		Quantity:       request.Quantity,
 		Account:        account,
 		UnitPrice:      control.FormatWalletAmount(price),
@@ -220,7 +249,7 @@ func (s HTTPServer) handleCustomerOrderCreate(w http.ResponseWriter, r *http.Req
 		// The gateway's fee goes on top of what Dafa collects, as the
 		// checkout showed before the customer paid.
 		FeePercent: s.Wallet.FeePercent,
-		TestMode:   s.Vouchers.MarksTest() || s.Wallet.TestMode || review,
+		TestMode:   s.Vouchers.MarksTest() || s.Wallet.TestMode || review || sandbox,
 		Review:     review,
 	}, request.UseCredit)
 	switch {
@@ -285,6 +314,7 @@ func (s HTTPServer) startCustomerPayment(
 		UserIdentifier: payer.identifier,
 		BirthYear:      payer.birthYear,
 		CallbackURL:    s.customerWebhookURL(r, order.ID),
+		ReturnURL:      s.customerReturnURL(r, method),
 	})
 	cancel()
 	if err == nil {
@@ -404,6 +434,12 @@ func (s HTTPServer) advanceCustomerOrder(
 	}
 	switch purchase.Status {
 	case control.VoucherPurchaseSucceeded:
+		if item, isESIM := parseESIMItem(order.ItemKey); isESIM {
+			if err := s.completeESIMOrder(ctx, order, purchase, item); err != nil {
+				s.logger().Warn("an eSIM was bought but could not be recorded yet", "order_id", order.ID, "error", err)
+				return order, nil, true
+			}
+		}
 		finished, applied, err := orders.FinishCustomerOrder(ctx, order.ID, true, "", "")
 		if err != nil {
 			s.logger().Error("recording a delivered customer order failed", "order_id", order.ID, "error", err)
@@ -461,6 +497,9 @@ func (s HTTPServer) claimCustomerPurchase(
 		}
 		s.logger().Warn("customer order refunded to credit before buying", "order_id", order.ID, "code", code)
 	}
+	if item, isESIM := parseESIMItem(order.ItemKey); isESIM {
+		return s.claimCustomerESIM(ctx, orders, cards, order, item, key)
+	}
 	located, ranking, failure := s.locateCustomerCard(ctx, cards, order.ItemKey, order.Review)
 	if failure != "" {
 		refund("item_unavailable", "the card left the catalog before it could be bought")
@@ -505,6 +544,10 @@ func (s HTTPServer) claimCustomerPurchase(
 }
 
 func (s HTTPServer) customerOrderCodes(ctx context.Context, cards control.VoucherStore, order control.CustomerOrder) (control.CustomerOrder, []vouchers.Code, bool) {
+	if isESIMOrder(order) {
+		// An eSIM's details are read from its own route, not with the order.
+		return order, nil, false
+	}
 	purchase, err := cards.GetVoucherPurchase(ctx, order.PurchaseID)
 	if err != nil {
 		return order, nil, true
@@ -605,7 +648,13 @@ func (s HTTPServer) answerCustomerOrder(w http.ResponseWriter, r *http.Request, 
 			order, codes, pending = s.advanceCustomerOrder(ctx, orders, cards, order, true)
 		}
 	}
-	writeJSON(w, status, map[string]any{"order": customerOrderPayload(order, codes, pending)})
+	payload := customerOrderPayload(order, codes, pending)
+	if order.Status != control.CustomerOrderAwaitingPayment {
+		if report := s.latestCustomerReport(ctx, order.ID); report != nil {
+			payload["report"] = report
+		}
+	}
+	writeJSON(w, status, map[string]any{"order": payload})
 }
 
 func customerOrderPayload(order control.CustomerOrder, codes []vouchers.Code, codesPending bool) map[string]any {
@@ -638,6 +687,9 @@ func customerOrderPayload(order control.CustomerOrder, codes []vouchers.Code, co
 		"test_mode":     order.TestMode && !order.Review,
 		"codes":         codes,
 		"codes_pending": codesPending,
+		// wait_seconds is how long the app's waiting page asks the customer
+		// to stay; an ending after it is pushed to their phones instead.
+		"wait_seconds": int(customerOrderWaitWindow / time.Second),
 		// account is whose account a card sent to one went to, as the
 		// customer typed it: their own data, shown back to them.
 		"account": customerAccountLine(order.Account),
@@ -648,6 +700,13 @@ func customerOrderPayload(order control.CustomerOrder, codes []vouchers.Code, co
 		"created_at":     order.CreatedAt,
 		"paid_at":        order.PaidAt,
 		"completed_at":   order.CompletedAt,
+	}
+	if isESIMOrder(order) {
+		// What installs an eSIM never rides on an order: the app asks for the
+		// eSIM by order (GET /v1/customers/esims?order=).
+		payload["codes"], payload["codes_pending"] = []vouchers.Code{}, false
+		payload["delivery"] = "esim"
+		payload["account"], payload["account_values"] = "", map[string]string{}
 	}
 	if order.Status == control.CustomerOrderAwaitingPayment {
 		if method, ok := lookupWalletMethod(order.Method); ok {
@@ -935,6 +994,24 @@ func (s HTTPServer) customerWebhookURL(r *http.Request, orderID string) string {
 		return ""
 	}
 	return base + customerWebhookPrefix + url.PathEscape(orderID) + "?token=" + s.Wallet.customerWebhookToken(orderID)
+}
+
+// customerReturnURL is where Dafa's bank-card page sends the payer once they
+// have paid (its «المتابعة» button): the relay's own payment-return page,
+// never the web app. The app's payment page, a web view or a frame over the
+// order, stops there and closes, and the order underneath carries the
+// checkout on. Only a hosted page has the button; like the webhook, it needs
+// the relay's public https address.
+func (s HTTPServer) customerReturnURL(r *http.Request, method walletMethod) string {
+	if !method.Provider.HostedPage {
+		return ""
+	}
+	base := s.walletWebhookBase(r)
+	parsed, err := url.Parse(base)
+	if err != nil || parsed.Scheme != "https" || !publicWebhookHost(parsed.Hostname()) {
+		return ""
+	}
+	return base + customerPaymentReturnPath
 }
 
 // handleCustomerDafaWebhook serves POST /v1/customers/dafa/webhook/{order id}:

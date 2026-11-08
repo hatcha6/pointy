@@ -56,7 +56,21 @@ var defaultCustomerServiceCategories = []string{"telecom", "intl_topup", "intern
 // financial products, and the app's Play declaration says it has none. The
 // Payments policy is not the question for these; Play's financial and crypto
 // policies are.
-var playHeldBrands = map[string]bool{"binance": true, "mastercard": true}
+//
+// Rewarble turns into crypto, a virtual Visa or an e-wallet balance, so it is both
+// of those. Discord and Adobe are not gift cards at all: they activate a
+// subscription to an app that is itself on Play, and the FAQ names subscriptions.
+var playHeldBrands = map[string]bool{
+	"binance": true, "mastercard": true, "gc-rewarble": true, "gc-discord": true, "gc-adobe": true,
+}
+
+// iosRealWorldBrands are gift cards the App Store allows without in-app purchase
+// although their category is otherwise left to the operator's switch. Guideline
+// 3.1.1 bars only cards "redeemed for digital goods or services", and 3.1.3(e)
+// requires another payment method for services consumed outside the app: an
+// Airbnb card pays for a stay. A card that also buys digital goods (Amazon,
+// GameStop) does not qualify.
+var iosRealWorldBrands = map[string]bool{"gc-airbnb": true}
 
 // shelfBrand is what a channel's rules look at.
 type shelfBrand struct {
@@ -138,6 +152,9 @@ func (c CustomerConfig) channelCategories(channel string) []string {
 // sells reports whether a channel sells a brand before the operator's switch
 // has its say.
 func (c CustomerConfig) sells(channel string, brand shelfBrand) bool {
+	if channel == CustomerChannelIOS && iosRealWorldBrands[brand.Key] {
+		return true
+	}
 	if !c.channelSells(channel, brand.Category) {
 		return false
 	}

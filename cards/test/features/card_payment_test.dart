@@ -12,6 +12,7 @@ import 'package:pointy_cards/src/data/models/order.dart';
 import 'package:pointy_cards/src/data/vault/card_vault.dart';
 import 'package:pointy_cards/src/features/card_payment/card_number.dart';
 import 'package:pointy_cards/src/features/card_payment/card_payment_page.dart';
+import 'package:pointy_cards/src/features/card_payment/payment_page_view.dart';
 import 'package:pointy_cards/src/features/card_payment/moamalat_client.dart';
 import 'package:pointy_cards/src/features/card_payment/three_ds_view.dart';
 import 'package:pointy_cards/src/features/orders/order_progress_page.dart';
@@ -505,6 +506,7 @@ void main() {
       http.Client? relay,
       Analytics? analytics,
       bool expectForm = true,
+      bool settle = true,
     }) async {
       tester.view.physicalSize = const Size(390 * 3, 844 * 3);
       tester.view.devicePixelRatio = 3;
@@ -529,6 +531,9 @@ void main() {
         ),
       );
       await tester.tap(find.text('order'));
+      if (!settle) {
+        return;
+      }
       await tester.pumpAndSettle();
       if (expectForm) {
         // The card form opens over the order on its own.
@@ -553,15 +558,54 @@ void main() {
         ),
       );
       final analytics = _ArmAnalytics('hosted');
-      await openOrder(tester, analytics: analytics, expectForm: false);
+      await openOrder(tester, analytics: analytics, settle: false);
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      // Dafa's page opens inside the app, never a browser...
+      expect(find.byType(PaymentPageView), findsOneWidget);
+      expect(find.text('localbankcards.dafa.ly'), findsOneWidget);
 
-      // Dafa's page opened, the app's form never did (the test relay then
-      // settles the order, so the card is shown).
-      expect(find.text('الدفع بالبطاقة المصرفية'), findsNothing);
+      // ...and closes by itself once the test relay settles the order (the
+      // next poll, two seconds on). The app's form never opened.
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+      expect(find.byType(PaymentPageView), findsNothing);
       expect(find.byType(CardPaymentPage), findsNothing);
-      expect(opened.single, endsWith('https://localbankcards.dafa.ly/pay-1'));
+      expect(opened, isEmpty);
       expect(analytics.asked, ['card-payment-form']);
       expect(analytics.forms, ['hosted']);
+    });
+
+    testWidgets("closing Dafa's page with nothing paid asks the relay, then "
+        'offers to pay again or call the order off', (tester) async {
+      await openOrder(
+        tester,
+        analytics: _ArmAnalytics('hosted'),
+        relay: fixtureRelay(orderStatus: 'awaiting_payment'),
+        settle: false,
+      );
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(find.byType(PaymentPageView), findsOneWidget);
+
+      // The payer cancels on the page and closes it: back where they paid.
+      await tester.tap(find.byIcon(Icons.close_rounded));
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.byType(PaymentPageView), findsNothing);
+      expect(find.byType(OrderProgressPage), findsOneWidget);
+      expect(find.text('لم يكتمل الدفع'), findsOneWidget);
+      expect(find.text('أكمل الدفع'), findsOneWidget);
+      expect(find.text('إلغاء الطلب'), findsOneWidget);
+      // Never the wait for a payment Dafa never confirmed.
+      expect(find.text('نتحقق من الدفع'), findsNothing);
+
+      // Leaving the order stops its watch.
+      tester.state<NavigatorState>(find.byType(Navigator).first).pop();
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 10));
     });
 
     testWidgets("the control arm keeps the app's own card form", (

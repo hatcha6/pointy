@@ -14,13 +14,18 @@ import '../home/home_reset.dart';
 import '../legal/about_page.dart';
 import '../legal/legal_document.dart';
 import '../legal/legal_page.dart';
+import '../esim/esim_destination_page.dart';
+import '../esim/esim_store_page.dart';
+import '../esim/esim_page.dart';
 import '../links/cards_link.dart';
+import '../sign_in/sign_in_sheet.dart';
 import '../links/link_inbox.dart';
 import '../my_cards/my_cards_page.dart';
 import '../search/search_page.dart';
 import '../shelf/shelf_model.dart';
 import 'cards_sidebar.dart';
 import 'cards_tab_bar.dart';
+import '../../shared/web_edges.dart';
 
 /// The app's three places: the shelf, the customer's cards, their account.
 /// Each tab keeps its state when the customer moves between them. Links
@@ -45,6 +50,17 @@ class _CardsShellState extends State<CardsShell> {
   /// What the web build's address bar last showed for the shell.
   String? _shownLocation;
 
+  VoidCallback? _preloadArt;
+
+  /// Reads the eSIM shelf again: who is signed in decides whether there is one.
+  VoidCallback? _reloadEsim;
+
+  /// Counts the visits to «كروتي», whose page starts over on each one. Only a
+  /// visit: the shell also rebuilds when the keyboard opens or a link lands,
+  /// and a fresh page each time lost the filter and the scroll, and on the web
+  /// never got past its placeholders.
+  late int _myCardsVisit = widget.initialTab == CardsTab.myCards.index ? 1 : 0;
+
   /// Whether the shelf has been on screen: the link the app starts on lands
   /// at once, under the shelf's own first appearance, not as a transition.
   bool _shown = false;
@@ -65,6 +81,16 @@ class _CardsShellState extends State<CardsShell> {
       // A purchase changes them too.
       _orders = dependencies.orders.changes
         ..addListener(_shelf!.refreshCustomer);
+      final art = dependencies.art;
+      if (art != null) {
+        _preloadArt = () => art.preload(_shelf!.shelf);
+        _shelf!.addListener(_preloadArt!);
+      }
+      // Read now: the home search finds eSIMs as well as cards. And again on
+      // signing in or out, which can open or close the shelf.
+      unawaited(dependencies.esim.loadShelf());
+      _reloadEsim = () => unawaited(dependencies.esim.loadShelf());
+      _session!.addListener(_reloadEsim!);
       // A link waits for the catalog when it names a brand or a category.
       _shelf!.addListener(_openLink);
       _links = dependencies.links..addListener(_openLink);
@@ -84,8 +110,14 @@ class _CardsShellState extends State<CardsShell> {
     final shelf = _shelf;
     if (shelf != null) {
       _session?.removeListener(shelf.refreshCustomer);
+      if (_reloadEsim case final reload?) {
+        _session?.removeListener(reload);
+      }
       _orders?.removeListener(shelf.refreshCustomer);
       _links?.removeListener(_openLink);
+      if (_preloadArt case final preload?) {
+        shelf.removeListener(preload);
+      }
       shelf.dispose();
     }
     _homeReset.dispose();
@@ -95,6 +127,9 @@ class _CardsShellState extends State<CardsShell> {
   void _go(int tab) {
     if (tab != _tab) {
       _screen(tab);
+      if (tab == CardsTab.myCards.index) {
+        _myCardsVisit++;
+      }
     }
     setState(() => _tab = tab);
     _showLocation();
@@ -174,6 +209,16 @@ class _CardsShellState extends State<CardsShell> {
       case OrderLink(:final order):
         _go(CardsTab.myCards.index);
         unawaited(_openOrder(order));
+      case EsimShelfLink(:final destination):
+        _go(CardsTab.shelf.index);
+        if (destination == null) {
+          EsimStorePage.open(context);
+        } else {
+          EsimDestinationPage.open(context, destination);
+        }
+      case EsimLink(:final iccid):
+        _go(CardsTab.myCards.index);
+        unawaited(_openEsim(iccid));
       case PageLink(:final page):
         _go(CardsTab.account.index);
         switch (page) {
@@ -185,6 +230,15 @@ class _CardsShellState extends State<CardsShell> {
             AboutPage.open(context);
         }
     }
+  }
+
+  /// Opens one eSIM over «كروتي». It needs a session: a phone signed out since
+  /// the alert was sent is asked to sign in first.
+  Future<void> _openEsim(String iccid) async {
+    if (!await ensureSignedIn(context) || !mounted) {
+      return;
+    }
+    await EsimPage.open(context, iccid);
   }
 
   /// Opens one order over «كروتي», as reading it now finds it. One that
@@ -255,7 +309,7 @@ class _CardsShellState extends State<CardsShell> {
         HomePage(shelf: _shelf!, reset: _homeReset),
         // Rebuilt on each visit so a card bought a minute ago is there.
         _tab == 1
-            ? MyCardsPage(key: UniqueKey(), onBrowse: () => _go(0))
+            ? MyCardsPage(key: ValueKey(_myCardsVisit), onBrowse: () => _go(0))
             : const SizedBox.shrink(),
         const AccountPage(),
       ],
@@ -324,11 +378,21 @@ class _CardsShellState extends State<CardsShell> {
       // Content scrolls under the tab bar, glass or frosted.
       extendBody: true,
       body: pages,
-      bottomNavigationBar: CardsTabBar(
-        current: _tab,
-        onSelect: _select,
-        onSearch: _openSearch,
+      // On the web, Safari's strip under its toolbar takes the bar's colour.
+      bottomNavigationBar: WebBottomEdge(
+        color: _tabBarColour(Theme.of(context)),
+        child: CardsTabBar(
+          current: _tab,
+          onSelect: _select,
+          onSearch: _openSearch,
+        ),
       ),
     );
   }
+
+  /// The tab bar as it shows: its translucent surface over the page.
+  static Color _tabBarColour(ThemeData theme) => Color.alphaBlend(
+    theme.navigationBarTheme.backgroundColor ?? theme.colorScheme.surface,
+    theme.scaffoldBackgroundColor,
+  );
 }

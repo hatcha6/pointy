@@ -132,9 +132,9 @@
   "@chooseValue": {
     "description": "Brand page: heading above the denominations."
   },
-  "chooseCountry": "الدولة",
+  "chooseCountry": "الدولة أو المنطقة",
   "@chooseCountry": {
-    "description": "Brand page: heading above the country chips."
+    "description": "Brand page: heading above the country and region chips."
   },
   "howToRedeem": "طريقة الاستخدام",
   "@howToRedeem": {
@@ -394,17 +394,13 @@
   "@errInvalidPayer": {
     "description": "Payer details refused."
   },
-  "hostedTitle": "أكمل الدفع في صفحة البطاقة",
+  "hostedTitle": "نتحقق من الدفع",
   "@hostedTitle": {
-    "description": "Hosted card page step title."
+    "description": "Dafa's card page said paid; the relay is confirming the payment."
   },
-  "hostedBody": "فتحنا صفحة الدفع الآمنة. بعد إتمام الدفع ارجع هنا، وسيظهر كرتك تلقائياً.",
+  "hostedBody": "تم الدفع في صفحة البطاقة، ونتأكد الآن من وصوله. سيظهر كرتك هنا خلال لحظات.",
   "@hostedBody": {
-    "description": "Hosted page explanation."
-  },
-  "openPaymentPage": "افتح صفحة الدفع",
-  "@openPaymentPage": {
-    "description": "Reopen the hosted page."
+    "description": "Shown while the relay confirms a payment made on Dafa's card page."
   },
   "cancelOrder": "إلغاء الطلب",
   "@cancelOrder": {
@@ -526,11 +522,11 @@
       }
     }
   },
-  "markUsed": "تحديد كمستخدم",
+  "markUsed": "استخدمته",
   "@markUsed": {
     "description": "Mark a card used."
   },
-  "markUnused": "إلغاء تحديد الاستخدام",
+  "markUnused": "لم أستخدمه",
   "@markUnused": {
     "description": "Unmark a used card."
   },
@@ -910,6 +906,18 @@
   "@filterIncomplete": {
     "description": "My cards filter: purchases that did not go through (failed, expired, refunded)."
   },
+  "myCardsNoneUnusedTitle": "استخدمت كل كروتك",
+  "@myCardsNoneUnusedTitle": {"description": "«كروتي»: a filter with nothing in it."},
+  "myCardsNoneUnusedBody": "الكروت التي لم تستخدم رمزها بعد تظهر هنا.",
+  "@myCardsNoneUnusedBody": {"description": "«كروتي»: a filter with nothing in it."},
+  "myCardsNoneUsedTitle": "لا كروت مستخدمة بعد",
+  "@myCardsNoneUsedTitle": {"description": "«كروتي»: a filter with nothing in it."},
+  "myCardsNoneUsedBody": "بعد أن تشحن كرتاً، اضغط «استخدمته» في صفحته لينتقل إلى هنا.",
+  "@myCardsNoneUsedBody": {"description": "«كروتي»: a filter with nothing in it."},
+  "myCardsNoneIncompleteTitle": "كل طلباتك اكتملت",
+  "@myCardsNoneIncompleteTitle": {"description": "«كروتي»: a filter with nothing in it."},
+  "myCardsNoneIncompleteBody": "إن تعذّر طلب يوماً يظهر هنا، ويعود ثمنه إلى رصيدك.",
+  "@myCardsNoneIncompleteBody": {"description": "«كروتي»: a filter with nothing in it."},
   "webOnlyBadge": "على الموقع",
   "@webOnlyBadge": {
     "description": "Badge on a card a store build (iPhone, Google Play) lists but cannot sell: it is bought on the website."
@@ -1216,7 +1224,7 @@
   "@editAction": {
     "description": "Edit what was typed."
   },
-  "topUpPreparingTitle": "{kind, select, invite{نرسل لك الهدية…} other{نشحن الحساب…}}",
+  "topUpPreparingTitle": "{kind, select, invite{نرسل لك الهدية…} telegram{نشحن حساب تيليجرام…} steam{نضيف الرصيد إلى محفظة ستيم…} other{نشحن حساب اللاعب…}}",
   "@topUpPreparingTitle": {
     "description": "Order paid, the top-up on its way.",
     "placeholders": {
@@ -1240,18 +1248,31 @@
       }
     }
   },
-  "topUpSlowTitle": "يتأخر الشحن هذه المرة",
+  "topUpSlowTitle": "{kind, select, invite{تتأخر الهدية هذه المرة} steam{تتأخر إضافة الرصيد هذه المرة} other{يتأخر الشحن هذه المرة}}",
   "@topUpSlowTitle": {
-    "description": "Top-up paid, still not arrived after a few minutes."
-  },
-  "topUpRefundedTitle": "لم يكتمل الشحن",
-  "@topUpRefundedTitle": {
-    "description": "Paid but the top-up failed: refunded to credit."
-  },
-  "topUpRefundedBody": "لم يصل الشحن إلى الحساب، فأعدنا {amount} إلى رصيدك. تأكد من الحساب ثم حاول مجدداً.",
-  "@topUpRefundedBody": {
-    "description": "Refund of a failed top-up.",
+    "description": "Top-up paid, still not arrived after the relay's wait; by the kind of account.",
     "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "topUpRefundedTitle": "{kind, select, invite{لم تُرسل الهدية} steam{لم يُضف الرصيد} other{لم يكتمل الشحن}}",
+  "@topUpRefundedTitle": {
+    "description": "Paid but the top-up failed: refunded to credit; by the kind of account.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "topUpRefundedBody": "{kind, select, invite{لم تُرسل الهدية، فأعدنا {amount} إلى رصيدك. تأكد من رابط الدعوة ثم حاول مجدداً.} telegram{لم يصل الشحن إلى حساب تيليجرام، فأعدنا {amount} إلى رصيدك. تأكد من اسم المستخدم ثم حاول مجدداً.} steam{لم يُضف الرصيد إلى محفظة ستيم، فأعدنا {amount} إلى رصيدك. تأكد من اسم الدخول ثم حاول مجدداً.} other{لم يصل الشحن إلى حساب اللاعب، فأعدنا {amount} إلى رصيدك. تأكد من المعرّف ثم حاول مجدداً.}}",
+  "@topUpRefundedBody": {
+    "description": "Refund of a failed top-up, naming what to check for the kind of account.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      },
       "amount": {
         "type": "String"
       }
@@ -1312,10 +1333,13 @@
   "@topUpHelp": {
     "description": "Receipt: support link."
   },
-  "topUpHelpMessage": "مرحباً، الطلب رقم {order} لم يصل إلى الحساب.",
+  "topUpHelpMessage": "{kind, select, invite{مرحباً، الطلب رقم {order}: لم تصلني الهدية.} telegram{مرحباً، الطلب رقم {order} لم يصل إلى حساب تيليجرام.} steam{مرحباً، الطلب رقم {order} لم يُضف إلى محفظة ستيم.} other{مرحباً، الطلب رقم {order} لم يصل إلى حساب اللاعب.}}",
   "@topUpHelpMessage": {
-    "description": "Prefilled support message.",
+    "description": "Prefilled support message, by the kind of account.",
     "placeholders": {
+      "kind": {
+        "type": "String"
+      },
       "order": {
         "type": "String"
       }
@@ -1367,5 +1391,623 @@
   "chooseEdition": "اختر الإصدار",
   "@chooseEdition": {
     "description": "Brand page heading for a game's editions."
+  },
+  "esimStoreTitle": "إلى أين تسافر؟",
+  "@esimStoreTitle": {
+    "description": "eSIM screens."
+  },
+  "esimEntryTitle": "سافر متصلاً من أول لحظة",
+  "@esimEntryTitle": {
+    "description": "eSIM screens."
+  },
+  "esimEntryBody": "إنترنت لأكثر من 200 وجهة، تثبّته بلمسة واحدة.",
+  "@esimEntryBody": {
+    "description": "eSIM screens."
+  },
+  "esimEntryAction": "اختر وجهتك",
+  "@esimEntryAction": {
+    "description": "eSIM screens."
+  },
+  "esimMineTitle": "شرائحي",
+  "@esimMineTitle": {
+    "description": "eSIM screens."
+  },
+  "esimSearchHint": "ابحث عن دولة أو منطقة",
+  "@esimSearchHint": {
+    "description": "eSIM screens."
+  },
+  "esimSearchClear": "مسح البحث",
+  "@esimSearchClear": {
+    "description": "eSIM screens."
+  },
+  "esimKindLocal": "دول",
+  "@esimKindLocal": {
+    "description": "eSIM screens."
+  },
+  "esimKindRegional": "مناطق",
+  "@esimKindRegional": {
+    "description": "eSIM screens."
+  },
+  "esimKindGlobal": "عالمية",
+  "@esimKindGlobal": {
+    "description": "eSIM screens."
+  },
+  "esimPopular": "الأكثر طلباً",
+  "@esimPopular": {
+    "description": "eSIM screens."
+  },
+  "esimAllCountries": "كل الدول",
+  "@esimAllCountries": {
+    "description": "eSIM screens."
+  },
+  "esimNoMatch": "لا توجد وجهة بهذا الاسم.",
+  "@esimNoMatch": {
+    "description": "eSIM screens."
+  },
+  "esimFrom": "تبدأ من",
+  "@esimFrom": {
+    "description": "eSIM screens."
+  },
+  "esimClosedTitle": "الشرائح غير متاحة الآن",
+  "@esimClosedTitle": {
+    "description": "eSIM screens."
+  },
+  "esimClosedBody": "عُد بعد قليل، أو تواصل معنا إذا كنت تحتاجها الآن.",
+  "@esimClosedBody": {
+    "description": "eSIM screens."
+  },
+  "esimLoadFailed": "تعذّر التحميل",
+  "@esimLoadFailed": {
+    "description": "eSIM screens."
+  },
+  "esimTryAgain": "أعد المحاولة",
+  "@esimTryAgain": {
+    "description": "eSIM screens."
+  },
+  "esimPhoneSupported": "هاتفك يدعم الشرائح الإلكترونية",
+  "@esimPhoneSupported": {
+    "description": "eSIM screens."
+  },
+  "esimPhoneNotSupported": "يبدو أن هاتفك لا يدعم الشرائح الإلكترونية",
+  "@esimPhoneNotSupported": {
+    "description": "eSIM screens."
+  },
+  "esimPhoneNotSupportedBody": "ما زال بإمكانك شراء شريحة لشخص تعرفه وإرسالها إليه. وإن كنت متأكداً أن هاتفك يدعمها، فتحقق من إعدادات الهاتف أولاً.",
+  "@esimPhoneNotSupportedBody": {
+    "description": "eSIM screens."
+  },
+  "esimUnlimited": "غير محدودة",
+  "@esimUnlimited": {
+    "description": "eSIM screens."
+  },
+  "esimNetworks": "الشبكات",
+  "@esimNetworks": {
+    "description": "eSIM screens."
+  },
+  "esimFactData": "البيانات",
+  "@esimFactData": {
+    "description": "eSIM screens."
+  },
+  "esimFactValidity": "الصلاحية",
+  "@esimFactValidity": {
+    "description": "eSIM screens."
+  },
+  "esimFactNetwork": "الشبكة",
+  "@esimFactNetwork": {
+    "description": "eSIM screens."
+  },
+  "esimFactTopUp": "الشحن",
+  "@esimFactTopUp": {
+    "description": "eSIM screens."
+  },
+  "esimTopUpYes": "يمكن شحنها",
+  "@esimTopUpYes": {
+    "description": "eSIM screens."
+  },
+  "esimTopUpNo": "لا يمكن شحنها",
+  "@esimTopUpNo": {
+    "description": "eSIM screens."
+  },
+  "esimStartsOnFirstUse": "تبدأ الصلاحية عند أول اتصال بالشبكة في وجهتك، لا عند الشراء ولا عند التثبيت.",
+  "@esimStartsOnFirstUse": {
+    "description": "eSIM screens."
+  },
+  "esimUnlockedNote": "يجب أن يكون هاتفك غير مقفل على شركة اتصالات. الهواتف المقفلة قد لا تقبل الشريحة.",
+  "@esimUnlockedNote": {
+    "description": "eSIM screens."
+  },
+  "esimDataOnlyNote": "بيانات فقط: لا تتضمن رقم هاتف ولا مكالمات عادية.",
+  "@esimDataOnlyNote": {
+    "description": "eSIM screens."
+  },
+  "esimWhoFor": "لمن هذه الشريحة؟",
+  "@esimWhoFor": {
+    "description": "eSIM screens."
+  },
+  "esimForMe": "لهاتفي",
+  "@esimForMe": {
+    "description": "eSIM screens."
+  },
+  "esimForSomeoneElse": "لشخص آخر",
+  "@esimForSomeoneElse": {
+    "description": "eSIM screens."
+  },
+  "esimRecipientName": "اسمه (اختياري)",
+  "@esimRecipientName": {
+    "description": "eSIM screens."
+  },
+  "esimForSomeoneElseNote": "بعد الدفع نعطيك رابطاً ترسله إليه، ويثبّتها من هاتفه بلمسة. الشريحة تعمل على هاتف واحد فقط.",
+  "@esimForSomeoneElseNote": {
+    "description": "eSIM screens."
+  },
+  "esimForMeUnsupportedNote": "قد لا تعمل الشريحة على هذا الهاتف، ولا يمكن استرداد شريحة بعد تثبيتها. تأكد أولاً من الإعدادات.",
+  "@esimForMeUnsupportedNote": {
+    "description": "eSIM screens."
+  },
+  "esimStatusNotActive": "لم تُفعَّل بعد",
+  "@esimStatusNotActive": {
+    "description": "eSIM screens."
+  },
+  "esimStatusActive": "فعّالة",
+  "@esimStatusActive": {
+    "description": "eSIM screens."
+  },
+  "esimStatusFinished": "نفدت",
+  "@esimStatusFinished": {
+    "description": "eSIM screens."
+  },
+  "esimStatusExpired": "انتهت",
+  "@esimStatusExpired": {
+    "description": "eSIM screens."
+  },
+  "esimStatusUnknown": "قيد التحقق",
+  "@esimStatusUnknown": {
+    "description": "eSIM screens."
+  },
+  "esimLeftOf": "متبقية من",
+  "@esimLeftOf": {
+    "description": "eSIM screens."
+  },
+  "esimEndsToday": "تنتهي اليوم",
+  "@esimEndsToday": {
+    "description": "eSIM screens."
+  },
+  "esimRunningOutTopUp": "قاربت على الانتهاء: اشحنها لتبقى متصلاً.",
+  "@esimRunningOutTopUp": {
+    "description": "eSIM screens."
+  },
+  "esimRunningOutNew": "قاربت على الانتهاء: اشترِ شريحة جديدة لتبقى متصلاً.",
+  "@esimRunningOutNew": {
+    "description": "eSIM screens."
+  },
+  "esimReadyTitle": "شريحتك جاهزة",
+  "@esimReadyTitle": {
+    "description": "eSIM screens."
+  },
+  "esimReadyBody": "بقيت خطوة واحدة: ثبّتها الآن أثناء اتصالك بالإنترنت، وستبدأ العمل عند وصولك.",
+  "@esimReadyBody": {
+    "description": "eSIM screens."
+  },
+  "esimReadyBodyGift": "أرسلها الآن، وسيثبّتها صاحبها من هاتفه بلمسة.",
+  "@esimReadyBodyGift": {
+    "description": "eSIM screens."
+  },
+  "esimInstallNow": "ثبّت الشريحة الآن",
+  "@esimInstallNow": {
+    "description": "eSIM screens."
+  },
+  "esimInstallHere": "ثبّتها على هذا الهاتف",
+  "@esimInstallHere": {
+    "description": "eSIM screens."
+  },
+  "esimInstallHint": "سيفتح هاتفك شاشة إضافة الشريحة، ولا تحتاج إلى مسح أي رمز.",
+  "@esimInstallHint": {
+    "description": "eSIM screens."
+  },
+  "esimInstallFailedNote": "لم يفتح هاتفك شاشة التثبيت. استخدم الرمز أو أدخل البيانات يدوياً.",
+  "@esimInstallFailedNote": {
+    "description": "eSIM screens."
+  },
+  "esimSendTo": "أرسلها إلى شخص آخر",
+  "@esimSendTo": {
+    "description": "eSIM screens."
+  },
+  "esimOtherWays": "طرق أخرى للتثبيت",
+  "@esimOtherWays": {
+    "description": "eSIM screens."
+  },
+  "esimAlreadyInstalled": "ثبّتها بالفعل",
+  "@esimAlreadyInstalled": {
+    "description": "eSIM screens."
+  },
+  "esimShowInstallAgain": "عرض طرق التثبيت مجدداً",
+  "@esimShowInstallAgain": {
+    "description": "eSIM screens."
+  },
+  "esimNeedsInternetNote": "تحتاج إلى اتصال بالإنترنت أثناء التثبيت.",
+  "@esimNeedsInternetNote": {
+    "description": "eSIM screens."
+  },
+  "esimOneDeviceNote": "تعمل الشريحة على هاتف واحد ولا تُنقل إلى غيره. لا تحذفها بعد تثبيتها.",
+  "@esimOneDeviceNote": {
+    "description": "eSIM screens."
+  },
+  "esimInstallAskTitle": "هل أُضيفت الشريحة؟",
+  "@esimInstallAskTitle": {
+    "description": "eSIM screens."
+  },
+  "esimInstallAskBody": "إذا ظهرت في إعدادات الهاتف ضمن شرائح الجوال، فقد تم التثبيت.",
+  "@esimInstallAskBody": {
+    "description": "eSIM screens."
+  },
+  "esimInstallAskYes": "نعم، أُضيفت",
+  "@esimInstallAskYes": {
+    "description": "eSIM screens."
+  },
+  "esimInstallAskNo": "لم تُضَف",
+  "@esimInstallAskNo": {
+    "description": "eSIM screens."
+  },
+  "esimInstallUnreadable": "تعذّر تحميل بيانات التثبيت.",
+  "@esimInstallUnreadable": {
+    "description": "eSIM screens."
+  },
+  "esimQrTitle": "امسح الرمز من هاتف آخر",
+  "@esimQrTitle": {
+    "description": "eSIM screens."
+  },
+  "esimQrStepsIos": "افتح هذا الرمز على شاشة أخرى، ثم في الهاتف: الإعدادات ← شبكة الجوال ← إضافة شريحة eSIM ← استخدام رمز QR.",
+  "@esimQrStepsIos": {
+    "description": "eSIM screens."
+  },
+  "esimQrStepsAndroid": "افتح هذا الرمز على شاشة أخرى، ثم في الهاتف: الإعدادات ← الشبكة والإنترنت ← شرائح SIM ← إضافة شريحة eSIM.",
+  "@esimQrStepsAndroid": {
+    "description": "eSIM screens."
+  },
+  "esimQrStepsOther": "في الهاتف الذي ستعمل عليه الشريحة، افتح إعدادات شبكة الجوال، واختر إضافة شريحة eSIM، ثم امسح هذا الرمز.",
+  "@esimQrStepsOther": {
+    "description": "eSIM screens."
+  },
+  "esimManualTitle": "أو أدخل البيانات يدوياً",
+  "@esimManualTitle": {
+    "description": "eSIM screens."
+  },
+  "esimSmdp": "عنوان SM-DP+",
+  "@esimSmdp": {
+    "description": "eSIM screens."
+  },
+  "esimActivationCode": "رمز التفعيل",
+  "@esimActivationCode": {
+    "description": "eSIM screens."
+  },
+  "esimConfirmationCode": "رمز التأكيد",
+  "@esimConfirmationCode": {
+    "description": "eSIM screens."
+  },
+  "esimCopy": "نسخ",
+  "@esimCopy": {
+    "description": "eSIM screens."
+  },
+  "esimCopied": "تم النسخ",
+  "@esimCopied": {
+    "description": "eSIM screens."
+  },
+  "esimNextStepsTitle": "لتعمل الشريحة",
+  "@esimNextStepsTitle": {
+    "description": "eSIM screens."
+  },
+  "esimStepDataLine": "في إعدادات شبكة الجوال، اختر هذه الشريحة لبيانات الجوال.",
+  "@esimStepDataLine": {
+    "description": "eSIM screens."
+  },
+  "esimStepRoaming": "شغّل «تجوال البيانات» لهذه الشريحة.",
+  "@esimStepRoaming": {
+    "description": "eSIM screens."
+  },
+  "esimStepApn": "أدخل نقطة الوصول (APN) التالية في إعدادات الشريحة:",
+  "@esimStepApn": {
+    "description": "eSIM screens."
+  },
+  "esimStepArrive": "عند وصولك إلى وجهتك، ستتصل الشريحة بالشبكة تلقائياً.",
+  "@esimStepArrive": {
+    "description": "eSIM screens."
+  },
+  "esimApn": "نقطة الوصول (APN)",
+  "@esimApn": {
+    "description": "eSIM screens."
+  },
+  "esimEndedNote": "انتهت هذه الشريحة ولا يمكن استخدامها مجدداً.",
+  "@esimEndedNote": {
+    "description": "eSIM screens."
+  },
+  "esimBuyAnother": "اشترِ شريحة جديدة",
+  "@esimBuyAnother": {
+    "description": "eSIM screens."
+  },
+  "esimTopUpTitle": "اشحن هذه الشريحة",
+  "@esimTopUpTitle": {
+    "description": "eSIM screens."
+  },
+  "esimNoTopUps": "لا تتوفر باقات شحن لهذه الشريحة الآن.",
+  "@esimNoTopUps": {
+    "description": "eSIM screens."
+  },
+  "esimTopUpDone": "أُضيفت الباقة إلى شريحتك.",
+  "@esimTopUpDone": {
+    "description": "eSIM screens."
+  },
+  "esimRenameTitle": "تسمية الشريحة",
+  "@esimRenameTitle": {
+    "description": "eSIM screens."
+  },
+  "esimCancel": "إلغاء",
+  "@esimCancel": {
+    "description": "eSIM screens."
+  },
+  "esimSave": "حفظ",
+  "@esimSave": {
+    "description": "eSIM screens."
+  },
+  "esimNumber": "رقم الشريحة (ICCID)",
+  "@esimNumber": {
+    "description": "eSIM screens."
+  },
+  "esimHelp": "تحتاج إلى مساعدة؟",
+  "@esimHelp": {
+    "description": "eSIM screens."
+  },
+  "esimCountriesCount": "{count, plural, =1{دولة واحدة} =2{دولتان} few{{count} دول} other{{count} دولة}}",
+  "@esimCountriesCount": {
+    "description": "eSIM screens.",
+    "placeholders": {"count": {"type": "int"}}
+  },
+  "esimValidDays": "صالحة {days, plural, =1{ليوم واحد} =2{ليومين} few{{days} أيام} other{{days} يوماً}}",
+  "@esimValidDays": {
+    "description": "eSIM screens.",
+    "placeholders": {"days": {"type": "int"}}
+  },
+  "esimVoiceAndText": "{voice} دقيقة · {text} رسالة",
+  "@esimVoiceAndText": {
+    "description": "eSIM screens.",
+    "placeholders": {"voice": {"type": "int"}, "text": {"type": "int"}}
+  },
+  "esimInstallWithin": "ثبّتها خلال {days, plural, =1{يوم واحد} =2{يومين} few{{days} أيام} other{{days} يوماً}} من الشراء، وإلا فلن تعود صالحة.",
+  "@esimInstallWithin": {
+    "description": "eSIM screens.",
+    "placeholders": {"days": {"type": "int"}}
+  },
+  "esimBuyFor": "متابعة · {price}",
+  "@esimBuyFor": {
+    "description": "eSIM screens.",
+    "placeholders": {"price": {"type": "String"}}
+  },
+  "esimForName": "لـ {name}",
+  "@esimForName": {
+    "description": "eSIM screens.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "esimEndsInDays": "تنتهي بعد {days, plural, =1{يوم واحد} =2{يومين} few{{days} أيام} other{{days} يوماً}}",
+  "@esimEndsInDays": {
+    "description": "eSIM screens.",
+    "placeholders": {"days": {"type": "int"}}
+  },
+  "esimShareText": "شريحة إنترنت (eSIM) لـ {destination}: {plan}\nافتح هذا الرابط من الهاتف الذي ستعمل عليه:\n{link}\nرمز الدخول: {code}",
+  "@esimShareText": {
+    "description": "eSIM screens.",
+    "placeholders": {"destination": {"type": "String"}, "plan": {"type": "String"}, "link": {"type": "String"}, "code": {"type": "String"}}
+  },
+  "esimPlanDays": "{days, plural, =1{يوم واحد} =2{يومان} few{{days} أيام} other{{days} يوماً}}",
+  "@esimPlanDays": {
+    "description": "eSIM screens: a plan's length.",
+    "placeholders": {"days": {"type": "int"}}
+  },
+  "esimPreparingTitle": "نجهّز شريحتك…",
+  "@esimPreparingTitle": {"description": "eSIM screens."},
+  "esimPreparingBody": "عادةً خلال ثوانٍ. يمكنك إغلاق التطبيق، وستجدها في «كروتي» وسنخبرك حين تصبح جاهزة.",
+  "@esimPreparingBody": {"description": "eSIM screens."},
+  "esimRefundedTitle": "لم نتمكن من إصدار الشريحة",
+  "@esimRefundedTitle": {"description": "eSIM screens."},
+  "esimEntryKicker": "شرائح eSIM",
+  "@esimEntryKicker": {"description": "eSIM banner: the small line above the title."},
+  "esimEntryFrom": "من {price}",
+  "@esimEntryFrom": {
+    "description": "eSIM banner button, with the lowest price.",
+    "placeholders": {"price": {"type": "String"}}
+  },
+  "esimStoreSubtitle": "إنترنت فور وصولك، بلا شريحة بلاستيكية.",
+  "@esimStoreSubtitle": {"description": "eSIM screens."},
+  "esimHowTitle": "كيف تعمل؟",
+  "@esimHowTitle": {"description": "eSIM screens."},
+  "esimHow1Title": "اختر وجهتك",
+  "@esimHow1Title": {"description": "eSIM screens."},
+  "esimHow1Body": "دولة، أو منطقة، أو باقة عالمية تناسب رحلتك.",
+  "@esimHow1Body": {"description": "eSIM screens."},
+  "esimHow2Title": "ثبّتها بلمسة",
+  "@esimHow2Title": {"description": "eSIM screens."},
+  "esimHow2Body": "يضيفها هاتفك بنفسه، بلا رمز ولا خطوات طويلة.",
+  "@esimHow2Body": {"description": "eSIM screens."},
+  "esimHow3Title": "اتصل عند وصولك",
+  "@esimHow3Title": {"description": "eSIM screens."},
+  "esimHow3Body": "تعمل الشريحة بجانب خطك، ويبقى رقمك كما هو.",
+  "@esimHow3Body": {"description": "eSIM screens."},
+  "esimTapToInstall": "اضغط لتثبيتها",
+  "@esimTapToInstall": {"description": "eSIM screens."},
+  "esimTapToSend": "اضغط لإرسالها أو تثبيتها",
+  "@esimTapToSend": {"description": "eSIM screens."},
+  "esimSearchSection": "شرائح eSIM للسفر",
+  "@esimSearchSection": {"description": "eSIM results in the home search."},
+  "esimSearchTag": "شريحة eSIM",
+  "@esimSearchTag": {"description": "Tag on an eSIM search result."},
+  "esimSearchRowLabel": "شريحة eSIM إلى {name}",
+  "@esimSearchRowLabel": {
+    "description": "Screen reader label of an eSIM search result.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "esimOneStepTitle": "بقيت خطوة واحدة",
+  "@esimOneStepTitle": {"description": "eSIM screens."},
+  "esimInstallAction": "ثبّت الشريحة",
+  "@esimInstallAction": {"description": "eSIM screens."},
+  "esimScanBody": "هذا الهاتف لا يثبّتها بلمسة. امسح الرمز من الهاتف الذي ستعمل عليه.",
+  "@esimScanBody": {"description": "eSIM screens."},
+  "esimSendNow": "أرسلها الآن",
+  "@esimSendNow": {"description": "eSIM screens."},
+  "esimSendAgain": "أرسلها مرة أخرى",
+  "@esimSendAgain": {"description": "eSIM screens."},
+  "esimSendBody": "يصله رابط ورمز، ويثبّتها من هاتفه بلمسة.",
+  "@esimSendBody": {"description": "eSIM screens."},
+  "esimSentBody": "أرسلتها. إن لم تصله، أرسلها مرة أخرى.",
+  "@esimSentBody": {"description": "eSIM screens."},
+  "esimGiftKicker": "هدية",
+  "@esimGiftKicker": {"description": "eSIM screens."},
+  "esimGiftTo": "هدية إلى",
+  "@esimGiftTo": {"description": "eSIM screens."},
+  "esimShareLink": "رابط الشريحة",
+  "@esimShareLink": {"description": "eSIM screens."},
+  "esimShareCode": "رمز الدخول",
+  "@esimShareCode": {"description": "eSIM screens."},
+  "esimShowQr": "إظهار رمز QR ليمسحه",
+  "@esimShowQr": {"description": "eSIM screens."},
+  "esimTopUpNow": "اشحنها الآن",
+  "@esimTopUpNow": {"description": "eSIM screens."},
+  "esimTopUpAction": "اشحن الشريحة",
+  "@esimTopUpAction": {"description": "eSIM screens."},
+  "esimLowTitle": "قاربت على الانتهاء",
+  "@esimLowTitle": {"description": "eSIM screens."},
+  "esimWhoForTitle": "لمن سترسلها؟",
+  "@esimWhoForTitle": {"description": "eSIM screens."},
+  "esimContinue": "متابعة",
+  "@esimContinue": {"description": "eSIM screens."},
+  "esimDetailsTitle": "التفاصيل",
+  "@esimDetailsTitle": {"description": "eSIM screens."},
+  "esimSendToName": "أرسلها إلى {name}",
+  "@esimSendToName": {
+    "description": "eSIM page's main button, for someone else's eSIM.",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "esimLowBodyTopUp": "اشحنها الآن لتبقى متصلاً.",
+  "@esimLowBodyTopUp": {"description": "eSIM screens."},
+  "esimLowBodyNew": "لا تُشحن هذه الباقة. اشترِ شريحة جديدة لتبقى متصلاً.",
+  "@esimLowBodyNew": {"description": "eSIM screens."},
+  "orderStatusHeading": "حالة الطلب",
+  "@orderStatusHeading": {
+    "description": "Heading over a top-up order's timeline."
+  },
+  "orderDetailsHeading": "التفاصيل",
+  "@orderDetailsHeading": {
+    "description": "Heading over a top-up order's receipt."
+  },
+  "orderStepPlaced": "تم الطلب",
+  "@orderStepPlaced": {
+    "description": "Timeline step: the order was placed."
+  },
+  "orderStepPaid": "تم الدفع",
+  "@orderStepPaid": {
+    "description": "Timeline step: the payment went through."
+  },
+  "orderStepSending": "{kind, select, invite{إرسال الهدية} telegram{الإرسال إلى حساب تيليجرام} steam{الإضافة إلى محفظة ستيم} other{الإرسال إلى حساب اللاعب}}",
+  "@orderStepSending": {
+    "description": "Timeline step: the supplier is topping the account up; by the kind of account.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "orderStepRefunded": "أُعيد المبلغ إلى رصيدك",
+  "@orderStepRefunded": {
+    "description": "Timeline step: the order ended without a top-up and the money went back."
+  },
+  "reportProblem": "الإبلاغ عن مشكلة",
+  "@reportProblem": {
+    "description": "Opens the report sheet for an order."
+  },
+  "reportAgain": "الإبلاغ عن مشكلة أخرى",
+  "@reportAgain": {
+    "description": "Report again after our reply."
+  },
+  "reportTitle": "ما المشكلة؟",
+  "@reportTitle": {
+    "description": "Report sheet title."
+  },
+  "reportBody": "اختر ما حدث، ونراجع طلبك ونرد عليك هنا وفي إشعار.",
+  "@reportBody": {
+    "description": "Report sheet explanation."
+  },
+  "reportNotArrived": "{kind, select, invite{لم تصل الهدية} steam{لم يُضف الرصيد} other{لم يصل الشحن}}",
+  "@reportNotArrived": {
+    "description": "Report reason, by the kind of account.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "reportWrongAccount": "{kind, select, invite{وصلت الهدية إلى حساب آخر} telegram{وصل إلى اسم مستخدم آخر} steam{أُضيف إلى حساب ستيم آخر} other{وصل إلى معرّف لاعب آخر}}",
+  "@reportWrongAccount": {
+    "description": "Report reason, by the kind of account.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "reportWrongAmount": "{kind, select, invite{وصلت لعبة أو نسخة غير التي طلبتها} other{الكمية غير صحيحة}}",
+  "@reportWrongAmount": {
+    "description": "Report reason, by the kind of account.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "reportOther": "مشكلة أخرى",
+  "@reportOther": {
+    "description": "Report reason."
+  },
+  "reportNote": "تفاصيل تساعدنا (اختياري)",
+  "@reportNote": {
+    "description": "Label of the report's note field."
+  },
+  "reportNoteHint": "{kind, select, invite{مثلاً: لم يصلني طلب الصداقة} steam{مثلاً: أُضيف جزء من الرصيد فقط} other{مثلاً: وصل جزء من الشحن فقط}}",
+  "@reportNoteHint": {
+    "description": "Hint in the report's note field, by the kind of account.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "reportSend": "إرسال البلاغ",
+  "@reportSend": {
+    "description": "Sends the report."
+  },
+  "reportSent": "وصلنا بلاغك. نراجعه ونرد عليك.",
+  "@reportSent": {
+    "description": "Snackbar after a report was sent."
+  },
+  "reportOpenTitle": "بلاغك قيد المراجعة",
+  "@reportOpenTitle": {
+    "description": "Card title while a report is open."
+  },
+  "reportOpenBody": "أبلغت: {reason}. نرد عليك هنا وفي إشعار.",
+  "@reportOpenBody": {
+    "description": "Card body while a report is open.",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "reportReplyTitle": "ردّنا على بلاغك",
+  "@reportReplyTitle": {
+    "description": "Card title once a report was resolved."
+  },
+  "reportResolvedBody": "راجعنا بلاغك عن هذا الطلب.",
+  "@reportResolvedBody": {
+    "description": "Shown when a report was resolved without a written reply."
+  },
+  "reportWhatsApp": "أو راسلنا على واتساب",
+  "@reportWhatsApp": {
+    "description": "Secondary way to reach us from the report sheet."
   }
 }

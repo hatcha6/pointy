@@ -144,7 +144,9 @@ var adminConsoleTemplate = template.Must(template.New("relay-admin").Parse(`<!do
 
 type HTTPServer struct {
 	Store control.InstallationStore
-	Hub   *Hub
+	// ESIM is the card app's eSIM shelf; the zero value leaves it off.
+	ESIM ESIMConfig
+	Hub  *Hub
 	// Artifacts stores on-prem update bundles the relay serves to the fleet.
 	// Nil disables the remote-update endpoints.
 	Artifacts                     *artifacts.Store

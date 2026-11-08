@@ -10,3 +10,6 @@ class IntegrationsConfig(AppConfig):
         # Registers every provider driver with the registry in providers.base.
         from . import providers  # noqa: F401
         from . import signals  # noqa: F401
+        # Strikes off debts left by refused cards sold on account before the
+        # refusal refund covered credit sales (2026-11-07).
+        from . import credit_refusal_repair  # noqa: F401

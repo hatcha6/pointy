@@ -8,6 +8,7 @@ import 'package:pointy_cards/dev/cards_fixtures.dart';
 import 'package:pointy_cards/src/core/money.dart';
 import 'package:pointy_cards/src/core/result.dart';
 import 'package:pointy_cards/src/data/api/relay_api.dart';
+import 'package:pointy_cards/src/core/analytics/analytics.dart';
 import 'package:pointy_cards/src/data/repositories/attribution_repository.dart';
 import 'package:pointy_cards/src/data/repositories/auth_repository.dart';
 import 'package:pointy_cards/src/data/session/session_store.dart';
@@ -213,4 +214,54 @@ void main() {
     expect(attribution.holding, isFalse);
     expect(told, 2, reason: 'told again once it can show');
   });
+
+  test(
+    'the answer outlives the relay taking it, and reaches a later launch',
+    () async {
+      await attribution.load();
+      await attribution.answer(heardFrom: 'friend');
+      expect(attribution.pending.heardFrom, 'friend');
+      expect(attribution.heardFrom, 'friend');
+
+      final later = build();
+      await later.load();
+      expect(later.heardFrom, 'friend');
+
+      // The first answer stands.
+      await later.answer(heardFrom: 'shop');
+      expect(later.heardFrom, 'friend');
+    },
+  );
+
+  test('a skip gives no answer to remember', () async {
+    await attribution.load();
+    attribution.skip();
+    expect(attribution.heardFrom, '');
+  });
+
+  test('answered signed in, analytics is told at once', () async {
+    final told = <Map<String, Object>>[];
+    final repository = AttributionRepository(
+      api: RelayApi(
+        baseUrl: Uri.parse('https://relay.test'),
+        sessions: sessions,
+        client: relay.client,
+      ),
+      isSignedIn: () => true,
+      analytics: _Person(told),
+    );
+    await repository.answer(heardFrom: 'facebook');
+    expect(told, [
+      {'heard_from': 'facebook'},
+    ]);
+  });
+}
+
+class _Person extends NoAnalytics {
+  _Person(this.told);
+
+  final List<Map<String, Object>> told;
+
+  @override
+  void setPersonOnce(Map<String, Object> properties) => told.add(properties);
 }

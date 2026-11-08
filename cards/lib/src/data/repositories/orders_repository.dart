@@ -1,3 +1,5 @@
+import '../models/order_report.dart';
+
 import 'package:flutter/foundation.dart';
 
 import '../../core/analytics/analytics.dart';
@@ -170,6 +172,21 @@ class OrdersRepository {
   Uri get cardReturnUrl => api.resolve('/v1/customers/card-return');
 
   /// One order; a delivered one comes back with its codes.
+  /// Reports a problem with a paid order. Reporting it again while the first
+  /// report is open answers that one: a second tap files nothing new.
+  Future<Result<OrderReport>> report(
+    String orderId, {
+    required ReportReason reason,
+    String note = '',
+  }) => Result.guard(() async {
+    final answer = await api.post(
+      '/v1/customers/orders/$orderId/report',
+      body: {'reason': reason.wire, 'note': note.trim()},
+      signedIn: true,
+    );
+    return OrderReport.fromJson(answer['report'] as Map<String, dynamic>);
+  });
+
   Future<Result<CardOrder>> order(String orderId) => Result.guard(() async {
     return _track(
       _order(await api.get('/v1/customers/orders/$orderId', signedIn: true)),

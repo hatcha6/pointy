@@ -171,4 +171,37 @@ void main() {
     watcher.dispose();
     expect(push.showing('order-1'), isFalse);
   });
+
+  testWidgets("the waiting page waits as long as the relay says", (
+    tester,
+  ) async {
+    await phone(tester);
+    final dependencies = fixtureDependencies(
+      client: waitingRelay(),
+      push: FixturePush(),
+    );
+    final watcher = OrderWatcher(
+      orders: dependencies.orders,
+      vault: dependencies.vault,
+      order: CardOrder.fromJson({
+        ...fixtureOrder(status: 'fulfilling', withCodes: false),
+        'wait_seconds': 30,
+      }),
+    )..start();
+    expect(watcher.order.wait, const Duration(seconds: 30));
+    await tester.pumpWidget(
+      CardsApp(
+        dependencies: dependencies,
+        home: OrderProgressPage(watcher: watcher),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 20));
+    expect(find.text('يتأخر المورّد هذه المرة'), findsNothing);
+    await tester.pump(const Duration(seconds: 11));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('يتأخر المورّد هذه المرة'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+    watcher.dispose();
+  });
 }

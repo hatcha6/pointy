@@ -42,12 +42,20 @@ class AttributionRepository {
 
   static const _pendingKey = 'cards.attribution.pending';
   static const _askedKey = 'cards.attribution.asked';
+  static const _heardFromKey = 'cards.attribution.heard_from';
   static const _referrerKey = 'cards.attribution.referrer_read';
 
   PendingAttribution _pending = PendingAttribution.empty;
 
   /// What the relay has not taken yet.
   PendingAttribution get pending => _pending;
+
+  String _heardFrom = '';
+
+  /// The answer given on this phone. [pending]'s is cleared once the relay has
+  /// it; this one stays, because analytics can only be told once the customer
+  /// is known, and is told again at each launch in case sharing was off.
+  String get heardFrom => _heardFrom;
 
   /// The offer behind a code the customer typed or followed, once checked.
   CampaignOffer? offer;
@@ -83,6 +91,8 @@ class AttributionRepository {
         );
       }
       _asked = await preferences?.getBool(_askedKey) ?? false;
+      _heardFrom =
+          await preferences?.getString(_heardFromKey) ?? _pending.heardFrom;
     } on Object {
       // Unreadable: nothing waits.
     }
@@ -143,6 +153,15 @@ class AttributionRepository {
       _pending = _pending.copyWith(heardFrom: heardFrom);
       _save();
     }
+    if (heardFrom.isNotEmpty && _heardFrom.isEmpty) {
+      _heardFrom = heardFrom;
+      preferences
+          ?.setString(_heardFromKey, heardFrom)
+          .catchError((Object _) {});
+      if (isSignedIn()) {
+        analytics.heardFrom(heardFrom);
+      }
+    }
     if (code != null) {
       offer = code;
       _hold(code.code, 'code', send: false);
@@ -150,6 +169,16 @@ class AttributionRepository {
     analytics.attributionAnswered(heardFrom: heardFrom, hasCode: code != null);
     _markAsked();
     await flush();
+  }
+
+  /// The customer signed out: their answer is not the next customer's on
+  /// this phone. One the relay has not taken yet still rides on a sign-in.
+  void signedOut() {
+    _heardFrom = _pending.heardFrom;
+    final write = _heardFrom.isEmpty
+        ? preferences?.remove(_heardFromKey)
+        : preferences?.setString(_heardFromKey, _heardFrom);
+    write?.catchError((Object _) {});
   }
 
   /// The question, skipped: not asked again.

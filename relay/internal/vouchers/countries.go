@@ -9,7 +9,10 @@ import "strings"
 // can carry it.
 //
 // Two codes are regions rather than countries: WW for a card that redeems
-// anywhere, and EU for one sold for the euro-zone stores.
+// anywhere, and EU for one sold for the euro-zone stores. A game sold per
+// region has more of them (regionNames): they fit the shop's mirror (8 letters)
+// and never collide with an ISO code, which is why North America is NORAM and
+// not NA, Namibia.
 const (
 	CountryWorldwide = "WW"
 	CountryEurope    = "EU"
@@ -82,10 +85,31 @@ var countryNames = map[string]string{
 	"YT": "مايوت", "ZA": "جنوب أفريقيا", "ZM": "زامبيا", "ZW": "زيمبابوي",
 }
 
+// regionNames are the regions a game is sold for, and the catalogues FazerCards
+// lists beside them: chosen on the brand's page like a country.
+var regionNames = map[string]string{
+	"MENA":    "الشرق الأوسط وشمال أفريقيا",
+	"SEA":     "جنوب شرق آسيا",
+	"ASIA":    "آسيا",
+	"CIS":     "رابطة الدول المستقلة",
+	"LATAM":   "أمريكا اللاتينية",
+	"AMER":    "الأمريكتان",
+	"NORAM":   "أمريكا الشمالية",
+	"NAEU":    "أمريكا الشمالية وأوروبا",
+	"MYSG":    "ماليزيا وسنغافورة",
+	"TWHKMO":  "تايوان وهونغ كونغ وماكاو",
+	"EXCL":    "الكتالوج الحصري",
+	"SPECIAL": "الكتالوج الخاص",
+}
+
 // CountryName is a code's Arabic name, "" for a code the catalog does not
 // accept.
 func CountryName(code string) string {
-	return countryNames[strings.ToUpper(strings.TrimSpace(code))]
+	code = strings.ToUpper(strings.TrimSpace(code))
+	if name, ok := regionNames[code]; ok {
+		return name
+	}
+	return countryNames[code]
 }
 
 // currencyNames name a card's face value the way a Libyan till reads it:
@@ -128,6 +152,20 @@ var currencyNames = map[string]string{
 	"IDR": "روبية إندونيسية",
 	"KRW": "وون",
 	"RUB": "روبل",
+	"ARS": "بيزو أرجنتيني",
+	"CLP": "بيزو تشيلي",
+	"COP": "بيزو كولومبي",
+	"CRC": "كولون كوستاريكي",
+	"CZK": "كرونة تشيكية",
+	"HUF": "فورنت",
+	"PEN": "سول بيروفي",
+	"PHP": "بيزو فلبيني",
+	"RON": "ليو روماني",
+	"THB": "بات",
+	"TWD": "دولار تايواني",
+	"UYU": "بيزو أوروغواي",
+	"VND": "دونغ",
+	"XOF": "فرنك غرب أفريقي",
 }
 
 // CurrencyName is a currency's Arabic name, or its code when the table has

@@ -26,7 +26,9 @@ import (
 //	DELETE /v1/customers/admin/customers/{id}/sessions/{session}
 //	DELETE /v1/customers/admin/customers/{id}
 //	GET    /v1/customers/admin/orders?status=&channel=&q=&customer=&limit=
-//	GET    /v1/customers/admin/orders/{id}
+//	GET    /v1/customers/admin/orders/{id}                (with its reports)
+//	GET    /v1/customers/admin/reports?status=&limit=     (customer_order_reports.go)
+//	POST   /v1/customers/admin/reports/{id}/resolve       {reply}
 //	GET    /v1/customers/admin/notifications?customer=&limit=
 //	POST   /v1/customers/admin/notifications            {audience, customer_id, title, body, link, campaign}
 //	GET    /v1/customers/admin/shelf
@@ -81,6 +83,10 @@ func (s HTTPServer) handleCustomerAdminRoutes(w http.ResponseWriter, r *http.Req
 		s.handleCustomerAdminOrders(w, r, store)
 	case len(parts) == 2 && parts[0] == "orders" && r.Method == http.MethodGet:
 		s.handleCustomerAdminOrder(w, r, store, parts[1])
+	case route == "reports" && r.Method == http.MethodGet:
+		s.handleCustomerAdminReports(w, r, store)
+	case len(parts) == 3 && parts[0] == "reports" && parts[2] == "resolve" && r.Method == http.MethodPost:
+		s.handleCustomerAdminResolveReport(w, r, store, parts[1])
 	case route == "notifications" && r.Method == http.MethodGet:
 		s.handleCustomerAdminNotifications(w, r, store)
 	case route == "shelf" && r.Method == http.MethodGet:
@@ -212,6 +218,7 @@ func (s HTTPServer) handleCustomerAdminDelete(w http.ResponseWriter, r *http.Req
 		s.customerInternalError(w, "customer delete failed", err)
 		return
 	}
+	s.forgetCustomerReports(r.Context(), id)
 	s.logger().Info("operator deleted a customer account", "customer_id", id, "actor", adminActor(r, ""))
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -346,7 +353,13 @@ func (s HTTPServer) handleCustomerAdminOrder(w http.ResponseWriter, r *http.Requ
 		s.customerInternalError(w, "customer order read failed", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"order": withPhones(r.Context(), store, []control.CustomerOrder{order})[0]})
+	payload := map[string]any{"order": withPhones(r.Context(), store, []control.CustomerOrder{order})[0]}
+	if reports, ok := s.Store.(control.CustomerOrderReportStore); ok {
+		if list, err := reports.CustomerOrderReports(r.Context(), order.ID); err == nil {
+			payload["reports"] = list
+		}
+	}
+	writeJSON(w, http.StatusOK, payload)
 }
 
 func (s HTTPServer) handleCustomerAdminNotifications(w http.ResponseWriter, r *http.Request, store customerAdminStore) {

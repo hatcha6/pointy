@@ -128,6 +128,10 @@ type FinanceTrackedMonth struct {
 	// SupplierCost is what card, airtime and bill suppliers charged, by the
 	// currency they charged in, for what shops bought.
 	SupplierCost map[string]string `json:"supplier_cost"`
+	// CardsAppCost is what the same suppliers charged, by currency, for what
+	// «دفتر كروت» customers bought: the cost of the cards_app revenue, kept
+	// apart so neither service's margin carries the other's.
+	CardsAppCost map[string]string `json:"cards_app_cost,omitempty"`
 	// CompanyCost is what the same suppliers charged for what the company
 	// bought for itself, by currency: its own spending, not a service's cost.
 	CompanyCost map[string]string `json:"company_cost,omitempty"`
@@ -368,6 +372,7 @@ type financeRollupMonth struct {
 	revenue      map[string]*big.Rat
 	smsCost      *big.Rat
 	supplierCost map[string]*big.Rat
+	cardsAppCost map[string]*big.Rat
 	companyCost  map[string]*big.Rat
 	topUps       map[string]*big.Rat
 	topUpFees    *big.Rat
@@ -384,6 +389,7 @@ func (r *financeRollup) month(name string) *financeRollupMonth {
 			revenue:      map[string]*big.Rat{},
 			smsCost:      new(big.Rat),
 			supplierCost: map[string]*big.Rat{},
+			cardsAppCost: map[string]*big.Rat{},
 			companyCost:  map[string]*big.Rat{},
 			topUps:       map[string]*big.Rat{},
 			topUpFees:    new(big.Rat),
@@ -417,6 +423,10 @@ func (r *financeRollup) addSMSCost(month, cost string) {
 
 func (r *financeRollup) addSupplierCost(month, currency, cost string) {
 	addRat(r.month(month).supplierCost, strings.ToUpper(strings.TrimSpace(currency)), cost)
+}
+
+func (r *financeRollup) addCardsAppCost(month, currency, cost string) {
+	addRat(r.month(month).cardsAppCost, strings.ToUpper(strings.TrimSpace(currency)), cost)
 }
 
 func (r *financeRollup) addCompanyCost(month, currency, cost string) {
@@ -467,6 +477,7 @@ func (r *financeRollup) result() []FinanceTrackedMonth {
 			Revenue:      formatRats(m.revenue),
 			SMSCost:      FormatWalletAmount(m.smsCost),
 			SupplierCost: formatRats(m.supplierCost),
+			CardsAppCost: formatRats(m.cardsAppCost),
 			CompanyCost:  formatRats(m.companyCost),
 			TopUps:       formatRats(m.topUps),
 			TopUpFees:    FormatWalletAmount(m.topUpFees),
@@ -632,7 +643,11 @@ func (s *FileStore) FinanceTracked(_ context.Context, from, to time.Time) ([]Fin
 		if purchase.Status != VoucherPurchaseSucceeded || purchase.TestMode || !within(at, from, to) {
 			continue
 		}
-		if purchase.ForCompany() && !purchase.ForCustomer() {
+		if purchase.ForCustomer() {
+			rollup.addCardsAppCost(FinanceMonth(at), purchase.SupplierCurrency, purchase.SupplierCost)
+			continue
+		}
+		if purchase.ForCompany() {
 			currency, cost := companyPurchaseCost(purchase)
 			rollup.addCompanyCost(FinanceMonth(at), currency, cost)
 			continue
@@ -847,10 +862,20 @@ func (s *PostgresStore) FinanceTracked(ctx context.Context, from, to time.Time) 
 			`SELECT ` + financeMonthSQL("COALESCE(completed_at, created_at)") + `, upper(supplier_currency),
 				SUM(CASE WHEN supplier_cost ~ '^\s*[0-9]+(\.[0-9]+)?\s*$' THEN trim(supplier_cost)::numeric ELSE 0 END)::text
 			FROM relay_voucher_purchases
-			WHERE status = 'succeeded' AND NOT test_mode AND (installation_id IS NOT NULL OR purpose = 'customer')
+			WHERE status = 'succeeded' AND NOT test_mode AND installation_id IS NOT NULL
 				AND COALESCE(completed_at, created_at) >= $1 AND COALESCE(completed_at, created_at) < $2
 			GROUP BY 1, 2`,
 			rollup.addSupplierCost,
+		},
+		{
+			// What «دفتر كروت» customers' cards cost, read the same way.
+			`SELECT ` + financeMonthSQL("COALESCE(completed_at, created_at)") + `, upper(supplier_currency),
+				SUM(CASE WHEN supplier_cost ~ '^\s*[0-9]+(\.[0-9]+)?\s*$' THEN trim(supplier_cost)::numeric ELSE 0 END)::text
+			FROM relay_voucher_purchases
+			WHERE status = 'succeeded' AND NOT test_mode AND installation_id IS NULL AND purpose = 'customer'
+				AND COALESCE(completed_at, created_at) >= $1 AND COALESCE(completed_at, created_at) < $2
+			GROUP BY 1, 2`,
+			rollup.addCardsAppCost,
 		},
 		{
 			// The company's own purchases, as companyPurchaseCost reads them.

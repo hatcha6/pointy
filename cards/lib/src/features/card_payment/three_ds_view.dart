@@ -168,7 +168,7 @@ class _ThreeDSViewState extends State<ThreeDSView> {
                       ),
                     ),
                   if (_failed)
-                    Positioned.fill(child: _LoadFailed(onRetry: _retry)),
+                    Positioned.fill(child: GatewayLoadFailed(onRetry: _retry)),
                   if (_loading)
                     const Positioned(
                       top: 0,
@@ -189,8 +189,9 @@ class _ThreeDSViewState extends State<ThreeDSView> {
 /// Never shorter than this, so a page that measures oddly stays usable.
 const _minHeight = 240.0;
 
-class _LoadFailed extends StatelessWidget {
-  const _LoadFailed({required this.onRetry});
+/// A gateway's page that did not load: white like the page, with a retry.
+class GatewayLoadFailed extends StatelessWidget {
+  const GatewayLoadFailed({super.key, required this.onRetry});
 
   final VoidCallback onRetry;
 

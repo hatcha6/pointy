@@ -268,10 +268,10 @@ abstract class AppLocalizations {
   /// **'اختر الفئة'**
   String get chooseValue;
 
-  /// Brand page: heading above the country chips.
+  /// Brand page: heading above the country and region chips.
   ///
   /// In ar, this message translates to:
-  /// **'الدولة'**
+  /// **'الدولة أو المنطقة'**
   String get chooseCountry;
 
   /// Brand page / reveal: how to redeem the card.
@@ -586,23 +586,17 @@ abstract class AppLocalizations {
   /// **'تحقّق من بيانات الدفع.'**
   String get errInvalidPayer;
 
-  /// Hosted card page step title.
+  /// Dafa's card page said paid; the relay is confirming the payment.
   ///
   /// In ar, this message translates to:
-  /// **'أكمل الدفع في صفحة البطاقة'**
+  /// **'نتحقق من الدفع'**
   String get hostedTitle;
 
-  /// Hosted page explanation.
+  /// Shown while the relay confirms a payment made on Dafa's card page.
   ///
   /// In ar, this message translates to:
-  /// **'فتحنا صفحة الدفع الآمنة. بعد إتمام الدفع ارجع هنا، وسيظهر كرتك تلقائياً.'**
+  /// **'تم الدفع في صفحة البطاقة، ونتأكد الآن من وصوله. سيظهر كرتك هنا خلال لحظات.'**
   String get hostedBody;
-
-  /// Reopen the hosted page.
-  ///
-  /// In ar, this message translates to:
-  /// **'افتح صفحة الدفع'**
-  String get openPaymentPage;
 
   /// Cancel an unpaid order.
   ///
@@ -787,13 +781,13 @@ abstract class AppLocalizations {
   /// Mark a card used.
   ///
   /// In ar, this message translates to:
-  /// **'تحديد كمستخدم'**
+  /// **'استخدمته'**
   String get markUsed;
 
   /// Unmark a used card.
   ///
   /// In ar, this message translates to:
-  /// **'إلغاء تحديد الاستخدام'**
+  /// **'لم أستخدمه'**
   String get markUnused;
 
   /// Used badge.
@@ -1648,6 +1642,42 @@ abstract class AppLocalizations {
   /// **'لم تكتمل'**
   String get filterIncomplete;
 
+  /// «كروتي»: a filter with nothing in it.
+  ///
+  /// In ar, this message translates to:
+  /// **'استخدمت كل كروتك'**
+  String get myCardsNoneUnusedTitle;
+
+  /// «كروتي»: a filter with nothing in it.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكروت التي لم تستخدم رمزها بعد تظهر هنا.'**
+  String get myCardsNoneUnusedBody;
+
+  /// «كروتي»: a filter with nothing in it.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا كروت مستخدمة بعد'**
+  String get myCardsNoneUsedTitle;
+
+  /// «كروتي»: a filter with nothing in it.
+  ///
+  /// In ar, this message translates to:
+  /// **'بعد أن تشحن كرتاً، اضغط «استخدمته» في صفحته لينتقل إلى هنا.'**
+  String get myCardsNoneUsedBody;
+
+  /// «كروتي»: a filter with nothing in it.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل طلباتك اكتملت'**
+  String get myCardsNoneIncompleteTitle;
+
+  /// «كروتي»: a filter with nothing in it.
+  ///
+  /// In ar, this message translates to:
+  /// **'إن تعذّر طلب يوماً يظهر هنا، ويعود ثمنه إلى رصيدك.'**
+  String get myCardsNoneIncompleteBody;
+
   /// Badge on a card a store build (iPhone, Google Play) lists but cannot sell: it is bought on the website.
   ///
   /// In ar, this message translates to:
@@ -2041,7 +2071,7 @@ abstract class AppLocalizations {
   /// Order paid, the top-up on its way.
   ///
   /// In ar, this message translates to:
-  /// **'{kind, select, invite{نرسل لك الهدية…} other{نشحن الحساب…}}'**
+  /// **'{kind, select, invite{نرسل لك الهدية…} telegram{نشحن حساب تيليجرام…} steam{نضيف الرصيد إلى محفظة ستيم…} other{نشحن حساب اللاعب…}}'**
   String topUpPreparingTitle(String kind);
 
   /// Order paid, the top-up on its way.
@@ -2050,23 +2080,23 @@ abstract class AppLocalizations {
   /// **'{kind, select, invite{يصلك من ستيم طلب صداقة ثم الهدية: اقبلهما حين يصلان.} other{نرسل {item} إلى {account}. يصل عادةً خلال دقيقة أو دقيقتين.}}'**
   String topUpPreparingBody(String kind, String item, String account);
 
-  /// Top-up paid, still not arrived after a few minutes.
+  /// Top-up paid, still not arrived after the relay's wait; by the kind of account.
   ///
   /// In ar, this message translates to:
-  /// **'يتأخر الشحن هذه المرة'**
-  String get topUpSlowTitle;
+  /// **'{kind, select, invite{تتأخر الهدية هذه المرة} steam{تتأخر إضافة الرصيد هذه المرة} other{يتأخر الشحن هذه المرة}}'**
+  String topUpSlowTitle(String kind);
 
-  /// Paid but the top-up failed: refunded to credit.
+  /// Paid but the top-up failed: refunded to credit; by the kind of account.
   ///
   /// In ar, this message translates to:
-  /// **'لم يكتمل الشحن'**
-  String get topUpRefundedTitle;
+  /// **'{kind, select, invite{لم تُرسل الهدية} steam{لم يُضف الرصيد} other{لم يكتمل الشحن}}'**
+  String topUpRefundedTitle(String kind);
 
-  /// Refund of a failed top-up.
+  /// Refund of a failed top-up, naming what to check for the kind of account.
   ///
   /// In ar, this message translates to:
-  /// **'لم يصل الشحن إلى الحساب، فأعدنا {amount} إلى رصيدك. تأكد من الحساب ثم حاول مجدداً.'**
-  String topUpRefundedBody(String amount);
+  /// **'{kind, select, invite{لم تُرسل الهدية، فأعدنا {amount} إلى رصيدك. تأكد من رابط الدعوة ثم حاول مجدداً.} telegram{لم يصل الشحن إلى حساب تيليجرام، فأعدنا {amount} إلى رصيدك. تأكد من اسم المستخدم ثم حاول مجدداً.} steam{لم يُضف الرصيد إلى محفظة ستيم، فأعدنا {amount} إلى رصيدك. تأكد من اسم الدخول ثم حاول مجدداً.} other{لم يصل الشحن إلى حساب اللاعب، فأعدنا {amount} إلى رصيدك. تأكد من المعرّف ثم حاول مجدداً.}}'**
+  String topUpRefundedBody(String kind, String amount);
 
   /// A top-up arrived.
   ///
@@ -2128,11 +2158,11 @@ abstract class AppLocalizations {
   /// **'لم يصلك؟ راسلنا على واتساب'**
   String get topUpHelp;
 
-  /// Prefilled support message.
+  /// Prefilled support message, by the kind of account.
   ///
   /// In ar, this message translates to:
-  /// **'مرحباً، الطلب رقم {order} لم يصل إلى الحساب.'**
-  String topUpHelpMessage(String order);
+  /// **'{kind, select, invite{مرحباً، الطلب رقم {order}: لم تصلني الهدية.} telegram{مرحباً، الطلب رقم {order} لم يصل إلى حساب تيليجرام.} steam{مرحباً، الطلب رقم {order} لم يُضف إلى محفظة ستيم.} other{مرحباً، الطلب رقم {order} لم يصل إلى حساب اللاعب.}}'**
+  String topUpHelpMessage(String kind, String order);
 
   /// Snackbar after copying the order number.
   ///
@@ -2181,6 +2211,983 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'اختر الإصدار'**
   String get chooseEdition;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلى أين تسافر؟'**
+  String get esimStoreTitle;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'سافر متصلاً من أول لحظة'**
+  String get esimEntryTitle;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنترنت لأكثر من 200 وجهة، تثبّته بلمسة واحدة.'**
+  String get esimEntryBody;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر وجهتك'**
+  String get esimEntryAction;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'شرائحي'**
+  String get esimMineTitle;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث عن دولة أو منطقة'**
+  String get esimSearchHint;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسح البحث'**
+  String get esimSearchClear;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'دول'**
+  String get esimKindLocal;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'مناطق'**
+  String get esimKindRegional;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'عالمية'**
+  String get esimKindGlobal;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأكثر طلباً'**
+  String get esimPopular;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل الدول'**
+  String get esimAllCountries;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد وجهة بهذا الاسم.'**
+  String get esimNoMatch;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'تبدأ من'**
+  String get esimFrom;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'الشرائح غير متاحة الآن'**
+  String get esimClosedTitle;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'عُد بعد قليل، أو تواصل معنا إذا كنت تحتاجها الآن.'**
+  String get esimClosedBody;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر التحميل'**
+  String get esimLoadFailed;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'أعد المحاولة'**
+  String get esimTryAgain;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'هاتفك يدعم الشرائح الإلكترونية'**
+  String get esimPhoneSupported;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'يبدو أن هاتفك لا يدعم الشرائح الإلكترونية'**
+  String get esimPhoneNotSupported;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'ما زال بإمكانك شراء شريحة لشخص تعرفه وإرسالها إليه. وإن كنت متأكداً أن هاتفك يدعمها، فتحقق من إعدادات الهاتف أولاً.'**
+  String get esimPhoneNotSupportedBody;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير محدودة'**
+  String get esimUnlimited;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'الشبكات'**
+  String get esimNetworks;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'البيانات'**
+  String get esimFactData;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'الصلاحية'**
+  String get esimFactValidity;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'الشبكة'**
+  String get esimFactNetwork;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'الشحن'**
+  String get esimFactTopUp;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'يمكن شحنها'**
+  String get esimTopUpYes;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يمكن شحنها'**
+  String get esimTopUpNo;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'تبدأ الصلاحية عند أول اتصال بالشبكة في وجهتك، لا عند الشراء ولا عند التثبيت.'**
+  String get esimStartsOnFirstUse;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'يجب أن يكون هاتفك غير مقفل على شركة اتصالات. الهواتف المقفلة قد لا تقبل الشريحة.'**
+  String get esimUnlockedNote;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'بيانات فقط: لا تتضمن رقم هاتف ولا مكالمات عادية.'**
+  String get esimDataOnlyNote;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'لمن هذه الشريحة؟'**
+  String get esimWhoFor;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'لهاتفي'**
+  String get esimForMe;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'لشخص آخر'**
+  String get esimForSomeoneElse;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'اسمه (اختياري)'**
+  String get esimRecipientName;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'بعد الدفع نعطيك رابطاً ترسله إليه، ويثبّتها من هاتفه بلمسة. الشريحة تعمل على هاتف واحد فقط.'**
+  String get esimForSomeoneElseNote;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'قد لا تعمل الشريحة على هذا الهاتف، ولا يمكن استرداد شريحة بعد تثبيتها. تأكد أولاً من الإعدادات.'**
+  String get esimForMeUnsupportedNote;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم تُفعَّل بعد'**
+  String get esimStatusNotActive;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'فعّالة'**
+  String get esimStatusActive;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'نفدت'**
+  String get esimStatusFinished;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'انتهت'**
+  String get esimStatusExpired;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'قيد التحقق'**
+  String get esimStatusUnknown;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'متبقية من'**
+  String get esimLeftOf;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'تنتهي اليوم'**
+  String get esimEndsToday;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'قاربت على الانتهاء: اشحنها لتبقى متصلاً.'**
+  String get esimRunningOutTopUp;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'قاربت على الانتهاء: اشترِ شريحة جديدة لتبقى متصلاً.'**
+  String get esimRunningOutNew;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'شريحتك جاهزة'**
+  String get esimReadyTitle;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'بقيت خطوة واحدة: ثبّتها الآن أثناء اتصالك بالإنترنت، وستبدأ العمل عند وصولك.'**
+  String get esimReadyBody;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'أرسلها الآن، وسيثبّتها صاحبها من هاتفه بلمسة.'**
+  String get esimReadyBodyGift;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'ثبّت الشريحة الآن'**
+  String get esimInstallNow;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'ثبّتها على هذا الهاتف'**
+  String get esimInstallHere;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيفتح هاتفك شاشة إضافة الشريحة، ولا تحتاج إلى مسح أي رمز.'**
+  String get esimInstallHint;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يفتح هاتفك شاشة التثبيت. استخدم الرمز أو أدخل البيانات يدوياً.'**
+  String get esimInstallFailedNote;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'أرسلها إلى شخص آخر'**
+  String get esimSendTo;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'طرق أخرى للتثبيت'**
+  String get esimOtherWays;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'ثبّتها بالفعل'**
+  String get esimAlreadyInstalled;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرض طرق التثبيت مجدداً'**
+  String get esimShowInstallAgain;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحتاج إلى اتصال بالإنترنت أثناء التثبيت.'**
+  String get esimNeedsInternetNote;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعمل الشريحة على هاتف واحد ولا تُنقل إلى غيره. لا تحذفها بعد تثبيتها.'**
+  String get esimOneDeviceNote;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'هل أُضيفت الشريحة؟'**
+  String get esimInstallAskTitle;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'إذا ظهرت في إعدادات الهاتف ضمن شرائح الجوال، فقد تم التثبيت.'**
+  String get esimInstallAskBody;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'نعم، أُضيفت'**
+  String get esimInstallAskYes;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم تُضَف'**
+  String get esimInstallAskNo;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل بيانات التثبيت.'**
+  String get esimInstallUnreadable;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'امسح الرمز من هاتف آخر'**
+  String get esimQrTitle;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'افتح هذا الرمز على شاشة أخرى، ثم في الهاتف: الإعدادات ← شبكة الجوال ← إضافة شريحة eSIM ← استخدام رمز QR.'**
+  String get esimQrStepsIos;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'افتح هذا الرمز على شاشة أخرى، ثم في الهاتف: الإعدادات ← الشبكة والإنترنت ← شرائح SIM ← إضافة شريحة eSIM.'**
+  String get esimQrStepsAndroid;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'في الهاتف الذي ستعمل عليه الشريحة، افتح إعدادات شبكة الجوال، واختر إضافة شريحة eSIM، ثم امسح هذا الرمز.'**
+  String get esimQrStepsOther;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'أو أدخل البيانات يدوياً'**
+  String get esimManualTitle;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'عنوان SM-DP+'**
+  String get esimSmdp;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'رمز التفعيل'**
+  String get esimActivationCode;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'رمز التأكيد'**
+  String get esimConfirmationCode;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'نسخ'**
+  String get esimCopy;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم النسخ'**
+  String get esimCopied;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'لتعمل الشريحة'**
+  String get esimNextStepsTitle;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'في إعدادات شبكة الجوال، اختر هذه الشريحة لبيانات الجوال.'**
+  String get esimStepDataLine;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'شغّل «تجوال البيانات» لهذه الشريحة.'**
+  String get esimStepRoaming;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدخل نقطة الوصول (APN) التالية في إعدادات الشريحة:'**
+  String get esimStepApn;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'عند وصولك إلى وجهتك، ستتصل الشريحة بالشبكة تلقائياً.'**
+  String get esimStepArrive;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'نقطة الوصول (APN)'**
+  String get esimApn;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'انتهت هذه الشريحة ولا يمكن استخدامها مجدداً.'**
+  String get esimEndedNote;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'اشترِ شريحة جديدة'**
+  String get esimBuyAnother;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'اشحن هذه الشريحة'**
+  String get esimTopUpTitle;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا تتوفر باقات شحن لهذه الشريحة الآن.'**
+  String get esimNoTopUps;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُضيفت الباقة إلى شريحتك.'**
+  String get esimTopUpDone;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسمية الشريحة'**
+  String get esimRenameTitle;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلغاء'**
+  String get esimCancel;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'حفظ'**
+  String get esimSave;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم الشريحة (ICCID)'**
+  String get esimNumber;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحتاج إلى مساعدة؟'**
+  String get esimHelp;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{دولة واحدة} =2{دولتان} few{{count} دول} other{{count} دولة}}'**
+  String esimCountriesCount(int count);
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'صالحة {days, plural, =1{ليوم واحد} =2{ليومين} few{{days} أيام} other{{days} يوماً}}'**
+  String esimValidDays(int days);
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'{voice} دقيقة · {text} رسالة'**
+  String esimVoiceAndText(int voice, int text);
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'ثبّتها خلال {days, plural, =1{يوم واحد} =2{يومين} few{{days} أيام} other{{days} يوماً}} من الشراء، وإلا فلن تعود صالحة.'**
+  String esimInstallWithin(int days);
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'متابعة · {price}'**
+  String esimBuyFor(String price);
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'لـ {name}'**
+  String esimForName(String name);
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'تنتهي بعد {days, plural, =1{يوم واحد} =2{يومين} few{{days} أيام} other{{days} يوماً}}'**
+  String esimEndsInDays(int days);
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'شريحة إنترنت (eSIM) لـ {destination}: {plan}\nافتح هذا الرابط من الهاتف الذي ستعمل عليه:\n{link}\nرمز الدخول: {code}'**
+  String esimShareText(
+    String destination,
+    String plan,
+    String link,
+    String code,
+  );
+
+  /// eSIM screens: a plan's length.
+  ///
+  /// In ar, this message translates to:
+  /// **'{days, plural, =1{يوم واحد} =2{يومان} few{{days} أيام} other{{days} يوماً}}'**
+  String esimPlanDays(int days);
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'نجهّز شريحتك…'**
+  String get esimPreparingTitle;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'عادةً خلال ثوانٍ. يمكنك إغلاق التطبيق، وستجدها في «كروتي» وسنخبرك حين تصبح جاهزة.'**
+  String get esimPreparingBody;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم نتمكن من إصدار الشريحة'**
+  String get esimRefundedTitle;
+
+  /// eSIM banner: the small line above the title.
+  ///
+  /// In ar, this message translates to:
+  /// **'شرائح eSIM'**
+  String get esimEntryKicker;
+
+  /// eSIM banner button, with the lowest price.
+  ///
+  /// In ar, this message translates to:
+  /// **'من {price}'**
+  String esimEntryFrom(String price);
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنترنت فور وصولك، بلا شريحة بلاستيكية.'**
+  String get esimStoreSubtitle;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'كيف تعمل؟'**
+  String get esimHowTitle;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر وجهتك'**
+  String get esimHow1Title;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'دولة، أو منطقة، أو باقة عالمية تناسب رحلتك.'**
+  String get esimHow1Body;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'ثبّتها بلمسة'**
+  String get esimHow2Title;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'يضيفها هاتفك بنفسه، بلا رمز ولا خطوات طويلة.'**
+  String get esimHow2Body;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'اتصل عند وصولك'**
+  String get esimHow3Title;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعمل الشريحة بجانب خطك، ويبقى رقمك كما هو.'**
+  String get esimHow3Body;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'اضغط لتثبيتها'**
+  String get esimTapToInstall;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'اضغط لإرسالها أو تثبيتها'**
+  String get esimTapToSend;
+
+  /// eSIM results in the home search.
+  ///
+  /// In ar, this message translates to:
+  /// **'شرائح eSIM للسفر'**
+  String get esimSearchSection;
+
+  /// Tag on an eSIM search result.
+  ///
+  /// In ar, this message translates to:
+  /// **'شريحة eSIM'**
+  String get esimSearchTag;
+
+  /// Screen reader label of an eSIM search result.
+  ///
+  /// In ar, this message translates to:
+  /// **'شريحة eSIM إلى {name}'**
+  String esimSearchRowLabel(String name);
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'بقيت خطوة واحدة'**
+  String get esimOneStepTitle;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'ثبّت الشريحة'**
+  String get esimInstallAction;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا الهاتف لا يثبّتها بلمسة. امسح الرمز من الهاتف الذي ستعمل عليه.'**
+  String get esimScanBody;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'أرسلها الآن'**
+  String get esimSendNow;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'أرسلها مرة أخرى'**
+  String get esimSendAgain;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'يصله رابط ورمز، ويثبّتها من هاتفه بلمسة.'**
+  String get esimSendBody;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'أرسلتها. إن لم تصله، أرسلها مرة أخرى.'**
+  String get esimSentBody;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'هدية'**
+  String get esimGiftKicker;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'هدية إلى'**
+  String get esimGiftTo;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'رابط الشريحة'**
+  String get esimShareLink;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'رمز الدخول'**
+  String get esimShareCode;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'إظهار رمز QR ليمسحه'**
+  String get esimShowQr;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'اشحنها الآن'**
+  String get esimTopUpNow;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'اشحن الشريحة'**
+  String get esimTopUpAction;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'قاربت على الانتهاء'**
+  String get esimLowTitle;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'لمن سترسلها؟'**
+  String get esimWhoForTitle;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'متابعة'**
+  String get esimContinue;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'التفاصيل'**
+  String get esimDetailsTitle;
+
+  /// eSIM page's main button, for someone else's eSIM.
+  ///
+  /// In ar, this message translates to:
+  /// **'أرسلها إلى {name}'**
+  String esimSendToName(String name);
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'اشحنها الآن لتبقى متصلاً.'**
+  String get esimLowBodyTopUp;
+
+  /// eSIM screens.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا تُشحن هذه الباقة. اشترِ شريحة جديدة لتبقى متصلاً.'**
+  String get esimLowBodyNew;
+
+  /// Heading over a top-up order's timeline.
+  ///
+  /// In ar, this message translates to:
+  /// **'حالة الطلب'**
+  String get orderStatusHeading;
+
+  /// Heading over a top-up order's receipt.
+  ///
+  /// In ar, this message translates to:
+  /// **'التفاصيل'**
+  String get orderDetailsHeading;
+
+  /// Timeline step: the order was placed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم الطلب'**
+  String get orderStepPlaced;
+
+  /// Timeline step: the payment went through.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم الدفع'**
+  String get orderStepPaid;
+
+  /// Timeline step: the supplier is topping the account up; by the kind of account.
+  ///
+  /// In ar, this message translates to:
+  /// **'{kind, select, invite{إرسال الهدية} telegram{الإرسال إلى حساب تيليجرام} steam{الإضافة إلى محفظة ستيم} other{الإرسال إلى حساب اللاعب}}'**
+  String orderStepSending(String kind);
+
+  /// Timeline step: the order ended without a top-up and the money went back.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُعيد المبلغ إلى رصيدك'**
+  String get orderStepRefunded;
+
+  /// Opens the report sheet for an order.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإبلاغ عن مشكلة'**
+  String get reportProblem;
+
+  /// Report again after our reply.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإبلاغ عن مشكلة أخرى'**
+  String get reportAgain;
+
+  /// Report sheet title.
+  ///
+  /// In ar, this message translates to:
+  /// **'ما المشكلة؟'**
+  String get reportTitle;
+
+  /// Report sheet explanation.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر ما حدث، ونراجع طلبك ونرد عليك هنا وفي إشعار.'**
+  String get reportBody;
+
+  /// Report reason, by the kind of account.
+  ///
+  /// In ar, this message translates to:
+  /// **'{kind, select, invite{لم تصل الهدية} steam{لم يُضف الرصيد} other{لم يصل الشحن}}'**
+  String reportNotArrived(String kind);
+
+  /// Report reason, by the kind of account.
+  ///
+  /// In ar, this message translates to:
+  /// **'{kind, select, invite{وصلت الهدية إلى حساب آخر} telegram{وصل إلى اسم مستخدم آخر} steam{أُضيف إلى حساب ستيم آخر} other{وصل إلى معرّف لاعب آخر}}'**
+  String reportWrongAccount(String kind);
+
+  /// Report reason, by the kind of account.
+  ///
+  /// In ar, this message translates to:
+  /// **'{kind, select, invite{وصلت لعبة أو نسخة غير التي طلبتها} other{الكمية غير صحيحة}}'**
+  String reportWrongAmount(String kind);
+
+  /// Report reason.
+  ///
+  /// In ar, this message translates to:
+  /// **'مشكلة أخرى'**
+  String get reportOther;
+
+  /// Label of the report's note field.
+  ///
+  /// In ar, this message translates to:
+  /// **'تفاصيل تساعدنا (اختياري)'**
+  String get reportNote;
+
+  /// Hint in the report's note field, by the kind of account.
+  ///
+  /// In ar, this message translates to:
+  /// **'{kind, select, invite{مثلاً: لم يصلني طلب الصداقة} steam{مثلاً: أُضيف جزء من الرصيد فقط} other{مثلاً: وصل جزء من الشحن فقط}}'**
+  String reportNoteHint(String kind);
+
+  /// Sends the report.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرسال البلاغ'**
+  String get reportSend;
+
+  /// Snackbar after a report was sent.
+  ///
+  /// In ar, this message translates to:
+  /// **'وصلنا بلاغك. نراجعه ونرد عليك.'**
+  String get reportSent;
+
+  /// Card title while a report is open.
+  ///
+  /// In ar, this message translates to:
+  /// **'بلاغك قيد المراجعة'**
+  String get reportOpenTitle;
+
+  /// Card body while a report is open.
+  ///
+  /// In ar, this message translates to:
+  /// **'أبلغت: {reason}. نرد عليك هنا وفي إشعار.'**
+  String reportOpenBody(String reason);
+
+  /// Card title once a report was resolved.
+  ///
+  /// In ar, this message translates to:
+  /// **'ردّنا على بلاغك'**
+  String get reportReplyTitle;
+
+  /// Shown when a report was resolved without a written reply.
+  ///
+  /// In ar, this message translates to:
+  /// **'راجعنا بلاغك عن هذا الطلب.'**
+  String get reportResolvedBody;
+
+  /// Secondary way to reach us from the report sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'أو راسلنا على واتساب'**
+  String get reportWhatsApp;
 }
 
 class _AppLocalizationsDelegate

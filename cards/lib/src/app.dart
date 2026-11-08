@@ -13,6 +13,7 @@ import 'features/shell/get_app_banner.dart';
 import 'features/splash/splash_handoff.dart';
 import 'features/splash/splash_overlay.dart';
 import 'shared/cards_scope.dart';
+import 'shared/web_edges.dart';
 
 /// «دفتر كروت»: Arabic and right to left unless the customer picks English
 /// or French, light or dark as they choose or as the phone is set.
@@ -77,6 +78,7 @@ class CardsApp extends StatelessWidget {
                 }
                 app = GetAppBanner(child: app);
                 app = InAppNotices(push: dependencies.push, child: app);
+                app = WebEdges(child: app);
                 if (splash != null) {
                   app = _WithSplash(opening: splash!, child: app);
                 }
