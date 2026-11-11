@@ -28,8 +28,9 @@ class EsimDeviceFacts {
   final String model;
   final String osVersion;
 
-  /// The system's own word. On Android it is reliable when true; on iPhone it
-  /// is a hint, so the model's check counts too.
+  /// The system's own word. On Android it is reliable when true; an iPhone
+  /// answers false to any app without a carrier entitlement, so there the
+  /// model decides ([iphoneTakesEsim]).
   final bool supportsEsim;
   final bool simulator;
 
@@ -97,16 +98,38 @@ enum EsimSupport {
   unknown,
 }
 
+/// What an iPhone's hardware model alone settles, or null when it settles
+/// nothing (not an iPhone, an iPad, a name nobody can read).
+///
+/// An app without a carrier entitlement is told "no eSIM" by every iPhone, and
+/// Airalo's list does not know the newer identifiers ("iPhone17,1"), so the
+/// identifier is the one dependable source: every iPhone from the XS and XR
+/// ("iPhone11,x", 2018) on takes eSIMs, and none before them does.
+bool? iphoneTakesEsim(EsimDeviceFacts facts) {
+  if (!facts.isIos) {
+    return null;
+  }
+  final match = RegExp(r'^iPhone(\d+),\d+$').firstMatch(facts.model);
+  if (match == null) {
+    return null;
+  }
+  return int.parse(match.group(1)!) >= 11;
+}
+
 /// The verdict, from what the phone says and what Airalo's list says.
 ///
-/// | Phone says | Model check             | Verdict                        |
+/// | Phone says | Model                   | Verdict                        |
 /// | ---------- | ----------------------- | ------------------------------ |
 /// | yes        | anything                | yes                            |
-/// | no         | supported               | iPhone: yes (its word is a     |
-/// |            |                         | hint); Android: unknown (the   |
-/// |            |                         | maker or carrier may disable   |
-/// |            |                         | it on this very unit)          |
-/// | no         | not supported           | no                             |
+/// | no         | an iPhone identifier    | XS/XR or newer: yes; older: no |
+/// |            |                         | (its word is no hint at all)   |
+/// | no         | list: supported         | iOS: yes; Android: unknown     |
+/// |            |                         | (the maker or carrier may      |
+/// |            |                         | disable it on this very unit)  |
+/// | no         | list: not supported     | no                             |
+/// | no         | off the list            | iOS: unknown (the list is not  |
+/// |            |                         | a verdict); Android: no (the   |
+/// |            |                         | system has no eSIM service)    |
 /// | no         | no answer               | unknown                        |
 EsimSupport esimSupportOf(EsimDeviceFacts facts, EsimModelCheck? check) {
   if (!facts.isPhone || facts.simulator) {
@@ -115,11 +138,18 @@ EsimSupport esimSupportOf(EsimDeviceFacts facts, EsimModelCheck? check) {
   if (facts.supportsEsim) {
     return EsimSupport.yes;
   }
+  final iphone = iphoneTakesEsim(facts);
+  if (iphone != null) {
+    return iphone ? EsimSupport.yes : EsimSupport.no;
+  }
   if (check == null) {
     return EsimSupport.unknown;
   }
   if (check.supported) {
     return facts.isIos ? EsimSupport.yes : EsimSupport.unknown;
+  }
+  if (!check.listed && facts.isIos) {
+    return EsimSupport.unknown;
   }
   return EsimSupport.no;
 }
@@ -146,8 +176,9 @@ class EsimCompatibility {
       return;
     }
     // The phone's own yes counts at once; the list only adds to a no.
-    if (facts.supportsEsim) {
-      support.value = EsimSupport.yes;
+    // So does an iPhone's model: neither needs the list, or a connection.
+    if (facts.supportsEsim || iphoneTakesEsim(facts) != null) {
+      support.value = esimSupportOf(facts, null);
       return;
     }
     final check = facts.model.isEmpty

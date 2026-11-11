@@ -13,7 +13,9 @@ import 'package:flutter/foundation.dart';
 /// | `/brand/pubg?item=pubg-325`        | a brand's page on one card           |
 /// | `/my-cards`, `/account`            | the other two tabs                   |
 /// | `/esim`                            | the eSIM shelf                       |
+/// | `/esim?days=30&gb=5&offers=1`      | the eSIM shelf, filtered             |
 /// | `/esim/turkey`                     | a destination's eSIM plans           |
+/// | `/esim/turkey/ea.PTR1G7`           | one plan, open over its destination  |
 /// | `/esims/8944…`                     | one of the customer's eSIMs          |
 /// | `/privacy`, `/terms`, `/about`     | the legal pages and «عن التطبيق»       |
 ///
@@ -48,7 +50,16 @@ sealed class CardsLink {
       'my-cards' when second() != null => OrderLink(second()!),
       'my-cards' => const TabLink(CardsTab.myCards),
       'account' => const TabLink(CardsTab.account),
-      'esim' => EsimShelfLink(destination: second()),
+      'esim' => EsimShelfLink(
+        destination: second(),
+        plan: segments.length > 2 ? segments[2] : null,
+        query: second() == null ? (query['q'] ?? '').trim() : '',
+        kind: second() == null ? (query['kind'] ?? '') : '',
+        days: second() == null ? int.tryParse(query['days'] ?? '') ?? 0 : 0,
+        gb: second() == null ? int.tryParse(query['gb'] ?? '') ?? 0 : 0,
+        offers: second() == null && query['offers'] == '1',
+        cheapest: second() == null && query['sort'] == 'cheapest',
+      ),
       'esims' when second() != null => EsimLink(second()!),
       'esims' => const TabLink(CardsTab.myCards),
       'privacy' => const PageLink(LinkedPage.privacy),
@@ -154,23 +165,58 @@ final class OrderLink extends CardsLink {
   int get hashCode => order.hashCode;
 }
 
-/// The eSIM shelf, or one destination on it.
+/// The eSIM shelf, one destination on it, or one plan of a destination. The
+/// shelf's own link can carry what it opens on: a search (`q`), a tab (`kind`:
+/// regional, global), a trip (`days`, `gb`), only offers (`offers=1`), and the
+/// cheapest first (`sort=cheapest`).
 final class EsimShelfLink extends CardsLink {
-  const EsimShelfLink({this.destination});
+  const EsimShelfLink({
+    this.destination,
+    this.plan,
+    this.query = '',
+    this.kind = '',
+    this.days = 0,
+    this.gb = 0,
+    this.offers = false,
+    this.cheapest = false,
+  });
 
   final String? destination;
 
+  /// A plan's id at [destination]: its sheet opens over the destination.
+  final String? plan;
+  final String query;
+  final String kind;
+  final int days;
+  final int gb;
+  final bool offers;
+  final bool cheapest;
+
   @override
-  String get location => destination == null
-      ? '/esim'
-      : '/esim/${Uri.encodeComponent(destination!)}';
+  String get location {
+    if (destination != null) {
+      final page = '/esim/${Uri.encodeComponent(destination!)}';
+      return plan == null ? page : '$page/${Uri.encodeComponent(plan!)}';
+    }
+    final asked = {
+      if (query.isNotEmpty) 'q': query,
+      if (kind == 'regional' || kind == 'global') 'kind': kind,
+      if (days > 0) 'days': '$days',
+      if (gb > 0) 'gb': '$gb',
+      if (offers) 'offers': '1',
+      if (cheapest) 'sort': 'cheapest',
+    };
+    return asked.isEmpty
+        ? '/esim'
+        : Uri(path: '/esim', queryParameters: asked).toString();
+  }
 
   @override
   bool operator ==(Object other) =>
-      other is EsimShelfLink && other.destination == destination;
+      other is EsimShelfLink && other.location == location;
 
   @override
-  int get hashCode => destination.hashCode;
+  int get hashCode => location.hashCode;
 }
 
 /// One eSIM the customer bought: a low-data alert opens this, to top up.

@@ -34,16 +34,24 @@ class CatalogRepository {
       return null;
     }
     try {
-      return _current = CardCatalog.fromJson(
+      return _current ??= CardCatalog.fromJson(
         jsonDecode(raw) as Map<String, dynamic>,
       );
-    } on FormatException {
+    } on Object {
+      // A saved copy that cannot be read (cut short, or of another shape)
+      // is no saved copy: the relay's is asked for, whole.
       return null;
     }
   }
 
-  /// The shelf as the relay has it now.
-  Future<Result<CardCatalog>> refresh() => Result.guard(() async {
+  Future<Result<CardCatalog>>? _refreshing;
+
+  /// The shelf as the relay has it now. Asked once at a time: callers that
+  /// ask while an answer is on its way share it.
+  Future<Result<CardCatalog>> refresh() =>
+      _refreshing ??= _refresh().whenComplete(() => _refreshing = null);
+
+  Future<Result<CardCatalog>> _refresh() => Result.guard(() async {
     // Only a shelf this device holds can be answered "not modified".
     final cachedShelf = await cached();
     final etag = cachedShelf == null
@@ -72,10 +80,17 @@ class CatalogRepository {
       jsonDecode(response.body) as Map<String, dynamic>,
     );
     _current = shelf;
-    await preferences?.setString(_bodyKey, response.body);
-    final newTag = response.headers['etag'];
-    if (newTag != null) {
-      await preferences?.setString(_etagKey, newTag);
+    try {
+      // The tag goes first: a copy cut short between the two is then asked
+      // for again, where a new tag over an old copy would keep the old one.
+      await preferences?.remove(_etagKey);
+      await preferences?.setString(_bodyKey, response.body);
+      final newTag = response.headers['etag'];
+      if (newTag != null) {
+        await preferences?.setString(_etagKey, newTag);
+      }
+    } on Exception {
+      // A full or failing disk costs the saved copy, not the shelf on screen.
     }
     return shelf;
   });
@@ -83,25 +98,32 @@ class CatalogRepository {
   /// A brand of the shelf this device last saw.
   CardBrand? brandOf(String key) => _current?.brand(key);
 
+  /// The countries by code of [_countriesOf], the shelf they were read from.
+  Map<String, CardCountry> _countries = const {};
+  CardCatalog? _countriesOf;
+
+  CardCountry? _country(String code) {
+    final shelf = _current;
+    if (!identical(shelf, _countriesOf)) {
+      _countriesOf = shelf;
+      _countries = {
+        // The first of a code wins, as the shelf lists it.
+        for (final country
+            in (shelf?.countries ?? const <CardCountry>[]).reversed)
+          country.code: country,
+      };
+    }
+    return _countries[code];
+  }
+
   /// A country's name as the shelf calls it (its code when unknown).
   String countryName(String code) {
-    for (final country in _current?.countries ?? const <CardCountry>[]) {
-      if (country.code == code && country.name.isNotEmpty) {
-        return country.name;
-      }
-    }
-    return code;
+    final name = _country(code)?.name ?? '';
+    return name.isEmpty ? code : name;
   }
 
   /// A country's flag reference, or empty.
-  String countryFlag(String code) {
-    for (final country in _current?.countries ?? const <CardCountry>[]) {
-      if (country.code == code) {
-        return country.flag;
-      }
-    }
-    return '';
-  }
+  String countryFlag(String code) => _country(code)?.flag ?? '';
 
   /// Where a logo or flag reference is served.
   Uri imageUrl(String reference) {

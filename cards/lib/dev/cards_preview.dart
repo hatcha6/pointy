@@ -226,6 +226,18 @@ class PreviewSurface extends StatelessWidget {
     return switch (screen) {
       'home' || 'signed-out' => const CardsShell(),
       'esim' => const EsimStorePage(),
+      // The shelf as a link opens it: a month's trip needing 5 GB, cheapest
+      // first; and only what is on offer.
+      'esim-filtered' => const EsimStorePage(
+        filter: EsimShelfFilter(
+          minDays: 30,
+          minMb: 5120,
+          sort: EsimSort.cheapest,
+        ),
+      ),
+      'esim-offers' => const EsimStorePage(
+        filter: EsimShelfFilter(offersOnly: true),
+      ),
       'esim-destination' => const EsimDestinationPage(
         destination: 'turkey',
         name: 'تركيا',

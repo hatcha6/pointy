@@ -90,7 +90,7 @@ class _TopUpDonePageState extends State<TopUpDonePage>
       return;
     }
     final dependencies = CardsScope.of(context);
-    if (MediaQuery.of(context).disableAnimations) {
+    if (MediaQuery.disableAnimationsOf(context)) {
       _seal.value = 1;
     } else {
       Haptics.success();

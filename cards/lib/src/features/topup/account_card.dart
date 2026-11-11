@@ -647,7 +647,19 @@ class _PasteButton extends StatelessWidget {
       padding: const EdgeInsetsDirectional.only(end: CardsSpace.xs),
       child: TextButton.icon(
         onPressed: () async {
-          final data = await Clipboard.getData(Clipboard.kTextPlain);
+          final messenger = ScaffoldMessenger.of(context);
+          final ClipboardData? data;
+          try {
+            data = await Clipboard.getData(Clipboard.kTextPlain);
+          } on PlatformException {
+            // A browser may refuse the read (Safari when the paste prompt is
+            // dismissed or not granted). Point at the field instead of
+            // leaving the tap to do nothing.
+            messenger
+              ..hideCurrentSnackBar()
+              ..showSnackBar(SnackBar(content: Text(l10n.pasteFailed)));
+            return;
+          }
           final text = data?.text?.trim() ?? '';
           if (text.isNotEmpty) {
             Haptics.select();

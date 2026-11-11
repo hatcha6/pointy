@@ -24,7 +24,11 @@ import 'settings_section.dart';
 /// devices signed in, signing out, and deleting the account (App Store
 /// guideline 5.1.1(v)).
 class AccountPage extends StatelessWidget {
-  const AccountPage({super.key});
+  const AccountPage({super.key, this.visit = 0});
+
+  /// Moves each time the customer comes to the tab: the credit and the
+  /// devices are read again, under what is already on screen.
+  final int visit;
 
   @override
   Widget build(BuildContext context) {
@@ -37,7 +41,11 @@ class AccountPage extends StatelessWidget {
         valueListenable: auth.session,
         builder: (context, session, _) => session == null
             ? const _SignedOut()
-            : _SignedIn(key: ValueKey(session.sessionId), phone: session.phone),
+            : _SignedIn(
+                key: ValueKey(session.sessionId),
+                phone: session.phone,
+                visit: visit,
+              ),
       ),
     );
   }
@@ -121,9 +129,10 @@ class _SignedOut extends StatelessWidget {
 }
 
 class _SignedIn extends StatefulWidget {
-  const _SignedIn({super.key, required this.phone});
+  const _SignedIn({super.key, required this.phone, required this.visit});
 
   final String phone;
+  final int visit;
 
   @override
   State<_SignedIn> createState() => _SignedInState();
@@ -133,6 +142,7 @@ class _SignedInState extends State<_SignedIn> {
   CreditStatement? _credit;
   List<DeviceSession> _devices = const [];
   bool _started = false;
+  ValueNotifier<int>? _purchases;
 
   @override
   void didChangeDependencies() {
@@ -140,14 +150,43 @@ class _SignedInState extends State<_SignedIn> {
     // Once: this also runs on every keyboard, rotation or theme change.
     if (!_started) {
       _started = true;
+      // A purchase paid from the credit, or refunded into it, shows here
+      // without the page being pulled down.
+      _purchases = CardsScope.of(context).orders.changes..addListener(_load);
       _load();
     }
   }
 
-  Future<void> _load() async {
+  @override
+  void didUpdateWidget(_SignedIn oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.visit != widget.visit) {
+      _load();
+    }
+  }
+
+  @override
+  void dispose() {
+    _purchases?.removeListener(_load);
+    super.dispose();
+  }
+
+  /// The read on its way: asking again meanwhile waits for it.
+  Future<void>? _loading;
+
+  Future<void> _load() =>
+      _loading ??= _read().whenComplete(() => _loading = null);
+
+  Future<void> _read() async {
+    if (!mounted) {
+      return;
+    }
     final dependencies = CardsScope.of(context);
-    final credit = await dependencies.orders.credit();
-    final devices = await dependencies.auth.devices();
+    // Side by side: neither waits on the other.
+    final (credit, devices) = await (
+      dependencies.orders.credit(),
+      dependencies.auth.devices(),
+    ).wait;
     if (!mounted) {
       return;
     }
@@ -177,9 +216,18 @@ class _SignedInState extends State<_SignedIn> {
   Future<void> _signOut() async {
     final dependencies = CardsScope.of(context);
     await dependencies.auth.signOut();
-    await dependencies.vault.clear();
-    await dependencies.cards.clear();
-    await dependencies.accounts.clear();
+    // Each on its own: one store that fails must not keep the others.
+    for (final clear in [
+      dependencies.vault.clear,
+      dependencies.cards.clear,
+      dependencies.accounts.clear,
+    ]) {
+      try {
+        await clear();
+      } on Object {
+        // Left for the next sign-out.
+      }
+    }
   }
 
   Future<void> _delete() async {

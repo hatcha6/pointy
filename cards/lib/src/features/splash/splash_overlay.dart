@@ -155,7 +155,7 @@ class _SplashOverlayState extends State<SplashOverlay>
     if (!mounted) {
       return;
     }
-    if (MediaQuery.of(context).disableAnimations) {
+    if (MediaQuery.disableAnimationsOf(context)) {
       _story.value = 1;
     } else {
       await _story.forward().orCancel.catchError((_) {});
@@ -176,7 +176,7 @@ class _SplashOverlayState extends State<SplashOverlay>
     final picture = widget.handoff?.painter?.call();
     if (landing != null &&
         picture != null &&
-        !MediaQuery.of(context).disableAnimations) {
+        !MediaQuery.disableAnimationsOf(context)) {
       _exit.duration = const Duration(milliseconds: 760);
       setState(() {
         _landing = landing;

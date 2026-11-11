@@ -63,12 +63,31 @@ class EsimRepository {
   }
 
   Future<Result<List<CustomerEsim>>> esims() => Result.guard(() async {
+    final customer = _customer;
     final answer = await api.get('/v1/customers/esims', signedIn: true);
-    return [
+    final list = [
       for (final row in answer['esims'] as List? ?? const [])
         CustomerEsim.fromJson(row as Map<String, dynamic>),
     ];
+    // An answer that was on its way while the customer changed is not kept.
+    if (customer == _customer) {
+      lastEsims = list;
+    }
+    return list;
   });
+
+  /// Moves with every [forget].
+  int _customer = 0;
+
+  /// The customer's eSIMs as last read, shown at once while they are read
+  /// again. Null before the first read, and after [forget].
+  List<CustomerEsim>? lastEsims;
+
+  /// Whoever was signed in has gone: nothing of theirs is kept.
+  void forget() {
+    _customer++;
+    lastEsims = null;
+  }
 
   /// One eSIM, with how to install it.
   Future<Result<CustomerEsim>> esim(String iccid) => Result.guard(() async {

@@ -273,6 +273,12 @@ writes those `og:` tags into each page and draws the pictures itself
 (`relay/internal/cardsweb`), every brand's ahead of time, since those apps
 never run the page's code.
 
+The same package makes each page findable by Google: its own title, a
+sitemap, structured data with prices, and the page's content as HTML under
+the app (see `relay/README.md`, `POINTY_RELAY_CARDS_WEB_HOSTS`). The page the
+browser opened on keeps the title it was served with while it is in front
+(`src/shared/page_title.dart`); do not set the tab title anywhere else.
+
 What makes the phone hand the link to the app:
 
 - iOS: `ios/Runner/Runner.entitlements` (`applinks:cards.dftr.ly`) and

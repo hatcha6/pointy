@@ -43,16 +43,17 @@ abstract final class CardsLayout {
     double bottom = 0,
     double maxWidth = readable,
   }) {
-    final media = MediaQuery.of(context);
+    final size = MediaQuery.sizeOf(context);
+    final padding = MediaQuery.paddingOf(context);
     final inner = column(
-      media.size.width - media.padding.horizontal,
+      size.width - padding.horizontal,
       top: top,
       bottom: bottom,
       maxWidth: maxWidth,
     );
     return inner.copyWith(
-      left: inner.left + media.padding.left,
-      right: inner.right + media.padding.right,
+      left: inner.left + padding.left,
+      right: inner.right + padding.right,
     );
   }
 }

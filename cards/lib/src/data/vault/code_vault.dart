@@ -28,18 +28,27 @@ class SecureCodeVault implements CodeVault {
 
   String _key(String orderId) => 'cards.codes.v1.$orderId';
 
+  /// What the keychain already answered, so «كروتي» asks it once for each
+  /// card, not on every visit: a keychain read crosses to the platform and
+  /// back, and a customer's cards are read one after another.
+  final Map<String, List<CardCode>> _read = {};
+  Set<String>? _usedRead;
+
   @override
   Future<List<CardCode>?> codes(String orderId) async {
+    if (_read[orderId] case final known?) {
+      return known;
+    }
     try {
       final raw = await _storage.read(key: _key(orderId));
       if (raw == null) {
         return null;
       }
-      return [
+      return _read[orderId] = [
         for (final row in jsonDecode(raw) as List)
           if (row is Map<String, dynamic>) CardCode.fromJson(row),
       ];
-    } on Exception {
+    } on Object {
       return null;
     }
   }
@@ -49,6 +58,7 @@ class SecureCodeVault implements CodeVault {
     if (codes.isEmpty) {
       return;
     }
+    _read[orderId] = codes;
     await _storage.write(
       key: _key(orderId),
       value: jsonEncode([
@@ -60,12 +70,17 @@ class SecureCodeVault implements CodeVault {
 
   @override
   Future<Set<String>> usedCodes() async {
+    if (_usedRead case final known?) {
+      return {...known};
+    }
     try {
       final raw = await _storage.read(key: _usedKey);
-      return raw == null
+      final used = raw == null
           ? <String>{}
           : {...(jsonDecode(raw) as List).whereType<String>()};
-    } on Exception {
+      _usedRead = used;
+      return {...used};
+    } on Object {
       return <String>{};
     }
   }
@@ -74,6 +89,7 @@ class SecureCodeVault implements CodeVault {
   Future<void> setUsed(String code, bool used) async {
     final current = await usedCodes();
     used ? current.add(code) : current.remove(code);
+    _usedRead = current;
     await _storage.write(key: _usedKey, value: jsonEncode(current.toList()));
   }
 
@@ -81,6 +97,8 @@ class SecureCodeVault implements CodeVault {
   /// sign-in, which clearing codes must never touch.
   @override
   Future<void> clear() async {
+    _read.clear();
+    _usedRead = null;
     final all = await _storage.readAll();
     for (final key in all.keys.toList()) {
       if (key.startsWith('cards.codes.v1.') || key == _usedKey) {

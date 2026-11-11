@@ -10,6 +10,8 @@ import '../../shared/cards_scope.dart';
 import '../../shared/empty_state.dart';
 import '../../shared/haptics.dart';
 import '../../shared/money_text.dart';
+import '../../shared/pill.dart';
+import '../links/cards_link.dart';
 import '../../shared/pressable.dart';
 import '../../shared/relay_error_text.dart';
 import '../../shared/side_back.dart';
@@ -17,7 +19,9 @@ import '../../shared/skeleton.dart';
 import '../../shared/esim_card_art.dart';
 import 'esim_format.dart';
 import 'esim_plan_sheet.dart';
+import 'esim_share.dart';
 import 'esim_split.dart';
+import 'esim_store_page.dart';
 import 'esim_support_banner.dart';
 
 /// One destination: its plans, smallest first, and where they work.
@@ -26,9 +30,13 @@ class EsimDestinationPage extends StatefulWidget {
     super.key,
     required this.destination,
     this.name = '',
+    this.plan,
   });
 
   final String destination;
+
+  /// A plan a link named: its sheet opens once the page has its plans.
+  final String? plan;
 
   /// Shown until the page's own answer comes.
   final String name;
@@ -37,10 +45,12 @@ class EsimDestinationPage extends StatefulWidget {
     BuildContext context,
     String key, {
     String name = '',
+    String? plan,
   }) => Navigator.of(context).push(
     MaterialPageRoute<void>(
       settings: screenSettings('esim_destination'),
-      builder: (_) => EsimDestinationPage(destination: key, name: name),
+      builder: (_) =>
+          EsimDestinationPage(destination: key, name: name, plan: plan),
     ),
   );
 
@@ -52,6 +62,7 @@ class _EsimDestinationPageState extends State<EsimDestinationPage> {
   EsimDestination? _destination;
   Object? _error;
   bool _started = false;
+  bool _linkedPlanShown = false;
 
   @override
   void didChangeDependencies() {
@@ -78,17 +89,44 @@ class _EsimDestinationPageState extends State<EsimDestinationPage> {
           _error = exception;
       }
     });
+    _openLinkedPlan();
   }
+
+  /// The plan the link named, shown once.
+  void _openLinkedPlan() {
+    final destination = _destination;
+    final wanted = widget.plan;
+    if (destination == null || wanted == null || _linkedPlanShown) {
+      return;
+    }
+    _linkedPlanShown = true;
+    final plan = destination.plans.where((p) => p.id == wanted).firstOrNull;
+    if (plan == null) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        showEsimPlanSheet(context, destination: destination, plan: plan);
+      }
+    });
+  }
+
+  EsimShelfLink _link() => EsimShelfLink(destination: widget.destination);
+
+  String _title() => _destination?.name ?? widget.name;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final destination = _destination;
+    final side = SideBack.active(context);
     return SideBack(
+      actions: [EsimShareButton.side(context, link: _link, title: _title)],
       child: Scaffold(
         appBar: AppBar(
           title: Text(destination?.name ?? widget.name),
-          automaticallyImplyLeading: !SideBack.active(context),
+          automaticallyImplyLeading: !side,
+          actions: [if (!side) EsimShareButton(link: _link, title: _title)],
         ),
         body: Builder(
           // Its own context: under SideBack, where the side column is
@@ -128,18 +166,22 @@ class _EsimDestinationPageState extends State<EsimDestinationPage> {
               country: destination.country,
               height: wide ? 220 : 148,
             );
+            final severalNetworks =
+                destination.plans.map((p) => p.operator).toSet().length > 1;
             final plans = [
+              Padding(
+                padding: const EdgeInsets.only(bottom: CardsSpace.md),
+                child: Text(
+                  l10n.esimPlansTitle,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
               for (final plan in destination.plans)
                 Padding(
                   padding: const EdgeInsets.only(bottom: CardsSpace.md),
                   child: _PlanCard(
                     plan: plan,
-                    showOperator:
-                        destination.plans
-                            .map((p) => p.operator)
-                            .toSet()
-                            .length >
-                        1,
+                    showOperator: severalNetworks,
                     onTap: () {
                       Haptics.tap();
                       showEsimPlanSheet(
@@ -150,18 +192,27 @@ class _EsimDestinationPageState extends State<EsimDestinationPage> {
                     },
                   ),
                 ),
-              if (destination.countries.isNotEmpty)
-                _Coverage(destination: destination),
             ];
+            final coverage = destination.countries.isEmpty
+                ? null
+                : _Coverage(destination: destination);
             if (wide) {
               return EsimSplit(
                 start: Builder(
                   builder: (context) => ListView(
-                    padding: CardsLayout.page(context, top: CardsSpace.sm),
+                    padding: CardsLayout.page(
+                      context,
+                      top: CardsSpace.sm,
+                      bottom:
+                          MediaQuery.paddingOf(context).bottom + CardsSpace.xl,
+                    ),
                     children: [
                       hero,
                       const SizedBox(height: CardsSpace.lg),
                       const EsimSupportBanner(),
+                      ?coverage,
+                      const SizedBox(height: CardsSpace.xl),
+                      const EsimHowItWorks(),
                     ],
                   ),
                 ),
@@ -183,6 +234,7 @@ class _EsimDestinationPageState extends State<EsimDestinationPage> {
                 const SizedBox(height: CardsSpace.lg),
                 const EsimSupportBanner(),
                 ...plans,
+                ?coverage,
               ],
             );
           },
@@ -225,18 +277,45 @@ class _PlanCard extends StatelessWidget {
         ),
         child: Row(
           children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: scheme.primaryContainer,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                plan.unlimited
+                    ? Icons.all_inclusive_rounded
+                    : Icons.signal_cellular_alt_rounded,
+                size: 22,
+                color: scheme.onPrimaryContainer,
+              ),
+            ),
+            const SizedBox(width: CardsSpace.md),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Align(
-                    alignment: AlignmentDirectional.centerStart,
-                    child: plan.unlimited
-                        ? Text(
-                            l10n.esimUnlimited,
-                            style: theme.textTheme.titleLarge,
-                          )
-                        : EsimLtr(plan.data, style: theme.textTheme.titleLarge),
+                  Wrap(
+                    spacing: CardsSpace.sm,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      plan.unlimited
+                          ? Text(
+                              l10n.esimUnlimited,
+                              style: theme.textTheme.titleLarge,
+                            )
+                          : EsimLtr(
+                              plan.data,
+                              style: theme.textTheme.titleLarge,
+                            ),
+                      if (plan.promo case final promo?)
+                        Pill(
+                          text: esimPromoLabel(l10n, promo),
+                          tone: PillTone.promo,
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 2),
                   Text(
@@ -267,13 +346,58 @@ class _PlanCard extends StatelessWidget {
                 ],
               ),
             ),
-            Text(
-              formatMoney(l10n, plan.price),
-              style: theme.textTheme.titleMedium,
+            const SizedBox(width: CardsSpace.sm),
+            // The price as the thing to press, the regular one struck over it.
+            // At the largest text it shrinks before it pushes the plan out.
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    if (plan.promo != null && plan.regularPrice != null)
+                      Padding(
+                        padding: const EdgeInsetsDirectional.only(
+                          end: CardsSpace.sm,
+                          bottom: 2,
+                        ),
+                        child: Text(
+                          formatMoney(l10n, plan.regularPrice!),
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                            decoration: TextDecoration.lineThrough,
+                          ),
+                        ),
+                      ),
+                    _price(context),
+                  ],
+                ),
+              ),
             ),
-            const SizedBox(width: CardsSpace.xs),
-            Icon(Icons.chevron_right_rounded, color: scheme.onSurfaceVariant),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _price(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: CardsSpace.md + 2,
+        vertical: CardsSpace.sm + 1,
+      ),
+      decoration: BoxDecoration(
+        color: scheme.primary,
+        borderRadius: BorderRadius.circular(CardsRadii.pill),
+      ),
+      child: Text(
+        formatMoney(l10n, plan.price),
+        style: theme.textTheme.labelLarge?.copyWith(
+          color: scheme.onPrimary,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );

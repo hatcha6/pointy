@@ -1498,6 +1498,12 @@ abstract class AppLocalizations {
   /// **'لم يُخصم شيء بعد. أكمل الدفع بالبطاقة، أو ألغِ الطلب.'**
   String get payNotFinishedBody;
 
+  /// No description provided for @payNotFinishedWalletBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يُخصم شيء بعد. رمز المحفظة يُطلب عند الشراء فقط، فألغِ هذا الطلب ثم اشترِ من جديد.'**
+  String get payNotFinishedWalletBody;
+
   /// No description provided for @finishPaying.
   ///
   /// In ar, this message translates to:
@@ -1959,6 +1965,12 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'لصق'**
   String get pasteAction;
+
+  /// Shown when the browser refuses to let the paste button read the clipboard.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر اللصق من الحافظة. الصق داخل الخانة مباشرة.'**
+  String get pasteFailed;
 
   /// Placeholder of a choice field.
   ///
@@ -2811,6 +2823,12 @@ abstract class AppLocalizations {
     String code,
   );
 
+  /// eSIM screens. Shared when the eSIM's page needs no access code.
+  ///
+  /// In ar, this message translates to:
+  /// **'شريحة إنترنت (eSIM) لـ {destination}: {plan}\nافتح هذا الرابط من الهاتف الذي ستعمل عليه:\n{link}'**
+  String esimShareTextNoCode(String destination, String plan, String link);
+
   /// eSIM screens: a plan's length.
   ///
   /// In ar, this message translates to:
@@ -3188,6 +3206,114 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'أو راسلنا على واتساب'**
   String get reportWhatsApp;
+
+  /// eSIM banner: a short perk.
+  ///
+  /// In ar, this message translates to:
+  /// **'تفعيل فوري'**
+  String get esimPerkInstant;
+
+  /// eSIM banner: a short perk.
+  ///
+  /// In ar, this message translates to:
+  /// **'بلا شريحة بلاستيكية'**
+  String get esimPerkNoPlastic;
+
+  /// eSIM banner: a short perk.
+  ///
+  /// In ar, this message translates to:
+  /// **'شحن من التطبيق'**
+  String get esimPerkTopUp;
+
+  /// eSIM destination page: the heading over its plans.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر باقتك'**
+  String get esimPlansTitle;
+
+  /// eSIM shelf: promotions and filters.
+  ///
+  /// In ar, this message translates to:
+  /// **'خصم {percent}%'**
+  String esimPromoOff(int percent);
+
+  /// eSIM shelf: promotions and filters.
+  ///
+  /// In ar, this message translates to:
+  /// **'عروض اليوم'**
+  String get esimOffersTitle;
+
+  /// eSIM shelf: promotions and filters.
+  ///
+  /// In ar, this message translates to:
+  /// **'عروض'**
+  String get esimFilterOffers;
+
+  /// eSIM shelf: promotions and filters.
+  ///
+  /// In ar, this message translates to:
+  /// **'مدة الرحلة'**
+  String get esimFilterDays;
+
+  /// eSIM shelf: promotions and filters.
+  ///
+  /// In ar, this message translates to:
+  /// **'{days, plural, few{{days} أيام فأكثر} other{{days} يوماً فأكثر}}'**
+  String esimFilterDaysOption(int days);
+
+  /// eSIM shelf: promotions and filters.
+  ///
+  /// In ar, this message translates to:
+  /// **'حجم البيانات'**
+  String get esimFilterData;
+
+  /// eSIM shelf: promotions and filters.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكل'**
+  String get esimFilterAny;
+
+  /// eSIM shelf: promotions and filters.
+  ///
+  /// In ar, this message translates to:
+  /// **'الترتيب'**
+  String get esimSortTitle;
+
+  /// eSIM shelf: promotions and filters.
+  ///
+  /// In ar, this message translates to:
+  /// **'أبجدياً'**
+  String get esimSortName;
+
+  /// eSIM shelf: promotions and filters.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأرخص أولاً'**
+  String get esimSortCheapest;
+
+  /// eSIM shelf: promotions and filters.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسح'**
+  String get esimFilterClear;
+
+  /// eSIM shelf: promotions and filters.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{وجهة واحدة} =2{وجهتان} few{{count} وجهات} other{{count} وجهة}}'**
+  String esimResultsCount(int count);
+
+  /// eSIM shelf: promotions and filters.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد وجهة بهذه المواصفات. جرّب مدة أقصر أو بيانات أقل.'**
+  String get esimFilterNone;
+
+  /// eSIM shelf: promotions and filters.
+  ///
+  /// In ar, this message translates to:
+  /// **'مشاركة'**
+  String get esimShareDestination;
 }
 
 class _AppLocalizationsDelegate

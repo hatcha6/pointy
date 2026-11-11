@@ -56,13 +56,27 @@ Future<void> showCheckout(
     useSafeArea: true,
     builder: (_) => CheckoutSheet(model: model, onEditAccount: onEditAccount),
   );
+  var placed = order;
+  if (placed == null) {
+    // Closed (swiped away, the back gesture) while «ادفع» was still being
+    // answered: the order may be placed, even paid from the credit, and it
+    // goes on to its page as if the sheet had stayed.
+    final late = await model.placing;
+    final waitsForCode =
+        late != null &&
+        late.status == OrderStatus.awaitingPayment &&
+        late.nextAction == 'otp';
+    if (late != null && !waitsForCode) {
+      placed = late;
+    }
+  }
   model.dispose();
-  if (order == null || !context.mounted) {
+  if (placed == null || !context.mounted) {
     return;
   }
   await OrderProgressPage.open(
     context,
-    order: order,
+    order: placed,
     brand: brand,
     fresh: true,
   );
@@ -135,6 +149,9 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
   }
 
   Future<void> _pay() async {
+    if (model.busy) {
+      return;
+    }
     var payer = '';
     var birthYear = '';
     if (model.needsPayerDetails) {
@@ -295,15 +312,22 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
                   horizontal: CardsSpace.lg,
                 ),
                 onTap: model.options == null ? null : _pickMethod,
-                leading: method == null
-                    ? const SizedBox(
+                leading: method != null
+                    ? MethodMark(method: method)
+                    : SizedBox(
                         width: 48,
                         height: 32,
                         child: Center(
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          // Turning only while there is something to wait
+                          // for: not over ways to pay that failed to load.
+                          child: model.loading
+                              ? const CircularProgressIndicator(strokeWidth: 2)
+                              : Icon(
+                                  Icons.credit_card_off_rounded,
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
                         ),
-                      )
-                    : MethodMark(method: method),
+                      ),
                 title: Text(
                   l10n.paymentMethodLabel,
                   style: theme.textTheme.bodySmall?.copyWith(
@@ -316,12 +340,15 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                trailing: Text(
-                  l10n.changeAction,
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    color: CardsTheme.link(theme),
-                  ),
-                ),
+                // Nothing to change to until the ways to pay are read.
+                trailing: model.options == null
+                    ? null
+                    : Text(
+                        l10n.changeAction,
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: CardsTheme.link(theme),
+                        ),
+                      ),
               ),
             if (model.credit.isPositive)
               SwitchListTile(
@@ -364,21 +391,32 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
           ),
         ),
         const SizedBox(height: CardsSpace.xl),
-        FilledButton(
-          onPressed:
-              model.busy ||
-                  !_accountReady ||
-                  (!model.creditCovers && model.method == null)
-              ? null
-              : _pay,
-          child: model.busy
-              ? const _Spinner()
-              : Text(
-                  model.creditCovers
-                      ? l10n.payFromCredit
-                      : l10n.payAmount(formatMoney(l10n, model.toPay)),
-                ),
-        ),
+        if (model.loadFailed)
+          // The ways to pay could not be read (a connection that dropped):
+          // read them again from here, rather than closing the sheet.
+          FilledButton(
+            onPressed: () {
+              Haptics.tap();
+              model.load();
+            },
+            child: Text(l10n.retryAction),
+          )
+        else
+          FilledButton(
+            onPressed:
+                model.busy ||
+                    !_accountReady ||
+                    (!model.creditCovers && model.method == null)
+                ? null
+                : _pay,
+            child: model.busy
+                ? const _Spinner()
+                : Text(
+                    model.creditCovers
+                        ? l10n.payFromCredit
+                        : l10n.payAmount(formatMoney(l10n, model.toPay)),
+                  ),
+          ),
         const SizedBox(height: CardsSpace.md),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,

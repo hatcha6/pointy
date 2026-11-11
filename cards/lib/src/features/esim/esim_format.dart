@@ -186,3 +186,7 @@ class EsimNote extends StatelessWidget {
     );
   }
 }
+
+/// What a promotion's badge says: the operator's own words, or the cut.
+String esimPromoLabel(AppLocalizations l10n, EsimPromo promo) =>
+    promo.badge.isNotEmpty ? promo.badge : l10n.esimPromoOff(promo.percent);

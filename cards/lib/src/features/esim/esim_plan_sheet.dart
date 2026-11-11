@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../../l10n/generated/app_localizations.dart';
@@ -9,9 +10,12 @@ import '../../shared/cards_scope.dart';
 import '../../shared/grouped.dart';
 import '../../shared/haptics.dart';
 import '../../shared/money_text.dart';
+import '../../shared/pill.dart';
 import '../../shared/esim_card_art.dart';
 import 'esim_checkout.dart';
 import 'esim_format.dart';
+import 'esim_share.dart';
+import '../links/cards_link.dart';
 
 /// Who the eSIM is for.
 enum EsimRecipient { me, someoneElse }
@@ -111,9 +115,36 @@ class _EsimPlanSheetState extends State<EsimPlanSheet> {
             CardsSpace.gutter,
             MediaQuery.viewInsetsOf(context).bottom + CardsSpace.lg,
           ),
-          child: FilledButton(
-            onPressed: () => _buy(recipient),
-            child: Text(l10n.esimBuyFor(formatMoney(l10n, plan.price))),
+          child: Row(
+            children: [
+              // This plan's own link: a friend opens the app on it.
+              Builder(
+                builder: (context) => IconButton.outlined(
+                  tooltip: l10n.shareAction,
+                  constraints: const BoxConstraints.tightFor(
+                    width: CardsSizes.button,
+                    height: CardsSizes.button,
+                  ),
+                  icon: const Icon(CupertinoIcons.share, size: 20),
+                  onPressed: () => shareEsimLink(
+                    context,
+                    EsimShelfLink(
+                      destination: widget.destination.key,
+                      plan: plan.id,
+                    ),
+                    title:
+                        '${widget.destination.name} · ${esimPlanText(l10n, data: plan.data, days: plan.days, unlimited: plan.unlimited)}',
+                  ),
+                ),
+              ),
+              const SizedBox(width: CardsSpace.sm),
+              Expanded(
+                child: FilledButton(
+                  onPressed: () => _buy(recipient),
+                  child: Text(l10n.esimBuyFor(formatMoney(l10n, plan.price))),
+                ),
+              ),
+            ],
           ),
         );
         final body = SingleChildScrollView(
@@ -137,6 +168,39 @@ class _EsimPlanSheetState extends State<EsimPlanSheet> {
                   unlimited: plan.unlimited,
                 ),
               ),
+              if (plan.promo case final promo?) ...[
+                const SizedBox(height: CardsSpace.md),
+                // Side by side; one under the other at the largest text.
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: CardsSpace.md,
+                  runSpacing: CardsSpace.xs,
+                  children: [
+                    Pill(
+                      text: esimPromoLabel(l10n, promo),
+                      tone: PillTone.promo,
+                      icon: Icons.local_offer_rounded,
+                    ),
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          if (plan.regularPrice case final regular?)
+                            TextSpan(
+                              text: '${formatMoney(l10n, regular)}  ',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                                decoration: TextDecoration.lineThrough,
+                              ),
+                            ),
+                          TextSpan(text: formatMoney(l10n, plan.price)),
+                        ],
+                      ),
+                      style: theme.textTheme.titleMedium,
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: CardsSpace.lg),
               Grouped(
                 children: [

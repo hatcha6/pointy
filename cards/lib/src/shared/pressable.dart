@@ -37,7 +37,7 @@ class _PressableState extends State<Pressable> {
 
   @override
   Widget build(BuildContext context) {
-    final still = MediaQuery.of(context).disableAnimations;
+    final still = MediaQuery.disableAnimationsOf(context);
     return Semantics(
       button: true,
       enabled: widget.onTap != null,

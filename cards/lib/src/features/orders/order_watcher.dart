@@ -43,6 +43,11 @@ class OrderWatcher extends ChangeNotifier {
   }
 
   void _schedule() {
+    // One timer at a time: two polls finishing together (the clock's, and
+    // the app coming back to the front) would otherwise each leave one
+    // running, and the order would be asked about twice as often for good.
+    _timer?.cancel();
+    _timer = null;
     if (_disposed || settled) {
       return;
     }
@@ -56,7 +61,14 @@ class OrderWatcher extends ChangeNotifier {
   }
 
   /// Reads the order now (also on the app coming back to the front).
-  Future<void> poll() async {
+  Future<void> poll() => _polling ??= _poll().whenComplete(() {
+    _polling = null;
+  });
+
+  /// The poll on its way: asking again meanwhile waits for its answer.
+  Future<void>? _polling;
+
+  Future<void> _poll() async {
     _timer?.cancel();
     final result = await orders.order(_order.id);
     if (_disposed) {
@@ -65,14 +77,23 @@ class OrderWatcher extends ChangeNotifier {
     if (result case Ok(:final value)) {
       _order = value;
       await _remember(value);
+      if (_disposed) {
+        return;
+      }
       notifyListeners();
     }
     _schedule();
   }
 
+  /// A keychain that will not take the codes costs the saved copy only: the
+  /// order still moves on, and the relay hands the codes over again.
   Future<void> _remember(CardOrder order) async {
     if (order.status == OrderStatus.delivered && order.codes.isNotEmpty) {
-      await vault.keep(order.id, order.codes);
+      try {
+        await vault.keep(order.id, order.codes);
+      } on Object {
+        // Read from the relay next time.
+      }
     }
   }
 

@@ -4,6 +4,7 @@ import '../../../l10n/generated/app_localizations.dart';
 import '../../core/result.dart';
 import '../../data/models/esim.dart';
 import '../../data/models/order.dart';
+import '../../dependencies.dart';
 import '../../design/cards_layout.dart';
 import '../../design/cards_tokens.dart';
 import '../../shared/card_art.dart';
@@ -19,6 +20,7 @@ import '../../shared/native_glass_chips.dart';
 import '../../shared/relay_error_text.dart';
 import '../../shared/skeleton.dart';
 import '../esim/esim_page.dart';
+import 'my_cards_memory.dart';
 import '../esim/esim_store_page.dart';
 import '../orders/order_progress_page.dart';
 import '../reveal/reveal_page.dart';
@@ -70,57 +72,175 @@ class _MyCardsPageState extends State<MyCardsPage> {
   Map<String, List<CardCode>> _saved = {};
   List<CustomerEsim> _esims = const [];
 
+  bool _started = false;
+  ValueNotifier<Object?>? _session;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_orders == null && _error == null) {
+    // Once: this also runs on every rotation, theme or text-size change.
+    if (_started) {
+      return;
+    }
+    _started = true;
+    final dependencies = CardsScope.of(context);
+    // What was read last time is on screen at once, without placeholders;
+    // the relay is asked again underneath, so a card bought a minute ago
+    // still arrives.
+    if (dependencies.auth.isSignedIn) {
+      if (dependencies.myCards.last case final known?) {
+        // With whatever was read since (the shelf reads the orders after
+        // every purchase): a card just bought is in the list already.
+        _show(
+          MyCardsSnapshot(
+            orders: dependencies.orders.lastOrders ?? known.orders,
+            esims: dependencies.esim.lastEsims ?? known.esims,
+            used: known.used,
+            saved: known.saved,
+          ),
+        );
+      }
+    }
+    _session = dependencies.auth.session..addListener(_sessionChanged);
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _session?.removeListener(_sessionChanged);
+    super.dispose();
+  }
+
+  /// Signed in from somewhere else while the page is up (a link that asked
+  /// for it): the cards are read. Signed out: nothing of them stays.
+  void _sessionChanged() {
+    if (!mounted) {
+      return;
+    }
+    if (_session?.value == null) {
+      setState(() {
+        _orders = null;
+        _error = null;
+        _esims = const [];
+        _saved = {};
+        _used = {};
+      });
+    } else {
       _load();
     }
   }
 
-  Future<void> _load() async {
+  /// The orders the list shows: a called-off one is not, and a delivered
+  /// eSIM lives in its own section, not as a card.
+  static List<CardOrder> _shownOrders(List<CardOrder> orders) => orders
+      .where(
+        (o) =>
+            o.status != OrderStatus.cancelled &&
+            !(o.isEsim && o.status == OrderStatus.delivered),
+      )
+      .toList();
+
+  /// The read on its way: asking again meanwhile waits for it.
+  Future<void>? _loading;
+
+  Future<void> _load() =>
+      _loading ??= _read().whenComplete(() => _loading = null);
+
+  Future<void> _read() async {
+    // Callers await something first (a sign-in sheet, an opened order), and
+    // the page can be replaced meanwhile; a disposed page has no context.
+    if (!mounted) {
+      return;
+    }
     final dependencies = CardsScope.of(context);
     if (!dependencies.auth.isSignedIn) {
       return;
     }
-    final result = await dependencies.orders.orders();
-    final esims = await dependencies.esim.esims();
-    final used = await dependencies.vault.usedCodes();
-    final saved = <String, List<CardCode>>{};
-    if (result case Ok(:final value)) {
-      for (final order in value.where(
-        (o) => o.status == OrderStatus.delivered,
-      )) {
-        final codes = await dependencies.vault.codes(order.id);
-        if (codes != null) {
-          saved[order.id] = codes;
+    final session = dependencies.auth.session.value;
+    bool stale() =>
+        !mounted || !identical(dependencies.auth.session.value, session);
+    // Side by side: neither waits on the other.
+    final asked = (
+      dependencies.orders.orders(),
+      dependencies.esim.esims(),
+    ).wait;
+    // A first visit: the shelf has usually read the orders already, so the
+    // list is up as soon as this phone has said which cards are used.
+    if (_orders == null) {
+      if (dependencies.orders.lastOrders case final known?) {
+        final (used, saved) = await _kept(dependencies, known);
+        if (stale()) {
+          return;
+        }
+        if (_orders == null) {
+          setState(
+            () => _show(
+              MyCardsSnapshot(
+                orders: known,
+                esims: dependencies.esim.lastEsims ?? const [],
+                used: used,
+                saved: saved,
+              ),
+            ),
+          );
         }
       }
     }
-    if (!mounted) {
+    final (result, esims) = await asked;
+    if (stale()) {
       return;
     }
-    setState(() {
-      _used = used;
-      _saved = saved;
-      if (esims case Ok(:final value)) {
-        _esims = value;
-      }
-      switch (result) {
-        case Ok(:final value):
-          // A delivered eSIM lives in its own section, not as a card.
-          _orders = value
-              .where(
-                (o) =>
-                    o.status != OrderStatus.cancelled &&
-                    !(o.isEsim && o.status == OrderStatus.delivered),
-              )
-              .toList();
+    switch (result) {
+      case Ok(:final value):
+        final (used, saved) = await _kept(dependencies, value);
+        if (stale()) {
+          return;
+        }
+        final snapshot = MyCardsSnapshot(
+          orders: value,
+          esims: switch (esims) {
+            Ok(:final value) => value,
+            Error() => _esims,
+          },
+          used: used,
+          saved: saved,
+        );
+        dependencies.myCards.last = snapshot;
+        setState(() {
+          _show(snapshot);
           _error = null;
-        case Error(:final exception):
-          _error = exception;
-      }
-    });
+        });
+      case Error(:final exception):
+        // What is on screen stays; a page with nothing says why.
+        setState(() => _error = exception);
+    }
+  }
+
+  void _show(MyCardsSnapshot snapshot) {
+    _orders = _shownOrders(snapshot.orders);
+    _esims = snapshot.esims;
+    _used = snapshot.used;
+    _saved = snapshot.saved;
+  }
+
+  /// What this phone holds of [orders]: the codes marked used, and the
+  /// codes of each delivered card.
+  static Future<(Set<String>, Map<String, List<CardCode>>)> _kept(
+    CardsDependencies dependencies,
+    List<CardOrder> orders,
+  ) async {
+    final delivered = [
+      for (final order in orders)
+        if (order.status == OrderStatus.delivered) order,
+    ];
+    final used = dependencies.vault.usedCodes();
+    final codes = await Future.wait([
+      for (final order in delivered) dependencies.vault.codes(order.id),
+    ]);
+    return (
+      await used,
+      {for (final (index, order) in delivered.indexed) order.id: ?codes[index]},
+    );
   }
 
   /// Nothing of it is left to use: every code marked used, or a top-up
@@ -173,7 +293,7 @@ class _MyCardsPageState extends State<MyCardsPage> {
         body: l10n.myCardsSignedOutBody,
         actionLabel: l10n.signInAction,
         onAction: () async {
-          if (await ensureSignedIn(context)) {
+          if (await ensureSignedIn(context) && mounted) {
             await _load();
           }
         },

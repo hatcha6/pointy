@@ -38,12 +38,16 @@ Future<bool> ensureSignedIn(BuildContext context) async {
     useSafeArea: true,
     builder: (_) => const SignInSheet(),
   );
-  if (done == true && context.mounted) {
+  // Signed in is signed in, however the sheet closed: swiping away the
+  // question that follows a first sign-in must not send the customer back
+  // to tap «اشترِ» a second time.
+  final signedIn = done == true || auth.isSignedIn;
+  if (signedIn && context.mounted) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(AppLocalizations.of(context).signInDone)),
     );
   }
-  return done == true;
+  return signedIn;
 }
 
 /// Phone, then the 6-digit code from the SMS. One field each; the code field
@@ -122,6 +126,10 @@ class _SignInSheetState extends State<SignInSheet> {
   }
 
   Future<void> _sendCode() async {
+    // The keyboard's own «تم» can ask twice: one message, one code.
+    if (_busy) {
+      return;
+    }
     final l10n = AppLocalizations.of(context);
     final national = LibyanPhone.national(_phone.text);
     if (national == null) {

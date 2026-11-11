@@ -224,10 +224,12 @@ class _SidebarItem extends StatelessWidget {
 /// Whether the shell has a sidebar beside its pages: a desktop's wide
 /// window, with no system side column and not a phone drawing Liquid Glass.
 bool sidebarFits(BuildContext context) {
-  final media = MediaQuery.of(context);
-  return CardsLayout.desktop(media.size) &&
+  // The size and the padding only: asking for all of it would rebuild the
+  // shell, and the whole shelf with it, at every frame of the keyboard
+  // sliding up.
+  return CardsLayout.desktop(MediaQuery.sizeOf(context)) &&
       !CardsTabBar.nativeGlass &&
-      CardsTabBar.side(media.padding) == null;
+      CardsTabBar.side(MediaQuery.paddingOf(context)) == null;
 }
 
 /// Marks the pages beside the sidebar: they lay out for a desktop (no tab

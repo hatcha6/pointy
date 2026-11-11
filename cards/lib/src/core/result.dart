@@ -8,6 +8,11 @@ sealed class Result<T> {
       return Ok(await operation());
     } on Exception catch (exception) {
       return Error(exception);
+    } on TypeError catch (error) {
+      // An answer of the wrong shape (a field missing, a list where a map
+      // was promised) is a failed call like any other, never a page left
+      // waiting for an answer that will not come.
+      return Error(FormatException('unexpected answer: $error'));
     }
   }
 }

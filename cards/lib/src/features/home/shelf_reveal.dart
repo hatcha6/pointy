@@ -47,14 +47,23 @@ class ShelfReveal {
     controller.forward(from: 0);
   }
 
-  /// The slice of the reveal the piece at [order] rises over.
-  Animation<double> slice(int order) {
-    final start = (order.clamp(0, _staggered) / _staggered) * 0.45;
-    return CurvedAnimation(
-      parent: controller,
-      curve: Interval(start, start + 0.55, curve: CardsMotion.curve),
-    );
-  }
+  /// The slice of the reveal the piece at [order] rises over. One of a
+  /// handful, made once: a new one for every tile built, each listening to
+  /// the controller for good, piled up for as long as the app stayed open.
+  Animation<double> slice(int order) => _slices[order.clamp(0, _staggered)];
+
+  late final List<Animation<double>> _slices = [
+    for (var i = 0; i <= _staggered; i++)
+      controller.drive(
+        CurveTween(
+          curve: Interval(
+            i / _staggered * 0.45,
+            i / _staggered * 0.45 + 0.55,
+            curve: CardsMotion.curve,
+          ),
+        ),
+      ),
+  ];
 
   void dispose() => controller.dispose();
 }

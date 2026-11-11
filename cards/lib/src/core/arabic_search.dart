@@ -28,15 +28,32 @@ String foldForSearch(String text) {
         buffer.writeCharCode(rune);
     }
   }
-  return buffer.toString().replaceAll(RegExp(r'\s+'), ' ').trim();
+  return buffer.toString().replaceAll(_spaces, ' ').trim();
 }
+
+final _spaces = RegExp(r'\s+');
 
 /// Whether every word of [query] appears in one of [fields].
 bool matchesSearch(String query, Iterable<String> fields) {
-  final words = foldForSearch(query).split(' ').where((w) => w.isNotEmpty);
+  final words = searchWords(query);
   if (words.isEmpty) {
     return true;
   }
-  final haystack = fields.map(foldForSearch).join(' ');
-  return words.every(haystack.contains);
+  return matchesWords(words, searchText(fields));
 }
+
+/// The words of [query], folded: what a search looks for.
+List<String> searchWords(String query) => [
+  for (final word in foldForSearch(query).split(' '))
+    if (word.isNotEmpty) word,
+];
+
+/// [fields] folded into one text to search, worked out once for something
+/// searched many times (a brand at every letter typed).
+String searchText(Iterable<String> fields) =>
+    fields.map(foldForSearch).join(' ');
+
+/// Whether every one of [words] (from [searchWords]) appears in [text] (from
+/// [searchText]).
+bool matchesWords(List<String> words, String text) =>
+    words.every(text.contains);

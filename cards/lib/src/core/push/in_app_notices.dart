@@ -34,6 +34,16 @@ class _InAppNoticesState extends State<InAppNotices>
   PushNotice? _notice;
   Timer? _leave;
 
+  /// Made once: one made in `build` would listen to [_shown] for good.
+  late final Animation<Offset> _slide =
+      Tween(begin: const Offset(0, -1.2), end: Offset.zero).animate(
+        CurvedAnimation(
+          parent: _shown,
+          curve: CardsMotion.spring,
+          reverseCurve: Curves.easeInCubic,
+        ),
+      );
+
   @override
   void initState() {
     super.initState();
@@ -108,14 +118,7 @@ class _InAppNoticesState extends State<InAppNotices>
             child: SafeArea(
               bottom: false,
               child: SlideTransition(
-                position: Tween(begin: const Offset(0, -1.2), end: Offset.zero)
-                    .animate(
-                      CurvedAnimation(
-                        parent: _shown,
-                        curve: CardsMotion.spring,
-                        reverseCurve: Curves.easeInCubic,
-                      ),
-                    ),
+                position: _slide,
                 child: FadeTransition(
                   opacity: _shown,
                   child: Dismissible(

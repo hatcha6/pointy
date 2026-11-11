@@ -23,18 +23,25 @@ class EsimSplit extends StatelessWidget {
       data: MediaQuery.of(context).copyWith(size: box.biggest),
       child: child,
     );
-    return Row(
-      children: [
-        Expanded(
-          flex: 5,
-          child: LayoutBuilder(builder: (context, box) => side(start, box)),
+    // On a desktop's broad window the two sides stay together, centred, as
+    // the shelf does.
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: CardsLayout.shelf),
+        child: Row(
+          children: [
+            Expanded(
+              flex: 5,
+              child: LayoutBuilder(builder: (context, box) => side(start, box)),
+            ),
+            const SizedBox(width: CardsSpace.sm),
+            Expanded(
+              flex: 6,
+              child: LayoutBuilder(builder: (context, box) => side(end, box)),
+            ),
+          ],
         ),
-        const SizedBox(width: CardsSpace.sm),
-        Expanded(
-          flex: 6,
-          child: LayoutBuilder(builder: (context, box) => side(end, box)),
-        ),
-      ],
+      ),
     );
   }
 }

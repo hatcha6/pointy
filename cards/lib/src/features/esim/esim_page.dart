@@ -353,6 +353,33 @@ class _EsimPageState extends State<EsimPage> with WidgetsBindingObserver {
     }
   }
 
+  /// What is sent with an eSIM handed to someone else. Its page asks for an
+  /// access code only where the supplier gives one.
+  String _shareText(
+    AppLocalizations l10n,
+    CustomerEsim esim,
+    EsimInstall install,
+  ) {
+    final plan = esimPlanText(
+      l10n,
+      data: esim.data,
+      days: esim.days,
+      unlimited: esim.unlimited,
+    );
+    return install.shareCode.isEmpty
+        ? l10n.esimShareTextNoCode(
+            esim.destinationName,
+            plan,
+            install.shareLink,
+          )
+        : l10n.esimShareText(
+            esim.destinationName,
+            plan,
+            install.shareLink,
+            install.shareCode,
+          );
+  }
+
   Future<void> _send(
     BuildContext button,
     CustomerEsim esim,
@@ -382,17 +409,7 @@ class _EsimPageState extends State<EsimPage> with WidgetsBindingObserver {
     final store = _store;
     final shared = await SharePlus.instance.share(
       ShareParams(
-        text: l10n.esimShareText(
-          esim.destinationName,
-          esimPlanText(
-            l10n,
-            data: esim.data,
-            days: esim.days,
-            unlimited: esim.unlimited,
-          ),
-          install.shareLink,
-          install.shareCode,
-        ),
+        text: _shareText(l10n, esim, install),
         sharePositionOrigin: box == null
             ? null
             : box.localToGlobal(Offset.zero) & box.size,
@@ -504,7 +521,9 @@ class _EsimPageState extends State<EsimPage> with WidgetsBindingObserver {
                             ),
                             child: sections.first,
                           ),
-                          const Spacer(),
+                          // Beside the details there is no thumb to pin it
+                          // under: the action sits with its card.
+                          const SizedBox(height: CardsSpace.sm),
                           _action(context, esim, mode),
                         ],
                       ),
@@ -758,10 +777,11 @@ class _EsimPageState extends State<EsimPage> with WidgetsBindingObserver {
                   label: l10n.esimShareLink,
                   value: install.shareLink,
                 ),
-                EsimCopyRow(
-                  label: l10n.esimShareCode,
-                  value: install.shareCode,
-                ),
+                if (install.shareCode.isNotEmpty)
+                  EsimCopyRow(
+                    label: l10n.esimShareCode,
+                    value: install.shareCode,
+                  ),
               ],
             ),
             gap,

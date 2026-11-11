@@ -194,12 +194,33 @@ class OrdersRepository {
   });
 
   Future<Result<List<CardOrder>>> orders() => Result.guard(() async {
+    final customer = _customer;
     final answer = await api.get('/v1/customers/orders', signedIn: true);
-    return [
+    final list = [
       for (final row in (answer['orders'] as List? ?? const []))
         if (row is Map<String, dynamic>) CardOrder.fromJson(row),
     ];
+    // An answer that was on its way while the customer changed is not kept.
+    if (customer == _customer) {
+      lastOrders = list;
+    }
+    return list;
   });
+
+  /// Moves with every [forget].
+  int _customer = 0;
+
+  /// The customer's orders as last read, so «كروتي» opens on them at once
+  /// and reads again underneath. Null before the first read, and after
+  /// [forget].
+  List<CardOrder>? lastOrders;
+
+  /// Whoever was signed in has gone: nothing of theirs is kept.
+  void forget() {
+    _customer++;
+    lastOrders = null;
+    _placed.clear();
+  }
 
   Future<Result<CreditStatement>> credit() => Result.guard(() async {
     return CreditStatement.fromJson(

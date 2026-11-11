@@ -179,10 +179,12 @@ class BrandCardStage extends StatelessWidget {
 
   /// Clear of the page's sides, and never wider than the art's 800 pixels
   /// at this screen's density: shown at its own sharpness, never blown up.
-  static double cardWidthFor(MediaQueryData media) {
-    final sharp = 800 / media.devicePixelRatio;
+  static double cardWidthFor(BuildContext context) {
+    // Asked for piece by piece: the page has a field on it, and all of
+    // [MediaQuery] changes at every frame of the keyboard sliding up.
+    final sharp = 800 / MediaQuery.devicePixelRatioOf(context);
     return math.min(
-      media.size.width - CardsSpace.gutter * 4,
+      MediaQuery.sizeOf(context).width - CardsSpace.gutter * 4,
       math.max(sharp, 240.0),
     );
   }

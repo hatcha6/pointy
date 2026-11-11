@@ -2,7 +2,113 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-/// The eSIM banner's picture, in the mark's vocabulary (a mint card, an amber
+import '../../shared/esim_card_art.dart';
+
+/// Where a flag sits around the globe, in globe radii from its centre: across
+/// (towards the text is positive), down, and the disc's own size.
+const _flagSpots = [
+  (-0.84, -0.56, 0.42),
+  (0.98, 0.20, 0.36),
+  (0.60, 0.70, 0.32),
+  (-1.02, 0.36, 0.32),
+  (-0.46, 0.78, 0.26),
+];
+
+/// The eSIM picture with the flags of where people go: a globe, an eSIM card
+/// over it, a plane on its route, and the destinations' flags around them. It
+/// fills its box, which sits at the banner's end.
+class EsimBannerArt extends StatelessWidget {
+  const EsimBannerArt({
+    super.key,
+    required this.countries,
+    this.flight = const AlwaysStoppedAnimation(1),
+  });
+
+  /// Country codes, most wanted first; as many as there is room for show.
+  final List<String> countries;
+  final Animation<double> flight;
+
+  @override
+  Widget build(BuildContext context) {
+    final rtl = Directionality.of(context) == TextDirection.rtl;
+    final side = rtl ? 1.0 : -1.0;
+    return LayoutBuilder(
+      builder: (context, box) {
+        final size = box.biggest;
+        final globe = EsimBannerArtPainter.globeRadius(size);
+        final centre = EsimBannerArtPainter.centreOf(size);
+        // A narrow box has room for three.
+        final room = size.width >= globe * 2.5 ? _flagSpots.length : 3;
+        final shown = math.min(room, countries.length);
+        // Small, the flags are drawn a little larger to stay readable.
+        final grow = globe < 80 ? 1.2 : 1.0;
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned.fill(
+              child: RepaintBoundary(
+                child: AnimatedBuilder(
+                  animation: flight,
+                  builder: (context, _) => CustomPaint(
+                    painter: EsimBannerArtPainter(
+                      flight:
+                          0.04 +
+                          Curves.easeInOutCubic.transform(flight.value) * 0.96,
+                      rtl: rtl,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            for (var i = 0; i < shown; i++)
+              Positioned(
+                left:
+                    centre.dx +
+                    side * _flagSpots[i].$1 * globe -
+                    _flagSpots[i].$3 * globe * grow / 2,
+                top:
+                    centre.dy +
+                    _flagSpots[i].$2 * globe -
+                    _flagSpots[i].$3 * globe * grow / 2,
+                child: _FlagDisc(
+                  country: countries[i],
+                  size: _flagSpots[i].$3 * globe * grow,
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _FlagDisc extends StatelessWidget {
+  const _FlagDisc({required this.country, required this.size});
+
+  final String country;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: size,
+    height: size,
+    padding: EdgeInsets.all(math.max(1.5, size * 0.06)),
+    decoration: const BoxDecoration(
+      shape: BoxShape.circle,
+      color: Colors.white,
+      boxShadow: [
+        BoxShadow(
+          color: Color(0x73001F1B),
+          blurRadius: 10,
+          offset: Offset(0, 4),
+        ),
+      ],
+    ),
+    child: EsimFlag(country: country, width: size),
+  );
+}
+
+/// The picture's drawn part, in the mark's vocabulary (a mint card, an amber
 /// accent, the same soft shadow): a globe, an eSIM card lying over it, and a
 /// plane on a dashed route. [flight] runs from 0 to 1 as the plane arrives.
 class EsimBannerArtPainter extends CustomPainter {
@@ -15,16 +121,19 @@ class EsimBannerArtPainter extends CustomPainter {
   static const _mint = Color(0xFFE6F5F1);
   static const _teal = Color(0xFF0F766E);
 
+  /// The globe's radius in a box of [size]: it fills the box's height, and
+  /// leaves room either side for the flags.
+  static double globeRadius(Size size) =>
+      math.min(size.height * 0.5, size.width * 0.42);
+
+  static Offset centreOf(Size size) =>
+      Offset(size.width / 2, size.height * 0.54);
+
   @override
   void paint(Canvas canvas, Size size) {
-    // The picture keeps to its own column at the banner's end (the left in
-    // Arabic), whatever the text beside it makes the banner's height.
     final side = rtl ? 1.0 : -1.0;
-    final radius = math.min(size.height * 0.36, 60.0);
-    final centre = Offset(
-      rtl ? radius * 1.12 : size.width - radius * 1.12,
-      size.height * 0.56,
-    );
+    final radius = globeRadius(size) / 1.5;
+    final centre = centreOf(size);
     _glow(canvas, centre, radius);
     _globe(canvas, centre, radius * 1.5);
     _route(canvas, centre, radius, side);

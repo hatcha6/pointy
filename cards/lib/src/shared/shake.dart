@@ -42,7 +42,7 @@ class _ShakeState extends State<Shake> with SingleTickerProviderStateMixin {
   }
 
   void _shake() {
-    if (MediaQuery.of(context).disableAnimations) {
+    if (MediaQuery.disableAnimationsOf(context)) {
       return;
     }
     _motion.forward(from: 0);

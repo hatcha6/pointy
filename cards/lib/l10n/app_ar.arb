@@ -862,6 +862,7 @@
   },
   "payNotFinishedTitle": "لم يكتمل الدفع",
   "payNotFinishedBody": "لم يُخصم شيء بعد. أكمل الدفع بالبطاقة، أو ألغِ الطلب.",
+  "payNotFinishedWalletBody": "لم يُخصم شيء بعد. رمز المحفظة يُطلب عند الشراء فقط، فألغِ هذا الطلب ثم اشترِ من جديد.",
   "finishPaying": "أكمل الدفع",
   "orderCancelled": "تم إلغاء الطلب.",
   "onboardingSkip": "تخطَّ",
@@ -1106,6 +1107,10 @@
   "pasteAction": "لصق",
   "@pasteAction": {
     "description": "Paste from the clipboard."
+  },
+  "pasteFailed": "تعذّر اللصق من الحافظة. الصق داخل الخانة مباشرة.",
+  "@pasteFailed": {
+    "description": "Shown when the browser refuses to let the paste button read the clipboard."
   },
   "chooseOption": "اختر",
   "@chooseOption": {
@@ -1796,6 +1801,11 @@
     "description": "eSIM screens.",
     "placeholders": {"destination": {"type": "String"}, "plan": {"type": "String"}, "link": {"type": "String"}, "code": {"type": "String"}}
   },
+  "esimShareTextNoCode": "شريحة إنترنت (eSIM) لـ {destination}: {plan}\nافتح هذا الرابط من الهاتف الذي ستعمل عليه:\n{link}",
+  "@esimShareTextNoCode": {
+    "description": "eSIM screens. Shared when the eSIM's page needs no access code.",
+    "placeholders": {"destination": {"type": "String"}, "plan": {"type": "String"}, "link": {"type": "String"}}
+  },
   "esimPlanDays": "{days, plural, =1{يوم واحد} =2{يومان} few{{days} أيام} other{{days} يوماً}}",
   "@esimPlanDays": {
     "description": "eSIM screens: a plan's length.",
@@ -2009,5 +2019,41 @@
   "reportWhatsApp": "أو راسلنا على واتساب",
   "@reportWhatsApp": {
     "description": "Secondary way to reach us from the report sheet."
-  }
+  },
+  "esimPerkInstant": "تفعيل فوري",
+  "@esimPerkInstant": {"description": "eSIM banner: a short perk."},
+  "esimPerkNoPlastic": "بلا شريحة بلاستيكية",
+  "@esimPerkNoPlastic": {"description": "eSIM banner: a short perk."},
+  "esimPerkTopUp": "شحن من التطبيق",
+  "@esimPerkTopUp": {"description": "eSIM banner: a short perk."},
+  "esimPlansTitle": "اختر باقتك",
+  "@esimPlansTitle": {"description": "eSIM destination page: the heading over its plans."},
+  "esimPromoOff": "خصم {percent}%",
+  "@esimPromoOff": {"description": "eSIM shelf: promotions and filters.", "placeholders": {"percent": {"type": "int"}}},
+  "esimOffersTitle": "عروض اليوم",
+  "@esimOffersTitle": {"description": "eSIM shelf: promotions and filters."},
+  "esimFilterOffers": "عروض",
+  "@esimFilterOffers": {"description": "eSIM shelf: promotions and filters."},
+  "esimFilterDays": "مدة الرحلة",
+  "@esimFilterDays": {"description": "eSIM shelf: promotions and filters."},
+  "esimFilterDaysOption": "{days, plural, few{{days} أيام فأكثر} other{{days} يوماً فأكثر}}",
+  "@esimFilterDaysOption": {"description": "eSIM shelf: promotions and filters.", "placeholders": {"days": {"type": "int"}}},
+  "esimFilterData": "حجم البيانات",
+  "@esimFilterData": {"description": "eSIM shelf: promotions and filters."},
+  "esimFilterAny": "الكل",
+  "@esimFilterAny": {"description": "eSIM shelf: promotions and filters."},
+  "esimSortTitle": "الترتيب",
+  "@esimSortTitle": {"description": "eSIM shelf: promotions and filters."},
+  "esimSortName": "أبجدياً",
+  "@esimSortName": {"description": "eSIM shelf: promotions and filters."},
+  "esimSortCheapest": "الأرخص أولاً",
+  "@esimSortCheapest": {"description": "eSIM shelf: promotions and filters."},
+  "esimFilterClear": "مسح",
+  "@esimFilterClear": {"description": "eSIM shelf: promotions and filters."},
+  "esimResultsCount": "{count, plural, =1{وجهة واحدة} =2{وجهتان} few{{count} وجهات} other{{count} وجهة}}",
+  "@esimResultsCount": {"description": "eSIM shelf: promotions and filters.", "placeholders": {"count": {"type": "int"}}},
+  "esimFilterNone": "لا توجد وجهة بهذه المواصفات. جرّب مدة أقصر أو بيانات أقل.",
+  "@esimFilterNone": {"description": "eSIM shelf: promotions and filters."},
+  "esimShareDestination": "مشاركة",
+  "@esimShareDestination": {"description": "eSIM shelf: promotions and filters."}
 }

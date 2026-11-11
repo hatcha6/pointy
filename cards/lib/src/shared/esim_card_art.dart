@@ -19,7 +19,13 @@ void registerFlagLicense() {
 /// The category an eSIM's card brand wears, so the shared pages draw this art.
 const esimCategory = 'esim';
 
-const _deep = [Color(0xFF0F766E), Color(0xFF0A5A55), Color(0xFF06302F)];
+/// The deep teal every eSIM surface is painted on.
+const esimDeepColors = [
+  Color(0xFF0F766E),
+  Color(0xFF0A5A55),
+  Color(0xFF06302F),
+];
+const _deep = esimDeepColors;
 const _amber = Color(0xFFF0A93C);
 
 /// A destination's flag, from the app's own assets: there at once, offline. A

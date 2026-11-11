@@ -53,9 +53,10 @@ EsimDeviceFacts _phone({
   bool supports = true,
   bool direct = true,
   bool simulator = false,
+  String? model,
 }) => EsimDeviceFacts(
   platform: platform,
-  model: platform == 'ios' ? 'iPhone13,2' : 'SM-S921B',
+  model: model ?? (platform == 'ios' ? 'iPhone13,2' : 'SM-S921B'),
   osVersion: '18.0',
   supportsEsim: supports,
   simulator: simulator,
@@ -122,9 +123,45 @@ void main() {
       );
     });
 
-    test('both saying no warns; no answer never does', () {
-      expect(esimSupportOf(_phone(supports: false), _offList), EsimSupport.no);
-      expect(esimSupportOf(_phone(supports: false), null), EsimSupport.unknown);
+    test('an iPhone is judged by its model, never by its own no', () {
+      // An iPhone 16 Pro: the system says no to an app with no carrier
+      // entitlement, and Airalo's list does not know "iPhone17,1".
+      final pro = _phone(supports: false, model: 'iPhone17,1');
+      expect(esimSupportOf(pro, _offList), EsimSupport.yes);
+      expect(esimSupportOf(pro, null), EsimSupport.yes);
+      expect(
+        esimSupportOf(_phone(supports: false, model: 'iPhone11,8'), _offList),
+        EsimSupport.yes,
+      );
+      // An iPhone X has none.
+      expect(
+        esimSupportOf(_phone(supports: false, model: 'iPhone10,3'), _listed),
+        EsimSupport.no,
+      );
+    });
+
+    test('a model off the list is no verdict on an iPad', () {
+      final ipad = _phone(supports: false, model: 'iPad13,1');
+      expect(esimSupportOf(ipad, _offList), EsimSupport.unknown);
+      expect(esimSupportOf(ipad, _listed), EsimSupport.yes);
+      expect(esimSupportOf(ipad, null), EsimSupport.unknown);
+    });
+
+    test('an Android phone with no eSIM service, off the list, is warned', () {
+      final android = _phone(platform: 'android', supports: false);
+      expect(esimSupportOf(android, _offList), EsimSupport.no);
+      expect(esimSupportOf(android, null), EsimSupport.unknown);
+    });
+
+    testWidgets('an iPhone 16 Pro is never told it takes no eSIM', (
+      tester,
+    ) async {
+      // The fixture relay answers "not on the list", as Airalo does.
+      final dependencies = _dependencies(
+        _FakeDevice(_phone(supports: false, model: 'iPhone17,1')),
+      );
+      await tester.runAsync(dependencies.esimCompatibility.load);
+      expect(dependencies.esimCompatibility.support.value, EsimSupport.yes);
     });
 
     test('a build with no phone cannot tell', () {
@@ -240,6 +277,81 @@ void main() {
       await tester.tap(find.text(l10n.esimKindRegional));
       await tester.pumpAndSettle();
       expect(find.text('أوروبا'), findsOneWidget);
+    });
+
+    testWidgets('filters narrow the shelf to a trip and show its price', (
+      tester,
+    ) async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
+      await _pump(
+        tester,
+        const EsimStorePage(filter: EsimShelfFilter(minDays: 30, minMb: 5120)),
+        dependencies: _dependencies(_FakeDevice(_phone())),
+      );
+      // Tunisia has no month of 5 GB; Turkey's is its 10 GB plan.
+      expect(find.text('تونس'), findsNothing);
+      expect(find.text(l10n.esimResultsCount(3)), findsOneWidget);
+      expect(find.textContaining('156.00'), findsOneWidget);
+      expect(find.text(l10n.esimPopular), findsNothing);
+      await tester.tap(find.text(l10n.esimFilterClear));
+      await tester.pumpAndSettle();
+      expect(find.text('تونس'), findsWidgets);
+      expect(find.text(l10n.esimOffersTitle), findsOneWidget);
+
+      // Only what is on offer.
+      await tester.tap(find.text(l10n.esimFilterOffers));
+      await tester.pumpAndSettle();
+      expect(find.text(l10n.esimResultsCount(1)), findsOneWidget);
+      expect(find.text('مصر'), findsNothing);
+    });
+
+    testWidgets('a search finds a region by a country in it', (tester) async {
+      await _pump(
+        tester,
+        const EsimStorePage(filter: EsimShelfFilter(query: 'فرنسا')),
+        dependencies: _dependencies(_FakeDevice(_phone())),
+      );
+      expect(find.text('أوروبا'), findsOneWidget);
+      expect(find.text('تركيا'), findsNothing);
+    });
+
+    testWidgets('a promotion shows on a plan, and a link opens the plan', (
+      tester,
+    ) async {
+      final l10n = await AppLocalizations.delegate.load(const Locale('ar'));
+      await _pump(
+        tester,
+        const EsimDestinationPage(
+          destination: 'turkey',
+          plan: 'merhaba-30days-3gb',
+        ),
+        dependencies: _dependencies(_FakeDevice(_phone())),
+      );
+      expect(find.text(l10n.esimPromoOff(20)), findsWidgets);
+      // The linked plan's sheet is open, at the promotion's price.
+      expect(find.text(l10n.esimWhoFor), findsOneWidget);
+      expect(find.textContaining('66.00'), findsWidgets);
+      expect(find.textContaining('82.50'), findsWidgets);
+    });
+
+    test('eSIM links name a destination, a plan and a filtered shelf', () {
+      CardsLink at(String path) =>
+          CardsLink.parse(Uri.parse('https://cards.dftr.ly$path'));
+      final plan = at('/esim/turkey/ea.PTR1G7') as EsimShelfLink;
+      expect(plan.destination, 'turkey');
+      expect(plan.plan, 'ea.PTR1G7');
+      expect(plan.location, '/esim/turkey/ea.PTR1G7');
+      final shelf = at(
+        '/esim?days=30&gb=5&offers=1&kind=regional&sort=cheapest',
+      ) as EsimShelfLink;
+      expect(shelf.destination, isNull);
+      expect(
+        (shelf.days, shelf.gb, shelf.offers, shelf.kind, shelf.cheapest),
+        (30, 5, true, 'regional', true),
+      );
+      expect(CardsLink.parse(Uri.parse(shelf.location)), shelf);
+      expect(at('/esim').location, '/esim');
+      expect(at('/esim/turkey').location, '/esim/turkey');
     });
 
     testWidgets('search finds eSIMs on the home page and the search page', (

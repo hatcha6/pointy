@@ -322,8 +322,9 @@ class _OrderProgressPageState extends State<OrderProgressPage>
   /// and a page closed by hand asks the relay once, then offers to pay again
   /// or call the order off.
   Future<void> _openPaymentPage() async {
-    final url = Uri.tryParse(widget.watcher.order.checkoutUrl);
-    if (url == null) {
+    final address = widget.watcher.order.checkoutUrl;
+    final url = address.isEmpty ? null : Uri.tryParse(address);
+    if (url == null || !mounted) {
       return;
     }
     final result = await PaymentPageView.open(
@@ -413,6 +414,19 @@ class _OrderProgressPageState extends State<OrderProgressPage>
       // Paying not finished (the card form or Dafa's page closed): nothing
       // is on its way, so nothing spins once the relay has said so. Pay, or
       // call the order off.
+      // A wallet's order, left before its code was typed: there is no card
+      // to finish paying with, and a wallet's code is asked for when the
+      // order is placed. It can only be called off, and bought again.
+      'paying' when order.nextAction == 'otp' && order.checkoutUrl.isEmpty =>
+        OrderOutcomePanel(
+          brand: widget.brand,
+          busy: _cancelling,
+          icon: Icons.account_balance_wallet_rounded,
+          title: l10n.payNotFinishedTitle,
+          body: l10n.payNotFinishedWalletBody,
+          secondaryLabel: _cancelling ? null : l10n.cancelOrder,
+          onSecondary: _cancel,
+        ),
       'paying' => OrderOutcomePanel(
         brand: widget.brand,
         busy: _cancelling || _checking,

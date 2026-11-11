@@ -61,15 +61,38 @@ class CheckoutModel extends ChangeNotifier {
     ).join();
   }
 
+  /// Reading the ways to pay and the credit.
+  bool loading = false;
+
+  /// The ways to pay could not be read: the sheet offers to read them again.
+  bool get loadFailed => !loading && options == null;
+
+  bool _started = false;
+  bool _disposed = false;
+
   Future<void> load() async {
-    orders.analytics.checkoutStarted(brand, item, quantity);
+    if (loading) {
+      return;
+    }
+    if (!_started) {
+      _started = true;
+      orders.analytics.checkoutStarted(brand, item, quantity);
+    }
+    loading = true;
+    error = null;
+    _notify();
     final results = await Future.wait([
       orders.checkoutOptions(),
       orders.credit(),
     ]);
     if (results[0] case Ok(:final value)) {
       options = value as CheckoutOptions;
-      final last = await preferences?.getString(_methodKey);
+      String? last;
+      try {
+        last = await preferences?.getString(_methodKey);
+      } on Exception {
+        // The first method, then.
+      }
       method =
           options!.methods.where((m) => m.key == last).firstOrNull ??
           options!.methods.firstOrNull;
@@ -79,8 +102,26 @@ class CheckoutModel extends ChangeNotifier {
     if (results[1] case Ok(:final value)) {
       credit = (value as CreditStatement).balance;
     }
-    notifyListeners();
+    loading = false;
+    _notify();
   }
+
+  /// The sheet can close while the relay is still answering.
+  void _notify() {
+    if (!_disposed) {
+      notifyListeners();
+    }
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  /// The payment being placed, while it is: a sheet closed meanwhile hands
+  /// its order on all the same.
+  Future<CardOrder?>? placing;
 
   Money get total => item.price * quantity;
   Money get creditApplied {
@@ -120,10 +161,20 @@ class CheckoutModel extends ChangeNotifier {
   }
 
   /// Places the order and starts the payment.
-  Future<CardOrder?> pay({String payer = '', String birthYear = ''}) async {
+  Future<CardOrder?> pay({String payer = '', String birthYear = ''}) {
+    if (busy) {
+      return placing ?? Future.value(order);
+    }
+    return placing = _pay(
+      payer: payer,
+      birthYear: birthYear,
+    ).whenComplete(() => placing = null);
+  }
+
+  Future<CardOrder?> _pay({String payer = '', String birthYear = ''}) async {
     busy = true;
     error = null;
-    notifyListeners();
+    _notify();
     final result = await orders.place(
       OrderRequest(
         itemKey: item.key,
@@ -141,11 +192,15 @@ class CheckoutModel extends ChangeNotifier {
     switch (result) {
       case Ok(:final value):
         order = value;
-        if (method != null) {
-          await preferences?.setString(_methodKey, method!.key);
+        try {
+          if (method != null) {
+            await preferences?.setString(_methodKey, method!.key);
+          }
+          // Topped up once, offered first next time.
+          await account?.remember();
+        } on Exception {
+          // Remembering is a convenience: the order is placed either way.
         }
-        // Topped up once, offered first next time.
-        await account?.remember();
         if (!value.status.isOpen && value.status != OrderStatus.delivered) {
           _key = _newKey();
         }
@@ -157,7 +212,7 @@ class CheckoutModel extends ChangeNotifier {
           method: creditCovers ? 'credit' : method?.key ?? '',
         );
     }
-    notifyListeners();
+    _notify();
     return order;
   }
 
@@ -169,7 +224,7 @@ class CheckoutModel extends ChangeNotifier {
     }
     busy = true;
     error = null;
-    notifyListeners();
+    _notify();
     final result = await orders.confirm(current.id, otp);
     busy = false;
     switch (result) {
@@ -178,7 +233,7 @@ class CheckoutModel extends ChangeNotifier {
       case Error(:final exception):
         error = exception;
     }
-    notifyListeners();
+    _notify();
     return order;
   }
 
@@ -191,6 +246,6 @@ class CheckoutModel extends ChangeNotifier {
       order = value;
     }
     _key = _newKey();
-    notifyListeners();
+    _notify();
   }
 }

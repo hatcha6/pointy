@@ -841,7 +841,14 @@ const Map<String, dynamic> fixtureEsimShelf = {
       'image': _esimFlag,
       'plans': 3,
       'countries': 1,
-      'from_price': '33.750',
+      'from_price': '27.000',
+      'regular_from_price': '33.750',
+      'promo': {'badge': '', 'percent': 20, 'ends_at': '2030-01-01T00:00:00Z'},
+      'plan_list': [
+        {'mb': 1024, 'days': 7, 'price': '27.000'},
+        {'mb': 3072, 'days': 30, 'price': '66.000'},
+        {'mb': 10240, 'days': 30, 'price': '156.000'},
+      ],
     },
     {
       'key': 'egypt',
@@ -852,6 +859,10 @@ const Map<String, dynamic> fixtureEsimShelf = {
       'plans': 2,
       'countries': 1,
       'from_price': '45.000',
+      'plan_list': [
+        {'mb': 1024, 'days': 7, 'price': '45.000'},
+        {'mb': 5120, 'days': 30, 'price': '120.000'},
+      ],
     },
     {
       'key': 'tunisia',
@@ -862,6 +873,10 @@ const Map<String, dynamic> fixtureEsimShelf = {
       'plans': 2,
       'countries': 1,
       'from_price': '37.500',
+      'plan_list': [
+        {'mb': 1024, 'days': 7, 'price': '37.500'},
+        {'mb': 3072, 'days': 15, 'price': '75.000'},
+      ],
     },
     {
       'key': 'malaysia',
@@ -872,6 +887,10 @@ const Map<String, dynamic> fixtureEsimShelf = {
       'plans': 2,
       'countries': 1,
       'from_price': '30.000',
+      'plan_list': [
+        {'mb': 1024, 'days': 7, 'price': '30.000'},
+        {'mb': 20480, 'days': 30, 'price': '210.000'},
+      ],
     },
     {
       'key': 'europe',
@@ -882,6 +901,12 @@ const Map<String, dynamic> fixtureEsimShelf = {
       'plans': 4,
       'countries': 39,
       'from_price': '37.500',
+      'covers': ['فرنسا', 'إيطاليا', 'ألمانيا', 'إسبانيا'],
+      'plan_list': [
+        {'mb': 1024, 'days': 7, 'price': '37.500'},
+        {'mb': 5120, 'days': 30, 'price': '135.000'},
+        {'mb': 10240, 'days': 30, 'price': '225.000'},
+      ],
     },
     {
       'key': 'world',
@@ -901,8 +926,13 @@ Map<String, dynamic> _esimPlan(
   String data,
   int mb,
   int days,
-  String price,
-) => {
+  String price, {
+  String? regular,
+}) => {
+  if (regular != null) ...{
+    'regular_price': regular,
+    'promo': {'badge': '', 'percent': 20, 'ends_at': '2030-01-01T00:00:00Z'},
+  },
   'item': 'esim:$id',
   'id': id,
   'title': '$data - $days يوماً',
@@ -937,9 +967,30 @@ final Map<String, dynamic> fixtureEsimDestination = {
     },
   ],
   'plans': [
-    _esimPlan('merhaba-7days-1gb', '1 GB', 1024, 7, '33.750'),
-    _esimPlan('merhaba-30days-3gb', '3 GB', 3072, 30, '82.500'),
-    _esimPlan('merhaba-30days-10gb', '10 GB', 10240, 30, '195.000'),
+    _esimPlan(
+      'merhaba-7days-1gb',
+      '1 GB',
+      1024,
+      7,
+      '27.000',
+      regular: '33.750',
+    ),
+    _esimPlan(
+      'merhaba-30days-3gb',
+      '3 GB',
+      3072,
+      30,
+      '66.000',
+      regular: '82.500',
+    ),
+    _esimPlan(
+      'merhaba-30days-10gb',
+      '10 GB',
+      10240,
+      30,
+      '156.000',
+      regular: '195.000',
+    ),
   ],
 };
 

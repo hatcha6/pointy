@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pointy_cards/src/features/orders/order_report_sheet.dart';
 import 'package:pointy_cards/src/data/models/order_report.dart';
@@ -231,6 +232,73 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       find.text('لا يوجد حساب بهذا المعرّف. تأكد منه في ملفك داخل اللعبة.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('the paste button puts the clipboard straight into its field', (
+    tester,
+  ) async {
+    await phone(tester);
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async => call.method == 'Clipboard.getData'
+          ? {
+              'text':
+                  'Add me on Steam https://s.team/p/GKCP-MVN/CWQDTMJF thanks',
+            }
+          : null,
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+    await tester.pumpWidget(
+      CardsApp(
+        dependencies: fixtureDependencies(),
+        home: BrandPage(brand: topUp('sg-palworld')),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('لصق'));
+    await tester.pumpAndSettle();
+    // Only the link, cut out of the message round it, and nothing to type.
+    final field = tester.widget<TextField>(find.byType(TextField));
+    expect(field.controller!.text, 'https://s.team/p/gkcp-mvn/CWQDTMJF');
+  });
+
+  testWidgets('a paste the browser refuses says so instead of doing nothing', (
+    tester,
+  ) async {
+    // Seen from Safari on cards.dftr.ly: Clipboard.getData threw
+    // PlatformException(paste_fail) and the tap went uncaught.
+    await phone(tester);
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async => call.method == 'Clipboard.getData'
+          ? throw PlatformException(code: 'paste_fail')
+          : null,
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+    await tester.pumpWidget(
+      CardsApp(
+        dependencies: fixtureDependencies(),
+        home: BrandPage(brand: topUp('sg-palworld')),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('لصق'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(
+      find.text('تعذّر اللصق من الحافظة. الصق داخل الخانة مباشرة.'),
       findsOneWidget,
     );
   });

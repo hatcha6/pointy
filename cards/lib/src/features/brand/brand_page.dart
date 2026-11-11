@@ -175,8 +175,9 @@ class _BrandPageState extends State<BrandPage> {
   }
 
   List<CardItem> get _items {
+    final everyCountry = _countries.length < 2;
     return widget.brand.items
-        .where((item) => _countries.length < 2 || item.country == _country)
+        .where((item) => everyCountry || item.country == _country)
         .toList()
       ..sort((a, b) => a.rank.compareTo(b.rank));
   }
@@ -184,27 +185,35 @@ class _BrandPageState extends State<BrandPage> {
   CardItem? _defaultItem() =>
       _items.where((item) => item.available).firstOrNull;
 
+  /// A purchase on its way to checkout: a second tap opens no second sheet.
+  bool _buying = false;
+
   Future<void> _buy() async {
     final item = _item;
-    if (item == null || !item.available || widget.brand.webOnly) {
+    if (_buying || item == null || !item.available || widget.brand.webOnly) {
       return;
     }
     if (!_accountReady()) {
       return;
     }
     Haptics.tap();
-    if (!await ensureSignedIn(context) || !mounted) {
-      return;
+    _buying = true;
+    try {
+      if (!await ensureSignedIn(context) || !mounted) {
+        return;
+      }
+      await showCheckout(
+        context,
+        brand: widget.brand,
+        item: item,
+        quantity: _account == null ? _quantity : 1,
+        heroTag: widget.heroTag,
+        account: _account,
+        onEditAccount: _editAccount,
+      );
+    } finally {
+      _buying = false;
     }
-    await showCheckout(
-      context,
-      brand: widget.brand,
-      item: item,
-      quantity: _account == null ? _quantity : 1,
-      heroTag: widget.heroTag,
-      account: _account,
-      onEditAccount: _editAccount,
-    );
   }
 
   @override
@@ -214,12 +223,11 @@ class _BrandPageState extends State<BrandPage> {
     final brand = widget.brand;
     final countries = _countries;
     final item = _item;
-    final media = MediaQuery.of(context);
-    final cardWidth = BrandCardStage.cardWidthFor(media);
+    final cardWidth = BrandCardStage.cardWidthFor(context);
     final cardHeight = cardWidth / kCardAspect;
     // The light reaches a little past the card before it has faded out.
     final lightHeight =
-        media.padding.top +
+        MediaQuery.paddingOf(context).top +
         kToolbarHeight +
         BrandCardStage.padding.vertical +
         cardHeight +
@@ -284,6 +292,9 @@ class _BrandPageState extends State<BrandPage> {
                 onTap: () => setState(() {
                   _country = code;
                   _item = _defaultItem();
+                  // The account is looked up for the card now chosen, not
+                  // for the one of the country just left.
+                  _account?.itemKey = _item?.key ?? '';
                 }),
               ),
           ],
@@ -352,7 +363,7 @@ class _BrandPageState extends State<BrandPage> {
       ],
     ];
     final buyBar = _buyBar();
-    if (CardsLayout.sideBySide(media.size)) {
+    if (CardsLayout.sideBySide(MediaQuery.sizeOf(context))) {
       return _sideBySide(context, details: details);
     }
     return SideBack(
@@ -502,11 +513,11 @@ class _BrandPageState extends State<BrandPage> {
   /// side in the brand's light, the details and the buy bar beside it, both
   /// clear of the system's side column.
   Widget _sideBySide(BuildContext context, {required List<Widget> details}) {
-    final media = MediaQuery.of(context);
-    final padding = media.padding;
+    final media = (size: MediaQuery.sizeOf(context));
+    final padding = MediaQuery.paddingOf(context);
     final pane = (media.size.width - padding.horizontal) / 2;
     final cardWidth = math.min(
-      BrandCardStage.cardWidthFor(media),
+      BrandCardStage.cardWidthFor(context),
       pane - CardsSpace.gutter * 2,
     );
     final rtl = Directionality.of(context) == TextDirection.rtl;

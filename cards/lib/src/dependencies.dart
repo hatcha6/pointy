@@ -18,6 +18,7 @@ import 'data/vault/card_vault.dart';
 import 'data/vault/code_vault.dart';
 import 'features/card_payment/moamalat_client.dart';
 import 'features/links/link_inbox.dart';
+import 'features/my_cards/my_cards_memory.dart';
 import 'shared/art_preloader.dart';
 
 /// Everything the screens use, built once at launch. Screens get it from
@@ -57,6 +58,12 @@ class CardsDependencies {
              isSignedIn: () => auth.isSignedIn,
            ) {
     _esimCompatibility = esimCompatibility;
+    // What was read for one customer is never shown to the next.
+    auth.session.addListener(() {
+      orders.forget();
+      this.esim.forget();
+      myCards.forget();
+    });
     // A link's campaign code is taken as the link arrives; a followed
     // campaign's own page opens after it.
     this.links.onOpen ??= this.attribution.openedLink;
@@ -66,6 +73,9 @@ class CardsDependencies {
 
   final EsimRepository esim;
   EsimCompatibility? _esimCompatibility;
+
+  /// «كروتي» as it last stood, shown at once on the next visit.
+  final MyCardsMemory myCards = MyCardsMemory();
 
   /// A phone other than this one: tests and the preview harness.
   void overrideEsimCompatibility(EsimCompatibility compatibility) =>

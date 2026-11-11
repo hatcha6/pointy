@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -127,17 +128,44 @@ class AuthRepository {
         );
       });
 
-  /// Signs this device out. Forgotten locally even when the relay cannot be
-  /// reached: the customer asked to be signed out.
+  /// Signs this device out, at once: the session is forgotten here first,
+  /// and the relay is told on the way out. The customer asked to be signed
+  /// out, and a slow or missing connection must not keep them waiting.
   Future<void> signOut() async {
     // Before the session goes, so the event is still the customer's.
     analytics.signedOut();
-    try {
-      await api.post('/v1/customers/auth/logout', signedIn: true);
-    } on RelayApiException {
-      // Already ended, or offline: the local session goes either way.
-    }
+    final leaving = await sessions.read();
     await _forget();
+    if (leaving == null) {
+      return;
+    }
+    unawaited(_endOnRelay(leaving));
+  }
+
+  /// Ends [leaving] on the relay too, so it leaves the customer's list of
+  /// devices. Its access token may have run out: it is renewed once, by
+  /// hand, since the stored session is already gone. Already ended, or
+  /// offline: the relay's copy runs out on its own.
+  Future<void> _endOnRelay(CustomerSession leaving) async {
+    const logout = '/v1/customers/auth/logout';
+    try {
+      await api.post(logout, bearer: leaving.accessToken);
+    } on RelayApiException catch (error) {
+      if (error.code != 'token_expired') {
+        return;
+      }
+      try {
+        final renewed = await api.post(
+          '/v1/customers/auth/refresh',
+          body: {'refresh_token': leaving.refreshToken},
+        );
+        if (renewed['access_token'] case final String token) {
+          await api.post(logout, bearer: token);
+        }
+      } on RelayApiException {
+        // Nothing more to try.
+      }
+    }
   }
 
   /// Deletes the account (App Store guideline 5.1.1(v)).

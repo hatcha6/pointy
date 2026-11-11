@@ -823,6 +823,10 @@ class AppLocalizationsFr extends AppLocalizations {
       'Rien n’a encore été débité. Terminez le paiement par carte, ou annulez la commande.';
 
   @override
+  String get payNotFinishedWalletBody =>
+      'Rien n’a encore été débité. Le code du portefeuille n’est demandé qu’à l’achat : annulez cette commande, puis achetez à nouveau.';
+
+  @override
   String get finishPaying => 'Terminer le paiement';
 
   @override
@@ -1120,6 +1124,10 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get pasteAction => 'Coller';
+
+  @override
+  String get pasteFailed =>
+      'Impossible de coller depuis le presse-papiers. Collez directement dans le champ.';
 
   @override
   String get chooseOption => 'Choisir';
@@ -1752,6 +1760,11 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String esimShareTextNoCode(String destination, String plan, String link) {
+    return 'شريحة إنترنت (eSIM) لـ $destination: $plan\nافتح هذا الرابط من الهاتف الذي ستعمل عليه:\n$link';
+  }
+
+  @override
   String esimPlanDays(int days) {
     String _temp0 = intl.Intl.pluralLogic(
       days,
@@ -1998,4 +2011,71 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get reportWhatsApp => 'Ou écrivez-nous sur WhatsApp';
+
+  @override
+  String get esimPerkInstant => 'Activation immédiate';
+
+  @override
+  String get esimPerkNoPlastic => 'Sans carte SIM physique';
+
+  @override
+  String get esimPerkTopUp => 'Recharge dans l\'appli';
+
+  @override
+  String get esimPlansTitle => 'Choisissez votre forfait';
+
+  @override
+  String esimPromoOff(int percent) {
+    return '-$percent %';
+  }
+
+  @override
+  String get esimOffersTitle => 'Offres du moment';
+
+  @override
+  String get esimFilterOffers => 'Offres';
+
+  @override
+  String get esimFilterDays => 'Durée du séjour';
+
+  @override
+  String esimFilterDaysOption(int days) {
+    return '$days jours et plus';
+  }
+
+  @override
+  String get esimFilterData => 'Données';
+
+  @override
+  String get esimFilterAny => 'Tous';
+
+  @override
+  String get esimSortTitle => 'Trier';
+
+  @override
+  String get esimSortName => 'De A à Z';
+
+  @override
+  String get esimSortCheapest => 'Moins cher d\'abord';
+
+  @override
+  String get esimFilterClear => 'Effacer';
+
+  @override
+  String esimResultsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count destinations',
+      one: '1 destination',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get esimFilterNone =>
+      'Aucune destination ne correspond. Essayez un séjour plus court ou moins de données.';
+
+  @override
+  String get esimShareDestination => 'Partager';
 }

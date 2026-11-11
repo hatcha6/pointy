@@ -43,17 +43,17 @@ class RelayApi {
   final SessionStore sessions;
   final http.Client _client;
   final Duration timeout;
-  Future<bool>? _refreshing;
+  Future<bool?>? _refreshing;
 
   /// Called when the session ended under the app (refresh refused): the app
   /// goes back to signed-out.
   void Function()? onSignedOut;
 
+  /// The relay's own path, without a closing slash.
+  late final String _root = baseUrl.path.replaceAll(RegExp(r'/$'), '');
+
   Uri resolve(String path, [Map<String, String>? query]) {
-    return baseUrl.replace(
-      path: '${baseUrl.path.replaceAll(RegExp(r'/$'), '')}$path',
-      queryParameters: query,
-    );
+    return baseUrl.replace(path: '$_root$path', queryParameters: query);
   }
 
   /// [withSession] sends the session when there is one, for a public route
@@ -73,17 +73,21 @@ class RelayApi {
     headers: headers,
   );
 
+  /// [bearer] sends that access token as it is, whatever session is stored
+  /// (or none): the sign-out that follows a session already forgotten here.
   Future<Map<String, dynamic>> post(
     String path, {
     Object? body,
     bool signedIn = false,
     bool withSession = false,
+    String? bearer,
   }) => _send(
     'POST',
     path,
     body: body ?? const {},
     signedIn: signedIn,
     withSession: withSession,
+    headers: bearer == null ? null : {'Authorization': 'Bearer $bearer'},
   );
 
   Future<Map<String, dynamic>> put(
@@ -160,7 +164,13 @@ class RelayApi {
         code == 'token_expired') {
       // A public route asked once more without a session that could not be
       // renewed: it was signed out, and is answered as anyone.
-      if (await _refresh() || (withSession && !signedIn)) {
+      final renewed = await _refresh();
+      if (renewed == null) {
+        // The relay could not be reached to renew the session: that is a
+        // connection problem to try again, not a customer to sign in again.
+        throw const RelayApiException(status: 0, code: 'network');
+      }
+      if (renewed || (withSession && !signedIn)) {
         return _send(
           method,
           path,
@@ -182,12 +192,13 @@ class RelayApi {
   }
 
   /// One refresh at a time: every call that hit an expired token waits on the
-  /// same one.
-  Future<bool> _refresh() {
+  /// same one. True when renewed, false when the session is over, null when
+  /// the relay could not be asked.
+  Future<bool?> _refresh() {
     return _refreshing ??= _doRefresh().whenComplete(() => _refreshing = null);
   }
 
-  Future<bool> _doRefresh() async {
+  Future<bool?> _doRefresh() async {
     final session = await sessions.read();
     if (session == null) {
       return false;
@@ -203,8 +214,12 @@ class RelayApi {
       if (error.status == 401) {
         await sessions.clear();
         onSignedOut?.call();
+        return false;
       }
-      return false;
+      // Unreachable, or busy (a 5xx): the session may well still be good.
+      return error.isNetwork || error.status >= 500 || error.status == 429
+          ? null
+          : false;
     }
   }
 

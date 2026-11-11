@@ -13,6 +13,7 @@ import 'features/shell/get_app_banner.dart';
 import 'features/splash/splash_handoff.dart';
 import 'features/splash/splash_overlay.dart';
 import 'shared/cards_scope.dart';
+import 'shared/page_title.dart';
 import 'shared/web_edges.dart';
 
 /// «دفتر كروت»: Arabic and right to left unless the customer picks English
@@ -42,6 +43,10 @@ class CardsApp extends StatelessWidget {
   /// controls. None in the app.
   final TransitionBuilder? overlay;
 
+  /// The web build's tab title: the one each page is served with, kept
+  /// while that page is in front.
+  static final PageTitles _titles = PageTitles();
+
   @override
   Widget build(BuildContext context) {
     final settings = dependencies.settings;
@@ -52,10 +57,10 @@ class CardsApp extends StatelessWidget {
         child: _Home(
           home: home,
           child: ListenableBuilder(
-            listenable: settings,
+            listenable: Listenable.merge([settings, _titles]),
             builder: (context, _) => MaterialApp(
               onGenerateTitle: (context) =>
-                  AppLocalizations.of(context).appTitle,
+                  _titles.title(AppLocalizations.of(context).appTitle),
               debugShowCheckedModeBanner: false,
               scaffoldMessengerKey: dependencies.push.messenger,
               locale: settings.locale,
@@ -70,7 +75,7 @@ class CardsApp extends StatelessWidget {
               darkTheme: CardsTheme.dark(),
               themeMode: themeMode ?? settings.themeMode,
               scrollBehavior: const _CardsScrollBehavior(),
-              navigatorObservers: [?dependencies.analytics.observer],
+              navigatorObservers: [?dependencies.analytics.observer, _titles],
               builder: (context, child) {
                 var app = child!;
                 if (overlay != null) {

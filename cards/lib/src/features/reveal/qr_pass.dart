@@ -182,8 +182,11 @@ class _QrPassPageState extends State<_QrPassPage>
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final media = MediaQuery.of(context);
-    final still = media.disableAnimations;
+    final media = (
+      size: MediaQuery.sizeOf(context),
+      padding: MediaQuery.paddingOf(context),
+    );
+    final still = MediaQuery.disableAnimationsOf(context);
     final size = _target(media.size, media.padding);
     final centre = media.padding.topLeft.translate(
       (media.size.width - media.padding.horizontal) / 2,

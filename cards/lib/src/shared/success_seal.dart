@@ -13,7 +13,9 @@ class SuccessSeal extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ScaleTransition(
-      scale: CurvedAnimation(parent: animation, curve: CardsMotion.spring),
+      // Driven, not wrapped: a wrapper made in `build` would go on listening
+      // to [animation] after every rebuild.
+      scale: animation.drive(CurveTween(curve: CardsMotion.spring)),
       child: Center(
         child: Container(
           width: 64,

@@ -57,8 +57,10 @@ Future<void> checkoutEsimPlan(
       faceValue: '',
       faceCurrency: '',
       price: plan.price,
-      regularPrice: plan.price,
-      promoBadge: '',
+      regularPrice: plan.regularPrice ?? plan.price,
+      promoBadge: plan.promo == null
+          ? ''
+          : esimPromoLabel(AppLocalizations.of(context), plan.promo!),
       available: true,
       rank: 0,
     ),

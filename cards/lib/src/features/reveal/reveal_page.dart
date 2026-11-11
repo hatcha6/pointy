@@ -113,35 +113,63 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
   }
 
   Future<void> _start() async {
+    if (!mounted) {
+      return;
+    }
     final dependencies = CardsScope.of(context);
     // The first card is in hand: now a notification is worth something.
     if (!widget.fromHistory) {
       unawaited(dependencies.push.offer());
     }
     _locked = widget.fromHistory && !dependencies.lock.isUnlocked;
-    if (_codes.isEmpty) {
-      _codes = await dependencies.vault.codes(widget.order.id) ?? const [];
-    }
     var latest = widget.order;
-    if (_codes.isEmpty) {
-      final result = await dependencies.orders.order(widget.order.id);
-      if (result case Ok(:final value)) {
-        latest = value;
-        _codes = value.codes;
-        await dependencies.vault.keep(value.id, value.codes);
+    var unread = false;
+    try {
+      if (_codes.isEmpty) {
+        _codes = await dependencies.vault.codes(widget.order.id) ?? const [];
       }
+      if (_codes.isEmpty) {
+        final result = await dependencies.orders.order(widget.order.id);
+        switch (result) {
+          case Ok(:final value):
+            latest = value;
+            _codes = value.codes;
+            await dependencies.vault.keep(value.id, value.codes);
+          case Error():
+            unread = true;
+        }
+      }
+      _used = await dependencies.vault.usedCodes();
+    } on Object {
+      // A keychain that cannot be read or written costs the saved copy and
+      // the «used» marks, never the page: the codes in hand are shown.
     }
-    _used = await dependencies.vault.usedCodes();
     if (!mounted) {
       return;
     }
-    setState(() => _loading = false);
+    setState(() {
+      _loading = false;
+      _unread = unread && _codes.isEmpty;
+    });
     if (!_locked) {
       _reveal();
     }
-    if (_codes.isEmpty && _codesComing(latest)) {
+    if (_codes.isEmpty && !_unread && _codesComing(latest)) {
       _followCodes(dependencies);
     }
+  }
+
+  /// The codes are neither on this phone nor could the relay be asked for
+  /// them (no connection): the page says so and offers to try again, rather
+  /// than a wheel that turns for good.
+  bool _unread = false;
+
+  void _retry() {
+    setState(() {
+      _loading = true;
+      _unread = false;
+    });
+    _start();
   }
 
   static bool _codesComing(CardOrder order) =>
@@ -184,7 +212,7 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
   }
 
   void _reveal() {
-    if (widget.fromHistory || MediaQuery.of(context).disableAnimations) {
+    if (widget.fromHistory || MediaQuery.disableAnimationsOf(context)) {
       _flip.value = 1;
       _seal.value = 1;
       return;
@@ -207,7 +235,7 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
         !mounted) {
       return;
     }
-    if (MediaQuery.of(context).disableAnimations) {
+    if (MediaQuery.disableAnimationsOf(context)) {
       setState(() => _locked = false);
       _flip.value = 1;
       return;
@@ -227,9 +255,14 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
 
   Future<void> _toggleUsed(String code) async {
     final used = !_used.contains(code);
-    await CardsScope.of(context).vault.setUsed(code, used);
+    // The mark shows at once; the keychain follows.
     Haptics.select();
     setState(() => used ? _used.add(code) : _used.remove(code));
+    try {
+      await CardsScope.of(context).vault.setUsed(code, used);
+    } on Object {
+      // Kept for this visit only.
+    }
   }
 
   Future<void> _showQr(
@@ -427,6 +460,9 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
     if (_locked) {
       return _LockedPanel(key: const ValueKey('locked'), onUnlock: _unlock);
     }
+    if (current == null && _unread) {
+      return _UnreadCodes(key: const ValueKey('unread'), onRetry: _retry);
+    }
     if (current == null) {
       return const _PendingCodes(key: ValueKey('pending'));
     }
@@ -595,14 +631,14 @@ class _FlipCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final curved = CurvedAnimation(
-      parent: animation,
-      curve: Curves.easeInOutBack,
-    );
     return AnimatedBuilder(
-      animation: curved,
+      animation: animation,
       builder: (context, _) {
-        final angle = curved.value.clamp(0.0, 1.0) * math.pi;
+        // The curve is applied here: an animation object made in `build`
+        // would listen to the turn for as long as the page lives, one more
+        // at every rebuild.
+        final turned = Curves.easeInOutBack.transform(animation.value);
+        final angle = turned.clamp(0.0, 1.0) * math.pi;
         final showBack = angle > math.pi / 2 && code != null;
         return Transform(
           alignment: Alignment.center,
@@ -666,10 +702,22 @@ class _ActionRow extends StatelessWidget {
 
   Future<void> _gift(BuildContext context) async {
     final text = AppLocalizations.of(context).giftMessage(name, code.code);
-    await launchUrl(
-      Uri.parse('https://wa.me/?text=${Uri.encodeComponent(text)}'),
-      mode: LaunchMode.externalApplication,
-    );
+    try {
+      await launchUrl(
+        Uri.parse('https://wa.me/?text=${Uri.encodeComponent(text)}'),
+        mode: LaunchMode.externalApplication,
+      );
+    } on PlatformException {
+      // Nothing on this phone opens the link: the message is on the
+      // clipboard instead, to paste wherever the gift is sent from.
+      if (context.mounted) {
+        await _copyWithNotice(
+          context,
+          text,
+          AppLocalizations.of(context).copiedNotice,
+        );
+      }
+    }
   }
 
   /// Calls the code in. A phone that cannot (an iPad, a browser) gets the
@@ -695,7 +743,11 @@ class _ActionRow extends StatelessWidget {
       code.code,
       AppLocalizations.of(context).redeemCopiedNotice,
     );
-    await launchUrl(Uri.parse(link), mode: LaunchMode.externalApplication);
+    try {
+      await launchUrl(Uri.parse(link), mode: LaunchMode.externalApplication);
+    } on PlatformException {
+      // No browser to open it: the code is on the clipboard all the same.
+    }
   }
 
   @override
@@ -891,6 +943,38 @@ class _LockedPanel extends StatelessWidget {
           icon: const Icon(Icons.fingerprint_rounded),
           label: Text(l10n.unlockAction),
         ),
+      ],
+    );
+  }
+}
+
+/// The codes could not be read: no connection, and no copy on this phone.
+class _UnreadCodes extends StatelessWidget {
+  const _UnreadCodes({super.key, required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    return Column(
+      children: [
+        Icon(
+          Icons.cloud_off_rounded,
+          size: 36,
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+        const SizedBox(height: CardsSpace.md),
+        Text(
+          l10n.errorNetwork,
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: CardsSpace.md),
+        FilledButton.tonal(onPressed: onRetry, child: Text(l10n.retryAction)),
       ],
     );
   }

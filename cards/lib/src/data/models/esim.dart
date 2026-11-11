@@ -14,6 +14,51 @@ enum EsimKind {
   };
 }
 
+/// A promotion running on a destination's plans.
+class EsimPromo {
+  const EsimPromo({required this.badge, required this.percent, this.endsAt});
+
+  /// Null when the relay sent none.
+  static EsimPromo? read(Map<String, dynamic> json, String key) {
+    final promo = readMap(json, key);
+    if (promo.isEmpty) {
+      return null;
+    }
+    return EsimPromo(
+      badge: readString(promo, 'badge'),
+      percent: readInt(promo, 'percent'),
+      endsAt: readTime(promo, 'ends_at'),
+    );
+  }
+
+  /// The operator's own words for it; empty when there are none.
+  final String badge;
+  final int percent;
+  final DateTime? endsAt;
+}
+
+/// One of a destination's plans, as the shelf needs it to filter by a trip.
+class EsimPlanBrief {
+  const EsimPlanBrief({
+    required this.mb,
+    required this.days,
+    required this.price,
+    required this.unlimited,
+  });
+
+  factory EsimPlanBrief.fromJson(Map<String, dynamic> json) => EsimPlanBrief(
+    mb: readInt(json, 'mb'),
+    days: readInt(json, 'days'),
+    price: Money.parse(readString(json, 'price')),
+    unlimited: readBool(json, 'unlimited'),
+  );
+
+  final int mb;
+  final int days;
+  final Money price;
+  final bool unlimited;
+}
+
 /// One row of the eSIM shelf.
 class EsimDestinationRow {
   const EsimDestinationRow({
@@ -25,10 +70,26 @@ class EsimDestinationRow {
     required this.fromPrice,
     required this.plans,
     required this.countries,
+    this.regularFromPrice,
+    this.promo,
+    this.planList = const [],
+    this.covers = const [],
   });
 
   factory EsimDestinationRow.fromJson(Map<String, dynamic> json) =>
       EsimDestinationRow(
+        regularFromPrice: json['regular_from_price'] == null
+            ? null
+            : Money.parse(readString(json, 'regular_from_price')),
+        promo: EsimPromo.read(json, 'promo'),
+        planList: [
+          for (final p in readList(json, 'plan_list'))
+            EsimPlanBrief.fromJson(p),
+        ],
+        covers: [
+          for (final c in (json['covers'] as List? ?? const []))
+            if (c is String) c,
+        ],
         key: readString(json, 'key'),
         kind: EsimKind.parse(readString(json, 'kind')),
         country: readString(json, 'country'),
@@ -47,6 +108,16 @@ class EsimDestinationRow {
   final Money fromPrice;
   final int plans;
   final int countries;
+
+  /// What the cheapest plan costs outside its promotion; null without one.
+  final Money? regularFromPrice;
+  final EsimPromo? promo;
+
+  /// Every plan's size, days and price; empty from a relay that sends none.
+  final List<EsimPlanBrief> planList;
+
+  /// The countries a region reaches, by name: a search finds it by them.
+  final List<String> covers;
 }
 
 /// The eSIM shelf as the relay shows it. [available] false: the app shows no
@@ -119,6 +190,8 @@ class EsimPlan {
     required this.topUpGraceDays,
     required this.otherInfo,
     required this.price,
+    this.regularPrice,
+    this.promo,
   });
 
   factory EsimPlan.fromJson(Map<String, dynamic> json) => EsimPlan(
@@ -138,6 +211,10 @@ class EsimPlan {
     topUpGraceDays: readInt(json, 'topup_grace_days'),
     otherInfo: readString(json, 'other_info'),
     price: Money.parse(readString(json, 'price')),
+    regularPrice: json['regular_price'] == null
+        ? null
+        : Money.parse(readString(json, 'regular_price')),
+    promo: EsimPromo.read(json, 'promo'),
   );
 
   /// The order item that buys it.
@@ -163,6 +240,13 @@ class EsimPlan {
   final int topUpGraceDays;
   final String otherInfo;
   final Money price;
+
+  /// The price outside a running promotion; null without one.
+  final Money? regularPrice;
+  final EsimPromo? promo;
+
+  /// The plan's own id, as a link names it: the order item without its kind.
+  String get id => item.startsWith('esim:') ? item.substring(5) : item;
 
   bool get startsOnFirstUse => activationPolicy.contains('first');
 }

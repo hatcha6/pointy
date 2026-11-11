@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../data/models/esim.dart';
 import '../../core/result.dart';
 import '../../shared/cards_scope.dart';
 import '../../shared/side_back.dart';
@@ -124,11 +125,17 @@ class _CardsShellState extends State<CardsShell> {
     super.dispose();
   }
 
+  /// Counts the visits to «حسابي»: each one reads the credit again.
+  int _accountVisit = 0;
+
   void _go(int tab) {
     if (tab != _tab) {
       _screen(tab);
       if (tab == CardsTab.myCards.index) {
         _myCardsVisit++;
+      }
+      if (tab == CardsTab.account.index) {
+        _accountVisit++;
       }
     }
     setState(() => _tab = tab);
@@ -212,9 +219,19 @@ class _CardsShellState extends State<CardsShell> {
       case EsimShelfLink(:final destination):
         _go(CardsTab.shelf.index);
         if (destination == null) {
-          EsimStorePage.open(context);
+          EsimStorePage.open(
+            context,
+            filter: EsimShelfFilter(
+              query: link.query,
+              kind: EsimKind.parse(link.kind),
+              minDays: link.days,
+              minMb: link.gb * 1024,
+              offersOnly: link.offers,
+              sort: link.cheapest ? EsimSort.cheapest : EsimSort.name,
+            ),
+          );
         } else {
-          EsimDestinationPage.open(context, destination);
+          EsimDestinationPage.open(context, destination, plan: link.plan);
         }
       case EsimLink(:final iccid):
         _go(CardsTab.myCards.index);
@@ -311,7 +328,7 @@ class _CardsShellState extends State<CardsShell> {
         _tab == 1
             ? MyCardsPage(key: ValueKey(_myCardsVisit), onBrowse: () => _go(0))
             : const SizedBox.shrink(),
-        const AccountPage(),
+        AccountPage(visit: _accountVisit),
       ],
     );
     if (sidebarFits(context)) {

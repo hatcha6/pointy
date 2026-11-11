@@ -67,7 +67,13 @@ class ShelfModel extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    final asked = auth.session.value;
     final results = await Future.wait([orders.credit(), orders.orders()]);
+    // Signed out, or someone else signed in, while the relay answered: this
+    // answer is not theirs.
+    if (!identical(auth.session.value, asked)) {
+      return;
+    }
     if (results[0] case Ok(:final value)) {
       credit = (value as CreditStatement).balance;
     }
@@ -114,28 +120,74 @@ class ShelfModel extends ChangeNotifier {
   List<CardBrand> get brands =>
       find(query, category: searching ? null : category);
 
+  /// The shelf [_ordered], [_searchable] and [_found] were worked out for:
+  /// a new shelf from the relay starts them over.
+  CardCatalog? _indexed;
+
+  /// Every brand, the featured first, then by the catalog's own order.
+  List<CardBrand> _ordered = const [];
+
+  /// What a search reads of each brand in [_ordered], folded once: its name,
+  /// its other names, its category's name and its cards' labels. Folding
+  /// them again at every letter typed is what made typing stutter on a
+  /// shelf of several hundred brands.
+  List<String> _searchable = const [];
+
+  /// The last few answers, by what was asked: the page asks for the same
+  /// list every time it rebuilds.
+  final Map<(String, String?), List<CardBrand>> _found = {};
+
+  void _index() {
+    if (identical(_indexed, shelf)) {
+      return;
+    }
+    _indexed = shelf;
+    _found.clear();
+    final names = {for (final c in shelf.categories) c.key: c.name};
+    // Brands of one rank keep the catalog's order among themselves, in
+    // every category and every search alike.
+    final place = {
+      for (final (index, brand) in shelf.brands.indexed) brand: index,
+    };
+    _ordered = [...shelf.brands]
+      ..sort((a, b) {
+        if (a.featured != b.featured) {
+          return a.featured ? -1 : 1;
+        }
+        final byRank = a.rank.compareTo(b.rank);
+        return byRank != 0 ? byRank : place[a]!.compareTo(place[b]!);
+      });
+    _searchable = [
+      for (final brand in _ordered)
+        searchText([
+          brand.name,
+          ...brand.aliases,
+          names[brand.category] ?? '',
+          for (final item in brand.items) item.label,
+        ]),
+    ];
+  }
+
   /// The brands matching [text] (all when it is empty), in [category] when
   /// one is given, the featured first, then by the catalog's own order.
+  /// The list is shared between callers: read it, never change it.
   List<CardBrand> find(String text, {String? category}) {
-    final names = {for (final c in shelf.categories) c.key: c.name};
-    final list = shelf.brands.where((brand) {
-      if (category != null && brand.category != category) {
-        return false;
-      }
-      return matchesSearch(text, [
-        brand.name,
-        ...brand.aliases,
-        names[brand.category] ?? '',
-        for (final item in brand.items) item.label,
-      ]);
-    }).toList();
-    list.sort((a, b) {
-      if (a.featured != b.featured) {
-        return a.featured ? -1 : 1;
-      }
-      return a.rank.compareTo(b.rank);
-    });
-    return list;
+    _index();
+    final words = searchWords(text);
+    final asked = (words.join(' '), category);
+    if (_found[asked] case final known?) {
+      return known;
+    }
+    final list = <CardBrand>[
+      for (var i = 0; i < _ordered.length; i++)
+        if ((category == null || _ordered[i].category == category) &&
+            (words.isEmpty || matchesWords(words, _searchable[i])))
+          _ordered[i],
+    ];
+    if (_found.length >= 8) {
+      _found.remove(_found.keys.first);
+    }
+    return _found[asked] = List.unmodifiable(list);
   }
 
   /// Up to six cards bought before that are still on the shelf, newest first.
