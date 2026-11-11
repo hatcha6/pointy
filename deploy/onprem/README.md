@@ -51,6 +51,31 @@ curl http://127.0.0.1:8000/readyz/
 `/healthz/` proves the web process is alive. `/readyz/` also verifies database
 and Redis access.
 
+## Start Time
+
+What a shop waits for after power-on is Docker starting every container at once,
+so that is the path kept short:
+
+- **Every role asks Postgres directly before it asks through PgBouncer**
+  (`backend/docker/wait_for_services.py`). A client that reaches the pooler while
+  Postgres is still starting makes its one login attempt fail, after which
+  PgBouncer refuses to try again for `server_login_retry` — 15 s by default, for
+  everyone. The compose file also sets that to 1 s, which applies the next time
+  the infrastructure is recreated (`install.sh`, `update.sh --restart`); the
+  backend-side wait needs no restart and arrives with any update.
+- **A boot skips `migrate` and `collectstatic` when this same image already ran
+  them** on this same database and static volume (`backend/docker/boot_stamp.py`).
+  The first two boots of a release still run both — the second is what runs the
+  live-update catch-ups after the flip — and a standby always does. A restored
+  backup, a hand-run migrate or a different image all bring the full boot back
+  by themselves. `POINTY_FAST_BOOT=0` in `.env` turns the skipping off.
+- Postgres and Redis are probed four times a second until their first healthy
+  answer, so `compose up` is not held back by a health-check tick.
+
+`docker compose logs backend | grep -E 'boot-phase|\[boot\]'` shows what a boot
+spent and what it skipped. Measured on one host (reboot path, tills answering
+through the edge): 17–19 s before, about 2 s after; `compose up`: 5.1 s to 2.2 s.
+
 ## Processes And Memory
 
 Most of the stack's memory is Django processes, so the layout keeps them few
@@ -233,6 +258,30 @@ price. Then `--apply`. It is safe while the shop trades and safe to run twice;
 `--include price_differs` also takes aliases whose price had drifted from their
 product's, which then ring at the product's price. Sales, profit and shrinkage do
 not move. Frozen Windows 7/8 tills keep scanning the old codes without an update.
+
+### What An Update Cost
+
+Every apply — `update.sh`, the update agent, and a plain `install.sh` — appends
+one JSON line to `update-history.jsonl` next to the scripts: the versions, live
+or restart, how it ended (`succeeded`, `aborted` before any traffic moved,
+`rolled_back`, `failed`), the seconds each step took, and the **measured**
+downtime. While an apply runs, a probe asks the LAN front door for `/readyz/`
+once a second — the question a till asks — and the seconds it was refused are
+the downtime; a live update should record `0`. An install has no probe and
+records none, which is not the same as zero.
+
+Two readers work through that file, each with its own cursor, so neither loses
+a run the other already has:
+
+- the backend's tracking module, as `deployment.update` / `deployment.install`
+  analytics events (`manage.py record_deployment_runs`), in the shop's exports;
+- the relay, sent by the update agent on its next pass, shown on the operator
+  console's updates page («كم كلّف كل تحديث») per shop and run by run.
+
+It is all best-effort: nothing in it can fail an update. A shop starts
+reporting from the update AFTER the one that installs this, because an update
+is driven by the engine that was already installed. `POINTY_UPDATE_PROBE=0`
+turns the probe off.
 
 ## Backup Notes
 

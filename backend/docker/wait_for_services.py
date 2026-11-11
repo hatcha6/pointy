@@ -8,6 +8,11 @@ from redis import Redis
 
 
 DEFAULT_TIMEOUT_SECONDS = 60
+# After a reboot Docker starts every container at once, so the database is
+# usually a second or two from ready when this first asks. Asking again after a
+# whole second made the answer up to a second late; start short and back off to
+# the old pace, so a long outage is polled no harder than before.
+RETRY_DELAYS_SECONDS = (0.1, 0.2, 0.3, 0.5, 1.0)
 
 
 def main():
@@ -16,6 +21,20 @@ def main():
     )
     # Postgres is the system of record: without it nothing can serve and the
     # migration step cannot run, so refusing to start is the honest outcome.
+    #
+    # Ask Postgres itself before asking through the pooler. After a reboot
+    # Docker starts every container at once, and a client that reaches
+    # PgBouncer while Postgres is still starting makes PgBouncer's one login
+    # attempt fail — after which it refuses to try again for
+    # `server_login_retry` (15 s by default), for every client, with Postgres
+    # long since up. That was most of a shop's wait after power-on. Every role
+    # comes through here, so nobody knocks on the pooler early.
+    wait_for_postgres(
+        os.environ.get("POINTY_DATABASE_DIRECT_URL", "").strip(),
+        deadline,
+        name="postgres (direct)",
+        required=False,
+    )
     wait_for_postgres(os.environ.get("DATABASE_URL", ""), deadline)
     # Redis is not. Every path that reads it is fail-open by design (see
     # apps.core.caching / sessions / throttling) and every broker publish is
@@ -30,13 +49,13 @@ def main():
     return 0
 
 
-def wait_for_postgres(database_url, deadline):
+def wait_for_postgres(database_url, deadline, *, name="postgres", required=True):
     if not database_url or database_url.startswith("sqlite:"):
         return
     parsed = urlparse(database_url)
     if parsed.scheme not in {"postgres", "postgresql"}:
         return
-    wait_until("postgres", deadline, lambda: _postgres_ready(database_url))
+    wait_until(name, deadline, lambda: _postgres_ready(database_url), required=required)
 
 
 def wait_for_redis(redis_url, deadline):
@@ -47,14 +66,20 @@ def wait_for_redis(redis_url, deadline):
 
 def wait_until(name, deadline, probe, *, required=True):
     last_error = None
-    while time.monotonic() < deadline:
+    attempt = 0
+    # Always asks at least once: an optional wait that used up the whole budget
+    # must not make the next dependency fail without ever being tried.
+    while True:
         try:
             probe()
             print(f"{name} is ready", flush=True)
             return
         except Exception as exc:
             last_error = exc
-            time.sleep(1)
+        if time.monotonic() >= deadline:
+            break
+        time.sleep(RETRY_DELAYS_SECONDS[min(attempt, len(RETRY_DELAYS_SECONDS) - 1)])
+        attempt += 1
     if required:
         print(f"Timed out waiting for {name}: {last_error}", file=sys.stderr)
         raise SystemExit(75)

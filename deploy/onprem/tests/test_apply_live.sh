@@ -237,7 +237,7 @@ test_standby_is_a_one_off_container_that_compose_will_not_sweep() {
   pu_start_standby >/dev/null 2>&1
   # `run -d --no-deps --name`: no published port (so it cannot collide with the
   # live container) and the one-off label (so `up --remove-orphans` leaves it).
-  assert_called docker "$COMPOSE run -d --no-deps --name pointy-backend-standby backend"
+  assert_called docker "$COMPOSE run -d --no-deps --name pointy-backend-standby -e POINTY_BOOT_ROLE=standby backend"
 }
 
 test_starting_a_standby_first_clears_any_leftover_one() {

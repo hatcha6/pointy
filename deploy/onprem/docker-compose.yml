@@ -154,6 +154,10 @@ x-backend-environment: &backend-environment
   POINTY_RELAY_CONNECTOR_ADDR: "${POINTY_RELAY_CONNECTOR_ADDR:?Set POINTY_RELAY_CONNECTOR_ADDR in deploy/onprem/.env}"
   POINTY_RELAY_ENROLLMENT_TOKEN: "${POINTY_RELAY_ENROLLMENT_TOKEN:-}"
   POINTY_REQUIRE_LICENSE: "${POINTY_REQUIRE_LICENSE:-false}"
+  # A boot skips `migrate` and `collectstatic` when this same image already ran
+  # them on this same database and static volume (backend/docker/boot_stamp.py).
+  # 0 makes every boot do both again, as every boot did before.
+  POINTY_FAST_BOOT: "${POINTY_FAST_BOOT:-1}"
   # Support surfaces, off by default. The Django admin is a browsable map of
   # every model plus a bulk export, and the schema documents the whole API —
   # neither belongs on a shop LAN. Flip either in .env for a support session,
@@ -239,11 +243,13 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
-      # Probe every 1s DURING startup (Docker 25+) so Postgres is marked healthy
-      # ~1-2s after it accepts connections instead of waiting for the first 10s
-      # interval tick — this gates the whole stack (pgbouncer + backend wait on
-      # it), so it is the biggest lever on cold-boot/reboot time-to-serving.
-      start_interval: 1s
+      # Probe 4x a second DURING startup (Docker 25+) so Postgres is marked
+      # healthy as it starts accepting connections instead of at the first 10s
+      # interval tick — `compose up` holds pgbouncer and the backend back until
+      # it is. At 1s this probe was a third of the whole start (measured: tills
+      # answering 3.2s -> 2.2s after `compose up`). The fast pace ends with the
+      # first success; from then on it is the 10s interval above.
+      start_interval: 250ms
     logging: *pointy-logging
 
   # Connection pooler (transaction mode). Multiplexes every app/worker/thread
@@ -284,6 +290,13 @@ services:
       # Hard ceiling on real Postgres backends — keep below Postgres max_connections.
       MAX_DB_CONNECTIONS: "${POINTY_PGBOUNCER_MAX_DB_CONNECTIONS:-50}"
       SERVER_IDLE_TIMEOUT: "60"
+      # How long PgBouncer sulks after one failed login to Postgres before it
+      # tries again (default 15 s). After a reboot everything starts at once, so
+      # a first attempt that lands while Postgres is still starting is ordinary
+      # — and it used to cost every till those 15 seconds. The backend also
+      # waits for Postgres directly first (docker/wait_for_services.py); this
+      # covers whatever else connects early.
+      SERVER_LOGIN_RETRY: "${POINTY_PGBOUNCER_SERVER_LOGIN_RETRY:-1}"
       QUERY_WAIT_TIMEOUT: "30"
       # psycopg3 sends these startup params; PgBouncer must not reject them.
       IGNORE_STARTUP_PARAMETERS: extra_float_digits,options
@@ -325,9 +338,10 @@ services:
       retries: 10
       start_period: 10s
       # Fast startup probe (Docker 25+): redis is ready almost immediately, so
-      # this marks it healthy in ~1s instead of at the first 10s tick, letting
-      # the backend (which waits on redis) start sooner.
-      start_interval: 1s
+      # this marks it healthy at once instead of at the first 10s tick, letting
+      # the backend (which waits on redis) start sooner. Same pace as Postgres,
+      # for the same reason; it stops at the first success.
+      start_interval: 250ms
     stop_grace_period: 30s
     logging: *pointy-logging
 

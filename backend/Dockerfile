@@ -189,6 +189,11 @@ COPY --from=compile /app/backend /app/backend
 RUN chown -R pointy:pointy /app/backend \
     && find /app/backend -type d -name __pycache__ -prune -exec rm -rf {} + \
     && find /app/backend -type f \( -name "tests.py" -o -name "test_*.py" \) -delete \
+    # The build id is what lets a boot skip migrate and collectstatic when this
+    # exact image already ran them (docker/boot_stamp.py). Taken here, after
+    # the tree is final, and over everything that could change what they do.
+    && python /app/backend/docker/boot_stamp.py /app/BUILD_ID \
+        /opt/pointy-venv/lib/python3.12/site-packages /app/backend /app/shared \
     && rm -rf \
         /usr/local/bin/pip* \
         /usr/local/lib/python3.12/ensurepip \

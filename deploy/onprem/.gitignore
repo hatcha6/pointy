@@ -2,6 +2,11 @@
 external-backups/
 # Held by a running update; tells the watchdog to stand down.
 .update.lock
+# What each update/install cost this server, and how far the backend and the
+# relay have read it (update-lib.sh, "Run records").
+update-history.jsonl
+.update-history.tracked
+.update-history.shipped
 
 # Built by wsl/build-rootfs.sh and fetched by CI — never committed (hundreds of MB).
 wsl/pointy-wsl-rootfs*.tar*

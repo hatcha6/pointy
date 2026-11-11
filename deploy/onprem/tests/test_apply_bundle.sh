@@ -24,6 +24,9 @@ _mock_deps() {
   pu_prune_superseded_images() { record "prune:$1"; return 0; }
   pu_rollback_live()   { record 'rollback-live'; return 1; }
   pu_compose()         { record "compose:$*"; return 0; }
+  # Recording a run is measured around the apply (tests/test_run_records.sh);
+  # here it would only be noise in the order these tests are about.
+  pu_track_runs()      { return 0; }
 }
 
 # Everything above EXCEPT the adoption, which stays real. `unset -f` would not

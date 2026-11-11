@@ -490,10 +490,14 @@ pu_retire_standby() {
 # carries the one-off label, so it cannot collide with the live container and
 # `compose up --remove-orphans` will not sweep it away. Its boot runs the new
 # release's migrations against the live database — the expand/contract window.
+# POINTY_BOOT_ROLE tells it that the old backend is still writing beside it, so
+# its migrate must not be taken for the last word (backend/docker/boot_stamp.py):
+# the managed container's boot after the flip has to run the catch-ups again.
 pu_start_standby() {
   pu_remove_standby
   pu_log "starting the new backend alongside the live one (migrations run here)…"
-  pu_compose run -d --no-deps --name "$POINTY_STANDBY_NAME" backend >/dev/null
+  pu_compose run -d --no-deps --name "$POINTY_STANDBY_NAME" \
+    -e POINTY_BOOT_ROLE=standby backend >/dev/null
 }
 
 # Recreate one service on the new image without touching its dependencies.
@@ -508,6 +512,7 @@ pu_apply_live() {
   local assigned="$1"
 
   pu_load_images live || return 1
+  pu_phase load_images
   pu_start_standby || { pu_warn "could not start the new backend"; return 1; }
 
   if ! pu_wait_upstream "$POINTY_STANDBY_NAME" "the new backend" \
@@ -516,6 +521,9 @@ pu_apply_live() {
     pu_warn "the new backend never became ready — nothing was switched over"
     return 1
   fi
+
+  # The standby's boot is where the release's migrations run.
+  pu_phase standby_ready
 
   # From here traffic moves. Every step below keeps one healthy backend serving.
   pu_set_upstream "$POINTY_STANDBY_NAME" || { pu_remove_standby; return 1; }
@@ -541,6 +549,7 @@ pu_apply_live() {
   fi
   pu_set_upstream backend || return 2
   pu_retire_standby
+  pu_phase promote
 
   # Everything else can be replaced normally now: none of it holds the LAN port,
   # and the tills are already being served by the new backend.
@@ -634,7 +643,7 @@ pu_missing_infra_images() {
   done
 }
 
-pu_apply_bundle() {
+pu_apply_bundle_steps() {
   local dir="$1" current="$2" assigned="$3" mode="${4:-auto}"
   local strategy snapshot rc missing
   POINTY_APPLY_ERROR=""
@@ -646,6 +655,7 @@ pu_apply_bundle() {
     pu_warn "this bundle does not carry ${missing}, and Docker here does not have it;"
     pu_warn "apply the full release bundle (pointy-onprem-${assigned}.zip) instead. Still on ${current}."
     POINTY_APPLY_ERROR="needs the full bundle: missing ${missing}"
+    POINTY_RUN_OUTCOME=aborted
     return 1
   fi
 
@@ -672,7 +682,9 @@ pu_apply_bundle() {
     pu_log "updating ${current} -> ${assigned} with a full restart"
   fi
 
+  POINTY_RUN_STRATEGY="$strategy"
   pu_backup_database "$current" "$assigned"
+  pu_phase backup
 
   snapshot="$(mktemp -d)"
   cp .env "${snapshot}/.env"
@@ -703,15 +715,18 @@ pu_apply_bundle() {
     if ! bash install.sh --env-only; then
       pu_restore_snapshot "$snapshot"
       pu_warn "the new release needs .env values this deployment cannot supply; still on ${current}"
+      POINTY_RUN_OUTCOME=aborted
       return 1
     fi
   else
     pu_warn "adopted install.sh has no --env-only; skipping the .env completeness check"
   fi
 
+  pu_phase prepare
   if [ "$strategy" = live ]; then
     pu_apply_live "$assigned"
     rc=$?
+    pu_phase finish
     if [ "$rc" -eq 0 ] && pu_healthy 24; then
       echo "${assigned}" >VERSION.txt
       pu_register_autostart
@@ -728,13 +743,20 @@ pu_apply_bundle() {
       # release behind our back.
       pu_restore_snapshot "$snapshot"
       pu_warn "update to ${assigned} aborted before any traffic moved; still on ${current}"
+      POINTY_RUN_OUTCOME=aborted
       return 1
     fi
-    pu_rollback_live "$snapshot" "$current" "$assigned"
+    if pu_rollback_live "$snapshot" "$current" "$assigned"; then
+      POINTY_RUN_OUTCOME=rolled_back
+    else
+      POINTY_RUN_OUTCOME=failed
+    fi
+    pu_phase rollback
     return 1
   fi
 
-  if pu_apply_restart && pu_healthy; then
+  if pu_apply_restart && pu_phase restart && pu_healthy; then
+    pu_phase healthy
     echo "${assigned}" >VERSION.txt
     pu_register_autostart
     pu_prune_superseded_images "$current" "$assigned"
@@ -748,10 +770,207 @@ pu_apply_bundle() {
   pu_compose up -d --remove-orphans >/dev/null 2>&1 || true
   if pu_healthy; then
     pu_warn "update to ${assigned} failed; rolled back to ${current}"
+    POINTY_RUN_OUTCOME=rolled_back
+    pu_phase rollback
     return 1
   fi
+  POINTY_RUN_OUTCOME=failed
   pu_warn "update to ${assigned} failed AND the rollback is unhealthy — manual intervention needed"
   return 1
+}
+
+# ---------------------------------------------------------------------------
+# Run records: what an update or an install cost the shop.
+#
+# Every apply appends one JSON line to update-history.jsonl: versions, how it
+# was applied, how it ended, how long each step took and - measured, not
+# assumed - for how many seconds a till could not reach the server. The line is
+# then handed to two readers, each with its own cursor so neither can lose a
+# run the other already has:
+#
+#   * the backend's tracking module (pu_track_runs), so the run sits beside the
+#     shop's other analytics events and travels in its exports;
+#   * the relay (update-agent.sh ships it), so the operator console can show
+#     every shop's update times and downtime on its updates page.
+#
+# All of it is best-effort. Nothing here may fail an update, and an apply that
+# cannot write its record is still an apply.
+# ---------------------------------------------------------------------------
+POINTY_RUN_HISTORY="${POINTY_RUN_HISTORY:-update-history.jsonl}"
+POINTY_RUN_TRACKED_CURSOR="${POINTY_RUN_TRACKED_CURSOR:-.update-history.tracked}"
+POINTY_RUN_STRATEGY=""
+POINTY_RUN_OUTCOME=""
+POINTY_RUN_PHASES=""
+POINTY_RUN_MARK=""
+
+pu_epoch() { date +%s; }
+
+pu_iso_utc() { # pu_iso_utc <epoch> — GNU date, then BSD
+  date -u -d "@$1" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null \
+    || date -u -r "$1" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || true
+}
+
+# A string safe to sit between double quotes in JSON: no control characters,
+# quotes and backslashes escaped, and short - this is a label, not a log.
+pu_json_text() {
+  printf '%s' "$1" | tr -d '\000-\037' | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | cut -c1-300
+}
+
+pu_json_number() { # a non-negative integer, or null
+  case "${1:-}" in ''|*[!0-9]*) printf 'null' ;; *) printf '%s' "$1" ;; esac
+}
+
+# pu_phase <name> — seconds since the previous mark, kept for the record.
+# Always succeeds, so it can sit in an && chain.
+pu_phase() {
+  local now
+  now="$(pu_epoch)"
+  if [ -n "$POINTY_RUN_MARK" ]; then
+    POINTY_RUN_PHASES="${POINTY_RUN_PHASES:+${POINTY_RUN_PHASES},}\"$1\":$(( now - POINTY_RUN_MARK ))"
+  fi
+  POINTY_RUN_MARK="$now"
+  return 0
+}
+
+# The downtime probe: once a second, ask the LAN front door what a till would
+# ask it, for as long as the apply runs. A live update should record zero; a
+# restart records the real gap; and a flip that drops requests shows up here
+# instead of in a phone call from the shop.
+POINTY_PROBE_FILE=""
+POINTY_PROBE_PID=""
+pu_probe_start() {
+  POINTY_PROBE_FILE=""
+  POINTY_PROBE_PID=""
+  [ "${POINTY_UPDATE_PROBE:-1}" = 1 ] || return 0
+  local port file
+  port="$(pu_backend_port)"
+  file="$(mktemp 2>/dev/null)" || return 0
+  POINTY_PROBE_FILE="$file"
+  (
+    while [ -f "$file" ]; do
+      if curl -fsS -m 2 "http://127.0.0.1:${port}/readyz/" >/dev/null 2>&1; then up=1; else up=0; fi
+      [ -f "$file" ] && printf '%s %s\n' "$(date +%s)" "$up" >>"$file"
+      sleep 1
+    done
+  ) >/dev/null 2>&1 &
+  POINTY_PROBE_PID=$!
+}
+
+# pu_probe_stop — prints "<down seconds> <longest outage> <samples>", or
+# nothing when no probe ran. A failed sample costs the time until the next one.
+pu_probe_stop() {
+  local file="$POINTY_PROBE_FILE" pid="$POINTY_PROBE_PID" copy
+  [ -n "$file" ] || return 0
+  copy="$(mktemp 2>/dev/null)" || copy=""
+  [ -n "$copy" ] && cp "$file" "$copy" 2>/dev/null
+  rm -f "$file"
+  [ -n "$pid" ] && { kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; }
+  [ -n "$copy" ] || return 0
+  awk -v now="$(pu_epoch)" '
+    { t[NR] = $1; up[NR] = $2 }
+    END {
+      if (NR == 0) exit
+      down = 0; longest = 0; run = 0
+      for (i = 1; i <= NR; i++) {
+        next_t = (i < NR) ? t[i + 1] : now
+        gap = next_t - t[i]; if (gap < 1) gap = 1
+        if (up[i] == 0) { down += gap; run += gap; if (run > longest) longest = run }
+        else run = 0
+      }
+      printf "%d %d %d\n", down, longest, NR
+    }' "$copy"
+  rm -f "$copy"
+}
+
+pu_run_id() {
+  cat /proc/sys/kernel/random/uuid 2>/dev/null && return 0
+  uuidgen 2>/dev/null | tr 'A-Z' 'a-z' && return 0
+  printf '%s-%s%s\n' "$(pu_epoch)" "$RANDOM" "$RANDOM"
+}
+
+# pu_record_run <kind> <from> <to> <strategy> <outcome> <error> <started-epoch>
+#               [<down seconds> <longest outage> <samples>]
+pu_record_run() {
+  local kind="$1" from="$2" to="$3" strategy="$4" outcome="$5" error="$6" started="$7"
+  local down="${8:-}" longest="${9:-}" samples="${10:-}" finished trigger
+  finished="$(pu_epoch)"
+  case "$started" in ''|*[!0-9]*) started="$finished" ;; esac
+  case "${POINTY_LOG_TAG:-}" in *agent*) trigger=agent ;; *) trigger=manual ;; esac
+  printf '{"id":"%s","kind":"%s","trigger":"%s","from_version":"%s","to_version":"%s","strategy":"%s","outcome":"%s","error":"%s","started_at":"%s","finished_at":"%s","duration_seconds":%s,"downtime_seconds":%s,"longest_outage_seconds":%s,"probe_samples":%s,"phases":{%s}}\n' \
+    "$(pu_json_text "$(pu_run_id)")" "$(pu_json_text "$kind")" "$trigger" \
+    "$(pu_json_text "$from")" "$(pu_json_text "$to")" "$(pu_json_text "$strategy")" \
+    "$(pu_json_text "$outcome")" "$(pu_json_text "$error")" \
+    "$(pu_iso_utc "$started")" "$(pu_iso_utc "$finished")" "$(( finished - started ))" \
+    "$(pu_json_number "$down")" "$(pu_json_number "$longest")" "$(pu_json_number "$samples")" \
+    "$POINTY_RUN_PHASES" >>"$POINTY_RUN_HISTORY" 2>/dev/null || true
+}
+
+# pu_pending_runs <cursor file> [<max>] — the history lines that cursor has not
+# passed yet. A history shorter than its cursor was replaced: start over.
+pu_pending_runs() {
+  local cursor="$1" max="${2:-50}" total sent
+  [ -f "$POINTY_RUN_HISTORY" ] || return 0
+  total="$(wc -l <"$POINTY_RUN_HISTORY" | tr -d ' ')"
+  sent="$(cat "$cursor" 2>/dev/null || echo 0)"
+  case "$sent" in ''|*[!0-9]*) sent=0 ;; esac
+  [ "$sent" -le "$total" ] || sent=0
+  [ "$total" -gt "$sent" ] || return 0
+  tail -n +"$(( sent + 1 ))" "$POINTY_RUN_HISTORY" | head -n "$max"
+}
+
+pu_advance_cursor() { # pu_advance_cursor <cursor file> <lines handed over>
+  local cursor="$1" count="$2" sent total
+  total="$(wc -l <"$POINTY_RUN_HISTORY" | tr -d ' ')"
+  sent="$(cat "$cursor" 2>/dev/null || echo 0)"
+  case "$sent" in ''|*[!0-9]*) sent=0 ;; esac
+  [ "$sent" -le "$total" ] || sent=0
+  echo "$(( sent + count ))" >"$cursor"
+}
+
+# Hand unrecorded runs to the backend's tracking module. A backend that is down,
+# or one from before the command existed (a rollback), leaves the cursor where
+# it was and the next apply or agent run tries again.
+pu_track_runs() {
+  local pending count
+  pending="$(pu_pending_runs "$POINTY_RUN_TRACKED_CURSOR")"
+  [ -n "$pending" ] || return 0
+  count="$(printf '%s\n' "$pending" | wc -l | tr -d ' ')"
+  # Bounded where the host can bound it: this runs under the update lock.
+  local bound=""
+  command -v timeout >/dev/null 2>&1 && bound="timeout 120"
+  # shellcheck disable=SC2086 — a command prefix, or nothing
+  if printf '%s\n' "$pending" \
+      | $bound docker compose --env-file .env -f docker-compose.yml \
+          exec -T backend python manage.py record_deployment_runs >/dev/null 2>&1; then
+    pu_advance_cursor "$POINTY_RUN_TRACKED_CURSOR" "$count"
+  fi
+  return 0
+}
+
+# Apply a staged bundle, and leave a record of what that cost. The work itself
+# is pu_apply_bundle_steps; this only measures around it.
+pu_apply_bundle() {
+  local started rc probe
+  started="$(pu_epoch)"
+  POINTY_RUN_STRATEGY=""
+  POINTY_RUN_OUTCOME=""
+  POINTY_RUN_PHASES=""
+  POINTY_RUN_MARK="$started"
+  # install.sh runs inside a restart update; it must not record a second run.
+  export POINTY_RUN_RECORDING=1
+  pu_probe_start
+  pu_apply_bundle_steps "$@"
+  rc=$?
+  probe="$(pu_probe_stop)"
+  unset POINTY_RUN_RECORDING
+  if [ -z "$POINTY_RUN_OUTCOME" ]; then
+    if [ "$rc" -eq 0 ]; then POINTY_RUN_OUTCOME=succeeded; else POINTY_RUN_OUTCOME=failed; fi
+  fi
+  # shellcheck disable=SC2086 — three numbers, or nothing
+  pu_record_run update "${2:-}" "${3:-}" "$POINTY_RUN_STRATEGY" "$POINTY_RUN_OUTCOME" \
+    "${POINTY_APPLY_ERROR:-}" "$started" $probe
+  pu_track_runs
+  return "$rc"
 }
 
 pu_restore_snapshot() {

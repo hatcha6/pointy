@@ -37,8 +37,8 @@ def main():
         require_secret("DJANGO_SECRET_KEY")
         sweep_stale_temp_files()
         timed("wait_for_dependencies", wait_for_dependencies)
-        timed("run_migrations", run_migrations)
-        timed("collect_static", collect_static)
+        timed("run_migrations", migrate_unless_settled)
+        timed("collect_static", collect_static_unless_current)
         # Enrollment is best-effort and only matters for first-boot promptness
         # (the periodic core.ensure_relay_enrollment task covers every case
         # afterwards). Kick it off in the BACKGROUND so a slow/unreachable relay
@@ -159,6 +159,43 @@ def run_migrations():
     if direct_url:
         child_env["DATABASE_URL"] = direct_url
     subprocess.check_call(["python", "manage.py", "migrate", "--noinput"], env=child_env)
+
+
+def migrate_unless_settled():
+    """Migrate, unless this very image already did on this very schema.
+
+    See docker/boot_stamp.py for what "already did" has to mean before a boot
+    may skip it. Only the web role comes through here: the explicit `migrate`
+    command always migrates.
+    """
+    import boot_stamp
+
+    build = boot_stamp.build_id() if boot_stamp.enabled() else ""
+    if not build:
+        run_migrations()
+        return
+    database_url = os.environ.get("DATABASE_URL", "")
+    standby = boot_stamp.is_standby()
+    before = boot_stamp.observe(database_url)
+    if boot_stamp.can_skip_migrate(build, before, standby=standby):
+        print("[boot] schema already migrated by this build; migrate skipped", flush=True)
+        return
+    run_migrations()
+    direct_url = os.environ.get("POINTY_DATABASE_DIRECT_URL", "").strip()
+    boot_stamp.record(direct_url or database_url, build, before, standby=standby)
+
+
+def collect_static_unless_current():
+    if os.environ.get("POINTY_COLLECTSTATIC", "1") != "1":
+        return
+    import boot_stamp
+
+    build = boot_stamp.build_id() if boot_stamp.enabled() else ""
+    if boot_stamp.static_is_current(build):
+        print("[boot] static files already collected by this build; skipped", flush=True)
+        return
+    collect_static()
+    boot_stamp.record_static(build)
 
 
 def start_enrollment_in_background():

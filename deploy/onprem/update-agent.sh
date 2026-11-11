@@ -42,7 +42,7 @@ POINTY_LOG_TAG="pointy-update-agent"
 # shellcheck source=update-lib.sh
 . ./update-lib.sh
 
-AGENT_VERSION="pointy-update-agent/2"
+AGENT_VERSION="pointy-update-agent/3"
 DRY_RUN=0
 MODE=auto
 for arg in "$@"; do
@@ -143,6 +143,33 @@ report_status() { # report_status <current_version> <status> <error>
     -H "Content-Type: application/json" \
     -d "{\"current_version\":\"$1\",\"agent_version\":\"${AGENT_VERSION}\",\"update_status\":\"$2\",\"update_error\":\"$3\"}" \
     "${RELAY_URL}/v1/agent/status" >/dev/null 2>&1 || true
+}
+
+# Hand the relay every update/install record it has not had yet (see "Run
+# records" in update-lib.sh), so the operator console can show what each update
+# cost this shop. Its own cursor, moved only when the relay said yes: a relay
+# that is unreachable now gets the same runs on the next pass. The backend's
+# tracking module is caught up on the same occasion.
+POINTY_RUN_SHIPPED_CURSOR="${POINTY_RUN_SHIPPED_CURSOR:-.update-history.shipped}"
+ship_runs() {
+  local pending count body
+  pu_track_runs
+  pending="$(pu_pending_runs "$POINTY_RUN_SHIPPED_CURSOR")"
+  [ -n "$pending" ] || return 0
+  count="$(printf '%s\n' "$pending" | wc -l | tr -d ' ')"
+  body="$(mktemp)"
+  { printf '{"agent_version":"%s","runs":[' "$AGENT_VERSION"
+    printf '%s\n' "$pending" | paste -sd, - | tr -d '\n'
+    printf ']}'; } >"$body"
+  if curl -fsS -m 30 -X POST \
+      -H "$auth_header" \
+      -H "Content-Type: application/json" \
+      --data-binary "@${body}" \
+      "${RELAY_URL}/v1/agent/runs" >/dev/null 2>&1; then
+    pu_advance_cursor "$POINTY_RUN_SHIPPED_CURSOR" "$count"
+  fi
+  rm -f "$body"
+  return 0
 }
 
 # ---------------------------------------------------------------------------
@@ -415,6 +442,7 @@ if [ "$DIRECTIVE" != "apply" ] || [ -z "$ASSIGNED" ] || [ "$ASSIGNED" = "$CURREN
     prune_downloads ""
   fi
   report_status "$CURRENT_VERSION" "idle" ""
+  [ "$DRY_RUN" = 0 ] && ship_runs
   exit 0
 fi
 
@@ -476,7 +504,9 @@ fi
 if pu_apply_bundle "$POINTY_BUNDLE_DIR" "$CURRENT_VERSION" "$ASSIGNED" "$MODE"; then
   prune_downloads ""
   report_status "$ASSIGNED" "succeeded" ""
+  ship_runs
   exit 0
 fi
 report_status "$(pu_current_version)" "failed" "${POINTY_APPLY_ERROR:-update to ${ASSIGNED} failed}"
+ship_runs
 exit 1

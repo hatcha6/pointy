@@ -11,6 +11,7 @@
 #
 set -euo pipefail
 cd "$(dirname "$0")"
+INSTALL_STARTED="$(date +%s)"
 
 err() { printf 'ERROR: %s\n' "$1" >&2; exit 1; }
 
@@ -714,6 +715,20 @@ if command -v systemctl >/dev/null 2>&1; then
     echo "==> To make the stack survive reboots/crashes, run once:"
     echo "      sudo bash register-autostart.sh"
   fi
+fi
+
+# Leave a record of this install beside the update records (see "Run records"
+# in update-lib.sh): the backend's tracking module gets it now, the relay when
+# the update agent next runs. Inside an update the engine records the whole run
+# itself. Never a reason for an install to fail.
+if [ -z "${POINTY_RUN_RECORDING:-}" ] && [ -f update-lib.sh ]; then
+  (
+    set +eu
+    . ./update-lib.sh
+    pu_record_run install "" "$(cat VERSION.txt 2>/dev/null | tr -d '[:space:]')" \
+      restart succeeded "" "$INSTALL_STARTED"
+    pu_track_runs
+  ) >/dev/null 2>&1 || true
 fi
 
 cat <<'MSG'

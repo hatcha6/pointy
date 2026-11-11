@@ -57,6 +57,7 @@ for _a in "$@"; do
   case "$_prev" in
     -o) _out="$_a" ;;
     -d) _body="$_a" ;;
+    --data-binary) _body="$(cat "${_a#@}" 2>/dev/null)" ;;
     -C) _resume=1 ;;
     -w) _code=1 ;;
   esac
@@ -67,6 +68,10 @@ case "$_url" in
   */v1/agent/status)
     printf '%s\n' "$_body" >>"${PU_TEST_DIR}/status-posts.jsonl"
     exit "${AGENT_STATUS_RC:-0}" ;;
+  */v1/agent/runs)
+    [ "${AGENT_RUNS_RC:-0}" = 0 ] || exit "${AGENT_RUNS_RC}"
+    printf '%s\n' "$_body" >>"${PU_TEST_DIR}/run-posts.jsonl"
+    exit 0 ;;
   */v1/agent/manifest)
     [ "${AGENT_MANIFEST_RC:-0}" = 0 ] || exit "${AGENT_MANIFEST_RC}"
     cat "${PU_TEST_DIR}/manifest.json" >"$_out"
@@ -871,6 +876,69 @@ test_a_run_with_the_guard_already_set_does_not_promote() {
   printf 'should not run\n' >update-agent.sh.new
   POINTY_AGENT_PROMOTED=1 _run_agent >/dev/null 2>&1
   assert_file update-agent.sh.new
+}
+
+# ---------------------------------------------------------------------------
+# Run records reach the relay — once each, and never lost to a bad line
+# ---------------------------------------------------------------------------
+
+_run_posts() { cat "${PU_TEST_DIR}/run-posts.jsonl" 2>/dev/null; }
+
+test_an_idle_pass_ships_the_runs_the_relay_has_not_had() {
+  _install_agent 1.0.0 1.1.0
+  _manifest hold ''
+  printf '{"id":"run-1","kind":"install"}\n{"id":"run-2","kind":"update"}\n' >update-history.jsonl
+  assert_status 0 _run_agent >/dev/null 2>&1
+  local posted; posted="$(_run_posts)"
+  assert_ok python3 -c 'import json,sys; d=json.loads(sys.argv[1]); assert [r["id"] for r in d["runs"]]==["run-1","run-2"], d; assert d["agent_version"]' "$posted"
+  assert_file_eq .update-history.shipped '2'
+}
+
+test_runs_already_shipped_are_not_shipped_again() {
+  _install_agent 1.0.0 1.1.0
+  _manifest hold ''
+  printf '{"id":"run-1"}\n' >update-history.jsonl
+  _run_agent >/dev/null 2>&1
+  _run_agent >/dev/null 2>&1
+  assert_eq '1' "$(_run_posts | wc -l | tr -d ' ')"
+}
+
+test_a_relay_that_refuses_the_runs_is_offered_them_again() {
+  _install_agent 1.0.0 1.1.0
+  _manifest hold ''
+  printf '{"id":"run-1"}\n' >update-history.jsonl
+  AGENT_RUNS_RC=22 assert_status 0 _run_agent >/dev/null 2>&1
+  assert_no_file .update-history.shipped
+  printf '{"id":"run-2"}\n' >>update-history.jsonl
+  _run_agent >/dev/null 2>&1
+  assert_contains "$(_run_posts)" '"run-1"},{"id":"run-2"'
+}
+
+test_a_shop_with_no_history_posts_nothing() {
+  _install_agent 1.0.0 1.1.0
+  _manifest hold ''
+  _run_agent >/dev/null 2>&1
+  assert_eq '' "$(_run_posts)"
+}
+
+test_runs_are_shipped_after_an_apply_whichever_way_it_went() {
+  _install_agent 1.0.0 1.1.0
+  _manifest apply 1.1.0
+  printf '{"id":"run-ok"}\n' >update-history.jsonl
+  assert_status 0 _run_agent >/dev/null 2>&1
+  assert_contains "$(_run_posts)" 'run-ok'
+  printf '{"id":"run-bad"}\n' >>update-history.jsonl
+  rm -f VERSION.txt; echo 1.0.0 >VERSION.txt
+  APPLY_RC=1 _run_agent >/dev/null 2>&1
+  assert_contains "$(_run_posts)" 'run-bad'
+}
+
+test_a_dry_run_ships_nothing() {
+  _install_agent 1.0.0 1.1.0
+  _manifest hold ''
+  printf '{"id":"run-1"}\n' >update-history.jsonl
+  _run_agent --check >/dev/null 2>&1
+  assert_eq '' "$(_run_posts)"
 }
 
 pu_run_tests "$@"

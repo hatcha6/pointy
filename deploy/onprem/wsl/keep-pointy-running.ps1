@@ -54,7 +54,7 @@
 # without it). A copy only ever replaces a LOWER revision: the release in the
 # distro and the copy the till carries both offer one, and an older server must
 # not undo a newer till's keeper.
-# pointy-keeper-revision: 3
+# pointy-keeper-revision: 5
 [CmdletBinding()]
 param(
     [switch]$Install,
@@ -98,8 +98,10 @@ $AnchorSleep  = "2147483647"
 $CheckEverySec = 60
 # Until the server answers after WSL starts: the stack is usually up well inside
 # a minute, and a till (or the client's restart wait) should not sit out the
-# rest of the minute for the keeper to notice.
-$StartupCheckEverySec = 5
+# rest of the minute for the keeper to notice. Two seconds, not five: the stack
+# itself now answers a couple of seconds after Docker starts, so a 5 s look
+# was most of what the till on this PC still waited for.
+$StartupCheckEverySec = 2
 $StartupWindowSec = 600
 $script:WslExe = ""
 # Release updates land inside the distro (update-lib.sh adopts them into
@@ -771,7 +773,7 @@ function Test-KeeperReplaced {
 }
 
 
-# How long the loop sleeps: a minute while the server answers, 5 seconds while
+# How long the loop sleeps: a minute while the server answers, 2 seconds while
 # it does not yet - for the first ten minutes after WSL starts, then a minute
 # again so a server that never comes up is not polled hard all day.
 function Get-CheckWaitSec {
@@ -921,7 +923,7 @@ function Invoke-KeepAlive {
                     $downSince = $null
                     Set-Title "RUNNING"
                 } else {
-                    # By the clock, not by cycles: a cycle is 5 seconds while
+                    # By the clock, not by cycles: a cycle is seconds while
                     # the server is starting and a minute after.
                     if (-not $downSince) { $downSince = Get-Date; $nextNudge = $downSince.AddMinutes(3) }
                     $downMinutes = [int][math]::Floor(((Get-Date) - $downSince).TotalMinutes)
