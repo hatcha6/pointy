@@ -75,7 +75,7 @@ class LocalServerHostController extends ChangeNotifier {
     required LocalServerHostPlatform platform,
     this.onServerReady,
     DateTime Function()? clock,
-    this.pollWhileWaiting = const Duration(seconds: 5),
+    this.pollWhileWaiting = const Duration(seconds: 1),
     this.pollWhileReady = const Duration(seconds: 30),
     this.kickEvery = const Duration(minutes: 1),
     this.heartbeatFreshFor = const Duration(minutes: 3),
@@ -92,6 +92,10 @@ class LocalServerHostController extends ChangeNotifier {
   /// again at once rather than on its own schedule.
   final VoidCallback? onServerReady;
 
+  /// A look while waiting only reads the keeper's small heartbeat file (the
+  /// keeper itself is started no more than once per [kickEvery]), so it is
+  /// taken every second: the cashier is watching the starting screen, and
+  /// every second between the server answering and this noticing is theirs.
   final Duration pollWhileWaiting;
   final Duration pollWhileReady;
 
