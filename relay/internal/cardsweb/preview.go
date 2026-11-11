@@ -29,20 +29,49 @@ type Source interface {
 	PreviewArt(ctx context.Context, ref string) ([]byte, error)
 }
 
-// PreviewCatalog is what previews say about the shelf.
+// PreviewCatalog is what previews and search engines are told about the shelf.
 type PreviewCatalog struct {
 	// Brands by key.
 	Brands map[string]PreviewBrand
 	// Categories are names by key.
 	Categories map[string]string
+	// CategoryOrder is the category keys in the shelf's order.
+	CategoryOrder []string
+	// Countries are names by code ("TR" -> "تركيا").
+	Countries map[string]string
+	// Currency is the ISO code prices are in ("LYD").
+	Currency string
+	// ESIMs are the eSIM destinations on sale to everyone, by key, and
+	// ESIMOrder their keys in the shelf's order (esim_pages.go). Empty while
+	// eSIMs are not on sale.
+	ESIMs     map[string]PreviewESIM
+	ESIMOrder []string
 }
 
-// PreviewBrand is one brand as its preview shows it.
+// PreviewBrand is one brand as its preview and its page show it.
 type PreviewBrand struct {
 	Name     string
 	Category string
 	// Art is the brand's card art ("sha256:…"); empty draws its colours.
 	Art string
+	// Aliases are the other names people search the brand by ("PUBG", "شدات").
+	Aliases []string
+	// Order is the brand's place on the shelf, lowest first.
+	Order int
+	// RedeemHint says how a bought card is used.
+	RedeemHint string
+	// Items are the brand's cards, in the shelf's order.
+	Items []PreviewItem
+}
+
+// PreviewItem is one card of a brand at the price a customer pays.
+type PreviewItem struct {
+	Key     string
+	Label   string
+	Country string
+	// Price is a decimal in the catalog's currency ("10.25").
+	Price     string
+	Available bool
 }
 
 const (
@@ -83,6 +112,8 @@ type banner struct {
 	done  chan struct{}
 	jpeg  []byte
 	err   error
+	// render draws a picture that is not a brand's (an eSIM's).
+	render func() ([]byte, error)
 }
 
 func (b *banner) failed() bool {
@@ -220,6 +251,10 @@ func (p *previews) brandLocked(key string, brand PreviewBrand) *banner {
 func (p *previews) drawNow(b *banner) {
 	b.once.Do(func() {
 		defer close(b.done)
+		if b.render != nil {
+			b.jpeg, b.err = b.render()
+			return
+		}
 		b.jpeg, b.err = p.draw(b.key, b.brand)
 	})
 }

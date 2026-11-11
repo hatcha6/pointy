@@ -142,9 +142,9 @@ func TestABrandLinkPreviewsTheBrand(t *testing.T) {
 	drawn(t, h)
 	page := get(h, http.MethodGet, "cards.dftr.ly", "/brand/libyana?item=x").Body.String()
 	for _, want := range []string{
-		"<title>كروت ليبيانا | دفتر كروت</title>",
-		`<meta property="og:title" content="كروت ليبيانا | دفتر كروت">`,
-		`<meta name="description" content="اشترِ كروت ليبيانا من دفتر كروت، ويصلك الرمز فوراً.">`,
+		"<title>كروت شحن ليبيانا في ليبيا | دفتر كروت</title>",
+		`<meta property="og:title" content="كروت شحن ليبيانا في ليبيا | دفتر كروت">`,
+		`<meta name="description" content="كروت شحن ليبيانا أونلاين في ليبيا من دفتر كروت. ادفع إلكترونياً ويصلك فوراً.">`,
 		`<meta property="og:url" content="https://cards.dftr.ly/brand/libyana">`,
 		`<meta name="twitter:card" content="summary_large_image">`,
 	} {
@@ -185,7 +185,7 @@ func TestOtherPagesPreviewTheShelf(t *testing.T) {
 		"/":                "دفتر كروت",
 		"/brand/unknown":   "دفتر كروت",
 		"/my-cards":        "دفتر كروت",
-		"/category/gaming": "الألعاب | دفتر كروت",
+		"/category/gaming": "كروت الألعاب في ليبيا | دفتر كروت",
 		"/category/nope":   "دفتر كروت",
 	} {
 		page := get(h, http.MethodGet, "cards.dftr.ly", target).Body.String()

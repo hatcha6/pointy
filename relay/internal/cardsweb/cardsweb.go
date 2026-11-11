@@ -9,7 +9,9 @@
 // Files go out compressed and cached as package webbuild serves every build.
 //
 // A page carries its own link preview (preview.go, page.go): a brand's link
-// shows that brand's name and picture in WhatsApp or Telegram.
+// shows that brand's name and picture in WhatsApp or Telegram. It also
+// carries what a search engine needs to list it (seo.go, static.go), and the
+// site has a robots.txt and a sitemap.xml (sitemap.go).
 package cardsweb
 
 import (
@@ -43,9 +45,11 @@ type Config struct {
 
 // Handler serves the web build for its hosts and hands everything else on.
 type Handler struct {
-	hosts     map[string]bool
-	files     fs.FS
-	next      http.Handler
+	hosts map[string]bool
+	files fs.FS
+	next  http.Handler
+	// origin is the address pages are listed under: the first host.
+	origin    string
 	index     []byte
 	previews  *previews
 	campaigns Campaigns
@@ -65,17 +69,22 @@ func Wrap(next http.Handler, cfg Config) (*Handler, error) {
 		return nil, errors.New("cardsweb: the web build has no index.html")
 	}
 	hosts := make(map[string]bool, len(cfg.Hosts))
+	origin := ""
 	for _, host := range cfg.Hosts {
 		host = strings.ToLower(strings.TrimSpace(host))
 		if host == "" || strings.ContainsAny(host, "/:") {
 			return nil, fmt.Errorf("cardsweb: %q is not a host name", host)
 		}
 		hosts[host] = true
+		if origin == "" {
+			origin = "https://" + host
+		}
 	}
 	return &Handler{
 		hosts:     hosts,
 		files:     cfg.Files,
 		next:      next,
+		origin:    origin,
 		index:     index,
 		previews:  newPreviews(cfg.Previews, cfg.Logger),
 		campaigns: cfg.Campaigns,
@@ -116,6 +125,14 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.serveCampaign(w, r, code)
 		return
 	}
+	switch name {
+	case "robots.txt":
+		h.serveRobots(w, r)
+		return
+	case "sitemap.xml":
+		h.serveSitemap(w, r)
+		return
+	}
 	if strings.HasPrefix(name, "og/") {
 		h.servePicture(w, r, name)
 		return
@@ -124,8 +141,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.serve(w, r, name)
 		return
 	}
-	// A missing file is a 404; any other address is a page of the app.
-	if path.Ext(name) != "" || strings.HasPrefix(name, ".well-known/") {
+	// A missing file is a 404; any other address is a page of the app. An
+	// eSIM plan's page is named by the plan's id, which may hold a dot
+	// ("esim/turkey/ea.PTR1G7"): never a file.
+	if (path.Ext(name) != "" && !strings.HasPrefix(name, "esim/")) || strings.HasPrefix(name, ".well-known/") {
 		http.NotFound(w, r)
 		return
 	}

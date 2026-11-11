@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 
 	"pointy/relay/internal/control"
@@ -83,12 +84,13 @@ func TestCampaignLinkSendsEachPhoneToItsStore(t *testing.T) {
 		t.Fatalf("opens %v", campaigns.opens)
 	}
 
-	// An unknown code goes to the shelf; a deeper path is a page.
+	// An unknown code goes to the shelf; a deeper path is no campaign link:
+	// the app, as for any address it does not know.
 	if got := open(h, http.MethodGet, "/go/NOPE", iphone).Header().Get("Location"); got != "/" {
 		t.Fatalf("unknown went to %s", got)
 	}
-	if got := open(h, http.MethodGet, "/go/AHMED/x", iphone); got.Code != http.StatusOK {
-		t.Fatalf("deeper path: %d", got.Code)
+	if got := open(h, http.MethodGet, "/go/AHMED/x", iphone); got.Header().Get("Location") != "" || !strings.Contains(got.Body.String(), "<title>") {
+		t.Fatalf("deeper path: %d %s", got.Code, got.Header().Get("Location"))
 	}
 }
 
