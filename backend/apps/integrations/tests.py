@@ -33,7 +33,6 @@ from apps.core.roles import (
 from apps.analytics import buffer as analytics_buffer
 from apps.analytics import context as analytics_context
 from apps.core.money_dates import day_range_start
-from apps.core.timeutils import business_timezone
 from apps.customers.models import Customer
 from apps.expenses.models import Expense
 from apps.notifications.models import BusinessNotification
@@ -68,10 +67,8 @@ from .providers import is_implemented, provider_for
 from .providers.base import in_parallel  # noqa: E402
 from .providers.base import (
     ERROR_INDETERMINATE,
-    ERROR_INSUFFICIENT_FLOAT,
     ERROR_NOT_CONFIGURED,
     ERROR_NOT_FOUND,
-    ERROR_PROVIDER_ERROR,
     ERROR_UNAUTHORIZED,
     ERROR_UNAVAILABLE,
     ERROR_UNEXPECTED,
@@ -1068,21 +1065,16 @@ class LnetCardViewTests(TestCase):
         self.assertTrue(resp.data["offers"])
 
     def test_several_lines_are_still_offered_as_a_choice_not_priced(self):
-        with patch_lnet(lnet_session(users=LNET_THREE_LINES)):
+        with patch_lnet(lnet_session(customers=HOUSEHOLD)):
             resp = self.client.get("/api/integrations/lnet/card/?card_no=basheir")
         self.assertTrue(resp.data["ok"])
         self.assertTrue(resp.data["needs_selection"])
         self.assertEqual(len(resp.data["candidates"]), 3)
 
     def test_the_line_carries_the_money_already_on_it(self):
-        one_line = lnet_users_page(
-            _lnet_user_row(
-                "alhussainbasheir", "214737",
-                start="2026-08-24", finish="2026-09-23",
-                status="Active", plan="Unlimited Home Basic", money="12.50",
-            )
-        )
-        with patch_lnet(lnet_session(users=one_line)):
+        # Read off the line's Cashdesk page: the API does not show a
+        # customer's balance to an agency login.
+        with patch_lnet(lnet_session()):
             resp = self.client.get(
                 "/api/integrations/lnet/card/?card_no=0910682854"
             )
@@ -1090,14 +1082,23 @@ class LnetCardViewTests(TestCase):
         self.assertTrue(resp.data["ok"], resp.data)
         self.assertEqual(resp.data["card"]["card_balance"], Decimal("12.50"))
 
-    def test_every_candidate_line_says_what_is_on_it(self):
-        """A household picking between lines sees each one's own credit."""
-        with patch_lnet(lnet_session(users=LNET_THREE_LINES)):
+    def test_every_candidate_line_says_whose_it_is_and_its_state(self):
+        """A household picks by name and status; a dead line is visible as one.
+
+        Splynx shows a line's money only on its own Cashdesk page, so the
+        picker does not carry it (one page load per candidate at the counter
+        would cost more than it tells).
+        """
+        with patch_lnet(lnet_session(customers=HOUSEHOLD)):
             resp = self.client.get("/api/integrations/lnet/card/?card_no=basheir")
 
         self.assertEqual(
-            [line["card_balance"] for line in resp.data["candidates"]],
-            [Decimal("12.50"), Decimal("0"), Decimal("0")],
+            [(line["card_no"], line["status"]) for line in resp.data["candidates"]],
+            [
+                ("alhussainbasheir", "active"),
+                ("basheir.shop", "blocked"),
+                ("basheir2", "active"),
+            ],
         )
 
 
@@ -1330,7 +1331,7 @@ class LnetRecentSearchTests(TestCase):
         self.assertEqual(entry["match_count"], 1)
 
     def test_a_household_is_remembered_as_several_lines(self):
-        with patch_lnet(lnet_session(users=LNET_THREE_LINES)):
+        with patch_lnet(lnet_session(customers=HOUSEHOLD)):
             resp = self.client.get(
                 "/api/integrations/lnet/card/?card_no=0910682854&search_by=mobile"
             )
@@ -3913,549 +3914,22 @@ class UnresolvedRechargeNotificationTests(TestCase):
 
 
 # --------------------------------------------------------------------------
-# LNET
-#
-# The fixtures below are trimmed from a real reseller session captured on
-# 2026-09-20, and they keep the two things that make this portal hostile to
-# parse: tables whose unused columns ship as HTML **comments** that do not line
-# up between header and body, and JSON answers served as ``text/html``.
-# Synthesising tidier markup would test a portal we do not have.
+# LNET (Splynx). Driver tests live in test_lnet.py; these are the screens,
+# checkout and sweeps around it, against the same stand-in.
 # --------------------------------------------------------------------------
 from .providers import lnet as lnet_module  # noqa: E402
 from .providers.lnet import LnetProvider  # noqa: E402
-
-LNET_LOGIN_PAGE = """
-<form action="/lnet-billing/public/login" method="post">
-  <div style="display:none">
-  <input type="hidden" name="ci_csrf_token" value="tok-from-login" /></div>
-  <input type="text" name="login" /><input type="password" name="password" />
-</form>
-"""
-
-LNET_HOME_PAGE = "<h1>Welcome Back النسيم للهاتف المحمول !</h1>"
-
-
-def _lnet_user_row(username, user_id, *, start, finish, status, plan, money="0"):
-    """One result row, commented-out cells and all — exactly as served."""
-    return f"""
-    <tr>
-      <td class="column-check"><input type="checkbox" name="checked[]" value="{user_id}" /></td>
-      <td><a href="https://b/lnet-billing/public/admin/settings/users/edit/{user_id}">{username}</a> </td>
-      <!--<td></td>-->
-      <td>{start}</td>
-      <!--<td></td>-->
-      <td>{finish}</td>
-      <td></td>
-      <td class="u_d_balance" data-username="{username}" data-custid="{user_id}"><img src="x"></td>
-      <td class='last-login'>{money}</td>
-      <!--<td></td>-->
-      <td class='status'> <span class="label label-success">{status}</span> </td>
-      <td></td>
-      <td><a href="https://b/lnet-billing/public/admin/settings/users/statistics/{user_id}?refresh-records=true">Show Statistics</a></td>
-      <td><a href="https://b/lnet-billing/public/admin/settings/users/recharge/{user_id}"
-             data-toggle="popover" title="Service Plan Name" data-content="{plan}" >Recharge</a></td>
-    </tr>"""
-
-
-def lnet_users_page(*rows) -> str:
-    """The user-search result table. ``rows`` may be empty (no match)."""
-    return f"""
-    <table class="table">
-      <thead><tr>
-        <th></th><th>Username</th>
-        <!--<th>Display Name</th>-->
-        <th>Service Start Date</th>
-        <!--<th>Email</th>-->
-        <th>Service Finish Date</th><th>Role</th><th>Up/Down Balance</th>
-        <th>Money Balance</th>
-        <!--<th>Rent Debt</th>-->
-        <th>Service Status</th><th>Expiry Date</th>
-        <th>Statistics</th><th>Recharge</th>
-      </tr></thead>
-      <tbody>{"".join(rows)}</tbody>
-    </table>"""
-
-
-LNET_ONE_LINE = lnet_users_page(
-    _lnet_user_row(
-        "alhussainbasheir", "214737",
-        start="2026-08-24", finish="2026-09-23",
-        status="Active", plan="Unlimited Home Basic",
-    )
+from .testing_lnet import (  # noqa: E402
+    HOUSEHOLD,
+    ONE_LINE,
+    Reply,
+    lnet_account,
+    deposit_opened,
+    lnet_session,
+    local_stamp,
+    paid,
+    patch_lnet,
 )
-
-# One phone, three lines — the shape the field warned about.
-LNET_THREE_LINES = lnet_users_page(
-    _lnet_user_row(
-        "basheir.home", "214737", start="2026-08-24", finish="2026-09-23",
-        status="Active", plan="Unlimited Home Basic", money="12.50",
-    ),
-    _lnet_user_row(
-        "basheir.shop", "214740", start="2026-01-02", finish="2026-02-02",
-        status="Expired", plan="Unlimited Home Basic Plus",
-    ),
-    _lnet_user_row(
-        "basheir.old", "214741", start="2025-01-02", finish="2025-02-02",
-        status="Suspended", plan="WIFI-Home Basic",
-    ),
-)
-
-LNET_RECHARGE_FORM = """
-<form action="https://b/lnet-billing/public/admin/settings/users/recharge/214737" method="post">
-  <div style="display:none">
-  <input type="hidden" name="ci_csrf_token" value="tok-from-form" /></div>
-  <input type="text" id="recharge_amount" name="recharge_amount" />
-  <select id="recharge_type" name="recharge_type">
-    <option value="1">Cash</option><option value="2">Cheque</option></select>
-  <input type="text" id="extra_gb" name="extra_gb" value="0" />
-  <input value="214737" type="hidden" id="user_id" name="user_id" />
-</form>
-"""
-
-def lnet_payments_report(rows=None) -> str:
-    """The agency payments report.
-
-    Rows are built relative to *now* rather than frozen, because the resolver
-    reasons about how far back the page reaches — a fixture with hardcoded
-    dates would quietly stop covering "an hour ago" the day after it was
-    written. Times are printed in the portal's own clock (shop-local), which
-    is what the parser converts back out of.
-    """
-    from apps.core.timeutils import business_timezone
-
-    if rows is None:
-        now = timezone.now()
-        rows = [
-            ("4300578", Decimal("25"), Decimal("518.8"), "alhussainbasheir",
-             now - timedelta(hours=2)),
-            ("4300494", Decimal("45"), Decimal("542.55"), "someone.else",
-             now - timedelta(hours=4)),
-        ]
-    body = []
-    for serial, amount, final, customer, at in rows:
-        local = at.astimezone(business_timezone()).strftime("%Y-%m-%d %H:%M:%S")
-        body.append(
-            f"""
-<tr><td>{serial}</td><td>{local}</td><td>{amount}</td><td>Cash</td><td></td>
-    <td></td><td>{final}</td><td>0</td><td></td><td> verified </td>
-    <td>{local}</td><td>{customer}</td><td>lnet_r67</td>
-    <!-- <td>x</td> <td>y</td>-->
-    <td></td><td>Reprint</td></tr>"""
-        )
-    return """
-<table class="table table-striped"><thead><tr>
-  <th>S/N</th><th>Payment Date</th><th>Payment Amount</th><th>Payment Type</th>
-  <th>Bank</th><th>Cheque Number</th><th>Final Balance</th><th>Extra Gb</th>
-  <th>Comment</th><th>Status</th><th>Final Date</th><th>Customer Name</th>
-  <th>Recharged By</th>
-  <!-- <th>Created At</th> <th>Updated At</th>-->
-  <th>Cancel Payment</th><th>Reprint</th>
-</tr></thead><tbody>""" + "".join(body) + "</tbody></table>"
-
-
-# The portal serves these as text/html; the driver must parse before believing.
-LNET_VALIDATE_OK = (
-    '{"status":"success","message":"Payment is ready for recharge.",'
-    '"data":{"payment_date":"2026-09-20 17:40:44","serial_number":4300665,'
-    '"payment_amount":45,"extra_gb":"0","current_user_id":203397,'
-    '"new_balance":517.85,"recharge_type":"1","bank":null,'
-    '"cheque_number":null,"total":"45"}}'
-)
-LNET_COMMIT_OK = (
-    '{"status":"success","message":"Customer has been successfully recharged '
-    'and your balance has been successfully updated."}'
-)
-
-
-class _LnetFakeSession:
-    """Routes by URL path, because this driver makes many different calls."""
-
-    def __init__(self, *, pages=None, posts=None, raise_on=None):
-        self.pages = dict(pages or {})
-        self.posts = dict(posts or {})
-        self.raise_on = raise_on or {}
-        self.get_calls = []
-        self.post_calls = []
-        # See _FakeSession.cookies.
-        self.cookies = {}
-
-    def _match(self, table, url):
-        for fragment, value in table.items():
-            if fragment in url:
-                return value
-        return None
-
-    def get(self, url, **kwargs):
-        self.get_calls.append((url, kwargs))
-        if self._match(self.raise_on, url) == "get":
-            raise lnet_module.requests.RequestException("boom")
-        found = self._match(self.pages, url)
-        if found is None:
-            raise AssertionError(f"unscripted GET {url}")
-        return found
-
-    def post(self, url, **kwargs):
-        self.post_calls.append((url, kwargs))
-        if self._match(self.raise_on, url) == "post":
-            raise lnet_module.requests.RequestException("boom")
-        found = self._match(self.posts, url)
-        if found is None:
-            raise AssertionError(f"unscripted POST {url}")
-        return found
-
-    def mount(self, prefix, adapter):
-        """A real Session has one; the drivers mount a shared pool on it."""
-
-
-class _LnetResponse(_FakeResponse):
-    def __init__(self, text, status_code=200, url="https://b/lnet-billing/public/"):
-        super().__init__(text, status_code)
-        self.url = url
-
-
-def lnet_account(**kwargs) -> IntegrationAccount:
-    defaults = {
-        "provider": "lnet",
-        "base_url": "https://b/lnet-billing/public",
-        "username": "lnet_r67",
-    }
-    defaults.update(kwargs)
-    return make_account(**defaults)
-
-
-def patch_lnet(session):
-    return mock.patch(
-        "apps.integrations.providers.lnet.requests.Session", return_value=session
-    )
-
-
-def lnet_session(*, users=LNET_ONE_LINE, **overrides):
-    """A session that can log in, search, and render the recharge form."""
-    pages = {
-        "/login": _LnetResponse(LNET_LOGIN_PAGE),
-        "/admin/settings/users/recharge/": _LnetResponse(LNET_RECHARGE_FORM),
-        "/admin/reports/payments": _LnetResponse(lnet_payments_report()),
-        "/admin/settings/users": _LnetResponse(users),
-    }
-    pages.update(overrides.pop("pages", {}))
-    posts = {"/login": _LnetResponse(LNET_HOME_PAGE)}
-    posts.update(overrides.pop("posts", {}))
-    return _LnetFakeSession(pages=pages, posts=posts, **overrides)
-
-
-class LnetAuthTests(TestCase):
-    def test_probe_reads_the_float_from_the_newest_payment(self):
-        # The portal renders no balance anywhere; Final Balance is all there is.
-        with patch_lnet(lnet_session()):
-            result = LnetProvider(lnet_account()).probe()
-        self.assertTrue(result.ok)
-        self.assertEqual(result.balance, Decimal("518.8"))
-
-    def test_login_form_coming_back_is_unauthorized(self):
-        session = lnet_session(posts={"/login": _LnetResponse(LNET_LOGIN_PAGE)})
-        with patch_lnet(session):
-            result = LnetProvider(lnet_account()).probe()
-        self.assertFalse(result.ok)
-        self.assertEqual(result.error_code, ERROR_UNAUTHORIZED)
-
-    def test_landing_back_on_the_login_url_is_unauthorized(self):
-        # Some builds answer a bad password with a bare redirect back.
-        session = lnet_session(
-            posts={"/login": _LnetResponse("", url="https://b/lnet-billing/public/login")}
-        )
-        with patch_lnet(session):
-            result = LnetProvider(lnet_account()).probe()
-        self.assertFalse(result.ok)
-        self.assertEqual(result.error_code, ERROR_UNAUTHORIZED)
-
-    def test_waf_403_is_unreachable_not_a_bad_password(self):
-        # Telling an owner their password is wrong when their network is
-        # blocked sends them to reset a credential that was fine.
-        session = lnet_session(pages={"/login": _LnetResponse("denied", 403)})
-        with patch_lnet(session):
-            result = LnetProvider(lnet_account()).probe()
-        self.assertFalse(result.ok)
-        self.assertEqual(result.error_code, ERROR_UNREACHABLE)
-
-    def test_probe_survives_an_unreadable_payments_report(self):
-        # Credentials proved good at login; a missing report is a missing
-        # balance, not a failed probe.
-        session = lnet_session(pages={"/admin/reports/payments": _LnetResponse("", 500)})
-        with patch_lnet(session):
-            result = LnetProvider(lnet_account()).probe()
-        self.assertTrue(result.ok)
-        self.assertIsNone(result.balance)
-
-    def test_login_posts_the_page_csrf_token(self):
-        session = lnet_session()
-        with patch_lnet(session):
-            LnetProvider(lnet_account()).probe()
-        _url, kwargs = session.post_calls[0]
-        self.assertEqual(kwargs["data"]["ci_csrf_token"], "tok-from-login")
-        self.assertEqual(kwargs["data"]["login"], "lnet_r67")
-
-
-class _StaleThenFreshLnetSession(_LnetFakeSession):
-    """One path answers dead-then-alive; every other path is scripted as usual.
-
-    ``_LnetFakeSession`` maps a URL fragment to a single, fixed response,
-    which cannot express "the first call to this path finds a dead session,
-    the retry after a relogin finds a live one" — exactly the sequence the
-    one-shot retry in ``_get`` exists to survive. This layers a small queue
-    over ONE path for that, and falls back to the normal fixture for
-    everything else, including the forced relogin itself.
-    """
-
-    def __init__(self, *, stale_path, stale_response, fresh_response, **kwargs):
-        super().__init__(**kwargs)
-        self._stale_path = stale_path
-        self._queue = [stale_response, fresh_response]
-
-    def get(self, url, **kwargs):
-        if self._stale_path in url and self._queue:
-            self.get_calls.append((url, kwargs))
-            return self._queue.pop(0)
-        return super().get(url, **kwargs)
-
-
-@CACHED_PROVIDER_SESSIONS
-class LnetSessionReuseTests(TestCase):
-    """LNET's login is the more expensive of the two apps drive: a GET for a
-    CSRF token, then a POST — twice the round trips HD Box's login costs, on
-    top of a search that can itself take up to three tries (see
-    ``LnetResolvedCardTests``). These prove the login half of that is spent
-    once, not once per capability call and not once per search in a shift.
-    """
-
-    def setUp(self):
-        cache.clear()
-
-    def test_one_login_serves_lookup_offers_and_profile(self):
-        session = lnet_session()
-        with patch_lnet(session):
-            driver = LnetProvider(lnet_account())
-            lookup = driver.lookup("alhussainbasheir")
-            self.assertTrue(lookup.ok, lookup.error_detail)
-            offers = driver.offers("alhussainbasheir")
-            self.assertTrue(offers.ok, offers.error_detail)
-            profile = driver.subscriber_profile("alhussainbasheir")
-            self.assertTrue(profile.ok, profile.error_detail)
-
-        login_gets = [u for u, _k in session.get_calls if u.endswith("/login")]
-        login_posts = [u for u, _k in session.post_calls if u.endswith("/login")]
-        self.assertEqual(len(login_gets), 1)
-        self.assertEqual(len(login_posts), 1)
-
-    def test_a_second_driver_instance_reuses_the_warm_cache_too(self):
-        account = lnet_account()
-        with patch_lnet(lnet_session()):
-            self.assertTrue(LnetProvider(account).probe().ok)
-
-        second = lnet_session()
-        with patch_lnet(second):
-            self.assertTrue(LnetProvider(account).probe().ok)
-        # No login page GET and no login POST at all — the cached cookie was
-        # used straight away.
-        self.assertEqual([u for u, _k in second.get_calls if u.endswith("/login")], [])
-        self.assertEqual(second.post_calls, [])
-
-    def test_a_stale_cached_session_is_retried_once_not_reported_as_a_failure(self):
-        account = lnet_account()
-        with patch_lnet(lnet_session()):
-            self.assertTrue(LnetProvider(account).probe().ok)
-
-        session = _StaleThenFreshLnetSession(
-            stale_path="/admin/reports/payments",
-            stale_response=_LnetResponse(
-                LNET_LOGIN_PAGE, url="https://b/lnet-billing/public/login"
-            ),
-            fresh_response=_LnetResponse(lnet_payments_report()),
-            pages={"/login": _LnetResponse(LNET_LOGIN_PAGE)},
-            posts={"/login": _LnetResponse(LNET_HOME_PAGE)},
-        )
-        with patch_lnet(session):
-            result = LnetProvider(account).probe()
-
-        self.assertTrue(result.ok, result.error_detail)
-        login_posts = [u for u, _k in session.post_calls if u.endswith("/login")]
-        self.assertEqual(len(login_posts), 1)
-
-    def test_a_session_that_was_never_cached_gets_no_retry_on_expiry(self):
-        session = lnet_session(posts={"/login": _LnetResponse(LNET_LOGIN_PAGE)})
-        with patch_lnet(session):
-            result = LnetProvider(lnet_account()).probe()
-        self.assertFalse(result.ok)
-        self.assertEqual(result.error_code, ERROR_UNAUTHORIZED)
-        login_posts = [u for u, _k in session.post_calls if u.endswith("/login")]
-        self.assertEqual(len(login_posts), 1)
-
-    def test_a_password_edit_is_not_served_a_replay_of_the_old_login(self):
-        account = lnet_account()
-        with patch_lnet(lnet_session()):
-            self.assertTrue(LnetProvider(account).probe().ok)
-
-        account.set_secret(catalog.FIELD_PASSWORD, "a-new-password")
-        account.save()
-
-        second = lnet_session()
-        with patch_lnet(second):
-            self.assertTrue(LnetProvider(account).probe().ok)
-        login_posts = [u for u, _k in second.post_calls if u.endswith("/login")]
-        self.assertEqual(len(login_posts), 1)
-
-
-class LnetLookupTests(TestCase):
-    def test_one_match_sets_card_and_reads_every_column(self):
-        with patch_lnet(lnet_session()):
-            result = LnetProvider(lnet_account()).lookup("0910682854")
-        self.assertTrue(result.ok)
-        self.assertFalse(result.is_ambiguous)
-        card = result.card
-        self.assertEqual(card.card_no, "alhussainbasheir")
-        self.assertEqual(card.provider_id, "214737")
-        # The trap: commented-out cells shift every column left if not stripped.
-        self.assertEqual(card.status, "Active")
-        self.assertEqual(card.package_name, "Unlimited Home Basic")
-        # Stored as UTC, read back in the shop's clock — the portal prints a
-        # bare local date, and 2026-09-23 there is 2026-09-22T22:00Z here.
-        shop = business_timezone()
-        self.assertEqual(
-            card.expire_at.astimezone(shop).date().isoformat(), "2026-09-23"
-        )
-        self.assertEqual(
-            card.start_at.astimezone(shop).date().isoformat(), "2026-08-24"
-        )
-
-    def test_one_phone_with_several_lines_returns_all_of_them(self):
-        with patch_lnet(lnet_session(users=LNET_THREE_LINES)):
-            result = LnetProvider(lnet_account()).lookup("0910682854")
-        self.assertTrue(result.ok)
-        self.assertTrue(result.is_ambiguous)
-        self.assertEqual(
-            [c.card_no for c in result.candidates],
-            ["basheir.home", "basheir.shop", "basheir.old"],
-        )
-        self.assertEqual(
-            [c.status for c in result.candidates], ["Active", "Expired", "Suspended"]
-        )
-        # Nothing may be chosen for the customer.
-        self.assertIsNone(result.card)
-
-    def test_a_line_carries_the_money_already_on_it(self):
-        with patch_lnet(lnet_session(users=LNET_THREE_LINES)):
-            result = LnetProvider(lnet_account()).lookup("0910682854")
-        self.assertEqual(result.candidates[0].card_balance, Decimal("12.50"))
-
-    def test_no_match_is_not_found(self):
-        with patch_lnet(lnet_session(users=lnet_users_page())):
-            result = LnetProvider(lnet_account()).lookup("0000000000")
-        self.assertFalse(result.ok)
-        self.assertEqual(result.error_code, ERROR_NOT_FOUND)
-
-    def test_a_digit_term_tries_mobile_before_username(self):
-        session = lnet_session()
-        with patch_lnet(session):
-            LnetProvider(lnet_account()).lookup("0910682854")
-        search = [k for _u, k in session.get_calls if "params" in k][0]
-        self.assertEqual(search["params"]["search_by"], "mobile")
-
-    def test_a_lettered_term_never_wastes_a_mobile_search(self):
-        session = lnet_session()
-        with patch_lnet(session):
-            LnetProvider(lnet_account()).lookup("basheir.home")
-        modes = [k["params"]["search_by"] for _u, k in session.get_calls if "params" in k]
-        self.assertNotIn("mobile", modes)
-        self.assertEqual(modes[0], "username")
-
-
-class LnetResolvedCardTests(TestCase):
-    """The bug behind Annaseem's "offers never show up": a search that FOUND
-    the line still failed to price it, whenever the search term was not
-    itself the exact username.
-
-    Every existing ``LnetOfferTests``/``LnetLookupTests`` fixture searches
-    for ``"alhussainbasheir"`` — the username itself — so none of them could
-    have caught this: ``offers()`` and ``subscriber_profile()`` re-search for
-    whatever they are handed and keep only an EXACT match against it, which
-    is correct when the caller already has the username and silently empty
-    whenever it does not. A till searches by phone number "almost always"
-    (the driver's own docstring), so this was not an edge case — it was
-    close to the ordinary path.
-    """
-
-    def test_offers_by_the_raw_search_term_alone_finds_nothing(self):
-        # The reproduction: a phone-shaped term finds the line (lookup works —
-        # "mobile" is tried and LNET_ONE_LINE answers, whatever the term was),
-        # but the line's real identifier is a username, not that phone number,
-        # so asking offers() for the SAME raw term fails the exact match.
-        with patch_lnet(lnet_session()):
-            driver = LnetProvider(lnet_account())
-            found = driver.lookup("0910682854")
-            self.assertTrue(found.ok)
-            self.assertEqual(found.card.card_no, "alhussainbasheir")
-
-            offers = driver.offers("0910682854")
-        self.assertFalse(offers.ok)
-        self.assertEqual(offers.error_code, ERROR_NOT_FOUND)
-        self.assertIn("0910682854", offers.error_detail)
-
-    def test_passing_the_resolved_card_finds_it(self):
-        with patch_lnet(lnet_session()):
-            driver = LnetProvider(lnet_account())
-            found = driver.lookup("0910682854")
-            offers = driver.offers("0910682854", resolved=found.card)
-        self.assertTrue(offers.ok, offers.error_detail)
-        self.assertTrue(offers.options)
-
-    def test_subscriber_profile_has_the_identical_gap_and_the_identical_fix(self):
-        with patch_lnet(lnet_session()):
-            driver = LnetProvider(lnet_account())
-            found = driver.lookup("0910682854")
-
-            broken = driver.subscriber_profile("0910682854")
-            self.assertFalse(broken.ok)
-
-            fixed = driver.subscriber_profile("0910682854", resolved=found.card)
-        self.assertTrue(fixed.ok, fixed.error_detail)
-        self.assertEqual(fixed.profile.subscriber_ref, "alhussainbasheir")
-
-    def test_the_resolved_card_skips_searching_again_entirely(self):
-        """Not just correct — the whole point is one search, not two more."""
-        session = lnet_session()
-        with patch_lnet(session):
-            driver = LnetProvider(lnet_account())
-            found = driver.lookup("0910682854")
-            searches_after_lookup = len(session.get_calls)
-            offers = driver.offers("0910682854", resolved=found.card)
-        self.assertTrue(offers.ok)
-        # offers() logs in again on its own (session reuse across calls is
-        # LnetSessionReuseTests' job, not this one) — what this proves is
-        # narrower: of the calls that follow the lookup, none is a SEARCH
-        # (the exact-match users page), only the login and the recharge form.
-        new_calls = [
-            url for url, _kwargs in session.get_calls[searches_after_lookup:]
-        ]
-        search_calls = [
-            url for url in new_calls if url.rstrip("/").endswith("/settings/users")
-        ]
-        self.assertEqual(search_calls, [])
-        self.assertTrue(
-            any("/admin/settings/users/recharge/" in url for url in new_calls),
-            new_calls,
-        )
-
-    def test_recharge_is_unaffected_it_never_receives_a_resolved_card(self):
-        """The write path keeps verifying its own exact match, always.
-
-        recharge() is reached from checkout with the card_no the customer's
-        line was ADDED TO CART under — already the resolved username, from
-        card_payload() — never from a raw search term, and it has no
-        ``resolved`` parameter to accept one. This is deliberate: unlike a
-        read, a stale or mismatched resolution here would mean spending the
-        float against the wrong line, so the write keeps doing its own
-        search-and-verify rather than trusting anything a caller hands it.
-        """
-        self.assertNotIn("resolved", lnet_module.LnetProvider.recharge.__code__.co_varnames)
 
 
 class LnetOfferTests(TestCase):
@@ -4515,9 +3989,7 @@ class LnetOfferTests(TestCase):
 
 
     def test_a_line_that_cannot_be_recharged_is_refused_before_the_customer_pays(self):
-        session = lnet_session(
-            pages={"/admin/settings/users/recharge/": _LnetResponse("<p>nope</p>")}
-        )
+        session = lnet_session(fail={"/cabinet/add-funds": Reply("<p>nope</p>")})
         with patch_lnet(session):
             result = LnetProvider(lnet_account()).offers("alhussainbasheir")
         self.assertFalse(result.ok)
@@ -4525,7 +3997,7 @@ class LnetOfferTests(TestCase):
 
     def test_a_near_miss_username_is_never_acted_on(self):
         # Search is a substring match; "basheir" must not resolve to a line.
-        with patch_lnet(lnet_session(users=LNET_THREE_LINES)):
+        with patch_lnet(lnet_session(customers=HOUSEHOLD)):
             result = LnetProvider(lnet_account()).offers("basheir")
         self.assertFalse(result.ok)
         self.assertEqual(result.error_code, ERROR_NOT_FOUND)
@@ -4656,196 +4128,6 @@ class LnetQuoteTests(TestCase):
         )
 
 
-class LnetRechargeTests(TransactionTestCase):
-    """The write path, and the three outcomes it has to tell apart."""
-
-    def _session(self, **overrides):
-        posts = {
-            "/login": _LnetResponse(LNET_HOME_PAGE),
-            "validatePaymentAJAX": _LnetResponse(LNET_VALIDATE_OK),
-            "rechargeOperatorPaymentAJAX": _LnetResponse(LNET_COMMIT_OK),
-        }
-        posts.update(overrides.pop("posts", {}))
-        return lnet_session(posts=posts, **overrides)
-
-    def test_a_successful_recharge_reports_the_serial_and_the_new_float(self):
-        session = self._session()
-        with patch_lnet(session):
-            result = LnetProvider(lnet_account()).recharge(
-                "alhussainbasheir", "topup:45", expected_cost=Decimal("42.75")
-            )
-        self.assertTrue(result.ok)
-        self.assertEqual(result.reference, "4300665")
-        self.assertEqual(result.balance_after, Decimal("517.85"))
-        self.assertEqual(result.receipt["username"], "alhussainbasheir")
-
-    def test_it_always_declares_cash_and_never_a_cheque(self):
-        session = self._session()
-        with patch_lnet(session):
-            LnetProvider(lnet_account()).recharge("alhussainbasheir", "topup:45")
-        sent = [k for u, k in session.post_calls if "validatePaymentAJAX" in u][0]
-        self.assertEqual(sent["data"]["recharge_type"], lnet_module.RECHARGE_TYPE_CASH)
-        self.assertEqual(sent["data"]["bank"], lnet_module.BANK_PLACEHOLDER)
-        self.assertEqual(sent["data"]["cheque_number"], "")
-        self.assertEqual(sent["data"]["extra_gb"], "0")
-        self.assertEqual(sent["data"]["recharge_amount"], "45")
-
-    def test_it_posts_the_token_from_the_recharge_form_not_the_login_page(self):
-        session = self._session()
-        with patch_lnet(session):
-            LnetProvider(lnet_account()).recharge("alhussainbasheir", "topup:45")
-        sent = [k for u, k in session.post_calls if "validatePaymentAJAX" in u][0]
-        self.assertEqual(sent["data"]["ci_csrf_token"], "tok-from-form")
-
-    def test_the_commit_echoes_back_exactly_what_the_server_computed(self):
-        session = self._session()
-        with patch_lnet(session):
-            LnetProvider(lnet_account()).recharge("alhussainbasheir", "topup:45")
-        sent = [k for u, k in session.post_calls if "rechargeOperator" in u][0]
-        self.assertEqual(sent["data"]["serial_number"], "4300665")
-        self.assertEqual(sent["data"]["current_user_id"], "203397")
-        # Not "517.8500" — the portal's own wire form, unchanged.
-        self.assertEqual(sent["data"]["new_balance"], "517.85")
-
-    def test_a_moved_cost_is_refused_before_anything_is_sent(self):
-        session = self._session()
-        with patch_lnet(session):
-            result = LnetProvider(lnet_account()).recharge(
-                "alhussainbasheir", "topup:45", expected_cost=Decimal("40.00")
-            )
-        self.assertTrue(result.is_definite_failure)
-        self.assertFalse(
-            [u for u, _k in session.post_calls if "validatePaymentAJAX" in u]
-        )
-
-    def test_a_refused_payment_is_a_definite_failure(self):
-        # The one outcome where the float and the customer are both untouched.
-        session = self._session(
-            posts={
-                "validatePaymentAJAX": _LnetResponse(
-                    '{"status":"error","message":"This user is not active"}'
-                )
-            }
-        )
-        with patch_lnet(session):
-            result = LnetProvider(lnet_account()).recharge(
-                "alhussainbasheir", "topup:45"
-            )
-        self.assertTrue(result.is_definite_failure)
-        self.assertEqual(result.error_code, ERROR_PROVIDER_ERROR)
-        self.assertIn("This user is not active", result.error_detail)
-
-    def test_an_empty_float_is_named_as_one_not_a_generic_refusal(self):
-        # LNET's exact words at Annaseem (2026-10-11, 2026-10-28). Named, the
-        # till says «رصيد الوكالة غير كافٍ» and the cashier stops retrying.
-        session = self._session(
-            posts={
-                "validatePaymentAJAX": _LnetResponse(
-                    '{"status":"error","message":"Your balance is not enough'
-                    ' to recharge the customer."}'
-                )
-            }
-        )
-        with patch_lnet(session):
-            result = LnetProvider(lnet_account()).recharge(
-                "alhussainbasheir", "topup:45"
-            )
-        self.assertTrue(result.is_definite_failure)
-        self.assertFalse(result.indeterminate)
-        self.assertEqual(result.error_code, ERROR_INSUFFICIENT_FLOAT)
-        self.assertIn("not enough", result.error_detail)
-        # Refused before a serial existed: the float was never asked to pay.
-        self.assertFalse(
-            [u for u, _k in session.post_calls if "rechargeOperator" in u]
-        )
-
-    def test_it_asks_lnet_even_when_the_float_it_last_saw_is_too_low(self):
-        # The stored float is a reading, not the truth: the owner may have
-        # topped up on the website since. LNET decides, not our copy of it.
-        account = lnet_account()
-        account.balance = Decimal("1.00")
-        account.balance_at = timezone.now()
-        account.save(update_fields=["balance", "balance_at"])
-        session = self._session()
-        with patch_lnet(session):
-            result = LnetProvider(account).recharge("alhussainbasheir", "topup:45")
-        self.assertTrue(result.ok, result.error_detail)
-        self.assertTrue(
-            [u for u, _k in session.post_calls if "validatePaymentAJAX" in u]
-        )
-
-    def test_a_lost_answer_to_the_payment_call_is_indeterminate(self):
-        session = self._session(raise_on={"validatePaymentAJAX": "post"})
-        with patch_lnet(session):
-            result = LnetProvider(lnet_account()).recharge(
-                "alhussainbasheir", "topup:45"
-            )
-        self.assertFalse(result.ok)
-        self.assertTrue(result.indeterminate)
-        self.assertEqual(result.error_code, ERROR_INDETERMINATE)
-
-    def test_an_unreadable_answer_to_the_payment_call_is_indeterminate(self):
-        # A 500 here may still have written the payment row.
-        session = self._session(
-            posts={"validatePaymentAJAX": _LnetResponse("<html>oops</html>", 500)}
-        )
-        with patch_lnet(session):
-            result = LnetProvider(lnet_account()).recharge(
-                "alhussainbasheir", "topup:45"
-            )
-        self.assertTrue(result.indeterminate)
-
-    def test_a_failed_float_debit_is_indeterminate_and_keeps_the_serial(self):
-        # THE case this driver exists to get right: the customer has already
-        # been credited, so this is never a failure a caller may retry — and
-        # the serial number is the only thing that makes it reconcilable.
-        session = self._session(
-            posts={
-                "rechargeOperatorPaymentAJAX": _LnetResponse(
-                    '{"status":"error","message":"session expired"}'
-                )
-            }
-        )
-        with patch_lnet(session):
-            result = LnetProvider(lnet_account()).recharge(
-                "alhussainbasheir", "topup:45"
-            )
-        self.assertFalse(result.ok)
-        self.assertTrue(result.indeterminate)
-        self.assertFalse(result.is_definite_failure)
-        self.assertEqual(result.reference, "4300665")
-        self.assertEqual(result.receipt["serial_number"], "4300665")
-
-    def test_a_lost_answer_to_the_float_debit_is_indeterminate(self):
-        session = self._session(raise_on={"rechargeOperatorPaymentAJAX": "post"})
-        with patch_lnet(session):
-            result = LnetProvider(lnet_account()).recharge(
-                "alhussainbasheir", "topup:45"
-            )
-        self.assertTrue(result.indeterminate)
-        self.assertEqual(result.reference, "4300665")
-
-    def test_an_unknown_option_never_reaches_the_provider(self):
-        session = self._session()
-        with patch_lnet(session):
-            result = LnetProvider(lnet_account()).recharge("alhussainbasheir", "renew:12")
-        self.assertTrue(result.is_definite_failure)
-        self.assertFalse(session.post_calls)
-
-
-class LnetHistoryTests(TestCase):
-    def test_history_keeps_only_this_line_and_prices_it_at_cost(self):
-        with patch_lnet(lnet_session()):
-            result = LnetProvider(lnet_account()).purchase_history("alhussainbasheir")
-        self.assertTrue(result.ok)
-        self.assertEqual(result.total, 1)
-        entry = result.purchases[0]
-        self.assertEqual(entry.reference, "4300578")
-        # Face value 25 cost the float 23.75 — the reconcilable number.
-        self.assertEqual(entry.cost, Decimal("23.75"))
-        self.assertTrue(entry.is_ours)
-
-
 class LnetCheckoutTests(TestCase):
     """What the till may and may not decide for itself."""
 
@@ -4939,13 +4221,20 @@ class SubmittedResolutionTests(TestCase):
         row.refresh_from_db()
         return row
 
-    def _reconcile(self):
-        with patch_lnet(lnet_session()):
+    def _history(self):
+        """One 25-dinar payment half an hour ago; the deposit opened days before."""
+        now = timezone.now()
+        return [
+            paid(ONE_LINE[0], at=local_stamp(now - timedelta(minutes=30)),
+                 amount="25.00", payment_id="4300578"),
+            deposit_opened(at=local_stamp(now - timedelta(days=5))),
+        ]
+
+    def _reconcile(self, history=None):
+        with patch_lnet(lnet_session(history=self._history() if history is None else history)):
             return reconcile_account(self.account)
 
     def test_a_held_reference_found_in_the_log_confirms_the_sale(self):
-        # LNET hands back a serial even when the float debit fails, so this is
-        # the ordinary ending for its two-step write.
         row = self._submitted(cost="23.75", reference="4300578")
         result = self._reconcile()
         row.refresh_from_db()
@@ -4975,11 +4264,12 @@ class SubmittedResolutionTests(TestCase):
         self.assertEqual(row.last_error_code, "")
 
     def test_absence_from_a_log_that_does_not_reach_back_proves_nothing(self):
-        # Sent before the oldest row the report still shows — a busy agency
-        # pushes older payments off the page. Absence here is ignorance, not
-        # proof, so it must not become a second charge.
+        # Sent before this login's Splynx deposit existed, i.e. to the OLD
+        # portal. The Cashdesk cannot know about it, so absence there is
+        # ignorance, not proof, and must not become a second charge.
         row = self._submitted(cost="99.99", sent_ago_hours=72)
-        result = self._reconcile()
+        now = timezone.now()
+        result = self._reconcile(history=[deposit_opened(at=local_stamp(now - timedelta(hours=2)))])
         row.refresh_from_db()
         self.assertEqual(row.status, IntegrationFulfillment.Status.SUBMITTED)
         self.assertEqual(result["resolved"]["not_performed"], 0)
@@ -4987,9 +4277,7 @@ class SubmittedResolutionTests(TestCase):
 
     def test_an_unreadable_log_settles_nothing(self):
         row = self._submitted(cost="99.99")
-        session = lnet_session(
-            pages={"/admin/reports/payments": _LnetResponse("", 500)}
-        )
+        session = lnet_session(fail={"/cabinet/history": 500})
         with patch_lnet(session):
             result = reconcile_account(self.account)
         row.refresh_from_db()
@@ -5037,7 +4325,8 @@ class ProviderTimestampTests(TestCase):
         # A naive datetime here does not read oddly — it makes reconciliation
         # raise TypeError the moment it filters the log by time, which is how
         # the whole sweep silently reports itself as unreachable.
-        with patch_lnet(lnet_session()):
+        history_rows = [paid(ONE_LINE[0], at=local_stamp())]
+        with patch_lnet(lnet_session(history=history_rows)):
             history = LnetProvider(lnet_account()).purchase_history(
                 "alhussainbasheir"
             )
@@ -5045,27 +4334,11 @@ class ProviderTimestampTests(TestCase):
         self.assertIsNotNone(entry.at.tzinfo)
         self.assertLess(entry.at, timezone.now() + timedelta(days=365))
 
-    def test_lnet_reads_the_portal_clock_as_shop_local(self):
-        # The portal prints a bare wall clock in Africa/Tripoli (UTC+2), so
-        # 16:38:59 on its screen is 14:38:59 in the database.
-        parsed = lnet_module._parse_datetime("2026-09-20 16:38:59")
+    def test_lnet_reads_the_cashdesk_clock_as_shop_local(self):
+        # The Cashdesk prints a bare wall clock in Africa/Tripoli (UTC+2), so
+        # 16:01:49 on its screen is 14:01:49 in the database.
+        parsed = lnet_module._parse_datetime("2026-11-11 16:01:49")
         self.assertEqual(parsed.astimezone(dt_timezone.utc).hour, 14)
-
-    def test_lnet_card_dates_are_aware_too(self):
-        with patch_lnet(lnet_session()):
-            card = LnetProvider(lnet_account()).lookup("0910682854").card
-        self.assertIsNotNone(card.expire_at.tzinfo)
-
-    def test_a_page_says_how_far_back_it_is_complete(self):
-        with patch_lnet(lnet_session()):
-            history = LnetProvider(lnet_account()).purchase_history(
-                "alhussainbasheir"
-            )
-        # The report is account-wide and newest-first, so having read it we
-        # have seen every payment back to its oldest row.
-        self.assertIsNotNone(history.complete_since)
-        self.assertTrue(history.covers(timezone.now()))
-        self.assertFalse(history.covers(timezone.now() - timedelta(days=300)))
 
     def test_a_driver_making_no_claim_never_lets_absence_count_as_proof(self):
         blank = HistoryResult(ok=True)
@@ -5112,20 +4385,19 @@ class IntegrationTelemetryTests(TestCase):
         self.assertTrue(row.attributes["shape_ok"])
         self.assertEqual(row.metrics["matches"], 1)
 
-    def test_a_blocked_network_is_named_at_the_login_page(self):
+    def test_an_unreachable_host_is_named_at_the_login_page(self):
         # The row has to distinguish this from a wrong password, because the
         # fix is a different person's job.
-        session = lnet_session(pages={"/login": _LnetResponse("denied", 403)})
+        session = lnet_session(fail={"/cashdesk/login": requests.ConnectionError})
         with patch_lnet(session):
             LnetProvider(self.account).probe()
         self._flush()
         row = self._events().get()
         self.assertEqual(row.attributes["outcome"], ERROR_UNREACHABLE)
         self.assertEqual(row.attributes["step"], integ_telemetry.STEP_LOGIN_PAGE)
-        self.assertEqual(row.attributes["http_status"], 403)
 
     def test_a_bad_password_is_named_at_the_login_post(self):
-        session = lnet_session(posts={"/login": _LnetResponse(LNET_LOGIN_PAGE)})
+        session = lnet_session(cashdesk_login_ok=False)
         with patch_lnet(session):
             LnetProvider(self.account).probe()
         self._flush()
@@ -5136,24 +4408,25 @@ class IntegrationTelemetryTests(TestCase):
     def test_changed_markup_is_told_apart_from_a_missing_customer(self):
         # Both arrive as not_found. Only one of them is a bug we must fix, and
         # without shape_ok the two are indistinguishable in an export.
-        with patch_lnet(lnet_session(users=lnet_users_page())):
-            LnetProvider(self.account).lookup("0000000000")
+        with patch_lnet(lnet_session()):
+            LnetProvider(self.account).lookup("alnobody")
         self._flush()
         absent = self._events().get()
         self.assertEqual(absent.attributes["outcome"], ERROR_NOT_FOUND)
-        self.assertTrue(absent.attributes["shape_ok"], "the table was there")
+        self.assertTrue(absent.attributes["shape_ok"], "the API answered a list")
 
         integ_telemetry.reset()
         self._events().delete()
-        with patch_lnet(lnet_session(users="<p>redesigned</p>")):
+        redesigned = Reply(payload={"rows": []})
+        with patch_lnet(lnet_session(fail={"/admin/customers/customer": redesigned})):
             LnetProvider(self.account).lookup("0910682854")
         self._flush()
         broken = self._events().get()
-        self.assertEqual(broken.attributes["outcome"], ERROR_NOT_FOUND)
+        self.assertEqual(broken.attributes["outcome"], ERROR_UNEXPECTED)
         self.assertFalse(broken.attributes["shape_ok"], "our parser went blind")
 
     def test_a_login_page_without_its_token_reports_a_changed_page(self):
-        session = lnet_session(pages={"/login": _LnetResponse("<form></form>")})
+        session = lnet_session(fail={"/cashdesk/login": Reply("<form></form>")})
         with patch_lnet(session):
             LnetProvider(self.account).probe()
         self._flush()
@@ -5165,7 +4438,7 @@ class IntegrationTelemetryTests(TestCase):
         # A portal that is down is one fact, however many times a till of
         # cashiers rediscovers it. Telemetry has taken this product down once
         # already by writing a row per attempt.
-        session = lnet_session(pages={"/login": _LnetResponse("denied", 403)})
+        session = lnet_session(fail={"/cashdesk/login": requests.ConnectionError})
         with patch_lnet(session):
             for _ in range(5):
                 LnetProvider(self.account).probe()
@@ -5184,14 +4457,7 @@ class IntegrationTelemetryTests(TestCase):
     def test_every_recharge_attempt_writes_its_own_row(self):
         # Money. Folding two indeterminate charges into a count would erase
         # the evidence for a second customer's money.
-        session = lnet_session(
-            posts={
-                "validatePaymentAJAX": _LnetResponse(LNET_VALIDATE_OK),
-                "rechargeOperatorPaymentAJAX": _LnetResponse(
-                    '{"status":"error","message":"nope"}'
-                ),
-            }
-        )
+        session = lnet_session(deposit="1000.00", add_funds=Reply("<html>?</html>"))
         with patch_lnet(session):
             for _ in range(3):
                 LnetProvider(self.account).recharge(
@@ -5201,14 +4467,9 @@ class IntegrationTelemetryTests(TestCase):
         writes = self._events().filter(attributes__operation="recharge")
         self.assertEqual(writes.count(), 3)
 
-    def test_an_unknown_charge_is_critical_and_keeps_its_serial(self):
+    def test_an_unknown_charge_is_critical_and_says_it_was_sent(self):
         session = lnet_session(
-            posts={
-                "validatePaymentAJAX": _LnetResponse(LNET_VALIDATE_OK),
-                "rechargeOperatorPaymentAJAX": _LnetResponse(
-                    '{"status":"error","message":"session expired"}'
-                ),
-            }
+            deposit="1000.00", fail={"/cabinet/add-funds?": requests.ConnectionError}
         )
         with patch_lnet(session):
             LnetProvider(self.account).recharge("alhussainbasheir", "topup:45")
@@ -5217,18 +4478,11 @@ class IntegrationTelemetryTests(TestCase):
         from apps.analytics.models import AnalyticsEvent
 
         self.assertEqual(row.severity, AnalyticsEvent.Severity.CRITICAL)
-        # It got past the customer credit and failed on the float debit.
-        self.assertEqual(row.attributes["step"], integ_telemetry.STEP_COMMIT)
-        self.assertEqual(row.attributes["provider_reference"], "4300665")
+        self.assertEqual(row.attributes["outcome"], ERROR_INDETERMINATE)
 
     def test_a_refused_charge_is_an_error_not_a_crisis(self):
-        session = lnet_session(
-            posts={
-                "validatePaymentAJAX": _LnetResponse(
-                    '{"status":"error","message":"Balance not sufficient"}'
-                )
-            }
-        )
+        # A deposit too small for it: refused before anything was sent.
+        session = lnet_session(deposit="10.00")
         with patch_lnet(session):
             LnetProvider(self.account).recharge("alhussainbasheir", "topup:45")
         self._flush()
@@ -5236,7 +4490,7 @@ class IntegrationTelemetryTests(TestCase):
         from apps.analytics.models import AnalyticsEvent
 
         self.assertEqual(row.severity, AnalyticsEvent.Severity.ERROR)
-        self.assertEqual(row.attributes["step"], integ_telemetry.STEP_SUBMIT)
+        self.assertEqual(row.attributes["step"], integ_telemetry.STEP_FORM)
 
     def test_no_row_ever_carries_a_customer_identifier(self):
         # Analytics rows leave the shop. A card number is a subscriber and an
@@ -5381,20 +4635,6 @@ class ProviderConnectionReuseTests(TestCase):
 
         self.assertEqual(session_class.call_count, 1)
 
-    def test_a_reused_session_still_carries_its_csrf_token(self):
-        # The token travels with the session it belongs to. Handing back an
-        # empty one would not break a write — every write re-reads its own
-        # page's token — but it would quietly drop the fallback.
-        with patch_lnet(lnet_session()):
-            driver = LnetProvider(lnet_account())
-            _first, first_token, code, _detail = driver._login()
-            self.assertEqual(code, "")
-            _second, second_token, _code, _detail = driver._login()
-
-        self.assertTrue(first_token)
-        self.assertEqual(second_token, first_token)
-
-
 class CardViewConcurrencyTests(TestCase):
     """The offer ladder and the detail page are read at the same time.
 
@@ -5440,127 +4680,6 @@ class CardViewConcurrencyTests(TestCase):
         self.assertFalse(session.barrier_broken)
         self.assertTrue(resp.data["offers"])
         self.assertTrue(resp.data["subscriber"])
-
-
-class _LnetSearchSession(_LnetFakeSession):
-    """An LNET session that answers per search mode, and can block.
-
-    Every search is the same URL with different query parameters, so routing
-    by path — which is all ``_LnetFakeSession`` does — cannot tell a phone
-    search from a contract search. This can, which is what it takes to say
-    anything about which searches were issued and when.
-    """
-
-    def __init__(self, by_mode, *, barrier=None, barrier_modes=(), **kwargs):
-        super().__init__(
-            pages={
-                "/login": _LnetResponse(LNET_LOGIN_PAGE),
-                "/admin/settings/users/recharge/": _LnetResponse(LNET_RECHARGE_FORM),
-            },
-            posts={"/login": _LnetResponse(LNET_HOME_PAGE)},
-            **kwargs,
-        )
-        self.by_mode = dict(by_mode)
-        self.barrier = barrier
-        self.barrier_modes = tuple(barrier_modes)
-        self.barrier_broken = False
-
-    @property
-    def search_modes(self):
-        return [
-            k["params"]["search_by"] for _u, k in self.get_calls if "params" in k
-        ]
-
-    def get(self, url, **kwargs):
-        mode = (kwargs.get("params") or {}).get("search_by")
-        if mode is None:
-            return super().get(url, **kwargs)
-        self.get_calls.append((url, kwargs))
-        if self.barrier is not None and mode in self.barrier_modes:
-            try:
-                self.barrier.wait()
-            except threading.BrokenBarrierError:
-                self.barrier_broken = True
-        return _LnetResponse(self.by_mode.get(mode, lnet_users_page()))
-
-
-@CACHED_PROVIDER_SESSIONS
-class LnetSearchFanOutTests(TestCase):
-    """Three searches, one wait.
-
-    The portal can be asked by phone number, by username or by contract
-    number, and a term made of digits could be any of them. Asking in turn
-    meant a term it does not know by phone paid for that search in full
-    before the username search had even started: the field export
-    (2026-09-22) has the same lookup landing at ~1.4s when one mode answered
-    and 4.4s when the third one did.
-    """
-
-    def setUp(self):
-        cache.clear()
-        self.addCleanup(analytics_buffer.reset)
-
-    def test_the_mode_a_till_types_most_still_costs_one_request(self):
-        # A phone number the portal knows by phone number. Nothing is fanned
-        # out, because nothing needed to be: this is the ordinary counter
-        # search and it must not send the portal two requests it cannot use.
-        session = _LnetSearchSession({"mobile": LNET_ONE_LINE})
-        with patch_lnet(session):
-            result = LnetProvider(lnet_account()).lookup("0910682854")
-
-        self.assertTrue(result.ok, result.error_detail)
-        self.assertEqual(session.search_modes, ["mobile"])
-
-    def test_the_modes_left_after_a_miss_go_together(self):
-        # Proved with a barrier, not a clock: if username and contract are
-        # searched one after the other, the first waits alone and times out.
-        barrier = threading.Barrier(2, timeout=10)
-        session = _LnetSearchSession(
-            {"contract_number": LNET_ONE_LINE},
-            barrier=barrier,
-            barrier_modes=("username", "contract_number"),
-        )
-        with patch_lnet(session):
-            result = LnetProvider(lnet_account()).lookup("0910682854")
-
-        self.assertTrue(result.ok, result.error_detail)
-        self.assertFalse(session.barrier_broken)
-        self.assertEqual(sorted(session.search_modes[1:]), ["contract_number", "username"])
-        # The leading mode still went first, and alone.
-        self.assertEqual(session.search_modes[0], "mobile")
-
-    def test_a_term_two_modes_both_know_answers_by_priority_not_by_speed(self):
-        # The whole reason the old loop stopped at the first hit: a term that
-        # is one household's username and another's contract number must not
-        # come back as two unrelated households. Running the searches together
-        # must not turn that into "whichever thread finished first".
-        session = _LnetSearchSession(
-            {"username": LNET_ONE_LINE, "contract_number": LNET_THREE_LINES}
-        )
-        with patch_lnet(session):
-            result = LnetProvider(lnet_account()).lookup("0910682854")
-
-        self.assertTrue(result.ok, result.error_detail)
-        self.assertEqual(len(result.candidates), 1)
-        self.assertEqual(result.card.card_no, "alhussainbasheir")
-
-    def test_nothing_anywhere_is_still_not_found(self):
-        session = _LnetSearchSession({})
-        with patch_lnet(session):
-            result = LnetProvider(lnet_account()).lookup("0000000000")
-
-        self.assertFalse(result.ok)
-        self.assertEqual(result.error_code, ERROR_NOT_FOUND)
-        self.assertEqual(sorted(session.search_modes), ["contract_number", "mobile", "username"])
-
-    def test_a_lettered_term_never_wastes_a_mobile_search(self):
-        session = _LnetSearchSession({"contract_number": LNET_ONE_LINE})
-        with patch_lnet(session):
-            result = LnetProvider(lnet_account()).lookup("basheir.home")
-
-        self.assertTrue(result.ok, result.error_detail)
-        self.assertNotIn("mobile", session.search_modes)
-        self.assertEqual(session.search_modes[0], "username")
 
 
 class ParallelCallIdentityTests(TestCase):
@@ -5710,91 +4829,3 @@ class ProviderConnectionPoolTests(TestCase):
             connection_pool.pooled_hosts(), [account.resolved_base_url()]
         )
 
-
-@CACHED_PROVIDER_SESSIONS
-class LnetSearchModePickerTests(TestCase):
-    """What the cashier says the number is, and what that saves.
-
-    A phone number and a contract number are both digits: nothing on the
-    server can tell them apart, so every till search used to be a guess that
-    cost a round trip per wrong guess. The picker beside the search box is
-    the cheapest possible fix — the person holding the number already knows.
-    """
-
-    def setUp(self):
-        cache.clear()
-        self.addCleanup(analytics_buffer.reset)
-        connection_pool.reset()
-        self.addCleanup(connection_pool.reset)
-        ensure_role_groups()
-        User = get_user_model()
-        self.cashier = User.objects.create_user(username="csh3", password="x")
-        self.cashier.groups.add(Group.objects.get(name=CASHIER_GROUP))
-        self.client = APIClient()
-        self.client.force_authenticate(self.cashier)
-        self.account = lnet_account()
-
-    def test_a_contract_number_named_as_one_costs_a_single_search(self):
-        # The case the old code was worst at: digits the portal does not know
-        # by phone, so it walked mobile, then username, then contract — three
-        # round trips, ~4.4s on the Annaseem till. Named, it is one.
-        session = _LnetSearchSession({"contract_number": LNET_ONE_LINE})
-        with patch_lnet(session):
-            result = LnetProvider(self.account).lookup(
-                "214737", search_by="contract_number"
-            )
-
-        self.assertTrue(result.ok, result.error_detail)
-        self.assertEqual(session.search_modes, ["contract_number"])
-
-    def test_the_default_pick_is_still_the_phone_search(self):
-        session = _LnetSearchSession({"mobile": LNET_ONE_LINE})
-        with patch_lnet(session):
-            LnetProvider(self.account).lookup("0910682854", search_by="mobile")
-
-        self.assertEqual(session.search_modes, ["mobile"])
-
-    def test_a_wrong_pick_still_finds_the_line(self):
-        # The picker orders the search; it must never fence it. A cashier who
-        # leaves it on the wrong entry waits a second longer — they do not
-        # get told the customer does not exist.
-        session = _LnetSearchSession({"mobile": LNET_ONE_LINE})
-        with patch_lnet(session):
-            result = LnetProvider(self.account).lookup(
-                "0910682854", search_by="contract_number"
-            )
-
-        self.assertTrue(result.ok, result.error_detail)
-        self.assertEqual(session.search_modes[0], "contract_number")
-        self.assertIn("mobile", session.search_modes)
-
-    def test_a_pick_the_portal_does_not_offer_is_ignored(self):
-        session = _LnetSearchSession({"mobile": LNET_ONE_LINE})
-        with patch_lnet(session):
-            result = LnetProvider(self.account).lookup(
-                "0910682854", search_by="iris-scan"
-            )
-
-        self.assertTrue(result.ok, result.error_detail)
-        self.assertEqual(session.search_modes[0], "mobile")
-
-    def test_a_lettered_term_never_leads_with_a_phone_search(self):
-        # Whatever the picker says. A username has letters in it and the
-        # phone search cannot match one, so leading with it is a wasted trip.
-        session = _LnetSearchSession({"username": LNET_ONE_LINE})
-        with patch_lnet(session):
-            LnetProvider(self.account).lookup("basheir.home", search_by="mobile")
-
-        self.assertNotIn("mobile", session.search_modes)
-
-    def test_the_till_passes_the_pick_through_to_the_portal(self):
-        session = _LnetSearchSession({"contract_number": LNET_ONE_LINE})
-        with patch_lnet(session):
-            resp = self.client.get(
-                "/api/integrations/lnet/card/"
-                "?card_no=214737&search_by=contract_number"
-            )
-
-        self.assertEqual(resp.status_code, 200)
-        self.assertTrue(resp.data["ok"], resp.data)
-        self.assertEqual(session.search_modes, ["contract_number"])

@@ -655,6 +655,38 @@ class QareebProfileTests(TestCase):
         self.assertEqual(result.error_code, ERROR_PROFILE_MISMATCH)
         self.assertIsNone(result.balance)
 
+    def test_a_probe_that_cannot_read_profiles_reports_unreachable_not_a_profile(self):
+        # Seen at Annaseem 2026-11-09: Qareeb took 15 s to list profiles and the
+        # Settings test told the owner they had chosen the wrong profile.
+        account = logged_in(qareeb_account(profile_id=STORE_PROFILE))
+        fake = _FakeQareeb().on(
+            "GET", qareeb_driver.PROFILES_PATH, requests.ReadTimeout("read timed out")
+        )
+        with patch_qareeb(fake):
+            result = provider_for(account).probe()
+        self.assertFalse(result.ok)
+        self.assertEqual(result.error_code, ERROR_UNREACHABLE)
+        self.assertNotIn(qareeb_driver.ACCOUNT_PATH, fake.paths())
+
+    def test_a_purchase_that_cannot_read_profiles_is_refused_as_unreachable(self):
+        account = logged_in(qareeb_account(profile_id=PERSONAL_PROFILE))
+        fake = buying(_FakeQareeb())
+        fake.on("GET", qareeb_driver.PROFILES_PATH, requests.ReadTimeout("read timed out"))
+        with patch_qareeb(fake):
+            result = provider_for(account).recharge("", LIBYANA_5, expected_cost=None)
+        self.assertEqual(result.error_code, ERROR_UNREACHABLE)
+        self.assertTrue(result.is_definite_failure)
+        self.assertNotIn(qareeb_driver.CHECKOUT_PATH, fake.paths())
+
+    def test_quick_switch_still_names_the_profile_when_profiles_time_out(self):
+        account = logged_in(qareeb_account(profile_id=PERSONAL_PROFILE))
+        fake = buying(_FakeQareeb(), quick=True)
+        fake.on("GET", qareeb_driver.PROFILES_PATH, requests.ReadTimeout("read timed out"))
+        with patch_qareeb(fake):
+            self.assertTrue(provider_for(account).recharge("", LIBYANA_5, expected_cost=None).ok)
+        checkout = [c for c in fake.calls if c["path"] == qareeb_driver.CHECKOUT_PATH][0]
+        self.assertEqual(checkout["json"]["profile"], PERSONAL_PROFILE)
+
 
 class QareebVerificationTests(TestCase):
     def test_picture_then_code_then_a_trusted_device(self):

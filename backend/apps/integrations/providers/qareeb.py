@@ -416,11 +416,9 @@ class QareebProvider(IntegrationProvider):
         # Reconcile the profile first: the balance below is one wallet's, so it
         # must be read as the profile this shop chose, not whichever the shared
         # session drifted to. No choice, or already on it, is a no-op.
-        mismatch = self._ensure_active_profile()
-        if mismatch is not None:
-            return ProbeResult(
-                ok=False, error_code=ERROR_PROFILE_MISMATCH, error_detail=mismatch
-            )
+        refusal = self._ensure_active_profile()
+        if refusal is not None:
+            return ProbeResult(ok=False, error_code=refusal.code, error_detail=refusal.detail)
         response, code, detail = self._authed("GET", ACCOUNT_PATH)
         if response is None:
             return ProbeResult(ok=False, error_code=code, error_detail=detail)
@@ -480,14 +478,19 @@ class QareebProvider(IntegrationProvider):
     def _chosen_profile(self) -> str:
         return _plain_str((self.account.config or {}).get(CONFIG_PROFILE_ID))
 
-    def _ensure_active_profile(self) -> str | None:
+    def _ensure_active_profile(self) -> _ProfileRefusal | None:
         """Put the login on the chosen profile, switching to it if it drifted.
 
         Returns ``None`` when nothing is in the way — no profile was chosen (act
         as whatever the login is, exactly what the app does with ``profile:
         null``), the chosen one is already active, or it was switched to just
-        now. Returns a reason to refuse otherwise: the chosen profile is gone
-        from this login, or its list could not be read.
+        now. Returns why not otherwise: the chosen profile is gone from this
+        login, the provider refused the switch, or Qareeb could not be asked.
+
+        Only the first two are a profile problem. A list or switch that never
+        got an answer keeps its own code (``unreachable``…): telling the owner
+        "you chose the wrong profile" when Qareeb was merely slow sends them to
+        change a setting that was right all along.
 
         The Qareeb session is shared with the owner's phone and every other
         till, so which profile is active is shared state that drifts. Reconciling
@@ -500,15 +503,22 @@ class QareebProvider(IntegrationProvider):
             return None
         result = self.profiles()
         if not result.ok:
-            return f"could not read profiles: {result.error_code}"
+            return _ProfileRefusal(
+                code=result.error_code or ERROR_UNEXPECTED,
+                detail=f"could not read profiles: {result.error_detail or result.error_code}",
+            )
         known = {profile.profile_id: profile for profile in result.profiles}
         if chosen not in known:
-            return "the chosen profile is no longer available to this login"
+            return _ProfileRefusal(
+                code=ERROR_PROFILE_MISMATCH,
+                detail="the chosen profile is no longer available to this login",
+                gone=True,
+            )
         if known[chosen].is_current:
             return None
         return self._switch_profile(chosen)
 
-    def _switch_profile(self, profile_id: str) -> str | None:
+    def _switch_profile(self, profile_id: str) -> _ProfileRefusal | None:
         """Make the login act as ``profile_id``. ``None`` on success, else why not.
 
         A session change, not a per-request one: after a ``{"status": true}``
@@ -519,15 +529,24 @@ class QareebProvider(IntegrationProvider):
             "POST", SWITCH_PROFILE_PATH, json_body={"profile_id": profile_id}
         )
         if response is None:
-            return detail or f"could not switch profile: {error}"
+            return _ProfileRefusal(
+                code=error or ERROR_UNEXPECTED,
+                detail=detail or f"could not switch profile: {error}",
+            )
         payload = _json(response)
         body = payload if isinstance(payload, dict) else {}
         if response.status_code >= 400 or not _truthy(body.get("status")):
-            return _message(payload) or f"switch_profile answered {response.status_code}"
+            return _ProfileRefusal(
+                code=ERROR_PROFILE_MISMATCH,
+                detail=_message(payload) or f"switch_profile answered {response.status_code}",
+            )
         activated = _plain_str(body.get("profile_id"))
         if activated and activated != profile_id:
             # It answered success for a different profile than we asked to be on.
-            return "switch_profile activated a different profile"
+            return _ProfileRefusal(
+                code=ERROR_PROFILE_MISMATCH,
+                detail="switch_profile activated a different profile",
+            )
         return None
 
     def _balance(self) -> Decimal | None:
@@ -870,10 +889,10 @@ class QareebProvider(IntegrationProvider):
         refusal = self._ensure_active_profile()
         if refusal is None:
             return None, None
-        if cart.quick_switch and "no longer available" not in refusal:
+        if cart.quick_switch and not refusal.gone:
             return chosen, None
         return None, RechargeResult(
-            ok=False, error_code=ERROR_PROFILE_MISMATCH, error_detail=refusal
+            ok=False, error_code=refusal.code, error_detail=refusal.detail
         )
 
     def _set_quantity(self, code: str, quantity: int) -> RechargeResult | None:
@@ -1257,6 +1276,23 @@ def _cart_lock(account, *, wait_seconds: float = CART_LOCK_WAIT_SECONDS):
 
 # --- parsing ------------------------------------------------------------------
 _ONE_SECOND = timedelta(seconds=1)
+
+
+class _ProfileRefusal:
+    """Why the session could not be put on the chosen profile.
+
+    ``code`` is what the caller reports: ``profile_mismatch`` only for a real
+    profile problem, the transport's own code when Qareeb never answered.
+    ``gone`` marks a profile missing from the login, which no per-checkout
+    override can name either.
+    """
+
+    __slots__ = ("code", "detail", "gone")
+
+    def __init__(self, code: str, detail: str, gone: bool = False):
+        self.code = code
+        self.detail = detail
+        self.gone = gone
 
 
 class _CartItem:

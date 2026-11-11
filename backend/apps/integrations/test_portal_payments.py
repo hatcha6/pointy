@@ -1,19 +1,17 @@
-"""Payments made on LNET's website: the mirror, a line's history, and recording
-one as the sale it was.
+"""Payments made outside the till (LNET's Cashdesk page): the mirror, a line's
+history, and recording one as the sale it was.
 
-Every provider exchange here goes through ``PortalSession``, which serves a
-login and a payments report paged ten rows at a time exactly as the captured
-portal pages it — and fails the test on any other request. So every test in
-this file also proves that nothing in it ever sends a recharge.
+Every provider exchange here goes through ``PortalSession``, a stand-in for
+LNET's Splynx that serves the logins and this login's Cashdesk history — and
+fails the test on any payment POST. So every test in this file also proves
+that nothing in it ever sends a recharge.
 """
 
 from __future__ import annotations
 
-import re
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from unittest import mock
-from urllib.parse import urlsplit
 
 import requests
 from django.contrib.auth import get_user_model
@@ -40,9 +38,8 @@ from .providers.base import ERROR_UNEXPECTED, ERROR_UNREACHABLE
 from .providers.lnet import LnetProvider
 from .provisioning import service_variant_for
 from .reconciliation import reconcile_account
-from .tests import LNET_HOME_PAGE, LNET_LOGIN_PAGE, _LnetResponse, lnet_account
-
-REPORT_URL = "https://b/lnet-billing/public/admin/reports/payments"
+from .providers import lnet as lnet_module
+from .testing_lnet import Reply, SplynxFake, deposit_opened, history_row, lnet_account
 
 
 def local(at) -> str:
@@ -63,91 +60,56 @@ def pay(serial, amount, customer, at, *, status="verified", operator="lnet_r67",
     }
 
 
-def report_page(rows, *, offset=0, page_size=10) -> str:
-    """One page of the report as the portal prints it, pager and tabs included."""
-    body = []
-    for row in rows[offset : offset + page_size]:
-        stamp = local(row["at"])
-        body.append(
-            f"""
-<tr><td>{row['serial']}</td><td>{stamp}</td><td>{row['amount']}</td><td>Cash</td><td></td>
-    <td></td><td>{row['final']}</td><td>{row['extra']}</td><td></td><td> {row['status']} </td>
-    <td>{stamp}</td><td>{row['customer']}</td><td>{row['operator']}</td>
-    <!-- <td>x</td> <td>y</td>-->
-    <td><a href="javascript: cancelRechargeRequest({row['serial']})"></a></td>
-    <td><a onclick="reprintPayment({row['serial']}, '{row['customer']}')">Reprint</a></td></tr>"""
-        )
-    links = [
-        f'<li><a href="{REPORT_URL}/index/all/{start}?">{start // page_size + 1}</a></li>'
-        for start in range(page_size, len(rows), page_size)
-    ]
-    if offset + page_size < len(rows):
-        links.append(
-            f'<li><a href="{REPORT_URL}/index/all/{offset + page_size}?">&rarr;</a></li>'
-        )
-    return f"""
-<ul class="nav nav-tabs">
-  <li><a href="{REPORT_URL}/index/all">All Payments</a></li>
-  <li><a href="{REPORT_URL}/index/status-verified">Verified</a></li>
-  <li><a href="{REPORT_URL}/index/status-cancelled">Canceled</a></li>
-</ul>
-<table class="table table-striped"><thead><tr>
-  <th>S/N</th><th>Payment Date</th><th>Payment Amount</th><th>Payment Type</th>
-  <th>Bank</th><th>Cheque Number</th><th>Final Balance</th><th>Extra Gb</th>
-  <th>Comment</th><th>Status</th><th>Final Date</th><th>Customer Name</th>
-  <th>Recharged By</th>
-  <!-- <th>Created At</th> <th>Updated At</th>-->
-  <th>Cancel Payment</th><th>Reprint</th>
-</tr></thead><tbody>{"".join(body)}</tbody></table>
-<div class="pagination pagination-right"><ul><li class="active"><a href="#">1</a></li>
-{"".join(links)}</ul></div>"""
+def _history_row(row) -> dict:
+    """A ``pay()`` row as the Cashdesk history lists it."""
+    return history_row(
+        payment_id=row["serial"],
+        at=local(row["at"]),
+        amount=row["amount"],
+        customer={"name": "عميل", "login": row["customer"], "id": "1"},
+        before=row["final"],
+        after=row["final"],
+    )
 
 
-class PortalSession:
-    """LNET's login, and its payments report paged like the real one.
+class PortalSession(SplynxFake):
+    """LNET's Splynx with this login's Cashdesk history in it.
 
-    Any other request fails the test. Above all a POST that is not the login:
-    nothing about a payment made on the website may ever be sent back.
+    The Cashdesk lists only payments that were made, and only this login's: a
+    row whose ``status`` is not verified, or whose ``operator`` is somebody
+    else, is not in it. A payment POST fails the test: nothing about a payment
+    made outside the till may ever be sent back.
     """
 
-    def __init__(self, rows=(), *, page_size=10, down=False, blank=False):
-        self.rows = list(rows)
-        self.page_size = page_size
-        self.down = down
-        self.blank = blank
-        self.get_calls = []
-        self.post_calls = []
-        self.cookies = {}
+    def __init__(self, rows=(), *, page_size=10, down=False, blank=False, opened=None):
+        fail = {}
+        if down:
+            fail = {"/cashdesk/": requests.ConnectionError, "/api/": requests.ConnectionError}
+        if blank:
+            fail["/cabinet/history"] = Reply("<html><body>Maintenance</body></html>")
+        listed = [
+            _history_row(row)
+            for row in rows
+            if row["status"] == "verified" and row["operator"] == "lnet_r67"
+        ]
+        if opened is not None:
+            listed.append(deposit_opened(at=local(opened)))
+        super().__init__(history=listed, fail=fail)
 
-    def mount(self, prefix, adapter):
-        """A real Session has one; the drivers mount a shared pool on it."""
-
-    def get(self, url, **kwargs):
-        self.get_calls.append(url)
-        if self.down:
-            raise requests.RequestException("the portal is down")
-        path = urlsplit(url).path
-        if path.endswith("/login"):
-            return _LnetResponse(LNET_LOGIN_PAGE)
-        if "/admin/reports/payments" in path:
-            if self.blank:
-                return _LnetResponse("<html><body>Maintenance</body></html>")
-            match = re.search(r"/index/all/(\d+)$", path)
-            offset = int(match.group(1)) if match else 0
-            return _LnetResponse(
-                report_page(self.rows, offset=offset, page_size=self.page_size)
-            )
-        raise AssertionError(f"unscripted GET {url}")
-
-    def post(self, url, **kwargs):
-        self.post_calls.append(url)
-        if urlsplit(url).path.endswith("/login"):
-            return _LnetResponse(LNET_HOME_PAGE)
+    def _pay(self, customer, kwargs, url):
         raise AssertionError(f"nothing may be written to the provider: POST {url}")
 
     @property
+    def post_calls(self) -> list[str]:
+        return [url for method, url, _ in self.calls if method == "POST"]
+
+    @property
+    def get_calls(self) -> list[str]:
+        return [url for method, url, _ in self.calls if method == "GET"]
+
+    @property
     def report_reads(self) -> list[str]:
-        return [url for url in self.get_calls if "/reports/payments" in url]
+        return [url for url in self.get_calls if "/cabinet/history" in url]
 
 
 def portal(session):
@@ -190,6 +152,10 @@ class _NoonCase(TestCase):
         clock = mock.patch.object(timezone, "now", lambda: wall() + offset)
         clock.start()
         self.addCleanup(clock.stop)
+        # Payments dated weeks back must be readable whatever today is.
+        floor = mock.patch.object(lnet_module, "HISTORY_FLOOR", date(2000, 1, 1))
+        floor.start()
+        self.addCleanup(floor.stop)
 
 
 class _PortalCase(_NoonCase):
@@ -252,7 +218,7 @@ class _PortalCase(_NoonCase):
             )
         self.assertEqual(response.status_code, expect, response.content)
         self.assertEqual(
-            [url for url in live.post_calls if not url.endswith("/login")], []
+            [url for url in live.post_calls if not url.endswith(("/login", "/tokens"))], []
         )
         return response.json()
 
@@ -295,15 +261,16 @@ class PaymentReportPageTests(_NoonCase):
         self.account = lnet_account()
         self.now = timezone.now()
 
-    def test_a_page_is_read_by_header_with_its_cost_and_status(self):
+    def test_a_window_lists_each_payment_with_its_cost(self):
         rows = [
             pay(4300578, "25", "osama.ageil", self.now - timedelta(minutes=5)),
-            pay(4300494, "45", "ahme.algerare", self.now - timedelta(minutes=9),
-                status="cancelled"),
+            pay(4300494, "45", "ahme.algerare", self.now - timedelta(minutes=9)),
         ]
-        with portal(PortalSession(rows)):
+        session = PortalSession(rows, opened=self.now - timedelta(days=3))
+        with portal(session):
             page = LnetProvider(self.account).payment_report_page()
         self.assertTrue(page.ok)
+        # The deposit was opened inside this window: nothing is older.
         self.assertIsNone(page.next_offset)
         first, second = page.payments
         self.assertEqual(first.reference, "4300578")
@@ -313,32 +280,25 @@ class PaymentReportPageTests(_NoonCase):
         self.assertEqual(first.subscriber_ref, "osama.ageil")
         self.assertEqual(first.operator_name, "lnet_r67")
         self.assertEqual(first.status, "verified")
-        self.assertEqual(second.status, "cancelled")
+        self.assertEqual(second.reference, "4300494")
+        self.assertEqual(len(session.report_reads), 1)
 
-    def test_the_next_page_is_wherever_the_pager_says(self):
+    def test_the_next_page_is_the_window_before_this_one(self):
         rows = [
-            pay(5000 - i, "45", f"line{i}", self.now - timedelta(minutes=i))
-            for i in range(25)
+            pay(5000 - day, "45", f"line{day}", self.now - timedelta(days=day))
+            for day in range(40)
         ]
-        session = PortalSession(rows)
+        session = PortalSession(rows, opened=self.now - timedelta(days=45))
         with portal(session):
             driver = LnetProvider(self.account)
             first = driver.payment_report_page()
             second = driver.payment_report_page(offset=first.next_offset)
-            third = driver.payment_report_page(offset=second.next_offset)
-        # The status tabs link ``index/all`` with no offset and must not be
-        # read as pages.
-        self.assertEqual((first.next_offset, second.next_offset), (10, 20))
-        self.assertIsNone(third.next_offset)
-        self.assertEqual(len(third.payments), 5)
-        self.assertTrue(session.report_reads[1].endswith("/index/all/10"))
-        self.assertEqual(third.payments[-1].reference, str(5000 - 24))
-
-    def test_a_status_it_does_not_know_is_passed_through_never_trusted(self):
-        rows = [pay(1, "45", "a", self.now, status="Refunded")]
-        with portal(PortalSession(rows)):
-            page = LnetProvider(self.account).payment_report_page()
-        self.assertEqual(page.payments[0].status, "refunded")
+        self.assertEqual(first.next_offset, 1)
+        self.assertIsNone(second.next_offset)
+        # Every payment once, none twice: the windows tile.
+        references = [p.reference for p in first.payments + second.payments]
+        self.assertEqual(len(references), 40)
+        self.assertEqual(len(set(references)), 40)
 
     def test_an_empty_report_is_a_quiet_day(self):
         with portal(PortalSession([])):
@@ -372,16 +332,16 @@ class PaymentMirrorTests(_PortalCase):
                 serial -= 1
         return rows
 
-    def test_a_first_read_walks_back_two_days_and_keeps_every_row(self):
+    def test_a_first_read_reaches_back_two_days_in_one_request(self):
         rows = self._days(5)
         result = self.mirror(rows)
         self.assertTrue(result.ok)
+        # One window is a month of history: one request, every row in it.
+        self.assertEqual(result.pages, 1)
         stored = ProviderPayment.objects.filter(account=self.account)
+        self.assertEqual(stored.count(), len(rows))
         oldest = min(stored.values_list("paid_at", flat=True))
         self.assertLessEqual(oldest, self.now - payment_report.FIRST_READ_WINDOW)
-        # Two days is three pages of ten here; it did not wander to day five.
-        self.assertLess(stored.count(), len(rows))
-        self.assertEqual(stored.count(), result.pages * 10)
         self.assertTrue(result.complete)
         self.assertEqual(self.account.payments_covered_since, oldest)
 
@@ -403,13 +363,13 @@ class PaymentMirrorTests(_PortalCase):
         # the top and kept its bottom.
         self.assertEqual(self.account.payments_covered_since, since)
 
-    def test_a_payment_read_twice_is_one_row_and_its_cancellation_is_seen(self):
+    def test_a_payment_read_twice_is_one_row(self):
         at = self.now - timedelta(minutes=30)
         self.mirror([pay(7, "45", "a.b", at)])
-        self.mirror([pay(7, "45", "a.b", at, status="cancelled")])
+        self.mirror([pay(7, "45", "a.b", at)])
         rows = ProviderPayment.objects.filter(account=self.account, reference="7")
         self.assertEqual(rows.count(), 1)
-        self.assertEqual(rows.get().status, "cancelled")
+        self.assertEqual(rows.get().status, "verified")
 
     def test_the_float_cost_is_what_it_was_when_first_read(self):
         at = self.now - timedelta(minutes=30)
@@ -422,20 +382,19 @@ class PaymentMirrorTests(_PortalCase):
         )
 
     def test_a_read_that_cannot_reach_the_last_one_does_not_claim_the_gap(self):
-        rows = self._days(1)
-        self.mirror(rows)
-        # Then a burst far bigger than one page, read by a walk allowed two.
-        burst = [
-            pay(20000 + i, "10", f"burst{i}", timezone.now() - timedelta(seconds=i))
-            for i in range(50)
-        ]
-        self.mirror(burst + rows, max_pages=2)
-        read = ProviderPayment.objects.filter(
-            reference__in=[str(20000 + i) for i in range(50)]
+        # The mirror was last whole two months ago; a walk allowed one window
+        # cannot reach back to it.
+        from .models import IntegrationAccount
+
+        IntegrationAccount.objects.filter(pk=self.account.pk).update(
+            payments_covered_since=self.now - timedelta(days=61),
+            payments_synced_at=self.now - timedelta(days=60),
         )
-        # Two pages: twenty of the fifty. The stretch between them and what
-        # was read before was never read, so coverage starts over.
-        self.assertEqual(read.count(), 20)
+        rows = self._days(1)
+        self.mirror(rows, max_pages=1)
+        read = ProviderPayment.objects.filter(account=self.account)
+        self.assertEqual(read.count(), len(rows))
+        # The stretch between them was never read, so coverage starts over.
         self.assertEqual(
             self.account.payments_covered_since,
             min(read.values_list("paid_at", flat=True)),
@@ -624,11 +583,6 @@ class PortalPaymentsListTests(_PortalCase):
             pay(101, "45", "walk.in", base + timedelta(minutes=6)),
             pay(102, "45", "till.sold", base + timedelta(minutes=5)),
             pay(103, "30", "waiting.line", base + timedelta(minutes=4)),
-            pay(104, "45", "cancelled.one", base + timedelta(minutes=3),
-                status="cancelled"),
-            pay(105, "45", "staff.login", base + timedelta(minutes=2),
-                operator="lnet_r67_staff"),
-            pay(106, "45", "extra.data", base + timedelta(minutes=1), extra="5"),
         ]
         body = self.listing(rows, base)
         states = {row["reference"]: row["state"] for row in body["payments"]}
@@ -638,9 +592,6 @@ class PortalPaymentsListTests(_PortalCase):
                 "101": "unrecorded",
                 "102": "recorded",
                 "103": "pending_sale",
-                "104": "not_verified",
-                "105": "other_operator",
-                "106": "unsupported",
             },
         )
         by_ref = {row["reference"]: row for row in body["payments"]}
@@ -963,12 +914,6 @@ class RecordPortalPaymentTests(_PortalCase):
         # Issuing a sale is sales.add_order's; refused at the door, not halfway.
         self.client.force_authenticate(self.clerk("integrations.record_portal_payment"))
         self.record(self.rows, "4307300", expect=403)
-        self.assertFalse(Order.objects.exists())
-
-    def test_a_payment_cancelled_since_is_refused(self):
-        live = [pay(4307300, "45", "salem.q", self.at, status="cancel_request")]
-        body = self.record(live, "4307300", expect=409)
-        self.assertEqual(body["code"], "not_verified")
         self.assertFalse(Order.objects.exists())
 
     def test_a_payment_the_report_no_longer_prints_is_refused(self):

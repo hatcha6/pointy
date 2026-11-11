@@ -276,12 +276,15 @@ LNET = ProviderSpec(
     ),
     fields=_CREDENTIALS,
     secret_fields=_SECRETS,
-    default_base_url="https://billing.lnet.ly/lnet-billing/public",
+    # Splynx-hosted since November 2026 (``sbilling.lnet.ly`` names the same
+    # server). The agency's Cashdesk login reads customers through the API and
+    # pays through the Cashdesk page: see ``providers.lnet``.
+    default_base_url="https://ltel.splynx.app",
     settings=(
-        # 5% is what the shop confirmed and what nine consecutive Final
-        # Balance deltas in the captured report show. It is a contract, not a
-        # constant, so an agency on other terms can say so without a release —
-        # and without anybody having to think in ratios.
+        # The agency's commission, which the owner edits. On Splynx the
+        # Cashdesk deposit pays face value per payment (34.00 → 33.00 for a
+        # 1.00 top-up), so the commission reaches the agency outside it; this
+        # is what the shop says its contract is, not something we can read.
         ProviderSetting(
             key=SETTING_COMMISSION_PERCENT,
             kind=SETTING_KIND_PERCENT,
@@ -309,12 +312,9 @@ LNET = ProviderSpec(
     # in here. There is also nothing to enumerate: the portal takes any amount,
     # not a fixed ladder.
     #
-    # Reachability is PER SHOP. LNET's WAF refuses whole origin networks, so a
-    # development machine on another ISP gets a flat 403 while an agency on an
-    # LNET connection reaches it normally — and the driver runs in the shop's
-    # own backend. That is why this is ``available`` despite never loading from
-    # our bench: what was missing was a survey of the portal, and a session
-    # captured from a real agency connection supplied it.
+    # Reachable from any network: Splynx hosts it (Hetzner), not LNET, and the
+    # old portal's per-network WAF is gone. Still driven from the shop's own
+    # backend, which is where its credentials and its sales live.
 )
 
 QAREEB = ProviderSpec(

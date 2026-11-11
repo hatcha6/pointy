@@ -1,77 +1,69 @@
-"""LNET — a CodeIgniter billing portal, driven as a browser would drive it.
+"""LNET on Splynx — the provider's REST API for reading, its Cashdesk for paying.
 
-There is no API. Everything below was read off a real reseller session captured
-from an LNET connection (2026-09-20), and the portal is a server-rendered admin
-with a handful of AJAX endpoints bolted on. What that session established, and
-what this driver therefore must not assume:
+In November 2026 LNET moved its billing off the old CodeIgniter portal
+(``billing.lnet.ly``) onto **Splynx**, hosted by Splynx itself at
+``ltel.splynx.app`` (the certificate also names ``sbilling.lnet.ly``). An agency
+is given a **Cashdesk** login and nothing else. Everything below was read off a
+real agency session captured on 2026-11-11 (account ``lnet_r67``) plus three
+read-only probes of the API with that same login. What they established:
 
-* Auth is a form POST to ``/login`` carrying a CodeIgniter ``ci_csrf_token``
-  lifted from the login page. Success is a **302** to the portal root; a bad
-  password re-renders the login form. The token proved stable for the whole
-  session, but it is re-read from every page anyway rather than cached, because
-  a token that silently rotates would turn writes into 403s at a till.
-* **The portal is reachable per shop, not per network.** LNET's WAF refuses
-  whole origin networks — a development machine on another ISP gets a flat 403
-  — while an agency sitting on an LNET connection reaches it normally. The
-  driver runs in the shop's own backend, so the shop's connection is the one
-  that matters, and "unreachable" here is a fact about one shop, never a
-  statement about the provider.
-* **One identifier can hold several lines.** A phone number, a name or a
-  contract may match many usernames, each with its own package, status and
-  expiry. Searching is therefore a list operation, and a household with a dead
-  line beside a live one is ordinary. Nothing may pick for the customer.
-* **Tables carry commented-out cells.** Both the user list and the payments
-  report ship ``<!--<td></td>-->`` and ``<!-- <th>…</th>-->`` from columns the
-  operator role does not see, and the commented ``<th>``s do not match the
-  commented ``<td>``s. Parsing by position without stripping comments first
-  reads the status column as the expiry and the wrong number as money. Every
-  table here is read by **header label**, after comments are stripped.
-* **A recharge is two writes, and the first one is the one that matters.**
-  ``validatePaymentAJAX`` does not validate: it *creates the payment*, mints a
-  serial number and credits the customer. ``rechargeOperatorPaymentAJAX`` then
-  debits the agency float. The portal's own JS proves it — the branch it
-  commented out calls ``deletePaymentAJAX`` to undo the first write when the
-  voucher fails to print. So once step one has answered, the customer has been
-  credited and **nothing may be sent again**, whatever step two does.
-* **Nothing is idempotent.** There is no client-supplied reference, and the
-  serial number is minted by the server. A replayed recharge is a second real
-  one. The at-most-once guard in :mod:`apps.integrations.recharge` is the whole
-  protection; this driver's job is to be honest about which of the three
-  outcomes happened.
-* The float is **not rendered anywhere** in the chrome. The only place a
-  balance appears is the payments report's ``Final Balance`` column, which is
-  the float as it stood after that payment — so the newest row is the freshest
-  figure the portal will give us, and a shop that refills its float sees the
-  new figure only after its next sale. ``probe`` says so rather than pretending
-  to a live read.
-* LNET sells **stored value, not months**. The till pays some number of dinars
-  into a line; the provider's billing spends it down against whatever package
-  the line is on. The float is debited 95% of face value — the agency's 5%
-  commission, confirmed by the shop and verified against nine consecutive
-  ``Final Balance`` deltas in the captured report. Face value is therefore the
-  retail floor: 45 dinars of credit sold for less than 45 loses money on every
-  sale by construction.
+* **A Cashdesk user is a Splynx administrator**, and Splynx's API 2.0 accepts an
+  administrator's login and password for a token (``auth_type: admin``). So the
+  one login reaches two doors. What it may do through the API is what LNET
+  granted it: **customers can be read** (search by phone or login, one customer
+  by id) and **all of finance answers 403** — payments, transactions, billing,
+  tariffs. So this driver *reads* through the API, which is clean JSON, and
+  *pays* through the Cashdesk web page, as a cashier would.
+* **The API customer id is the Cashdesk's ``customer_id``.** A line found
+  through the API is paid at ``/cashdesk/cabinet/add-funds?customer_id=<id>``
+  with no Cashdesk search in between.
+* **A payment is ONE request**, a multipart POST of ``AddFundsForm`` sent the
+  way the page's own pjax sends it. Success re-renders the page with a «Done!»
+  alert and the customer's balance raised by the amount. The reply carries no
+  payment id. (The old portal took two requests, and a failure between them
+  left the customer credited and the float unpaid; that whole class is gone.)
+* **We name our own payment.** The form has a free ``comment`` that the
+  Cashdesk history prints back, so every payment this driver sends carries a
+  marker built from the fulfillment's attempt key. A reply that did not arrive,
+  or that we cannot read, is settled by finding that marker in history: found
+  means performed. **Not found is never read as "not performed" here** — that
+  judgement belongs to :mod:`apps.integrations.reconciliation`, on a complete
+  log, after the request can no longer be in flight.
+* **The agency float is the Cashdesk "deposit"**, set by LNET, shown in the
+  page header as ``Balance:33.00`` and at ``/cashdesk/cabinet/balance``. A
+  payment takes its **face value** off the deposit (34.00 → 33.00 for a 1.00
+  payment). Whatever commission LNET pays the agency is outside this, so the
+  cost of a top-up stays the owner's commission setting applied to face value,
+  as before: it is the agency's contract, not ours to infer.
+* **History is JSON for a date range**, every payment this login made with
+  the deposit before and after, plus the deposit's own top-ups (``payment_id``
+  ``---``). No ten-row pager; a month is one request.
+* **What was NOT captured**: a refused payment (an empty deposit, a validation
+  error). So the deposit is checked *before* sending — an amount it cannot
+  cover is refused without anything leaving the machine — and any reply that
+  is not «Done!» is reported as indeterminate unless the marker settles it.
+  Such replies are written to telemetry with their alert text so that the
+  first real one can be read and taught to this driver.
 """
 
 from __future__ import annotations
 
-import json
+import logging
 import re
-from datetime import datetime, timezone as utc_timezone
+import uuid
+from datetime import date, datetime, time, timedelta, timezone as utc_timezone
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
-from functools import partial
 from html import unescape
-from urllib.parse import urlsplit
 
 import requests
+from django.utils import timezone
 
 from apps.core.timeutils import business_timezone
 
 from .. import connection_pool, session_cache
+from ..masking import mask_numbers
 from ..catalog import SETTING_COMMISSION_PERCENT, SETTING_DENOMINATIONS
-
 from ..telemetry import (
-    STEP_COMMIT,
     STEP_FORM,
     STEP_LOGIN,
     STEP_LOGIN_PAGE,
@@ -88,10 +80,6 @@ from .base import (
     ERROR_UNEXPECTED,
     ERROR_UNREACHABLE,
     HISTORY_PURCHASES,
-    PAYMENT_CANCEL_REJECTED,
-    PAYMENT_CANCEL_REQUESTED,
-    PAYMENT_CANCELLED,
-    PAYMENT_PENDING,
     PAYMENT_VERIFIED,
     RECHARGE_TOPUP,
     CardInfo,
@@ -109,136 +97,143 @@ from .base import (
     RechargeResult,
     ReportPayment,
     SubscriberProfile,
-    in_parallel,
     register,
 )
 
+logger = logging.getLogger(__name__)
+
 DEFAULT_TIMEOUT_SECONDS = 20
 
-LOGIN_PATH = "/login"
-USERS_PATH = "/admin/settings/users"
-RECHARGE_VIEW_PATH = "/admin/settings/users/recharge/"
-VALIDATE_PATH = "/admin/settings/users/validatePaymentAJAX/"
-COMMIT_PATH = "/admin/settings/users/rechargeOperatorPaymentAJAX"
-PAYMENTS_PATH = "/admin/reports/payments"
-#: Every page of the report after the first, by row offset. The captured pager
-#: links ``index/all/10`` and ``index/all/20`` for pages two and three and
-#: ``index/all/9390`` for the last: TEN ROWS A PAGE, over the agency's whole
-#: life. Reading only the first page therefore sees roughly the last day of
-#: trade, which is why a line's history read that way was nearly always empty.
-PAYMENTS_PAGE_PATH = "/admin/reports/payments/index/all/"
+# --- the Cashdesk (web) ------------------------------------------------------
+LOGIN_PATH = "/cashdesk/login"
+CABINET_PATH = "/cashdesk/cabinet"
+ADD_FUNDS_PATH = "/cashdesk/cabinet/add-funds"
+BALANCE_PATH = "/cashdesk/cabinet/balance"
+HISTORY_PATH = "/cashdesk/cabinet/history"
 
-#: The float pays this much per dinar of face value when nothing else is set —
-#: a 5% agency commission. The *owner-facing* form of this is a percentage and
-#: lives in the catalog as ``SETTING_COMMISSION_PERCENT``; a shop knows it is
-#: "on 5%", not that its cost ratio is 0.95, and nobody should have to convert.
+# --- the API ------------------------------------------------------------------
+TOKEN_PATH = "/api/2.0/admin/auth/tokens"
+CUSTOMERS_PATH = "/api/2.0/admin/customers/customer"
+#: What the till shows about a line comes from three API replies, each
+#: checked on a live line on 2026-11-12 against the admin page:
+#:
+#: * ``{CUSTOMERS_PATH}/{id}/internet-services`` — the service: ``status``,
+#:   ``unit_price`` ("80.0000" = Price 80.00), ``start_date`` ("2026-10-10" =
+#:   Billing start date) and ``tariff_id`` (63). No plan name in it.
+#: * ``customer-tariffs/{id}`` — the plans this line may hold, as
+#:   ``{"internet": [{"id": 63, "title": "Unlimited Home Basic Plus", ...}]}``;
+#:   the plan's title is looked up there by ``tariff_id``.
+#:   (``tariffs/internet`` itself is 403 to an agency login.)
+#: * ``billing-info/{id}`` — ``blocking_date`` ("2026-12-10", the day after the
+#:   admin page's «Invoiced until 09/12/2026», with ``howManyDaysLeft`` 28 on
+#:   2026-11-12): the day LNET cuts the line, which is its expiry.
+SERVICES_SUFFIX = "internet-services"
+CUSTOMER_TARIFFS_PATH = "/api/2.0/admin/customers/customer-tariffs"
+BILLING_INFO_PATH = "/api/2.0/admin/customers/billing-info"
+
+#: The float pays this much per dinar of face value when nothing else is set:
+#: a 5% agency commission. The owner edits it as a percentage on the
+#: integration page (``SETTING_COMMISSION_PERCENT``).
 DEFAULT_COST_RATIO = Decimal("0.95")
-
 _HUNDRED = Decimal("100")
 
-#: The portal's own search selector. Order matters: a till types a phone number
-#: far more often than anything else, so that is tried first.
+#: The till's search picker, in the vocabulary it already sends. Unchanged from
+#: the old portal so a till on any build keeps working.
 SEARCH_BY_MOBILE = "mobile"
 SEARCH_BY_USERNAME = "username"
 SEARCH_BY_CONTRACT = "contract_number"
-SEARCH_MODES = (SEARCH_BY_MOBILE, SEARCH_BY_USERNAME, SEARCH_BY_CONTRACT)
 
-#: ``recharge_type`` on the recharge form. The portal also offers Cheque (2),
-#: which needs a bank and a cheque number — the agency's instruction is that a
-#: recharge is **always declared as cash**, so the other branch is not
-#: implemented rather than left switchable: a cheque posted without its
-#: paperwork would be a payment the provider's own reconciliation cannot match.
-#:
-#: This says how the **agency settles with LNET**, and nothing whatever about
-#: how the **customer pays the shop**. A top-up is an ordinary order line, so
-#: its invoice can be cash, card or آجل like any other sale, and the two must
-#: never be wired together: a customer paying on credit for a top-up we tell
-#: LNET was cash is the normal case, not a discrepancy.
-RECHARGE_TYPE_CASH = "1"
-#: The bank select's placeholder option. The portal posts this literal string
-#: when no bank is chosen, and so do we — a blank would be a request the
-#: provider's own UI never makes.
-BANK_PLACEHOLDER = "Please Select The Bank"
-#: Extra data is a separate product with its own price, and no captured session
-#: ever sent a non-zero value. Sending one would spend money on a guess.
-EXTRA_GB_NONE = "0"
+#: ``AddFundsForm[paymentType]``. The Cashdesk offers Cash (1), Bank transfer
+#: (2), Credit card (3) and Cheque (7). The agency's instruction is that a
+#: top-up is **always declared as cash** to LNET. This says how the agency
+#: settles with LNET and nothing about how the customer paid the shop: the
+#: invoice can be cash, card or آجل like any other sale.
+PAYMENT_TYPE_CASH = "1"
+#: ``AddFundsForm[payInvoiceOrRequest]``: 0 = "do not pay a particular invoice",
+#: i.e. money onto the customer's balance, which is what a top-up is.
+PAY_NO_INVOICE = "0"
 
-_AJAX_HEADERS = {
+#: Prefix of the comment every payment of ours carries, so history can name it.
+MARKER_PREFIX = "pointy:"
+
+#: How many lines one search may return. A phone shared by a household holds
+#: a handful; past this the term is too vague to sell against.
+SEARCH_LIMIT = 25
+
+#: One page of :meth:`LnetProvider.payment_report_page` is this many days of
+#: history. Pages tile backwards from today with no gap and no overlap.
+REPORT_WINDOW_DAYS = 31
+#: A page with no payments in it looks further back, up to this many windows,
+#: before it answers: ``payment_report.sync`` reads an empty page as the end.
+EMPTY_WINDOWS_SKIPPED = 12
+#: Nothing this login paid can be older than LNET's move to Splynx: the first
+#: agency deposit (Annaseem's) was opened on this day.
+HISTORY_FLOOR = date(2026, 11, 11)
+#: How far back a line's history (and reconciliation's proof of absence) reads.
+LINE_HISTORY_DAYS = 31
+
+_PJAX_HEADERS = {
+    "X-PJAX": "true",
+    "X-PJAX-Container": "#p0",
     "X-Requested-With": "XMLHttpRequest",
-    "Accept": "application/json, text/javascript, */*; q=0.01",
 }
 
-_CSRF_RE = re.compile(
-    r'name=["\']ci_csrf_token["\'][^>]*value=["\']([^"\']+)["\']', re.I
+_CSRF_RE = re.compile(r'name=["\']_csrf["\'][^>]*value=["\']([^"\']+)["\']', re.I)
+_CSRF_ALT_RE = re.compile(r'value=["\']([^"\']+)["\'][^>]*name=["\']_csrf["\']', re.I)
+_LOGIN_FORM_RE = re.compile(r'name=["\']LoginForm\[password\]["\']', re.I)
+_ADD_FUNDS_FORM_RE = re.compile(r'id=["\']add-funds-form["\']', re.I)
+#: The page title: ``Add funds to <name> (login: <login>, id: <id>)``.
+_TITLE_RE = re.compile(r"Add funds to\s*(.*?)\s*\(login:\s*([^,()]+?),\s*id:\s*(\d+)\)", re.S)
+#: ``(login: alhosen.basher1, id: 202844)`` in a history row.
+_WHO_RE = re.compile(r"\(login:\s*([^,()]+?),\s*id:\s*(\d+)\)")
+_CUSTOMER_BALANCE_RE = re.compile(
+    r"Customer balance\s*</strong>\s*:\s*(-?[\d.,]+)", re.I
 )
-# The same input with the attributes the other way round; the portal renders
-# both orders depending on the template.
-_CSRF_ALT_RE = re.compile(
-    r'value=["\']([^"\']+)["\'][^>]*name=["\']ci_csrf_token["\']', re.I
+#: The deposit in the page header, and the whole body of ``/cabinet/balance``.
+#: Case-sensitive on purpose: «Customer balance : 1» on the same page is the
+#: line's money, not the agency's, and must never be read as the deposit.
+_DEPOSIT_RE = re.compile(r"Balance:\s*(-?[\d.,]+)")
+_DONE_RE = re.compile(r"alert-success[^>]*>.*?<strong>\s*Done!\s*</strong>", re.S | re.I)
+#: Every way the page can say something went wrong: a flash alert or a Yii
+#: field error under an input.
+_ERROR_RE = re.compile(
+    r'class=["\'][^"\']*(?:alert-danger|alert-warning|alert-error|help-block-error)[^"\']*["\'][^>]*>(.*?)</div>',
+    re.S | re.I,
 )
-_LOGIN_FORM_RE = re.compile(r'name=["\']password["\']', re.I)
-#: How the portal refuses a top-up the agency's float cannot cover — "Your
-#: balance is not enough to recharge the customer." (Annaseem, 2026-10-11 and
-#: 2026-10-28). Arabic too, in case the portal is ever localised.
 _INSUFFICIENT_RE = re.compile(
-    r"balance\b[^.]{0,20}\bnot\s+(?:enough|sufficient)|رصيد\S*\s+غير\s+كاف", re.I
+    r"(?:balance|deposit)\b[^.]{0,30}\b(?:not\s+(?:enough|sufficient)|insufficient|too\s+low)"
+    r"|insufficient\s+(?:funds|balance|deposit)|رصيد\S*\s+غير\s+كاف",
+    re.I,
 )
-_COMMENT_RE = re.compile(r"<!--.*?-->", re.S)
+_CUSTOMER_LINK_RE = re.compile(r"add-funds\?customer_id=(\d+)", re.I)
 _TAG_RE = re.compile(r"<[^>]+>")
-_ROW_RE = re.compile(r"<tr\b.*?</tr>", re.S | re.I)
-_TH_RE = re.compile(r"<th\b[^>]*>(.*?)</th>", re.S | re.I)
-_TD_RE = re.compile(r"<td\b[^>]*>(.*?)</td>", re.S | re.I)
-_USER_LINK_RE = re.compile(r"/users/edit/(\d+)", re.I)
-_ROW_ID_RE = re.compile(r'name=["\']checked\[\]["\'][^>]*value=["\'](\d+)["\']', re.I)
-_PLAN_RE = re.compile(r'data-content=["\']([^"\']*)["\']', re.I)
-_USER_ID_FIELD_RE = re.compile(
-    r'name=["\']user_id["\'][^>]*value=["\'](\d+)["\']', re.I
-)
-_USER_ID_FIELD_ALT_RE = re.compile(
-    r'value=["\'](\d+)["\'][^>]*name=["\']user_id["\']', re.I
-)
-_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}:\d{2})?$")
 
 utc = utc_timezone.utc
-#: Older than any payment the portal can hold, for "we have seen all of it".
 BEGINNING_OF_TIME = datetime(1970, 1, 1, tzinfo=utc)
 
 
 def _new_session(account):
-    """A session of this driver's own, on the portal's shared connection pool.
-
-    The session is per-call — it carries the account's cookies and
-    ``requests.Session`` is not thread-safe — but the sockets underneath it
-    are not, so a lookup a minute after the last one finds the connection
-    already open. See ``apps.integrations.connection_pool``.
-    """
+    """A session of this driver's own, on the provider's shared connection pool."""
     return connection_pool.warm(requests.Session(), account.resolved_base_url())
 
 
 @register("lnet")
 class LnetProvider(IntegrationProvider):
-    #: No status feed: the portal keeps no per-line state log an agency can
-    #: read. Saying so here keeps the tab off the till rather than offering
-    #: one that answers "unavailable" every time it is pressed.
+    #: No status feed an agency can read, so the till offers one history tab.
     history_kinds = (HISTORY_PURCHASES,)
 
     def __init__(self, account):
         super().__init__(account)
-        #: The live session every ``_get``/write uses. Set by ``_login`` —
-        #: from a cached login or a real one — and never touched anywhere
-        #: else, so a mid-call relogin (see ``_get``) is picked up by every
-        #: call that follows it with no bookkeeping at the caller.
+        #: ONE ``requests.Session`` for both doors: same host, so one
+        #: connection and one TLS handshake per driver. The Cashdesk's cookies
+        #: live in it; the API authenticates by header and ignores them.
         self._session: requests.Session | None = None
-        #: True when ``self._session`` came from ``session_cache`` rather
-        #: than the two-round-trip login page + POST just now. The one thing
-        #: this flags: whether ``_get`` is allowed to spend a retry
-        #: re-logging in if this session turns out to be dead.
+        #: The Cashdesk cookies in ``_session`` are a logged-in session.
+        self._cashdesk_ready = False
         self._session_from_cache = False
-        #: The CSRF token that came with ``_session``. A fallback only —
-        #: every write re-reads its own page's token before using it — but it
-        #: has to travel with the session it belongs to, so that reusing the
-        #: live session does not hand back an empty one.
+        #: The API's bearer token.
         self._token = ""
+        self._token_from_cache = False
 
     # --- configuration -----------------------------------------------------
     @property
@@ -252,12 +247,7 @@ class LnetProvider(IntegrationProvider):
 
     @property
     def _cost_ratio(self) -> Decimal:
-        """What the float pays per dinar of face value.
-
-        Derived from the owner's commission percentage rather than stored, so
-        there is one number in the system and it is the one a shop would say
-        out loud. The account has already rejected anything out of range.
-        """
+        """What the float pays per dinar of face value, from the owner's percent."""
         percent = _as_decimal(self.account.setting(SETTING_COMMISSION_PERCENT))
         if percent is None:
             return DEFAULT_COST_RATIO
@@ -265,12 +255,6 @@ class LnetProvider(IntegrationProvider):
 
     @property
     def _denominations(self) -> tuple[Decimal, ...]:
-        """The one-tap amounts, in order. May legitimately be empty.
-
-        An owner who clears them is saying "we always type it", which is a
-        real answer: the provider takes any amount and the field is always
-        there, so there is nothing to protect them from.
-        """
         values = []
         for item in self.account.setting(SETTING_DENOMINATIONS) or ():
             amount = _as_decimal(item)
@@ -281,32 +265,26 @@ class LnetProvider(IntegrationProvider):
     def _url(self, path: str) -> str:
         return f"{self.account.resolved_base_url()}{path}"
 
+    def _conn(self) -> requests.Session:
+        if self._session is None:
+            self._session = _new_session(self.account)
+        return self._session
+
+    def _spec(self) -> OpenAmount:
+        return OpenAmount(
+            minimum=Decimal("1"), maximum=None, step=Decimal("1"), cost_ratio=self._cost_ratio
+        )
+
     # --- offline arithmetic ------------------------------------------------
     def quote(self, option_code: str) -> OptionQuote | None:
-        """Price a top-up from its code alone — no network, no client input.
-
-        The option code *is* the face value (``topup:45``), and the commission
-        is an account setting, so the whole quote is derivable here. That
-        matters at checkout: it means the cost booked against the sale and the
-        price charged for it are both the server's arithmetic rather than
-        numbers the till asserted.
-        """
+        """Price a top-up from its code alone (``topup:45``), no network."""
         amount = _amount_from_option(option_code)
         if amount is None:
             return None
-        ratio = self._cost_ratio
-        return OptionQuote(
-            cost=OpenAmount(minimum=Decimal("1"), cost_ratio=ratio).cost_of(amount),
-            face_value=amount,
-        )
+        return OptionQuote(cost=self._spec().cost_of(amount), face_value=amount)
 
     def option_for_payment(self, amount) -> RechargeOption | None:
-        """The top-up a payment of ``amount`` was: ``topup:<amount>``.
-
-        The same code, label and cost the till's own amount picker produces
-        for that figure, so a payment recorded from the report and one sold at
-        the till are the same line, priced by the same rule.
-        """
+        """The top-up a payment of ``amount`` was, priced as the till prices it."""
         value = _quantize(amount)
         if value is None or value <= 0:
             return None
@@ -314,440 +292,498 @@ class LnetProvider(IntegrationProvider):
             code=_topup_code(value),
             kind=RECHARGE_TOPUP,
             label=_amount_label(value),
-            cost=OpenAmount(minimum=Decimal("1"), cost_ratio=self._cost_ratio).cost_of(
-                value
-            ),
+            cost=self._spec().cost_of(value),
             face_value=value,
         )
 
-    # --- plumbing ----------------------------------------------------------
-    def _login(self, *, force: bool = False) -> tuple[requests.Session | None, str, str, str]:
-        """Return ``(session, csrf_token, error_code, error_detail)``.
+    # --- the API -----------------------------------------------------------
+    def _api_login(self, *, force: bool = False) -> tuple[str, str]:
+        """A bearer token for the API. Returns ``(error_code, detail)``; blank is fine.
 
-        Tries the session this instance is already holding, then
-        ``session_cache`` — which skips BOTH network calls this login
-        otherwise costs (the login page for a token, then the POST) — and
-        only then the network. ``force=True`` is the one-shot retry in
-        ``_get``, after a cached session has already proven to be dead.
-
-        **The live session comes first, and that is not a micro-optimisation.**
-        Rebuilding a ``requests.Session`` from cached cookies throws away its
-        connection pool, so the next call opens a new socket and pays a fresh
-        TLS handshake to a portal on the other side of a Libyan uplink. One
-        card lookup calls this three times — lookup, offers, profile — so a
-        cache that answered without a *login* still cost three handshakes for
-        work that could travel on one connection.
-
-        The returned token is a fallback only. Every write re-reads its own
-        page's token before using it (see ``recharge``) — a cache hit simply
-        has none of its own to offer, which is exactly as safe as the login
-        page's token already was, since neither is ever the one a write
-        actually sends.
+        Cached like the Cashdesk session: a lookup is several calls, and each
+        login would cost a round trip and a password on the wire.
         """
         if not force:
-            if self._session is not None:
-                return self._session, self._token, "", ""
+            if self._token:
+                return "", ""
+            cached = session_cache.load("lnet-api", self.account)
+            if cached and cached.get("token") and _still_valid(cached.get("expires")):
+                self._token = cached["token"]
+                self._token_from_cache = True
+                return "", ""
+        self._token_from_cache = False
+        self._note(STEP_LOGIN)
+        try:
+            reply = self._conn().post(
+                self._url(TOKEN_PATH),
+                json={
+                    "auth_type": "admin",
+                    "login": self.account.username,
+                    "password": self.account.password,
+                },
+                timeout=self._timeout,
+            )
+        except requests.RequestException as exc:
+            return ERROR_UNREACHABLE, str(exc)
+        self._observe(http_status=reply.status_code)
+        payload = _json(reply)
+        if reply.status_code in (401, 403):
+            return ERROR_UNAUTHORIZED, _api_message(payload) or "login rejected"
+        if reply.status_code >= 500:
+            return ERROR_PROVIDER_ERROR, f"api error {reply.status_code}"
+        token = str((payload or {}).get("access_token") or "") if isinstance(payload, dict) else ""
+        if not token:
+            self._observe(shape_ok=False)
+            return ERROR_UNEXPECTED, "no access token in the login reply"
+        self._token = token
+        session_cache.save(
+            "lnet-api",
+            self.account,
+            {"token": token, "expires": payload.get("access_token_expiration")},
+        )
+        return "", ""
+
+    def _api_get(self, path: str, params=None):
+        """GET from the API. Returns ``(payload, error_code, detail)``.
+
+        A token that died early (401) earns exactly one fresh login.
+        """
+        code, detail = self._api_login()
+        if code:
+            return None, code, detail
+        for attempt in (1, 2):
+            try:
+                reply = self._conn().get(
+                    self._url(path),
+                    params=params,
+                    headers={"Authorization": f"Splynx-EA (access_token={self._token})"},
+                    timeout=self._timeout,
+                )
+            except requests.RequestException as exc:
+                return None, ERROR_UNREACHABLE, str(exc)
+            self._observe(http_status=reply.status_code)
+            if reply.status_code == 401 and attempt == 1:
+                session_cache.invalidate("lnet-api", self.account)
+                self._token = ""
+                code, detail = self._api_login(force=True)
+                if code:
+                    return None, code, detail
+                continue
+            if reply.status_code in (401, 403):
+                # A 403 here is LNET's permission for this login, not a dead
+                # session: say so plainly rather than retrying.
+                return None, ERROR_UNAUTHORIZED, f"api refused {path} ({reply.status_code})"
+            if reply.status_code == 404:
+                return None, ERROR_NOT_FOUND, "no such record"
+            if reply.status_code >= 400:
+                return None, ERROR_PROVIDER_ERROR, f"api error {reply.status_code}"
+            payload = _json(reply)
+            if payload is None:
+                self._observe(shape_ok=False)
+                return None, ERROR_UNEXPECTED, "api reply was not JSON"
+            return payload, "", ""
+        return None, ERROR_UNAUTHORIZED, "session expired"  # pragma: no cover
+
+    def _customers(self, field_name: str, value: str, *, exact: bool = False):
+        """Customers whose ``field_name`` matches. ``(rows, code, detail)``."""
+        params = {"limit": SEARCH_LIMIT}
+        if exact:
+            params[f"main_attributes[{field_name}]"] = value
+        else:
+            params[f"main_attributes[{field_name}][0]"] = "LIKE"
+            params[f"main_attributes[{field_name}][1]"] = value
+        payload, code, detail = self._api_get(CUSTOMERS_PATH, params)
+        if payload is None:
+            return None, code, detail
+        if not isinstance(payload, list):
+            self._observe(shape_ok=False)
+            return None, ERROR_UNEXPECTED, "customer search did not answer a list"
+        return [row for row in payload if isinstance(row, dict)], "", ""
+
+    def _customer(self, customer_id: str):
+        payload, code, detail = self._api_get(f"{CUSTOMERS_PATH}/{customer_id}")
+        if payload is None:
+            return None, code, detail
+        if not isinstance(payload, dict) or not payload.get("login"):
+            self._observe(shape_ok=False)
+            return None, ERROR_UNEXPECTED, "customer record had no login"
+        return payload, "", ""
+
+    def _line_service(self, customer_id: str) -> "_LineService | None":
+        """The line's plan, price, start and cut-off day, as LNET states them.
+
+        Best-effort. A line whose details cannot be read is still a line the
+        cashier can top up, so every failure here leaves that detail blank.
+        """
+        if not customer_id:
+            return None
+        plan, price, started = "", None, None
+        payload, _code, _detail = self._api_get(f"{CUSTOMERS_PATH}/{customer_id}/{SERVICES_SUFFIX}")
+        rows = [row for row in payload if isinstance(row, dict)] if isinstance(payload, list) else []
+        live = [row for row in rows if str(row.get("status") or "").strip().lower() == "active"]
+        if live:
+            service = live[0]
+            price = _quantize(service.get("unit_price"))
+            started = _api_date(service.get("start_date"))
+            plan = self._plan_title(customer_id, str(service.get("tariff_id") or "").strip())
+        info, _code, _detail = self._api_get(f"{BILLING_INFO_PATH}/{customer_id}")
+        blocked_on = _api_date(info.get("blocking_date")) if isinstance(info, dict) else None
+        if not (plan or price is not None or started or blocked_on):
+            return None
+        return _LineService(plan=plan, price=price, started=started, blocked_on=blocked_on)
+
+    def _plan_title(self, customer_id: str, tariff_id: str) -> str:
+        """The title of plan ``tariff_id`` from the line's own plan list."""
+        if not tariff_id:
+            return ""
+        cached = session_cache.load("lnet-tariffs", self.account) or {}
+        titles = dict(cached.get("titles") or {})
+        if tariff_id not in titles:
+            payload, _code, _detail = self._api_get(f"{CUSTOMER_TARIFFS_PATH}/{customer_id}")
+            plans = payload.get("internet") if isinstance(payload, dict) else None
+            for plan in plans if isinstance(plans, list) else []:
+                if isinstance(plan, dict) and str(plan.get("title") or "").strip():
+                    titles[str(plan.get("id"))] = str(plan["title"]).strip()
+            if tariff_id in titles:
+                session_cache.save("lnet-tariffs", self.account, {"titles": titles})
+        return titles.get(tariff_id, "")
+
+    # --- the Cashdesk ------------------------------------------------------
+    def _cashdesk_login(self, *, force: bool = False) -> tuple[str, str]:
+        """A live Cashdesk session in ``self._session``. ``(error_code, detail)``."""
+        if not force:
+            if self._cashdesk_ready:
+                return "", ""
             cached = session_cache.load("lnet", self.account)
             if cached is not None:
-                session = _new_session(self.account)
-                session.cookies.update(cached.get("cookies") or {})
-                self._session = session
-                self._token = cached.get("token") or ""
+                self._conn().cookies.update(cached.get("cookies") or {})
+                self._cashdesk_ready = True
                 self._session_from_cache = True
-                return session, self._token, "", ""
+                return "", ""
 
         self._session_from_cache = False
-        session = _new_session(self.account)
+        self._cashdesk_ready = False
+        session = self._conn()
+        session.cookies.clear()
         self._note(STEP_LOGIN_PAGE)
         try:
             page = session.get(self._url(LOGIN_PATH), timeout=self._timeout)
         except requests.RequestException as exc:
-            return None, "", ERROR_UNREACHABLE, str(exc)
-
+            return ERROR_UNREACHABLE, str(exc)
         self._observe(http_status=page.status_code)
-        # The WAF answers a blocked origin with a flat 403 and no login form.
-        # That is not a credential problem and must not be reported as one.
-        if page.status_code == 403:
-            return None, "", ERROR_UNREACHABLE, "portal refused this network (403)"
-
+        if page.status_code >= 500:
+            return ERROR_PROVIDER_ERROR, f"cashdesk error {page.status_code}"
         token = _csrf_token(page.text or "")
         if not token:
-            # The login page rendered and had no token in it: their page
-            # changed, which is a different job from a wrong password.
             self._observe(shape_ok=False)
-            return None, "", ERROR_UNEXPECTED, "no csrf token on the login page"
+            return ERROR_UNEXPECTED, "no csrf token on the login page"
 
         self._note(STEP_LOGIN)
         try:
             reply = session.post(
                 self._url(LOGIN_PATH),
-                data={
-                    "ci_csrf_token": token,
-                    "login": self.account.username,
-                    "password": self.account.password,
-                    # The submit button's own name/value. The portal's Arabic
-                    # build labels it "دخول"; CodeIgniter only checks presence.
-                    "log-me-in": "دخول",
-                },
+                data=[
+                    ("_csrf", token),
+                    ("LoginForm[login]", self.account.username),
+                    ("LoginForm[password]", self.account.password),
+                    # The page posts the hidden 0 and the ticked 1, in order.
+                    ("LoginForm[rememberMe]", "0"),
+                    ("LoginForm[rememberMe]", "1"),
+                    ("login-button", ""),
+                ],
+                headers={"Referer": self._url(LOGIN_PATH)},
                 timeout=self._timeout,
                 allow_redirects=True,
             )
         except requests.RequestException as exc:
-            return None, "", ERROR_UNREACHABLE, str(exc)
-
+            return ERROR_UNREACHABLE, str(exc)
+        self._observe(http_status=reply.status_code)
         body = reply.text or ""
-        # A good login lands on the portal root; a bad one re-renders the form.
-        if _LOGIN_FORM_RE.search(body) or reply.url.rstrip("/").endswith("/login"):
-            return None, "", ERROR_UNAUTHORIZED, "login rejected"
-        # Prefer a token from the page we actually landed on.
-        landed_token = _csrf_token(body) or token
-        self._session = session
-        self._token = landed_token
-        session_cache.save(
-            "lnet", self.account, {"cookies": dict(session.cookies), "token": landed_token}
-        )
-        return session, landed_token, "", ""
+        # A good login lands in the cabinet; a bad one re-renders the form.
+        if _LOGIN_FORM_RE.search(body) or urlpath(reply.url).rstrip("/").endswith("/login"):
+            return ERROR_UNAUTHORIZED, "login rejected"
+        self._cashdesk_ready = True
+        session_cache.save("lnet", self.account, {"cookies": dict(session.cookies)})
+        return "", ""
 
     def _get(self, path: str, **kwargs):
-        """GET with the current session, mapping the portal's failure shapes.
-
-        Always uses ``self._session`` — never a value a caller is holding
-        onto — so a relogin triggered by this very call is what every later
-        call in the same capability method sees too, including the recursive
-        searches inside ``_find_lines``. On a cached session that turns out
-        to be dead, this spends exactly one retry: invalidate, log in for
-        real, replay this one request. The WAF's 403 is a different problem
-        (a blocked network, not a dead session) and is never retried — a
-        fresh login from the same blocked network would just 403 again.
-        """
-        session = self._session
+        """GET a Cashdesk page. ``(response, code, detail)``; one relogin on a dead cache."""
+        code, detail = self._cashdesk_login()
+        if code:
+            return None, code, detail
         try:
-            response = session.get(self._url(path), timeout=self._timeout, **kwargs)
+            response = self._session.get(self._url(path), timeout=self._timeout, **kwargs)
         except requests.RequestException as exc:
             return None, ERROR_UNREACHABLE, str(exc)
         self._observe(http_status=response.status_code)
-        if response.status_code == 403:
-            return None, ERROR_UNREACHABLE, "portal refused this network (403)"
         if response.status_code >= 500:
-            return None, ERROR_PROVIDER_ERROR, f"portal error {response.status_code}"
-        body = response.text or ""
-        # Being bounced to the login form means the session died mid-flight.
-        if _LOGIN_FORM_RE.search(body) and _is_login_url(response.url):
+            return None, ERROR_PROVIDER_ERROR, f"cashdesk error {response.status_code}"
+        if _bounced_to_login(response):
             if self._session_from_cache:
                 session_cache.invalidate("lnet", self.account)
-                fresh, _token, code, detail = self._login(force=True)
-                if fresh is not None:
-                    return self._get(path, **kwargs)
-                return None, code, detail
+                code, detail = self._cashdesk_login(force=True)
+                if code:
+                    return None, code, detail
+                return self._get(path, **kwargs)
             return None, ERROR_UNAUTHORIZED, "session expired"
+        if response.status_code == 403:
+            return None, ERROR_UNAUTHORIZED, "cashdesk refused this login (403)"
+        if response.status_code >= 400:
+            return None, ERROR_PROVIDER_ERROR, f"cashdesk error {response.status_code}"
         self._renew_cached_session()
         return response, "", ""
 
     def _renew_cached_session(self) -> None:
-        """Keep a session that just proved alive cached for another full TTL.
-
-        Without this a login lived ten minutes from the moment it was made,
-        however busy the shift, and a shop logged in all day long — dozens of
-        logins a day from one address, the pattern a portal's anti-bot rules
-        look for. Saving the session's current cookies also follows the
-        portal if it ever rotates its session id on a request.
-        """
-        session = self._session
-        if session is None:
+        if self._session is None or not self._cashdesk_ready:
             return
         try:
-            cookies = dict(session.cookies)
+            cookies = dict(self._session.cookies)
         except Exception:  # noqa: BLE001 - a cookie name clash: keep the old entry
             return
-        session_cache.save("lnet", self.account, {"cookies": cookies, "token": self._token})
+        session_cache.save("lnet", self.account, {"cookies": cookies})
 
-    def _search(self, token: str, term: str, mode: str):
-        """One search, as the portal's own filter form issues it.
-
-        Returns ``(rows, error_code, detail, shape_ok)``. ``shape_ok`` is
-        returned rather than recorded here because several of these run at
-        once in :meth:`_find_lines`, and telemetry a worker thread writes
-        whenever it happens to finish is telemetry nobody can read.
-        """
-        self._note(STEP_SEARCH)
+    def _add_funds_page(self, customer_id: str):
+        """The customer's Cashdesk page. ``(page, code, detail)``."""
+        # Logged in first, so the row names the page and not the login when
+        # what follows refuses.
+        code, detail = self._cashdesk_login()
+        if code:
+            return None, code, detail
+        self._note(STEP_FORM)
         response, code, detail = self._get(
-            USERS_PATH,
-            params={
-                "search_by": mode,
-                "search_term": term,
-                "filter_by": "Filter Users",
-            },
+            ADD_FUNDS_PATH, params={"customer_id": customer_id}
         )
         if response is None:
-            return None, code, detail, None
-        body = response.text or ""
-        # THE signal worth having. A results table with no rows is a customer
-        # who has no line; no results table at all is our parser gone blind on
-        # markup that changed. Both would otherwise arrive as "not found", and
-        # only one of them is a bug we have to go and fix.
-        return _parse_user_rows(body), "", "", _has_user_table(body)
+            return None, code, detail
+        page = _parse_add_funds(response.text or "")
+        if page is None:
+            self._observe(shape_ok=False)
+            return None, ERROR_UNEXPECTED, "add-funds form did not render"
+        if page.customer_id != str(customer_id):
+            # The Cashdesk answered for somebody else. Never pay on that.
+            self._observe(shape_ok=False)
+            return None, ERROR_UNEXPECTED, "add-funds page names another customer"
+        return page, "", ""
 
-    def _find_lines(self, token: str, term: str, *, lead: str = ""):
-        """Every line matching ``term``, trying each way the portal can search.
+    def _history(self, start: date, end: date):
+        """This login's Cashdesk history between two local dates, inclusive.
 
-        Answers with the first mode **in priority order** that matched
-        anything, rather than merging: a term that is somebody's phone number
-        and somebody else's contract number would otherwise return two
-        unrelated households to choose between, which is worse than the
-        ambiguity it is trying to solve.
+        Returns ``(rows, code, detail)``; rows newest first, deposit rows
+        included (``row.is_deposit``).
+        """
+        self._note(STEP_PARSE)
+        response, code, detail = self._get(
+            HISTORY_PATH,
+            params={"list": "ok", "from": start.isoformat(), "to": end.isoformat()},
+            headers={"X-Requested-With": "XMLHttpRequest", "Accept": "application/json"},
+        )
+        if response is None:
+            return None, code, detail
+        payload = _json(response)
+        data = payload.get("data") if isinstance(payload, dict) else None
+        if not isinstance(data, list):
+            self._observe(shape_ok=False)
+            return None, ERROR_UNEXPECTED, "history did not answer a data list"
+        rows = [row for row in (_history_row(item) for item in data) if row is not None]
+        if len(rows) != len(data):
+            # A row we could not read cannot be placed in its day.
+            self._observe(shape_ok=False)
+        rows.sort(key=lambda row: row.at or BEGINNING_OF_TIME, reverse=True)
+        return rows, "", ""
 
-        **The leading mode goes alone; the rest go together.** This used to
-        walk all three one at a time, which is the cheapest thing to do in
-        requests and the most expensive thing to do in seconds — a term the
-        portal does not know by phone number paid for the phone search in
-        full before the username search had even started. Measured on the
-        Annaseem till, a lookup that took one round trip came back in ~1.4s
-        and one that took three took 4.4s: the same search, three times the
-        wait, with a customer standing at the counter.
+    def _deposit(self):
+        """The agency float, live. ``(amount, code, detail)``."""
+        response, code, detail = self._get(
+            BALANCE_PATH, headers={"X-Requested-With": "XMLHttpRequest"}
+        )
+        if response is None:
+            return None, code, detail
+        amount = _deposit_of(response.text or "")
+        if amount is None:
+            self._observe(shape_ok=False)
+            return None, ERROR_UNEXPECTED, "deposit balance did not render"
+        return amount, "", ""
 
-        Which mode leads is the till's to say, and that is what makes the
-        ordinary search fast rather than merely faster: a phone number and a
-        contract number are both digits, so nothing here could ever tell them
-        apart, and the picker beside the search box can. A cashier who picks
-        right pays one request and one wait.
+    # --- finding lines -----------------------------------------------------
+    def _find_lines(self, term: str, *, lead: str = ""):
+        """Every line matching ``term``. ``(cards, code, detail)``.
 
-        Leading alone rather than firing everything at once is deliberate.
-        The lead is usually right, so the ordinary case costs exactly the one
-        request it always did — and this portal runs a WAF that answers a
-        whole network with a flat 403 (see :meth:`_get`), which is not
-        something to provoke by tripling every search a shop makes. What this
-        caps is the bad case: two round trips, not three.
+        A phone number and a username are both read through the API. Digits
+        are tried as a phone first (the national number, without 0/218), then
+        as a login; anything else is a login. A contract number exists only in
+        the Cashdesk's own search, so it goes there. The first search that
+        matches answers, so a number that is one household's phone and
+        another's login does not mix two households in one picker.
         """
         term = (term or "").strip()
         if not term:
             return [], ERROR_NOT_FOUND, "no search term"
-        modes = _search_modes_for(term, lead)
-        shape_seen: list[bool] = []
+        self._note(STEP_SEARCH)
+        compact = term.replace(" ", "").replace("-", "")
+        searches = []
+        if compact.lstrip("+").isdigit():
+            searches = [("phone", _national_number(compact)), ("login", term)]
+            if lead == SEARCH_BY_USERNAME:
+                searches.reverse()
+            if lead == SEARCH_BY_CONTRACT:
+                searches.insert(0, ("contract", term))
+            else:
+                searches.append(("contract", term))
+        else:
+            searches = [("login", term)]
 
-        def answer(result):
-            # A results table rendered for ANY mode means the parser still
-            # sees what it expects; only a search that rendered no table at
-            # all is the blindness signal. Folded here, on the request's own
-            # thread, so the row never depends on which worker finished last.
-            if shape_seen:
-                self._observe(shape_ok=any(shape_seen))
-            return result
-
-        rows, code, detail, shape_ok = self._search(token, term, modes[0])
-        if shape_ok is not None:
-            shape_seen.append(shape_ok)
-        if rows is None:
-            return answer((None, code, detail))
-        if rows:
-            return answer((rows, "", ""))
-
-        rest = modes[1:]
-        if not rest:
-            return answer(([], ERROR_NOT_FOUND, "no line matched"))
-
-        # One driver per search: a ``requests.Session`` is not thread-safe,
-        # and ``_get`` replaces ``self._session`` outright when a dead session
-        # forces a relogin. Each sibling hits the session cache, so the extra
-        # instances cost no extra login.
-        results = in_parallel(
-            [
-                partial(type(self)(self.account)._search_isolated, term, mode)
-                for mode in rest
-            ]
-        )
-        shape_seen.extend(shape for *_rest, shape in results if shape is not None)
-        for rows, code, detail, _shape in results:
-            if rows:
-                return answer((rows, "", ""))
-        # Nothing matched anywhere. A transport failure is worth reporting
-        # over a clean "no such line": they are different problems.
-        for rows, code, detail, _shape in results:
+        failure = None
+        for kind, value in searches:
+            if kind == "contract":
+                rows, code, detail = self._cashdesk_search(
+                    "CustomerSearchForm[contract_number]", value
+                )
+            else:
+                rows, code, detail = self._customers(kind, value)
             if rows is None:
-                return answer((None, code, detail))
-        return answer(([], ERROR_NOT_FOUND, "no line matched"))
+                failure = failure or (code, detail)
+                continue
+            if rows:
+                self._observe(shape_ok=True, matches=len(rows))
+                return [_card_of(row) for row in rows], "", ""
+        if failure is not None:
+            return None, failure[0], failure[1]
+        # Every search answered, and answered a list: a customer who has no
+        # line, not a parser gone blind (that returns above as unexpected).
+        self._observe(shape_ok=True, matches=0)
+        return [], ERROR_NOT_FOUND, "no line matched"
 
-    def _search_isolated(self, term: str, mode: str):
-        """One search on this instance's own session, for a worker thread.
+    def _cashdesk_search(self, field_name: str, value: str):
+        """The Cashdesk's own search form, for what the API cannot find by.
 
-        Logs in first — from the cache, in the ordinary case, costing no
-        network call — because a sibling built for one search has none yet.
+        One match redirects straight to that customer's add-funds page; more
+        render a list. Either way the customer ids are read off the page and
+        the customers themselves come from the API.
         """
-        session, token, code, detail = self._login()
-        if session is None:
-            return None, code, detail, None
-        return self._search(token, term, mode)
+        code, detail = self._cashdesk_login()
+        if code:
+            return None, code, detail
+        response, code, detail = self._get(CABINET_PATH)
+        if response is None:
+            return None, code, detail
+        token = _csrf_token(response.text or "")
+        if not token:
+            self._observe(shape_ok=False)
+            return None, ERROR_UNEXPECTED, "no csrf token on the search page"
+        fields = {
+            "CustomerSearchForm[id]": "",
+            "CustomerSearchForm[login]": "",
+            "CustomerSearchForm[name]": "",
+            "CustomerSearchForm[phone]": "",
+            "CustomerSearchForm[contract_number]": "",
+            "CustomerSearchForm[type]": "",
+            "CustomerSearchForm[number]": "",
+        }
+        fields[field_name] = value
+        try:
+            reply = self._session.post(
+                self._url(CABINET_PATH),
+                data={"_csrf": token, **fields, "login-button": ""},
+                headers={"Referer": self._url(CABINET_PATH)},
+                timeout=self._timeout,
+                allow_redirects=True,
+            )
+        except requests.RequestException as exc:
+            return None, ERROR_UNREACHABLE, str(exc)
+        self._observe(http_status=reply.status_code)
+        if reply.status_code >= 400:
+            return None, ERROR_PROVIDER_ERROR, f"cashdesk error {reply.status_code}"
+        ids = []
+        landed = _CUSTOMER_LINK_RE.search(reply.url or "")
+        if landed:
+            ids.append(landed.group(1))
+        for found in _CUSTOMER_LINK_RE.findall(reply.text or ""):
+            if found not in ids:
+                ids.append(found)
+        rows = []
+        for customer_id in ids[:SEARCH_LIMIT]:
+            row, code, detail = self._customer(customer_id)
+            if row is None:
+                return None, code, detail
+            rows.append(row)
+        return rows, "", ""
 
-    def _resolve(self, token: str, username: str):
-        """The one line called ``username``, as an exact match.
-
-        Search is a substring match, so ``ali`` finds ``ali.hassan`` too. A
-        write path must never act on a near miss.
-        """
-        rows, code, detail = self._find_lines(token, username)
+    def _resolve(self, username: str):
+        """The one line called ``username``, as an exact, case-blind match."""
+        wanted = (username or "").strip()
+        if not wanted:
+            return None, ERROR_NOT_FOUND, "no line given"
+        self._note(STEP_SEARCH)
+        rows, code, detail = self._customers("login", wanted, exact=True)
         if rows is None:
             return None, code, detail
-        wanted = (username or "").strip().casefold()
-        exact = [r for r in rows if r.card_no.casefold() == wanted]
+        exact = [r for r in rows if str(r.get("login", "")).casefold() == wanted.casefold()]
         if not exact:
-            return None, ERROR_NOT_FOUND, f"no line called {username!r}"
-        if len(exact) > 1:  # pragma: no cover - usernames are the login
-            return None, ERROR_UNEXPECTED, f"{len(exact)} lines called {username!r}"
-        return exact[0], "", ""
+            return None, ERROR_NOT_FOUND, f"no line called {wanted!r}"
+        if len(exact) > 1:  # pragma: no cover - a login is unique in Splynx
+            return None, ERROR_UNEXPECTED, f"{len(exact)} lines called {wanted!r}"
+        return _card_of(exact[0]), "", ""
 
-    def _resolve_or_use(self, token: str, card_no: str, resolved: "CardInfo | None"):
-        """``resolved`` if the caller already has it; otherwise a real search.
-
-        The fast path a caller earns by passing the ``CardInfo`` its own
-        ``lookup()`` already returned: no search at all, so ``offers()`` and
-        ``subscriber_profile()`` called right after a ``lookup()`` cost one
-        login and one search between the two of them, not a login and a
-        search EACH. Falls back to ``_resolve`` — the exact-match search —
-        for any caller that has only a bare identifier, which is what keeps
-        calling these methods standalone (as every existing test does)
-        working exactly as it always has.
-        """
-        if resolved is not None:
+    def _resolve_or_use(self, card_no: str, resolved: CardInfo | None):
+        if resolved is not None and resolved.provider_id:
             return resolved, "", ""
-        return self._resolve(token, card_no)
+        return self._resolve(card_no)
 
     # --- capabilities ------------------------------------------------------
     def probe(self) -> ProbeResult:
-        """Authenticate, and report the float as of the last recorded payment.
-
-        There is no live balance to read: the portal renders one nowhere in its
-        chrome, and the only figure it will give us is ``Final Balance`` on the
-        newest payment. That is exact at the moment it was written and goes
-        stale the moment the shop refills its float from outside Pointy, which
-        is why every successful recharge refreshes it from the write's own
-        reply instead of leaning on this.
-        """
-        session, token, code, detail = self._login()
-        if session is None:
+        """Both doors open, and the deposit as it stands right now."""
+        code, detail = self._cashdesk_login()
+        if code:
             return ProbeResult(ok=False, error_code=code, error_detail=detail)
-
-        response, code, detail = self._get(PAYMENTS_PATH)
-        if response is None:
-            # Credentials are good — we got past the login — so a report we
-            # could not read is a missing balance, not a failed probe.
-            return ProbeResult(ok=True, account_label=self.account.username)
-
-        payments = _parse_payment_rows(response.text or "")
-        balance = payments[0].balance_after if payments else None
-        return ProbeResult(
-            ok=True,
-            balance=balance,
-            account_label=self.account.username,
-        )
+        code, detail = self._api_login()
+        if code:
+            return ProbeResult(ok=False, error_code=code, error_detail=f"api: {detail}")
+        balance, _code, _detail = self._deposit()
+        return ProbeResult(ok=True, balance=balance, account_label=self.account.username)
 
     def lookup(self, card_no: str, *, search_by: str = "") -> LookupResult:
-        """Find the line, or lines, behind what the cashier typed.
-
-        ``card_no`` is a phone number, a username or a contract number, and
-        ``search_by`` is the till saying which — the picker beside the search
-        box, not a guess. It is a hint about where to look first, never a
-        restriction on where to look: see :func:`_search_modes_for`.
-
-        One household can hold several lines, so this answers with all of
-        them and leaves the choosing to a human.
-        """
-        session, token, code, detail = self._login()
-        if session is None:
-            return LookupResult(ok=False, error_code=code, error_detail=detail)
-
-        rows, code, detail = self._find_lines(token, card_no, lead=search_by)
+        """The line, or lines, behind what the cashier typed. Nothing picks for them."""
+        rows, code, detail = self._find_lines(card_no, lead=search_by)
         if rows is None:
             return LookupResult(ok=False, error_code=code, error_detail=detail)
         if not rows:
-            return LookupResult(
-                ok=False, error_code=ERROR_NOT_FOUND, error_detail=detail
-            )
+            return LookupResult(ok=False, error_code=ERROR_NOT_FOUND, error_detail=detail)
         return LookupResult(
-            ok=True,
-            card=rows[0] if len(rows) == 1 else None,
-            candidates=tuple(rows),
+            ok=True, card=rows[0] if len(rows) == 1 else None, candidates=tuple(rows)
         )
 
-    def subscriber_profile(
-        self, card_no: str, *, resolved: CardInfo | None = None
-    ) -> ProfileResult:
-        """What the list row says about one line.
-
-        LNET does not mask the way HD Box does, but it also does not offer a
-        detail view an agency can read, so the row *is* the profile: package,
-        status, the service window and the money already sitting on the line.
-
-        ``resolved`` is the line a caller already found — see ``offers`` for
-        why passing it is not just an optimisation.
-        """
-        session, token, code, detail = self._login()
-        if session is None:
-            return ProfileResult(ok=False, error_code=code, error_detail=detail)
-
-        row, code, detail = self._resolve_or_use(token, card_no, resolved)
+    def subscriber_profile(self, card_no: str, *, resolved: CardInfo | None = None) -> ProfileResult:
+        """The line, with the money already on it read off its Cashdesk page."""
+        row, code, detail = self._resolve_or_use(card_no, resolved)
         if row is None:
             return ProfileResult(ok=False, error_code=code, error_detail=detail)
-
+        page, _code, _detail = self._add_funds_page(row.provider_id)
+        service = self._line_service(row.provider_id)
         return ProfileResult(
             ok=True,
             profile=SubscriberProfile(
                 subscriber_ref=row.card_no,
                 display_name=row.holder_name,
-                package_name=row.package_name,
+                package_name=(service.plan if service else "") or row.package_name,
                 status=row.status,
-                started_at=row.start_at,
-                expire_at=row.expire_at,
-                card_balance=row.card_balance,
+                price_per_month=service.price if service else None,
+                started_at=(service.started if service else None) or row.start_at,
+                expire_at=(service.blocked_on if service else None) or row.expire_at,
+                card_balance=page.customer_balance if page is not None else row.card_balance,
             ),
         )
 
     def offers(self, card_no: str, *, resolved: CardInfo | None = None) -> OfferResult:
-        """What this line can be sold, priced as of now.
-
-        The options are **shortcuts, not a menu**: LNET takes any amount, so
-        ``open_amount`` is the real contract and the denominations exist so a
-        cashier can tap 45 instead of typing it. Each carries its face value as
-        the retail floor, because stored value sold below face loses money.
-
-        ``resolved`` is the line a caller already found — typically the very
-        ``CardInfo`` its own ``lookup(card_no)`` just answered with, a moment
-        earlier in the same request. Passing it is not merely faster, it is
-        what makes this find anything at all when the till searched by a
-        phone number or a contract number rather than the exact username:
-        without it, this re-searches for ``card_no`` and keeps only an EXACT
-        match against it — correct when ``card_no`` already is the username,
-        wrong whenever it is the phone number that found it, which is most
-        every search a cashier actually types.
-        """
-        session, token, code, detail = self._login()
-        if session is None:
-            return OfferResult(ok=False, error_code=code, error_detail=detail)
-
-        row, code, detail = self._resolve_or_use(token, card_no, resolved)
+        """Quick-pick amounts plus any typed amount, once the Cashdesk will take one."""
+        row, code, detail = self._resolve_or_use(card_no, resolved)
         if row is None:
             return OfferResult(ok=False, error_code=code, error_detail=detail)
-
-        # The recharge form is the provider's own answer to "may this line be
-        # topped up at all". Reading it here means a cashier learns that before
-        # the customer has paid, rather than at the write.
-        self._note(STEP_FORM)
-        response, code, detail = self._get(f"{RECHARGE_VIEW_PATH}{row.provider_id}")
-        if response is None:
+        # The add-funds form is the provider's own answer to "may this line be
+        # paid at all", read before the customer hands money over.
+        page, code, detail = self._add_funds_page(row.provider_id)
+        if page is None:
             return OfferResult(ok=False, error_code=code, error_detail=detail)
-        if not _recharge_form_user_id(response.text or ""):
-            self._observe(shape_ok=False)
-            return OfferResult(
-                ok=False,
-                error_code=ERROR_UNEXPECTED,
-                error_detail="recharge form did not render",
-            )
-
-        ratio = self._cost_ratio
-        spec = OpenAmount(
-            minimum=Decimal("1"),
-            maximum=None,
-            step=Decimal("1"),
-            cost_ratio=ratio,
-        )
+        spec = self._spec()
         options = tuple(
             RechargeOption(
                 code=_topup_code(amount),
@@ -761,150 +797,100 @@ class LnetProvider(IntegrationProvider):
         )
         return OfferResult(ok=True, options=options, open_amount=spec)
 
-    def purchase_history(
-        self, card_no: str, *, limit: int = 10, offset: int = 0
-    ) -> HistoryResult:
-        """This line's top-ups, newest first, out of the agency's own report.
+    def purchase_history(self, card_no: str, *, limit: int = 10, offset: int = 0) -> HistoryResult:
+        """This line's payments by this login over the last month, newest first.
 
-        The report's own ``Customer Name`` filter answers HTTP 500 for a term
-        that matches nothing — verified in the captured session — so it is not
-        used. Reading the report and matching here costs one page and cannot
-        fail that way.
+        The Cashdesk history is every payment this login made in the range, so
+        having read it we have seen every one back to the range's first day —
+        which is what lets reconciliation read absence as proof.
         """
-        session, token, code, detail = self._login()
-        if session is None:
+        today = _local_today()
+        start = max(today - timedelta(days=LINE_HISTORY_DAYS), HISTORY_FLOOR)
+        rows, code, detail = self._history(start, today + timedelta(days=1))
+        if rows is None:
             return HistoryResult(ok=False, error_code=code, error_detail=detail)
-
-        response, code, detail = self._get(PAYMENTS_PATH)
-        if response is None:
-            return HistoryResult(ok=False, error_code=code, error_detail=detail)
-
         wanted = (card_no or "").strip().casefold()
-        mine = (self.account.username or "").strip().casefold()
-        page = _parse_payment_rows(response.text or "")
-        # The report is the WHOLE account's payments, newest first, and the
-        # filter below happens here rather than at the provider. So having read
-        # this page we have seen every payment — for every line — back to its
-        # oldest row, which is a stronger claim than a per-card log could make
-        # and is what lets reconciliation read absence as proof. An empty
-        # report means the agency has never taken a payment at all.
-        stamps = [row.at for row in page if row.at is not None]
-        complete_since = min(stamps) if stamps else BEGINNING_OF_TIME
-        rows = [row for row in page if row.customer_name.casefold() == wanted]
+        mine = [row for row in rows if not row.is_deposit and row.login.casefold() == wanted]
+        ratio = self._cost_ratio
         entries = tuple(
             PurchaseEntry(
-                reference=row.serial,
-                cost=row.cost_for(self._cost_ratio),
+                reference=row.payment_id,
+                cost=row.cost_for(ratio),
                 months=0,
                 at=row.at,
-                package_name="",
-                operator_name=row.operator_name,
-                # Every row in this report was made by this login; the column
-                # exists because a reseller can have staff logins under it.
-                is_ours=not mine or row.operator_name.casefold() == mine,
-                amount=_quantize(row.amount),
-                status=_payment_status(row.status),
+                operator_name=self.account.username,
+                is_ours=True,
+                amount=row.amount,
+                status=PAYMENT_VERIFIED,
             )
-            for row in rows[offset : offset + limit]
+            for row in mine[offset : offset + limit]
         )
+        # Complete back to the range's first day — but never back past the
+        # moment this login's deposit was opened. A sale sent before that went
+        # to the OLD portal, and its absence from the Cashdesk proves nothing.
+        complete_since = _local_midnight(start)
+        opened = [row.at for row in rows if row.opens_deposit and row.at is not None]
+        if opened:
+            complete_since = max(complete_since, max(opened))
         return HistoryResult(
             ok=True,
-            total=len(rows),
+            total=len(mine),
             purchases=entries,
             complete_since=complete_since,
         )
 
     def payment_report_page(self, *, offset: int = 0) -> PaymentReportPage:
-        """One page of the agency's payments report — every line, newest first.
+        """One window of this login's payments, newest first.
 
-        The first page is the report's own address; the rest are reached the
-        way its pager reaches them. Where the next page starts is read off
-        that same pager rather than assumed, so a portal that prints twenty
-        rows tomorrow is followed rather than skipped through.
-
-        A page with no payments table at all is not an empty report: an empty
-        report still prints its header. That is our parser gone blind, and it
-        is reported as such instead of as "nothing happened today".
+        ``offset`` counts windows of ``REPORT_WINDOW_DAYS`` back from today.
+        An empty window looks further back on its own, so an empty page always
+        means the end: the deposit's creation, or ``HISTORY_FLOOR``.
         """
-        session, token, code, detail = self._login()
-        if session is None:
-            return PaymentReportPage(
-                ok=False, offset=offset, error_code=code, error_detail=detail
-            )
-
-        path = PAYMENTS_PATH if offset <= 0 else f"{PAYMENTS_PAGE_PATH}{offset}"
-        response, code, detail = self._get(path)
-        if response is None:
-            return PaymentReportPage(
-                ok=False, offset=offset, error_code=code, error_detail=detail
-            )
-
-        self._note(STEP_PARSE)
-        html = response.text or ""
-        if not _has_payments_table(html):
-            self._observe(shape_ok=False)
-            return PaymentReportPage(
-                ok=False,
-                offset=offset,
-                error_code=ERROR_UNEXPECTED,
-                error_detail="payments report did not render",
-            )
-        rows = _parse_payment_rows(html)
-        if any(row.at is None for row in rows):
-            # A row whose date we cannot read cannot be placed in the day it
-            # belongs to, and a reader walking the report by date would stop
-            # in the wrong place. Their date format changed; say so.
-            self._observe(shape_ok=False)
+        offset = max(offset, 0)
+        today = _local_today()
         ratio = self._cost_ratio
-        return PaymentReportPage(
-            ok=True,
-            offset=max(offset, 0),
-            next_offset=_next_payments_offset(html, max(offset, 0)),
-            payments=tuple(
-                ReportPayment(
-                    reference=row.serial,
-                    at=row.at,
-                    amount=_quantize(row.amount),
-                    cost=row.cost_for(ratio),
-                    balance_after=_quantize(row.balance_after),
-                    subscriber_ref=row.customer_name,
-                    operator_name=row.operator_name,
-                    status=_payment_status(row.status),
-                    status_label=row.status,
-                    payment_type=row.payment_type,
-                    extra=row.extra_gb,
-                    comment=row.comment,
+        window = offset
+        for _ in range(EMPTY_WINDOWS_SKIPPED + 1):
+            end = today + timedelta(days=1) - timedelta(days=REPORT_WINDOW_DAYS * window)
+            start = end - timedelta(days=REPORT_WINDOW_DAYS - 1)
+            if end < HISTORY_FLOOR:
+                return PaymentReportPage(ok=True, offset=offset, next_offset=None)
+            rows, code, detail = self._history(max(start, HISTORY_FLOOR), end)
+            if rows is None:
+                return PaymentReportPage(
+                    ok=False, offset=offset, error_code=code, error_detail=detail
                 )
+            payments = tuple(
+                _report_payment(row, ratio, self.account.username)
                 for row in rows
-            ),
-        )
+                if not row.is_deposit
+            )
+            at_end = start <= HISTORY_FLOOR or any(row.opens_deposit for row in rows)
+            if payments or at_end:
+                return PaymentReportPage(
+                    ok=True,
+                    offset=offset,
+                    next_offset=None if at_end else window + 1,
+                    payments=payments,
+                )
+            window += 1
+        return PaymentReportPage(ok=True, offset=offset, next_offset=None)
 
     # --- the write path ----------------------------------------------------
-    def recharge(
-        self, card_no: str, option_code: str, *, expected_cost=None, attempt_key: str = ""
-    ):
-        """Pay money onto a line. Spends the agency float.
+    def recharge(self, card_no: str, option_code: str, *, expected_cost=None, attempt_key: str = ""):
+        """Pay money onto a line. Spends the agency deposit. Never raises.
 
-        Two writes, and the boundary between them is the whole risk. Step one
-        creates the payment and credits the customer; step two debits the
-        float. Once step one has been *sent*, a retry would credit the customer
-        twice, so every outcome from there on is either a confirmed charge or
-        an indeterminate one — never a definite failure, and never something a
-        caller may try again.
+        One request. Before it: every check that can refuse without spending
+        (the cost, the line, the page, the deposit). After it has been sent,
+        nothing here may report a definite failure unless the page said so in
+        words AND the payment provably is not in history.
         """
         amount = _amount_from_option(option_code)
         if amount is None:
             return RechargeResult(
-                ok=False,
-                error_code=ERROR_UNEXPECTED,
-                error_detail=f"unsupported option {option_code!r}",
+                ok=False, error_code=ERROR_UNEXPECTED, error_detail=f"unsupported option {option_code!r}"
             )
-
-        ratio = self._cost_ratio
-        quoted = OpenAmount(minimum=Decimal("1"), cost_ratio=ratio).cost_of(amount)
-        # What the customer paid against. If our cost has moved since the till
-        # quoted it, refuse before anything is sent: spending a different
-        # amount of the shop's money than it agreed to is not ours to decide.
+        quoted = self._spec().cost_of(amount)
         if expected_cost is not None and quoted != _quantize(expected_cost):
             return RechargeResult(
                 ok=False,
@@ -912,451 +898,361 @@ class LnetProvider(IntegrationProvider):
                 error_detail=f"cost moved: quoted {expected_cost}, now {quoted}",
             )
 
-        session, token, code, detail = self._login()
-        if session is None:
-            return RechargeResult(ok=False, error_code=code, error_detail=detail)
-
-        row, code, detail = self._resolve(token, card_no)
+        row, code, detail = self._resolve(card_no)
         if row is None:
             return RechargeResult(ok=False, error_code=code, error_detail=detail)
-
-        # Take the token from the recharge form itself rather than the login
-        # page: it is the page whose POST we are about to imitate.
-        self._note(STEP_FORM)
-        response, code, detail = self._get(f"{RECHARGE_VIEW_PATH}{row.provider_id}")
-        if response is None:
+        page, code, detail = self._add_funds_page(row.provider_id)
+        if page is None:
             return RechargeResult(ok=False, error_code=code, error_detail=detail)
-        form_body = response.text or ""
-        user_id = _recharge_form_user_id(form_body)
-        if not user_id:
+        if page.login.casefold() != row.card_no.casefold():
             self._observe(shape_ok=False)
             return RechargeResult(
-                ok=False,
-                error_code=ERROR_UNEXPECTED,
-                error_detail="recharge form did not render",
+                ok=False, error_code=ERROR_UNEXPECTED, error_detail="add-funds page names another line"
             )
-        token = _csrf_token(form_body) or token
-        referer = self._url(f"{RECHARGE_VIEW_PATH}{user_id}")
-        # Re-read rather than trust the local ``session`` from ``_login()``
-        # above: the search and the form fetch that got us here may have
-        # silently relogged in on a dead cached session (see ``_get``), and
-        # both writes below have to go out on whichever session is actually
-        # still alive.
+        # The deposit pays face value. One it cannot cover is refused here,
+        # before anything is sent, with the code the till turns into «رصيد
+        # الوكالة غير كافٍ».
+        if page.deposit is not None and page.deposit < amount:
+            return RechargeResult(
+                ok=False,
+                error_code=ERROR_INSUFFICIENT_FLOAT,
+                error_detail=f"deposit {page.deposit} cannot cover {amount}",
+                balance_after=page.deposit,
+            )
+
+        marker = _marker(attempt_key)
+        receipt = {
+            "face_value": _plain(amount),
+            "username": row.card_no,
+            "customer_id": row.provider_id,
+            "package_name": row.package_name,
+            "marker": marker,
+        }
+        form = [
+            ("_csrf", (None, page.csrf)),
+            ("AddFundsForm[amount]", (None, _plain(amount))),
+            ("AddFundsForm[comment]", (None, marker)),
+            ("AddFundsForm[date]", (None, _local_today().isoformat())),
+            ("AddFundsForm[payInvoiceOrRequest]", (None, PAY_NO_INVOICE)),
+            ("AddFundsForm[paymentType]", (None, PAYMENT_TYPE_CASH)),
+            ("add-button", (None, "")),
+        ]
+        add_url = self._url(f"{ADD_FUNDS_PATH}?customer_id={row.provider_id}")
         session = self._session
 
-        # --- step one: create the payment ---------------------------------
-        # Past this line the customer may already have been credited, whatever
-        # comes back. Nothing below may report a definite failure.
-        #
-        # The step is recorded BEFORE the request, not after: if this process
-        # dies mid-call the row still says "submit", which is the difference
-        # between a charge that may have happened and one that provably did
-        # not leave the machine.
+        # Recorded BEFORE the request: a process that dies mid-call still says
+        # "submit", i.e. a payment that may have happened.
         self._note(STEP_SUBMIT)
         try:
-            created = session.post(
-                self._url(f"{VALIDATE_PATH}{user_id}"),
-                data={
-                    "ci_csrf_token": token,
-                    "recharge_amount": _plain(amount),
-                    "recharge_type": RECHARGE_TYPE_CASH,
-                    "bank": BANK_PLACEHOLDER,
-                    "cheque_number": "",
-                    "extra_gb": EXTRA_GB_NONE,
-                },
+            reply = session.post(
+                add_url,
+                files=form,
+                headers={**_PJAX_HEADERS, "Referer": add_url},
                 timeout=self._timeout,
-                headers={**_AJAX_HEADERS, "Referer": referer},
             )
         except requests.RequestException as exc:
-            # The answer never arrived. The payment may well exist.
-            return RechargeResult(
-                ok=False,
-                indeterminate=True,
-                error_code=ERROR_INDETERMINATE,
-                error_detail=f"payment may have been created: {exc}",
+            return self._settle_unanswered(
+                marker, row, amount, receipt, f"payment may have been made: {exc}"
             )
 
-        self._observe(http_status=created.status_code)
-        payload, error = _json_reply(created)
-        if payload is None:
-            # A reply we cannot read is not a refusal: the portal answers
-            # JSON as ``text/html`` and a 500 here may still have written.
-            return RechargeResult(
-                ok=False,
-                indeterminate=True,
-                error_code=ERROR_INDETERMINATE,
-                error_detail=f"payment may have been created: {error}",
-            )
-        if payload.get("status") != "success":
-            # An explicit refusal, before a serial number existed. This is the
-            # one outcome where the float and the customer are both untouched.
-            message = str(payload.get("message") or "").strip()
-            return RechargeResult(
-                ok=False,
-                # An empty float gets its own code: the till then says «رصيد
-                # الوكالة غير كافٍ» instead of a generic failure, and the
-                # cashier stops retrying a sale only the owner can unblock.
-                error_code=ERROR_INSUFFICIENT_FLOAT
-                if _INSUFFICIENT_RE.search(message)
-                else ERROR_PROVIDER_ERROR,
-                error_detail=message or "payment refused",
-            )
+        self._observe(http_status=reply.status_code)
+        body = reply.text or ""
+        if reply.status_code < 400 and _DONE_RE.search(body):
+            return self._performed(marker, row, amount, receipt, reply_page=_parse_add_funds(body))
 
-        data = payload.get("data")
-        if not isinstance(data, dict):
-            return RechargeResult(
-                ok=False,
-                indeterminate=True,
-                error_code=ERROR_INDETERMINATE,
-                error_detail="payment created but its reply had no data",
-            )
-        serial = _plain_str(data.get("serial_number"))
-        operator_id = _plain_str(data.get("current_user_id"))
-        new_balance = _as_decimal(data.get("new_balance"))
-        receipt = {
-            "serial_number": serial,
-            "payment_date": _plain_str(data.get("payment_date")),
-            "payment_amount": _plain_str(data.get("payment_amount")),
-            "face_value": _plain(amount),
-            "extra_gb": _plain_str(data.get("extra_gb")),
-            "username": row.card_no,
-            "user_id": user_id,
-            "package_name": row.package_name,
-        }
-        self._observe(provider_reference=serial)
-        if not serial or not operator_id or new_balance is None:
-            self._observe(shape_ok=False)
-            return RechargeResult(
-                ok=False,
-                indeterminate=True,
-                error_code=ERROR_INDETERMINATE,
-                error_detail="payment created but its reply was incomplete",
-                receipt=receipt,
-            )
+        # Not «Done!». Read what the page said, keep it for the first real
+        # refusal to be taught to this driver, and settle on history.
+        message = _alert_text(body)
+        # Rows leave the shop: digits masked like every other detail, so an
+        # alert that names a phone or an id never carries it off the machine.
+        self._observe(shape_ok=False, reply_message=mask_numbers(message)[:200])
+        logger.warning(
+            "lnet: add-funds answered without Done! (HTTP %s): %s",
+            reply.status_code,
+            message[:200] or "<no message>",
+        )
+        if reply.status_code < 400 and message:
+            found, code, _detail = self._find_marked(marker)
+            if found is not None:
+                return self._performed(marker, row, amount, receipt, history_row=found)
+            if code == "":
+                # The page refused in words and the payment is provably not in
+                # this login's history, read after the reply arrived.
+                return RechargeResult(
+                    ok=False,
+                    error_code=ERROR_INSUFFICIENT_FLOAT
+                    if _INSUFFICIENT_RE.search(message)
+                    else ERROR_PROVIDER_ERROR,
+                    error_detail=message[:255],
+                )
+        return self._settle_unanswered(
+            marker,
+            row,
+            amount,
+            receipt,
+            f"payment may have been made: HTTP {reply.status_code} {message[:120]}".strip(),
+        )
 
-        # --- step two: debit the float -------------------------------------
-        self._note(STEP_COMMIT)
-        try:
-            committed = session.post(
-                self._url(COMMIT_PATH),
-                data={
-                    "ci_csrf_token": token,
-                    "current_user_id": operator_id,
-                    # Echoed back exactly as the server computed it. This is
-                    # the portal's own protocol, not arithmetic of ours.
-                    "new_balance": _plain(new_balance),
-                    "serial_number": serial,
-                },
-                timeout=self._timeout,
-                headers={**_AJAX_HEADERS, "Referer": referer},
-            )
-        except requests.RequestException as exc:
-            return RechargeResult(
-                ok=False,
-                indeterminate=True,
-                error_code=ERROR_INDETERMINATE,
-                reference=serial,
-                receipt=receipt,
-                error_detail=f"customer credited, float debit unconfirmed: {exc}",
-            )
+    def _find_marked(self, marker: str):
+        """The history row carrying ``marker``, from today and yesterday. ``(row, code, detail)``."""
+        today = _local_today()
+        rows, code, detail = self._history(today - timedelta(days=1), today + timedelta(days=1))
+        if rows is None:
+            return None, code, detail
+        for row in rows:
+            if row.comment.strip() == marker:
+                return row, "", ""
+        return None, "", ""
 
-        self._observe(http_status=committed.status_code)
-        commit_payload, error = _json_reply(committed)
-        if commit_payload is None or commit_payload.get("status") != "success":
-            message = (
-                error
-                if commit_payload is None
-                else str(commit_payload.get("message") or "").strip()
-            )
-            # The customer has their credit and the float may or may not have
-            # paid for it. A human has to reconcile serial ``serial``; a retry
-            # would top the customer up a second time.
-            return RechargeResult(
-                ok=False,
-                indeterminate=True,
-                error_code=ERROR_INDETERMINATE,
-                reference=serial,
-                receipt=receipt,
-                error_detail=f"customer credited, float debit unconfirmed: {message}",
-            )
+    def _settle_unanswered(self, marker, row, amount, receipt, detail) -> RechargeResult:
+        """A payment whose answer we do not have: performed if history names it, else unknown."""
+        found, _code, _detail = self._find_marked(marker)
+        if found is not None:
+            return self._performed(marker, row, amount, receipt, history_row=found)
+        return RechargeResult(
+            ok=False,
+            indeterminate=True,
+            error_code=ERROR_INDETERMINATE,
+            error_detail=detail[:255],
+            receipt=receipt,
+        )
 
-        # What the customer's receipt prints in the line's slip: whose line was
-        # topped up, by how much, and the serial LNET issued for it — the
-        # number LNET's own support asks for.
+    def _performed(self, marker, row, amount, receipt, *, reply_page=None, history_row=None):
+        """A confirmed payment, with LNET's own payment id when history gives it."""
+        if history_row is None:
+            history_row, _code, _detail = self._find_marked(marker)
+        reference = history_row.payment_id if history_row is not None else ""
+        balance_after = history_row.balance_after if history_row is not None else None
+        if balance_after is None:
+            balance_after, _code, _detail = self._deposit()
+        self._observe(provider_reference=reference)
+        receipt = {**receipt, "payment_id": reference}
+        if reply_page is not None and reply_page.customer_balance is not None:
+            receipt["customer_balance"] = _plain(reply_page.customer_balance)
         receipt["printed"] = {
             key: value
             for key, value in {
                 "username": row.card_no,
                 "amount": _plain(amount),
-                "serial": serial,
+                "serial": reference,
                 "package": row.package_name,
             }.items()
             if value
         }
         return RechargeResult(
-            ok=True,
-            reference=serial,
-            balance_after=_quantize(new_balance),
-            receipt=receipt,
+            ok=True, reference=reference, balance_after=balance_after, receipt=receipt
         )
 
 
 # --- parsing ----------------------------------------------------------------
-class _PaymentRow:
-    """One row of the agency's payments report."""
-
-    __slots__ = ("serial", "at", "amount", "balance_after", "customer_name",
-                 "operator_name", "status", "payment_type", "extra_gb",
-                 "comment")
+class _AddFundsPage:
+    __slots__ = ("csrf", "name", "login", "customer_id", "customer_balance", "deposit")
 
     def __init__(self, **kwargs):
         for name in self.__slots__:
             setattr(self, name, kwargs.get(name))
 
+
+class _LineService:
+    """What the API says about a line's internet service."""
+
+    __slots__ = ("plan", "price", "started", "blocked_on")
+
+    def __init__(self, **kwargs):
+        for name in self.__slots__:
+            setattr(self, name, kwargs.get(name))
+
+
+class _HistoryRow:
+    """One row of the Cashdesk history."""
+
+    __slots__ = (
+        "payment_id", "at", "amount", "login", "customer_id", "comment",
+        "balance_before", "balance_after", "is_deposit",
+    )
+
+    def __init__(self, **kwargs):
+        for name in self.__slots__:
+            setattr(self, name, kwargs.get(name))
+
+    @property
+    def opens_deposit(self) -> bool:
+        """The row that created this login's deposit: nothing is older."""
+        return bool(self.is_deposit and self.comment.lower().startswith("create new deposit"))
+
     def cost_for(self, ratio: Decimal) -> Decimal | None:
-        """What the float paid for this payment's face value."""
         if self.amount is None:
             return None
         return (self.amount * ratio).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
-def _csrf_token(html: str) -> str:
-    match = _CSRF_RE.search(html or "") or _CSRF_ALT_RE.search(html or "")
-    return match.group(1) if match else ""
-
-
-def _is_login_url(url: str) -> bool:
-    try:
-        return urlsplit(url or "").path.rstrip("/").endswith("/login")
-    except ValueError:  # pragma: no cover - defensive
-        return False
-
-
-def _recharge_form_user_id(html: str) -> str:
-    match = _USER_ID_FIELD_RE.search(html or "") or _USER_ID_FIELD_ALT_RE.search(
-        html or ""
+def _parse_add_funds(html: str) -> _AddFundsPage | None:
+    form = _ADD_FUNDS_FORM_RE.search(html)
+    if not form:
+        return None
+    title = _TITLE_RE.search(html)
+    if not title:
+        return None
+    balance = _CUSTOMER_BALANCE_RE.search(html)
+    deposit = _deposit_of(html)
+    return _AddFundsPage(
+        # The form's own token: it is the POST being imitated. (Yii prints one
+        # value in every form of a page, but the nav's logout form comes first.)
+        csrf=_csrf_token(html[form.start():]) or _csrf_token(html),
+        name=_text(title.group(1)),
+        login=_text(title.group(2)),
+        customer_id=title.group(3),
+        customer_balance=_quantize(balance.group(1)) if balance else None,
+        deposit=deposit,
     )
-    return match.group(1) if match else ""
 
 
-def _strip_comments(html: str) -> str:
-    """Drop commented-out markup before anything counts a cell.
+def _history_row(item) -> _HistoryRow | None:
+    if not isinstance(item, dict):
+        return None
+    at = _parse_datetime(item.get("datetime"))
+    amount = _quantize(_text(str(item.get("amount") or "")))
+    if at is None or amount is None:
+        return None
+    payment_id = _text(str(item.get("payment_id") or ""))
+    who = _WHO_RE.search(_text(str(item.get("customerFullTitle") or "")))
+    is_deposit = payment_id in ("", "---") or who is None
+    return _HistoryRow(
+        payment_id="" if is_deposit else payment_id,
+        at=at,
+        amount=amount,
+        login=who.group(1).strip() if who else "",
+        customer_id=who.group(2) if who else "",
+        comment=_text(str(item.get("comment") or "")),
+        balance_before=_quantize(_text(str(item.get("balanceBefore") or ""))),
+        balance_after=_quantize(_text(str(item.get("balanceAfter") or ""))),
+        is_deposit=is_deposit,
+    )
 
-    Both portal tables ship columns the operator role does not see as HTML
-    comments, and the commented headers do not line up with the commented
-    cells. Counting them reads every column one place to the left.
+
+def _report_payment(row: _HistoryRow, ratio: Decimal, operator: str) -> ReportPayment:
+    return ReportPayment(
+        reference=row.payment_id,
+        at=row.at,
+        amount=row.amount,
+        cost=row.cost_for(ratio),
+        balance_after=row.balance_after,
+        subscriber_ref=row.login,
+        # The history is this login's alone.
+        operator_name=operator,
+        # The Cashdesk has no pending or cancelled payment: one in its history
+        # was made.
+        status=PAYMENT_VERIFIED,
+        status_label="",
+        payment_type="",
+        extra="",
+        comment=row.comment,
+    )
+
+
+def _card_of(customer: dict) -> CardInfo:
+    login = str(customer.get("login") or "").strip()
+    name = str(customer.get("name") or "").strip()
+    return CardInfo(
+        card_no=login,
+        status=str(customer.get("status") or "").strip(),
+        provider_id=str(customer.get("id") or "").strip(),
+        label=login,
+        holder_name=name,
+    )
+
+
+def _deposit_of(html: str) -> Decimal | None:
+    found = _DEPOSIT_RE.search(_text(html) if "<" in html else html)
+    return _quantize(found.group(1)) if found else None
+
+
+def _alert_text(html: str) -> str:
+    """Whatever the page said in an error alert or under a field, as plain text."""
+    parts = [_text(found) for found in _ERROR_RE.findall(html or "")]
+    return " | ".join(part for part in parts if part)
+
+
+def _bounced_to_login(response) -> bool:
+    return bool(_LOGIN_FORM_RE.search(response.text or "")) and urlpath(response.url).rstrip(
+        "/"
+    ).endswith("/login")
+
+
+def _csrf_token(html: str) -> str:
+    found = _CSRF_RE.search(html or "") or _CSRF_ALT_RE.search(html or "")
+    return unescape(found.group(1)) if found else ""
+
+
+def urlpath(url) -> str:
+    from urllib.parse import urlsplit
+
+    return urlsplit(url or "").path
+
+
+def _json(response):
+    try:
+        return response.json()
+    except ValueError:
+        return None
+
+
+def _api_message(payload) -> str:
+    if isinstance(payload, dict):
+        error = payload.get("error")
+        if isinstance(error, dict):
+            return str(error.get("message") or "")
+    return ""
+
+
+def _still_valid(expires) -> bool:
+    """A cached token with at least a minute left. Unknown expiry: trust the cache TTL."""
+    try:
+        stamp = int(expires)
+    except (TypeError, ValueError):
+        return True
+    return stamp - 60 > int(timezone.now().timestamp())
+
+
+def _marker(attempt_key: str) -> str:
+    key = (attempt_key or "").strip() or f"x{uuid.uuid4().hex[:16]}"
+    return f"{MARKER_PREFIX}{key}"[:64]
+
+
+def _national_number(digits: str) -> str:
+    """``0912906205``, ``+218912906205`` and ``218912906205`` → ``912906205``.
+
+    Splynx stores phones however LNET typed them, so the search is a substring
+    match on the national number, which every spelling contains.
     """
-    return _COMMENT_RE.sub("", html or "")
+    text = digits.lstrip("+")
+    if text.startswith("00218"):
+        text = text[5:]
+    elif text.startswith("218") and len(text) > 9:
+        text = text[3:]
+    if text.startswith("0") and len(text) > 9:
+        text = text[1:]
+    return text
 
 
-def _cell_text(cell: str) -> str:
-    return re.sub(r"\s+", " ", unescape(_TAG_RE.sub(" ", cell or ""))).strip()
+def _local_today() -> date:
+    return timezone.now().astimezone(business_timezone()).date()
 
 
-def _tables_by_header(html: str):
-    """Yield ``(headers, row_html)`` for every data row, headers lowercased."""
-    body = _strip_comments(html)
-    rows = _ROW_RE.findall(body)
-    headers: list[str] = []
-    for row in rows:
-        ths = _TH_RE.findall(row)
-        if ths:
-            headers = [_cell_text(th).casefold() for th in ths]
-            continue
-        if not headers:
-            continue
-        yield headers, row
+def _local_midnight(day: date) -> datetime:
+    return datetime.combine(day, time.min, tzinfo=business_timezone()).astimezone(utc)
 
 
-def _column_map(headers: list[str], cells: list[str]) -> dict[str, str]:
-    """``{header: cell}`` — by label, never by position."""
-    return {name: cells[i] for i, name in enumerate(headers) if i < len(cells)}
-
-
-def _has_user_table(html: str) -> bool:
-    """Did this page render the user-results table at all?
-
-    Separates "the customer has no line" from "their markup changed and we can
-    no longer see one". Deliberately checks the *header*, not the rows: a real
-    search with no matches still renders the header.
-    """
-    for headers, _row in _tables_by_header(html):
-        if "username" in headers:
-            return True
-    # No data rows at all, so the loop above never yielded. Look for the header
-    # on its own before concluding the page is unrecognisable.
-    body = _strip_comments(html)
-    for row in _ROW_RE.findall(body):
-        cells = [_cell_text(th).casefold() for th in _TH_RE.findall(row)]
-        if "username" in cells:
-            return True
-    return False
-
-
-def _parse_user_rows(html: str) -> list[CardInfo]:
-    """Every line in a user-search result, read by header label."""
-    found: list[CardInfo] = []
-    for headers, row in _tables_by_header(html):
-        if "username" not in headers:
-            continue
-        cells = _TD_RE.findall(row)
-        if not cells:
-            continue
-        columns = _column_map(headers, cells)
-        username = _cell_text(columns.get("username", ""))
-        if not username:
-            continue
-        link = _USER_LINK_RE.search(columns.get("username", "")) or _ROW_ID_RE.search(
-            row
-        )
-        provider_id = link.group(1) if link else ""
-        if not provider_id:
-            # Without an id there is no page to recharge; showing the line
-            # would offer a cashier something that cannot be completed.
-            continue
-        plan = _PLAN_RE.search(columns.get("recharge", ""))
-        found.append(
-            CardInfo(
-                card_no=username,
-                provider_id=provider_id,
-                status=_cell_text(columns.get("service status", "")),
-                start_at=_parse_datetime(columns.get("service start date")),
-                expire_at=_parse_datetime(columns.get("service finish date")),
-                package_name=unescape(plan.group(1)).strip() if plan else "",
-                holder_name=_cell_text(columns.get("display name", "")),
-                card_balance=_as_decimal(_cell_text(columns.get("money balance", ""))),
-            )
-        )
-    return found
-
-
-def _parse_payment_rows(html: str) -> list[_PaymentRow]:
-    """The agency's payments report, newest first, read by header label."""
-    found: list[_PaymentRow] = []
-    for headers, row in _tables_by_header(html):
-        if "s/n" not in headers or "final balance" not in headers:
-            continue
-        cells = _TD_RE.findall(row)
-        if not cells:
-            continue
-        columns = {k: _cell_text(v) for k, v in _column_map(headers, cells).items()}
-        serial = columns.get("s/n", "")
-        if not serial.isdigit():
-            continue
-        found.append(
-            _PaymentRow(
-                serial=serial,
-                at=_parse_datetime(columns.get("payment date")),
-                amount=_as_decimal(columns.get("payment amount")),
-                balance_after=_as_decimal(columns.get("final balance")),
-                customer_name=columns.get("customer name", ""),
-                operator_name=columns.get("recharged by", ""),
-                status=columns.get("status", ""),
-                payment_type=columns.get("payment type", ""),
-                extra_gb=columns.get("extra gb", ""),
-                comment=columns.get("comment", ""),
-            )
-        )
-    return found
-
-
-def _has_payments_table(html: str) -> bool:
-    """Did this page render the payments table at all, rows or none?
-
-    The same question ``_has_user_table`` asks of a search: a report with no
-    payments still prints its header, so a missing header is a changed page,
-    never a quiet day.
-    """
-    body = _strip_comments(html)
-    for row in _ROW_RE.findall(body):
-        cells = [_cell_text(th).casefold() for th in _TH_RE.findall(row)]
-        if "s/n" in cells and "final balance" in cells:
-            return True
-    return False
-
-
-_PAGER_OFFSET_RE = re.compile(r"/reports/payments/index/all/(\d+)", re.I)
-
-
-def _next_payments_offset(html: str, offset: int) -> int | None:
-    """Where the report's own pager says the page after ``offset`` starts.
-
-    The nearest pager link past the current offset — which is what its "next"
-    arrow points at on every captured page — or ``None`` on the last page.
-    Read from the links rather than computed, so no page size of ours can
-    step over rows the portal printed.
-    """
-    offsets = {int(value) for value in _PAGER_OFFSET_RE.findall(html or "")}
-    later = [value for value in offsets if value > offset]
-    return min(later) if later else None
-
-
-#: The report's status words, mapped to the stable codes in ``base``. Keys are
-#: the ``status-…`` filters its own tabs link to, which is also how a row
-#: prints its status ("verified" on every captured row).
-_PAYMENT_STATUSES = {
-    "verified": PAYMENT_VERIFIED,
-    "pending": PAYMENT_PENDING,
-    "cancelled": PAYMENT_CANCELLED,
-    "canceled": PAYMENT_CANCELLED,
-    "cancel_request": PAYMENT_CANCEL_REQUESTED,
-    "cancellation request": PAYMENT_CANCEL_REQUESTED,
-    "rejected": PAYMENT_CANCEL_REJECTED,
-    "cancelled rejected": PAYMENT_CANCEL_REJECTED,
-}
-
-
-def _payment_status(text: str) -> str:
-    """A report row's status as a stable code, or the word itself, lowercased.
-
-    An unfamiliar word is passed through rather than guessed at: everything
-    downstream treats only ``verified`` as a payment that happened, so a new
-    state can never be read as a settled one by accident.
-    """
-    word = _cell_text(text).casefold()
-    return _PAYMENT_STATUSES.get(word, word[:32])
-
-
-def _search_modes_for(term: str, lead: str = "") -> tuple[str, ...]:
-    """Which of the portal's three searches to try, and in what order.
-
-    ``lead`` is the cashier's own answer to "what is this number?", taken from
-    the picker beside the search box. It is worth far more than anything that
-    can be inferred from the digits: a phone number and a contract number are
-    both digits, so without it every till search is a guess that costs a round
-    trip per wrong guess. With it, the ordinary search is one request and one
-    wait.
-
-    It orders the modes; it does not restrict them. A cashier who leaves the
-    picker on the wrong entry still finds the customer, just a second slower —
-    which is the old behaviour, and a much better failure than "not found" for
-    a line that is plainly there.
-    """
-    compact = term.replace(" ", "").replace("-", "")
-    if compact.isdigit():
-        modes = SEARCH_MODES
-    else:
-        # Usernames carry letters and dots; a phone search for one is a
-        # wasted trip whatever the picker says.
-        modes = (SEARCH_BY_USERNAME, SEARCH_BY_CONTRACT)
-    if lead in modes:
-        return (lead,) + tuple(m for m in modes if m != lead)
-    return modes
+def _text(value) -> str:
+    return re.sub(r"\s+", " ", unescape(_TAG_RE.sub(" ", value or ""))).strip()
 
 
 def _parse_datetime(value) -> datetime | None:
-    """A portal timestamp as an **aware** UTC datetime.
+    """A Cashdesk timestamp, printed in the shop's own time, as aware UTC.
 
-    The portal prints a bare wall clock with no offset, in the shop's own time
-    (verified against the capture: a request sent 15:39:38Z was recorded as
-    17:40:44, i.e. UTC+2/Africa/Tripoli, with a minute of server skew). Pointy
-    runs in UTC, so a naive value here does not merely read oddly — it makes
-    every comparison against ``timezone.now()`` raise, which is exactly what
-    reconciliation does to decide whether money moved.
+    Verified on the capture: a payment sent at 14:06:50Z is listed 16:06:52.
     """
-    text = _cell_text(value or "")
-    if not text or not _DATE_RE.match(text):
-        return None
+    text = _text(str(value or ""))
     for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"):
         try:
             parsed = datetime.strptime(text, fmt)
@@ -1364,6 +1260,19 @@ def _parse_datetime(value) -> datetime | None:
             continue
         return parsed.replace(tzinfo=business_timezone()).astimezone(utc)
     return None
+
+
+def _api_date(value) -> datetime | None:
+    """An API date (``2026-12-09``) as the start of that day in the shop's time.
+
+    Splynx writes ``0000-00-00`` (or nothing) for "no date".
+    """
+    text = str(value or "").strip()[:10]
+    try:
+        day = datetime.strptime(text, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+    return _local_midnight(day)
 
 
 def _as_decimal(value) -> Decimal | None:
@@ -1380,32 +1289,18 @@ def _as_decimal(value) -> Decimal | None:
 
 def _quantize(value) -> Decimal | None:
     parsed = _as_decimal(value)
-    return (
-        None
-        if parsed is None
-        else parsed.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-    )
+    return None if parsed is None else parsed.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 def _plain(value) -> str:
-    """A number as the portal's own form would send it — no trailing zeros.
-
-    The captured session posts ``1``, not ``1.00``, and echoes ``517.85`` back
-    exactly as it was received. Normalising either would be inventing a
-    protocol the provider never agreed to.
-    """
+    """A number as the page's own form sends it: ``1``, not ``1.00``."""
     parsed = _as_decimal(value)
     if parsed is None:
         return ""
     normalised = parsed.normalize()
-    # normalize() renders whole numbers in exponent form (1E+2); undo that.
     if normalised == normalised.to_integral_value():
         return str(normalised.quantize(Decimal("1")))
     return format(normalised, "f")
-
-
-def _plain_str(value) -> str:
-    return "" if value is None else str(value).strip()
 
 
 def _topup_code(amount) -> str:
@@ -1426,17 +1321,3 @@ def _amount_from_option(option_code: str) -> Decimal | None:
     if amount is None or amount <= 0:
         return None
     return amount
-
-
-def _json_reply(response) -> tuple[dict | None, str]:
-    """Parse a reply the portal serves as ``text/html`` but means as JSON."""
-    body = (response.text or "").strip()
-    if response.status_code >= 500:
-        return None, f"portal error {response.status_code}"
-    try:
-        payload = json.loads(body)
-    except ValueError:
-        return None, f"not JSON ({body[:120]!r})"
-    if not isinstance(payload, dict):
-        return None, "not an object"
-    return payload, ""

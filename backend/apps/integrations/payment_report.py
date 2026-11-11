@@ -1,13 +1,13 @@
 """The provider's own payments report, mirrored a page at a time.
 
-LNET keeps one report of every payment the agency ever made — each line, each
-operator, the till's and the website's alike — and it is the only record of a
-top-up somebody did on the website while the till could not sell it. It prints
-**ten rows a page over the agency's whole life**, newest first (the captured
-account had ~9,400). Read live, one page is roughly the last day of trade, and
-that was the whole of what the till's history for a line could ever show.
+LNET keeps one record of every payment the agency's login made, the till's and
+the ones typed into LNET's own page alike, and it is the only record of a
+top-up somebody did there while the till could not sell it. Since November
+2026 that is the Splynx Cashdesk history, which the driver serves one
+month-long window per page (``providers.lnet.payment_report_page``); before
+that it was the old portal's report at ten rows a page.
 
-So the report is copied into :class:`~apps.integrations.models.ProviderPayment`
+The report is copied into :class:`~apps.integrations.models.ProviderPayment`
 and read from there. Three rules make the copy trustworthy:
 
 * **It is always read from the newest row down**, the only order the report can
