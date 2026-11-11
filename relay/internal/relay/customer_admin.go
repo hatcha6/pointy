@@ -33,6 +33,8 @@ import (
 //	POST   /v1/customers/admin/notifications            {audience, customer_id, title, body, link, campaign}
 //	GET    /v1/customers/admin/shelf
 //	PUT    /v1/customers/admin/shelf                    {ios_gift_cards}
+//	GET    /v1/customers/admin/esim-promos              (esim_promos.go)
+//	PUT    /v1/customers/admin/esim-promos              {promos}
 //	GET    /v1/customers/admin/campaigns                (customer_campaigns.go)
 //	POST   /v1/customers/admin/campaigns                {code, name, kind, note, landing}
 //	PATCH  /v1/customers/admin/campaigns/{id}           {name, note, landing, active}
@@ -94,6 +96,12 @@ func (s HTTPServer) handleCustomerAdminRoutes(w http.ResponseWriter, r *http.Req
 		return
 	case route == "shelf" && r.Method == http.MethodPut:
 		s.handleCustomerAdminSetShelf(w, r)
+		return
+	case route == "esim-promos" && r.Method == http.MethodGet:
+		s.handleCustomerAdminESIMPromos(w, r)
+		return
+	case route == "esim-promos" && r.Method == http.MethodPut:
+		s.handleCustomerAdminSetESIMPromos(w, r)
 		return
 	case route == "notifications" && r.Method == http.MethodPost:
 		s.handleCustomerAdminNotify(w, r, store)
@@ -203,7 +211,7 @@ func (s HTTPServer) handleCustomerAdminDetail(w http.ResponseWriter, r *http.Req
 		"attribution":   attribution,
 		"sessions":      devices,
 		"credit":        map[string]any{"balance": balance, "entries": entries},
-		"orders":        orders,
+		"orders":        s.orderViews(r, store, orders),
 		"notifications": notifications,
 	})
 }
@@ -304,10 +312,12 @@ func (s HTTPServer) handleCustomerAdminSignOut(w http.ResponseWriter, r *http.Re
 	writeJSON(w, http.StatusOK, map[string]any{"signed_out": count})
 }
 
-// customerOrderAdminView is an order with its customer's phone.
+// customerOrderAdminView is an order with its customer's phone and what it
+// made the company (sale_profit.go).
 type customerOrderAdminView struct {
 	control.CustomerOrder
 	CustomerPhone string `json:"customer_phone,omitempty"`
+	saleProfit
 }
 
 // withPhones names each order's customer, reading each customer once.
@@ -327,6 +337,25 @@ func withPhones(ctx context.Context, store customerAdminStore, orders []control.
 	return views
 }
 
+// orderViews is withPhones, and each delivered order priced from the purchase
+// that supplied it.
+func (s HTTPServer) orderViews(r *http.Request, store customerAdminStore, orders []control.CustomerOrder) []customerOrderAdminView {
+	views := withPhones(r.Context(), store, orders)
+	voucherStore, ok := s.voucherStore()
+	if !ok {
+		return views
+	}
+	purchases := orderPurchases(r.Context(), voucherStore, orders)
+	if len(purchases) == 0 {
+		return views
+	}
+	usdRate, _ := s.financeUSDRate(r)
+	for i := range views {
+		views[i].saleProfit = orderProfit(views[i].CustomerOrder, purchases, usdRate)
+	}
+	return views
+}
+
 func (s HTTPServer) handleCustomerAdminOrders(w http.ResponseWriter, r *http.Request, store customerAdminStore) {
 	query := r.URL.Query()
 	orders, err := store.ListCustomerOrders(r.Context(), control.CustomerOrderFilter{
@@ -340,7 +369,7 @@ func (s HTTPServer) handleCustomerAdminOrders(w http.ResponseWriter, r *http.Req
 		s.customerInternalError(w, "customer orders failed", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"orders": withPhones(r.Context(), store, orders)})
+	writeJSON(w, http.StatusOK, map[string]any{"orders": s.orderViews(r, store, orders)})
 }
 
 func (s HTTPServer) handleCustomerAdminOrder(w http.ResponseWriter, r *http.Request, store customerAdminStore, id string) {
@@ -353,7 +382,7 @@ func (s HTTPServer) handleCustomerAdminOrder(w http.ResponseWriter, r *http.Requ
 		s.customerInternalError(w, "customer order read failed", err)
 		return
 	}
-	payload := map[string]any{"order": withPhones(r.Context(), store, []control.CustomerOrder{order})[0]}
+	payload := map[string]any{"order": s.orderViews(r, store, []control.CustomerOrder{order})[0]}
 	if reports, ok := s.Store.(control.CustomerOrderReportStore); ok {
 		if list, err := reports.CustomerOrderReports(r.Context(), order.ID); err == nil {
 			payload["reports"] = list

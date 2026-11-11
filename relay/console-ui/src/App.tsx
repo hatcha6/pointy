@@ -24,6 +24,7 @@ const Wallets = lazy(() => import("./pages/Wallets").then((m) => ({ default: m.W
 const Licenses = lazy(() => import("./pages/Licenses").then((m) => ({ default: m.Licenses })));
 const Sms = lazy(() => import("./pages/Sms").then((m) => ({ default: m.Sms })));
 const Catalog = lazy(() => import("./pages/vouchers/Catalog").then((m) => ({ default: m.Catalog })));
+const CatalogEditor = lazy(() => import("./pages/vouchers/CatalogEditor").then((m) => ({ default: m.CatalogEditor })));
 const Suppliers = lazy(() => import("./pages/vouchers/Suppliers").then((m) => ({ default: m.Suppliers })));
 const Stock = lazy(() => import("./pages/vouchers/Stock").then((m) => ({ default: m.Stock })));
 const Company = lazy(() => import("./pages/vouchers/Company").then((m) => ({ default: m.Company })));
@@ -42,6 +43,7 @@ const CardOrders = lazy(() => import("./pages/cards/CustomerOrders").then((m) =>
 const CardReports = lazy(() => import("./pages/cards/Reports").then((m) => ({ default: m.Reports })));
 const CardCampaigns = lazy(() => import("./pages/cards/Campaigns").then((m) => ({ default: m.Campaigns })));
 const CardShelf = lazy(() => import("./pages/cards/Shelf").then((m) => ({ default: m.Shelf })));
+const CardEsimPromos = lazy(() => import("./pages/cards/EsimPromos").then((m) => ({ default: m.EsimPromos })));
 const CardNotifications = lazy(() => import("./pages/cards/Notifications").then((m) => ({ default: m.Notifications })));
 const Ledger = lazy(() => import("./pages/Ledger").then((m) => ({ default: m.Ledger })));
 
@@ -96,6 +98,8 @@ function Page({ path }: { path: string }) {
       return <Moamalat />;
     case "/catalog":
       return <Catalog />;
+    case "/catalog/edit":
+      return <CatalogEditor />;
     case "/suppliers":
       return <Suppliers />;
     case "/stock":
@@ -118,6 +122,8 @@ function Page({ path }: { path: string }) {
       return <CardNotifications />;
     case "/cards/shelf":
       return <CardShelf />;
+    case "/cards/esim-promos":
+      return <CardEsimPromos />;
     case "/cards/campaigns":
       return <CardCampaigns />;
     default:
@@ -153,7 +159,7 @@ export function App() {
   }, [me.data]);
 
   useEffect(() => {
-    const name = pageTitles[path] ?? (path.startsWith("/shops/") ? "متجر" : path.startsWith("/topups/") ? "عملية شحن" : path.startsWith("/cards/customers/") ? "زبون" : "");
+    const name = pageTitles[path] ?? (path === "/catalog/edit" ? "تعديل الكتالوج" : path.startsWith("/shops/") ? "متجر" : path.startsWith("/topups/") ? "عملية شحن" : path.startsWith("/cards/customers/") ? "زبون" : "");
     setPageTitle(name ? `${name} — دفتر` : "دفتر — لوحة التشغيل");
   }, [path]);
 

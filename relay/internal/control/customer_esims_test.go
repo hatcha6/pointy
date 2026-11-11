@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -95,6 +96,33 @@ func exerciseCustomerESIMStore(t *testing.T, store CustomerESIMStore) {
 		t.Fatalf("catalog: %+v, %v", catalog, err)
 	}
 
+	// A supplier that issues the ICCID again: the old row moves aside, its
+	// alerts go, and the number is free for the new eSIM.
+	if first, err := store.ClaimCustomerESIMNotice(ctx, row.ICCID, "90%", "retire"); err != nil || !first {
+		t.Fatalf("claim before retiring: %v %v", first, err)
+	}
+	retired, err := store.RetireCustomerESIM(ctx, row.ICCID)
+	if err != nil || retired == row.ICCID || !strings.HasPrefix(retired, row.ICCID+"~") {
+		t.Fatalf("retire: %q %v", retired, err)
+	}
+	if _, err := store.GetCustomerESIM(ctx, row.ICCID); !errors.Is(err, ErrCustomerESIMNotFound) {
+		t.Fatalf("the ICCID should be free: %v", err)
+	}
+	if old, err := store.GetCustomerESIM(ctx, retired); err != nil || old.CustomerID != "c-1" {
+		t.Fatalf("the retired row: %+v %v", old, err)
+	}
+	reissued, err := store.SaveCustomerESIM(ctx, CustomerESIM{
+		ICCID: row.ICCID, CustomerID: "c-1", OrderID: "o-new", Supplier: "esimaccess", SupplierRef: "tran-2",
+	})
+	if err != nil || reissued.OrderID != "o-new" || reissued.Supplier != "esimaccess" || reissued.SupplierRef != "tran-2" {
+		t.Fatalf("the reissued ICCID: %+v %v", reissued, err)
+	}
+	if first, err := store.ClaimCustomerESIMNotice(ctx, row.ICCID, "90%", "retire"); err != nil || !first {
+		t.Fatalf("the new eSIM's alerts should be new: %v %v", first, err)
+	}
+	if _, err := store.RetireCustomerESIM(ctx, "no-such"); !errors.Is(err, ErrCustomerESIMNotFound) {
+		t.Fatalf("retiring an unknown ICCID: %v", err)
+	}
 	if err := store.ForgetCustomerESIMs(ctx, "c-1"); err != nil {
 		t.Fatal(err)
 	}

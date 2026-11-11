@@ -3,6 +3,7 @@ package control
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"time"
 
@@ -50,6 +51,13 @@ type CustomerESIM struct {
 	// supplier knows it.
 	Simulated bool `json:"simulated,omitempty"`
 	TestMode  bool `json:"test_mode"`
+	// Supplier is who issued it ("airalo", "esimaccess"). Empty on a row from
+	// before there was a second supplier: Airalo's, unless Simulated.
+	Supplier string `json:"supplier,omitempty"`
+	// SupplierRef is the supplier's own name for the eSIM where the ICCID is
+	// not one for good: eSIM Access reuses ICCIDs and asks by its transaction
+	// number.
+	SupplierRef string `json:"supplier_ref,omitempty"`
 	// Usage as last read: status (NOT_ACTIVE, ACTIVE, FINISHED, EXPIRED,
 	// UNKNOWN), megabytes, when it ends, and when this was read.
 	UsageStatus string     `json:"usage_status,omitempty"`
@@ -90,6 +98,10 @@ type CustomerESIMStore interface {
 	UpdateCustomerESIMUsage(ctx context.Context, iccid string, usage CustomerESIMUsage) error
 	// RenameCustomerESIM sets who an eSIM of this customer is for.
 	RenameCustomerESIM(ctx context.Context, customerID, iccid, label string) (CustomerESIM, error)
+	// RetireCustomerESIM frees an ICCID its supplier has issued again: the old
+	// row stays its owner's, under a key no supplier can issue, with its alerts
+	// forgotten. The answer is that key.
+	RetireCustomerESIM(ctx context.Context, iccid string) (string, error)
 	// ClaimCustomerESIMNotice reports whether this alert (a level on a package)
 	// is new for the eSIM: Airalo may deliver one up to 20 times, the customer
 	// hears it once.
@@ -115,6 +127,12 @@ var (
 
 func normalizeCustomerESIMLabel(label string) string {
 	return truncateRunes(strings.TrimSpace(label), maxCustomerESIMLabel)
+}
+
+// retiredCustomerESIMKey is the key of a row whose ICCID went to a newer eSIM.
+// "~" is in no ICCID, so no supplier can issue it.
+func retiredCustomerESIMKey(iccid string, at time.Time) string {
+	return iccid + "~" + strconv.FormatInt(at.UnixMilli(), 36)
 }
 
 func customerESIMNoticeKey(iccid, level, packageName string) string {
@@ -226,6 +244,25 @@ func (s *FileStore) RenameCustomerESIM(_ context.Context, customerID, iccid, lab
 	return esim, nil
 }
 
+func (s *FileStore) RetireCustomerESIM(_ context.Context, iccid string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	esim, ok := s.data.CustomerESIMs[iccid]
+	if !ok {
+		return "", ErrCustomerESIMNotFound
+	}
+	retired := retiredCustomerESIMKey(iccid, s.clock.Now())
+	esim.ICCID, esim.UpdatedAt = retired, s.clock.Now()
+	delete(s.data.CustomerESIMs, iccid)
+	s.data.CustomerESIMs[retired] = esim
+	for key := range s.data.CustomerESIMNotices {
+		if strings.HasPrefix(key, iccid+"\x00") {
+			delete(s.data.CustomerESIMNotices, key)
+		}
+	}
+	return retired, s.saveLocked()
+}
+
 func (s *FileStore) ClaimCustomerESIMNotice(_ context.Context, iccid, level, packageName string) (bool, error) {
 	key := customerESIMNoticeKey(iccid, level, packageName)
 	s.mu.Lock()
@@ -306,14 +343,15 @@ func (s *FileStore) SaveESIMCatalog(_ context.Context, catalog ESIMCatalogDocume
 
 const customerESIMColumns = `iccid, customer_id, order_id, package_id, title, data, days, operator,
 	destination, destination_name, country, image, unlimited, rechargeable, label, gift, simulated, test_mode,
-	usage_status, remaining_mb, total_mb, expires_at, usage_at, created_at, updated_at`
+	usage_status, remaining_mb, total_mb, expires_at, usage_at, created_at, updated_at, supplier, supplier_ref`
 
 func scanCustomerESIM(row pgx.Row) (CustomerESIM, error) {
 	var esim CustomerESIM
 	err := row.Scan(&esim.ICCID, &esim.CustomerID, &esim.OrderID, &esim.PackageID, &esim.Title, &esim.Data,
 		&esim.Days, &esim.Operator, &esim.Destination, &esim.DestinationName, &esim.Country, &esim.Image, &esim.Unlimited,
 		&esim.Rechargeable, &esim.Label, &esim.Gift, &esim.Simulated, &esim.TestMode, &esim.UsageStatus,
-		&esim.RemainingMB, &esim.TotalMB, &esim.ExpiresAt, &esim.UsageAt, &esim.CreatedAt, &esim.UpdatedAt)
+		&esim.RemainingMB, &esim.TotalMB, &esim.ExpiresAt, &esim.UsageAt, &esim.CreatedAt, &esim.UpdatedAt,
+		&esim.Supplier, &esim.SupplierRef)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return CustomerESIM{}, ErrCustomerESIMNotFound
 	}
@@ -329,12 +367,13 @@ func (s *PostgresStore) SaveCustomerESIM(ctx context.Context, esim CustomerESIM)
 	if _, err := s.pool.Exec(ctx, `
 INSERT INTO relay_customer_esims (iccid, customer_id, order_id, package_id, title, data, days, operator,
 	destination, destination_name, country, image, unlimited, rechargeable, label, gift, simulated, test_mode,
-	created_at, updated_at)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$19)
+	created_at, updated_at, supplier, supplier_ref)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$19,$20,$21)
 ON CONFLICT (iccid) DO NOTHING`,
 		esim.ICCID, esim.CustomerID, esim.OrderID, esim.PackageID, esim.Title, esim.Data, esim.Days, esim.Operator,
 		esim.Destination, esim.DestinationName, esim.Country, esim.Image, esim.Unlimited, esim.Rechargeable,
-		normalizeCustomerESIMLabel(esim.Label), esim.Gift, esim.Simulated, esim.TestMode, now); err != nil {
+		normalizeCustomerESIMLabel(esim.Label), esim.Gift, esim.Simulated, esim.TestMode, now,
+		esim.Supplier, esim.SupplierRef); err != nil {
 		return CustomerESIM{}, err
 	}
 	return s.GetCustomerESIM(ctx, esim.ICCID)
@@ -386,6 +425,28 @@ func (s *PostgresStore) RenameCustomerESIM(ctx context.Context, customerID, icci
 	return scanCustomerESIM(s.pool.QueryRow(ctx, `UPDATE relay_customer_esims SET label = $3, updated_at = $4
 WHERE iccid = $1 AND customer_id = $2 RETURNING `+customerESIMColumns,
 		iccid, customerID, normalizeCustomerESIMLabel(label), s.clock.Now()))
+}
+
+func (s *PostgresStore) RetireCustomerESIM(ctx context.Context, iccid string) (string, error) {
+	now := s.clock.Now()
+	retired := retiredCustomerESIMKey(iccid, now)
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	// The notices name the row by its ICCID; they are the old eSIM's and go.
+	if _, err := tx.Exec(ctx, `DELETE FROM relay_customer_esim_notices WHERE iccid = $1`, iccid); err != nil {
+		return "", err
+	}
+	tag, err := tx.Exec(ctx, `UPDATE relay_customer_esims SET iccid = $2, updated_at = $3 WHERE iccid = $1`, iccid, retired, now)
+	if err != nil {
+		return "", err
+	}
+	if tag.RowsAffected() == 0 {
+		return "", ErrCustomerESIMNotFound
+	}
+	return retired, tx.Commit(ctx)
 }
 
 func (s *PostgresStore) ClaimCustomerESIMNotice(ctx context.Context, iccid, level, packageName string) (bool, error) {
@@ -491,6 +552,14 @@ func (s *CachedInstallationStore) RenameCustomerESIM(ctx context.Context, custom
 		return CustomerESIM{}, err
 	}
 	return store.RenameCustomerESIM(ctx, customerID, iccid, label)
+}
+
+func (s *CachedInstallationStore) RetireCustomerESIM(ctx context.Context, iccid string) (string, error) {
+	store, err := s.customerESIMStore()
+	if err != nil {
+		return "", err
+	}
+	return store.RetireCustomerESIM(ctx, iccid)
 }
 
 func (s *CachedInstallationStore) ClaimCustomerESIMNotice(ctx context.Context, iccid, level, packageName string) (bool, error) {

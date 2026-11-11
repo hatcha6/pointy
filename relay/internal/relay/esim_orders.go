@@ -13,10 +13,12 @@ import (
 
 	"pointy/relay/internal/alerts"
 	"pointy/relay/internal/control"
+	"pointy/relay/internal/esimaccess"
 	"pointy/relay/internal/vouchers"
 )
 
-// An eSIM order is a customer order whose item names an Airalo package:
+// An eSIM order is a customer order whose item names a supplier's package (one
+// of eSIM Access's starts with "ea."):
 //
 //	esim:<package>                 a new eSIM
 //	esim-topup:<iccid>:<package>   a top-up of one the customer owns
@@ -90,6 +92,8 @@ type esimQuote struct {
 	Name    string
 	Price   *big.Rat
 	Details esimPurchaseDetails
+	// Ref is what the supplier is asked for.
+	Ref vouchers.Ref
 }
 
 // esimPurchaseDetails is the plan as sold, kept on the purchase row until the
@@ -107,6 +111,24 @@ type esimPurchaseDetails struct {
 	Image           string `json:"image,omitempty"`
 	Unlimited       bool   `json:"unlimited,omitempty"`
 	Rechargeable    bool   `json:"rechargeable,omitempty"`
+	// Supplier is who the plan is bought from; empty is Airalo.
+	Supplier string `json:"supplier,omitempty"`
+}
+
+// esimPlanRef is what a supplier is asked for to issue a first eSIM on a plan.
+func esimPlanRef(plan esimPlan) vouchers.Ref {
+	if planSupplier(plan) == vouchers.SupplierESIMAccess {
+		return vouchers.ESIMAccessSIMRef(plan.Ref, plan.CostUnits)
+	}
+	return vouchers.AiraloSIMRef(plan.ID)
+}
+
+// esimTopUpRef is what a supplier is asked for to top an eSIM up with a plan.
+func esimTopUpRef(esim control.CustomerESIM, plan esimPlan) vouchers.Ref {
+	if planSupplier(plan) == vouchers.SupplierESIMAccess {
+		return vouchers.ESIMAccessTopUpRef(esim.SupplierRef, esimAccessICCID(esim), plan.Ref, plan.CostUnits)
+	}
+	return vouchers.AiraloTopUpRef(esim.ICCID, plan.ID)
 }
 
 // quoteESIMOrder prices the plan an order item names. The failure is an error
@@ -130,17 +152,20 @@ func (s HTTPServer) quoteESIMOrder(ctx context.Context, customer control.Custome
 	if !found {
 		return esimQuote{}, 404, "unknown_item"
 	}
-	price, ok := pricing.price(plan.NetUSD, plan.RetailUSD)
-	if !ok || price.Sign() <= 0 {
+	// The price the shelf showed: a running promotion's, else the plan's own.
+	offer, ok := pricing.offer(destination.Key, plan)
+	if !ok || offer.Price.Sign() <= 0 {
 		return esimQuote{}, 409, "item_unavailable"
 	}
 	return esimQuote{
 		Name:  esimOrderName(destination.Name, plan),
-		Price: price,
+		Price: offer.Price,
+		Ref:   esimPlanRef(plan),
 		Details: esimPurchaseDetails{
 			PackageID: plan.ID, Title: plan.Title, Data: plan.Data, Days: plan.Days, AmountMB: plan.AmountMB,
 			Operator: plan.Operator, Destination: destination.Key, DestinationName: destination.Name, Country: destination.Country,
 			Image: destination.Image, Unlimited: plan.Unlimited, Rechargeable: plan.Rechargeable,
+			Supplier: planSupplier(plan),
 		},
 	}, 0, ""
 }
@@ -162,47 +187,46 @@ func (s HTTPServer) quoteESIMTopUp(ctx context.Context, customer control.Custome
 		if plan.ID != item.PackageID {
 			continue
 		}
-		price, ok := pricing.price(plan.NetUSD, plan.RetailUSD)
+		price, ok := pricing.price(plan)
 		if !ok || price.Sign() <= 0 {
 			break
 		}
 		return esimQuote{
 			Name:  esimOrderName(esim.DestinationName, plan),
 			Price: price,
+			Ref:   esimTopUpRef(esim, plan),
 			Details: esimPurchaseDetails{
 				PackageID: plan.ID, Title: plan.Title, Data: plan.Data, Days: plan.Days, AmountMB: plan.AmountMB,
 				Operator: esim.Operator, Destination: esim.Destination, DestinationName: esim.DestinationName, Country: esim.Country,
 				Image: esim.Image, Unlimited: plan.Unlimited, Rechargeable: true,
+				Supplier: planSupplier(plan),
 			},
 		}, 0, ""
 	}
 	return esimQuote{}, 409, "item_unavailable"
 }
 
-// esimSupplierFor is who sells an order: the stores' review account and test
-// mode buy for show, everyone else from Airalo. While Airalo is in Sandbox the
-// review account buys there too: its eSIM is Airalo's dummy one, on Airalo's
-// Sandbox dashboard, and nothing is paid for it. Against a live Airalo account
-// a review order would be a real eSIM, so it stays with the test supplier.
-func (s HTTPServer) esimSupplierFor(order control.CustomerOrder) (vouchers.Supplier, bool) {
+// esimSupplierFor is who sells an order of a plan from supplier: the stores'
+// review account and test mode buy for show, everyone else from the plan's
+// supplier. While Airalo is in Sandbox the review account buys an Airalo plan
+// there too: its eSIM is Airalo's dummy one, on Airalo's Sandbox dashboard, and
+// nothing is paid for it. Against a live account (and eSIM Access has no other
+// kind) a review order would be a real eSIM, so it stays with the test supplier.
+func (s HTTPServer) esimSupplierFor(order control.CustomerOrder, supplier string) (vouchers.Supplier, bool) {
+	if supplier == "" {
+		supplier = vouchers.SupplierAiralo
+	}
 	switch {
 	case order.Review:
-		if supplier, ok := s.Vouchers.Suppliers[vouchers.SupplierAiralo]; ok && s.ESIM.Sandbox {
-			return supplier, true
+		if airalo, ok := s.Vouchers.Suppliers[vouchers.SupplierAiralo]; ok && s.ESIM.Sandbox && supplier == vouchers.SupplierAiralo {
+			return airalo, true
 		}
 		return vouchers.TestSupplier{Plain: true}, true
 	case s.Vouchers.TestMode:
 		return vouchers.TestSupplier{}, true
 	}
-	supplier, ok := s.Vouchers.Suppliers[vouchers.SupplierAiralo]
-	return supplier, ok
-}
-
-func esimRef(item esimItem) vouchers.Ref {
-	if item.topUp() {
-		return vouchers.AiraloTopUpRef(item.ICCID, item.PackageID)
-	}
-	return vouchers.AiraloSIMRef(item.PackageID)
+	found, ok := s.Vouchers.Suppliers[supplier]
+	return found, ok
 }
 
 // claimCustomerESIM claims the order's purchase and places it with Airalo. Called
@@ -222,11 +246,6 @@ func (s HTTPServer) claimCustomerESIM(
 		}
 		s.logger().Warn("eSIM order refunded to credit before buying", "order_id", order.ID, "code", code)
 	}
-	supplier, ok := s.esimSupplierFor(order)
-	if !ok {
-		refund("item_unavailable", "eSIMs are not configured on this relay")
-		return control.VoucherPurchase{}, nil, false
-	}
 	// The plan as the customer saw it: a sale already paid for goes ahead at its
 	// paid price even if the catalog just re-priced it.
 	quote, _, failure := s.quoteESIMOrder(ctx, control.Customer{ID: order.CustomerID}, item)
@@ -234,12 +253,17 @@ func (s HTTPServer) claimCustomerESIM(
 		refund("item_unavailable", "the plan left the catalog before it could be bought")
 		return control.VoucherPurchase{}, nil, false
 	}
+	supplier, ok := s.esimSupplierFor(order, quote.Details.Supplier)
+	if !ok {
+		refund("item_unavailable", "the plan's supplier is not configured on this relay")
+		return control.VoucherPurchase{}, nil, false
+	}
 	details, err := json.Marshal(quote.Details)
 	if err != nil {
 		s.logger().Error("encoding an eSIM order's details failed", "order_id", order.ID, "error", err)
 		return control.VoucherPurchase{}, nil, false
 	}
-	ref := esimRef(item)
+	ref := quote.Ref
 	claim, created, err := cards.BeginVoucherPurchase(ctx, control.VoucherPurchase{
 		IdempotencyKey: key,
 		ItemKey:        order.ItemKey,
@@ -304,7 +328,28 @@ func (s HTTPServer) completeESIMOrder(ctx context.Context, order control.Custome
 		Label: order.Account[esimAccountLabel], Gift: order.Account[esimAccountGift] != "",
 		TestMode: order.TestMode,
 	}
-	if purchase.Supplier == vouchers.SupplierAiralo {
+	switch purchase.Supplier {
+	case vouchers.SupplierESIMAccess:
+		if s.ESIM.Access == nil {
+			return errors.New("eSIM Access is not configured on this relay")
+		}
+		profiles, _, err := s.ESIM.Access.Profiles(ctx, esimaccess.ProfileQuery{OrderNo: purchase.SupplierOrderID, Size: 5})
+		if err != nil {
+			return err
+		}
+		if len(profiles) == 0 || profiles[0].ICCID == "" {
+			return errors.New("eSIM Access's order holds no eSIM yet")
+		}
+		row.ICCID, row.Supplier, row.SupplierRef = profiles[0].ICCID, vouchers.SupplierESIMAccess, profiles[0].TranNo
+		// eSIM Access issues an ICCID again once its eSIM has ended. The earlier
+		// eSIM keeps its row under another key, and the number names the new one.
+		if held, err := store.GetCustomerESIM(ctx, row.ICCID); err == nil && held.OrderID != order.ID &&
+			esimSupplierOf(held) == vouchers.SupplierESIMAccess && held.SupplierRef != row.SupplierRef {
+			if _, err := store.RetireCustomerESIM(ctx, row.ICCID); err != nil {
+				return err
+			}
+		}
+	case vouchers.SupplierAiralo:
 		supplier, ok := s.Vouchers.Suppliers[vouchers.SupplierAiralo]
 		if !ok {
 			return errors.New("Airalo is not configured on this relay")
@@ -316,8 +361,8 @@ func (s HTTPServer) completeESIMOrder(ctx context.Context, order control.Custome
 		if len(read.Codes) == 0 || read.Codes[0].Serial == "" {
 			return errors.New("Airalo's order holds no eSIM yet")
 		}
-		row.ICCID = read.Codes[0].Serial
-	} else {
+		row.ICCID, row.Supplier = read.Codes[0].Serial, vouchers.SupplierAiralo
+	default:
 		row.ICCID, row.Simulated = simulatedICCID(order.ID), true
 	}
 	saved, err := store.SaveCustomerESIM(ctx, row)
@@ -325,13 +370,13 @@ func (s HTTPServer) completeESIMOrder(ctx context.Context, order control.Custome
 		return err
 	}
 	// An ICCID already held by someone else: never tell this customer it arrived.
-	if saved.CustomerID != order.CustomerID {
+	if saved.CustomerID != order.CustomerID || saved.OrderID != order.ID {
 		return fmt.Errorf("the eSIM ending %s already belongs to another customer", iccidTail(row.ICCID))
 	}
 	return nil
 }
 
-// warnESIMSoldAtALoss tells the operator when Airalo charged more than the
+// warnESIMSoldAtALoss tells the operator when the supplier charged more than the
 // customer paid: prices come from the catalog, the charge only with the order. In
 // Sandbox a top-up listed at $4 came back charged $7.20.
 func (s HTTPServer) warnESIMSoldAtALoss(ctx context.Context, order control.CustomerOrder, purchase control.VoucherPurchase) {
@@ -349,12 +394,12 @@ func (s HTTPServer) warnESIMSoldAtALoss(ctx context.Context, order control.Custo
 	if inDinars.Cmp(sold) <= 0 {
 		return
 	}
-	s.logger().Error("an eSIM was sold below what Airalo charged", "order_id", order.ID,
+	s.logger().Error("an eSIM was sold below what its supplier charged", "order_id", order.ID, "supplier", purchase.Supplier,
 		"cost_usd", purchase.SupplierCost, "cost_lyd", inDinars.FloatString(3), "sold_lyd", order.UnitPrice)
 	if s.Alerts != nil {
 		s.Alerts.Send(alerts.Message{
 			Title:    "eSIM sold at a loss: " + order.ItemName,
-			Body:     "Order: " + order.ID + "\nAiralo charged " + purchase.SupplierCost + " USD (" + inDinars.FloatString(3) + " LYD)\nSold for " + order.UnitPrice + " LYD",
+			Body:     "Order: " + order.ID + "\n" + purchase.Supplier + " charged " + purchase.SupplierCost + " USD (" + inDinars.FloatString(3) + " LYD)\nSold for " + order.UnitPrice + " LYD",
 			Priority: alerts.PriorityUrgent,
 			Tags:     []string{"warning"},
 		})
@@ -433,7 +478,8 @@ func (s HTTPServer) esimTopUps(ctx context.Context, esim control.CustomerESIM) (
 		return simulatedESIMTopUps(), nil
 	}
 	state := s.ESIM.state
-	if s.ESIM.Client == nil || state == nil {
+	access := esimSupplierOf(esim) == vouchers.SupplierESIMAccess
+	if state == nil || (access && s.ESIM.Access == nil) || (!access && s.ESIM.Client == nil) {
 		return nil, errors.New("eSIMs are not configured")
 	}
 	now := s.clock().Now()
@@ -445,19 +491,28 @@ func (s HTTPServer) esimTopUps(ctx context.Context, esim control.CustomerESIM) (
 	}
 	callCtx, cancel := context.WithTimeout(ctx, esimTopUpsTimeout)
 	defer cancel()
-	pricing, packages, err := s.ESIM.Client.TopUps(callCtx, esim.ICCID, "ar")
-	if err != nil {
-		return nil, err
-	}
-	plans := make([]esimPlan, 0, len(packages))
-	for _, source := range packages {
-		plan := esimPlan{
-			ID: source.ID, Title: source.Title, Data: esimDataLabel(source), AmountMB: source.AmountMB.Int(),
-			Days: source.Days.Int(), Unlimited: source.Unlimited, Voice: source.Voice.Int(), Text: source.Text.Int(),
-			NetUSD: pricing.CostUSD(source), RetailUSD: airaloPlanRetail(source), Info: source.ShortInfo,
+	var plans []esimPlan
+	if access {
+		read, err := s.esimAccessTopUps(callCtx, esim)
+		if err != nil {
+			return nil, err
 		}
-		if plan.ID != "" && plan.NetUSD > 0 {
-			plans = append(plans, plan)
+		plans = read
+	} else {
+		pricing, packages, err := s.ESIM.Client.TopUps(callCtx, esim.ICCID, "ar")
+		if err != nil {
+			return nil, err
+		}
+		plans = make([]esimPlan, 0, len(packages))
+		for _, source := range packages {
+			plan := esimPlan{
+				ID: source.ID, Title: source.Title, Data: esimDataLabel(source), AmountMB: source.AmountMB.Int(),
+				Days: source.Days.Int(), Unlimited: source.Unlimited, Voice: source.Voice.Int(), Text: source.Text.Int(),
+				NetUSD: pricing.CostUSD(source), RetailUSD: airaloPlanRetail(source), Info: source.ShortInfo,
+			}
+			if plan.ID != "" && plan.NetUSD > 0 {
+				plans = append(plans, plan)
+			}
 		}
 	}
 	state.mu.Lock()

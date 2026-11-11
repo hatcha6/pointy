@@ -1,16 +1,16 @@
-import { useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { Unavailable } from "../../components/Unavailable";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeftRight, CalendarClock, Landmark, RefreshCw, Search, Settings2, Telescope, TriangleAlert, Trophy, Truck, Wallet } from "lucide-react";
 import { api, qs } from "../../lib/api";
 import { useSearchParam } from "../../lib/router";
-import { matches } from "../../lib/search";
+import { folded, matcher, matches } from "../../lib/search";
 import { count, money } from "../../lib/format";
 import { label, supplier as supplierLabels } from "../../lib/labels";
 import { reasonText, type SupplierOffer, type Supply } from "../../lib/vouchers";
-import { Badge, Button, Card, Empty, Money, Notice, Segmented, Skeleton, Switch, Tabs, TimeAgo } from "../../components/ui";
+import { Badge, Button, Card, Empty, Fold, Money, Notice, Segmented, Skeleton, Switch, Tabs, TimeAgo } from "../../components/ui";
 import { ProfitCell } from "../../components/profit";
-import { DataTable, Stacked, type Column } from "../../components/DataTable";
+import { DataTable, Pager, Stacked, usePage, type Column } from "../../components/DataTable";
 import { PageHeader } from "../../components/PageHeader";
 import { AutoView } from "../../components/AutoView";
 import { ConfigList, testOrLive, yesNo } from "../../components/ConfigList";
@@ -46,11 +46,16 @@ export function Suppliers() {
   );
 }
 
+/** Groups of offers on a page: each is one folded line until opened. */
+const GROUPS_PER_PAGE = 40;
+
 function OffersTab() {
   const queryClient = useQueryClient();
   const toast = useToast();
   const [supplier, setSupplier] = useSearchParam("supplier");
-  const [query, setQuery] = useState("");
+  const [text, setQuery] = useState("");
+  // The box answers at once; the list of offers follows when the browser has time.
+  const query = useDeferredValue(text);
   const [stock, setStock] = useState<"" | "in" | "out" | "moved">("");
   const [grouped, setGrouped] = useState(true);
   const offers = useQuery({
@@ -59,22 +64,28 @@ function OffersTab() {
     retry: false,
   });
   const sync = useAction<{ synced: Record<string, number> }>({});
-  const rows = (offers.data ?? []).filter(
-    (o) =>
-      matches(query, o.name, o.ref, o.group) &&
-      (stock === "" || (stock === "moved" ? recentlyMoved(o) : stock === "in" ? o.in_stock : !o.in_stock)),
-  );
-  const moved = (offers.data ?? []).filter(recentlyMoved).length;
+  const index = useMemo(() => (offers.data ?? []).map((o) => ({ o, text: folded(o.name, o.ref, o.group) })), [offers.data]);
+  const rows = useMemo(() => {
+    const hit = matcher(query);
+    return index
+      .filter(({ o, text }) => hit(text) && (stock === "" || (stock === "moved" ? recentlyMoved(o) : stock === "in" ? o.in_stock : !o.in_stock)))
+      .map(({ o }) => o);
+  }, [index, query, stock]);
+  const moved = useMemo(() => (offers.data ?? []).filter(recentlyMoved).length, [offers.data]);
   // Grouped by brand (the supplier's group), biggest groups first; the rows
   // of a group stay in the supplier's order.
   const groups = useMemo(() => {
     const map = new Map<string, SupplierOffer[]>();
     for (const o of rows) {
       const key = o.group || "بلا مجموعة";
-      map.set(key, [...(map.get(key) ?? []), o]);
+      const list = map.get(key);
+      if (list) list.push(o);
+      else map.set(key, [o]);
     }
     return [...map.entries()].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]));
   }, [rows]);
+  const resetKey = `${supplier}|${query}|${stock}`;
+  const groupPage = usePage(groups.length, GROUPS_PER_PAGE, resetKey);
   const columns: Column<SupplierOffer>[] = [
     { key: "name", header: "البطاقة", mobile: "title", cell: (o) => <Stacked title={o.name} sub={`${label(supplierLabels, o.supplier)} · ${o.ref}${o.group ? " · " + o.group : ""}`} /> },
     { key: "cost", header: "بالدينار", align: "end", mobile: "trailing", cell: (o) => (o.cost_lyd ? <Money value={Number(o.cost_lyd).toFixed(3)} /> : <span className="faint">—</span>) },
@@ -125,7 +136,7 @@ function OffersTab() {
       <div className="toolbar stacks">
         <div className="search-input">
           <Search />
-          <input className="input" placeholder="اسم البطاقة أو رقمها" value={query} onChange={(e) => setQuery(e.target.value)} />
+          <input className="input" placeholder="اسم البطاقة أو رقمها" value={text} onChange={(e) => setQuery(e.target.value)} />
         </div>
         <Segmented
           value={supplier}
@@ -157,20 +168,30 @@ function OffersTab() {
       ) : (
         grouped && !offers.isLoading && rows.length > 0 ? (
           <div className="offer-groups">
-            {groups.map(([name, list]) => (
-              <details key={name} className="offer-group" open={groups.length <= 6 || !!query || stock === "moved"}>
-                <summary>
-                  <strong>{name}</strong>
-                  <span className="faint">{list.length} عرضاً</span>
-                  {list.some(recentlyMoved) && <Badge tone="warning">تغيّر سعر</Badge>}
-                  {list.some((o) => !o.in_stock) && <Badge tone="danger">{list.filter((o) => !o.in_stock).length} نافد</Badge>}
-                </summary>
+            {groups.slice(groupPage.start, groupPage.end).map(([name, list]) => (
+              <Fold
+                key={name}
+                className="offer-group"
+                open={groups.length <= 6 || ((!!query || stock === "moved") && groups.length <= 12)}
+                summary={
+                  <>
+                    <strong>{name}</strong>
+                    <span className="faint">{list.length} عرضاً</span>
+                    {list.some(recentlyMoved) && <Badge tone="warning">تغيّر سعر</Badge>}
+                    {list.some((o) => !o.in_stock) && <Badge tone="danger">{list.filter((o) => !o.in_stock).length} نافد</Badge>}
+                  </>
+                }
+              >
                 <DataTable rows={list} columns={columns} rowKey={(o) => `${o.supplier}:${o.ref}`} />
-              </details>
+              </Fold>
             ))}
+            <Pager {...groupPage} total={groups.length} unit="مجموعة" onPage={(page) => {
+              groupPage.setPage(page);
+              window.scrollTo({ top: 0 });
+            }} />
           </div>
         ) : (
-          <DataTable rows={rows} columns={columns} rowKey={(o) => `${o.supplier}:${o.ref}`} loading={offers.isLoading} empty={<Empty icon={<Truck />} title="لا عروض" />} />
+          <DataTable rows={rows} columns={columns} rowKey={(o) => `${o.supplier}:${o.ref}`} resetKey={resetKey} loading={offers.isLoading} empty={<Empty icon={<Truck />} title="لا عروض" />} />
         )
       )}
     </Card>

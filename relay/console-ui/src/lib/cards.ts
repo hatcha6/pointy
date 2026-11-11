@@ -69,6 +69,10 @@ export type CardOrder = {
   completed_at?: string;
   /** What the customer typed for a card sent to an account (a player ID). */
   account?: Record<string, string>;
+  /** What its cards cost the company in dinars, and what the company kept of
+   *  the total: only on a real order that was delivered. */
+  cost_lyd?: string;
+  profit?: string;
 };
 
 export type CardCreditEntry = {
@@ -137,6 +141,7 @@ export const cardKeys = {
   orders: (filter: Record<string, string>) => ["cards", "orders", filter],
   notifications: (filter: Record<string, string>) => ["cards", "notifications", filter],
   campaigns: ["cards", "campaigns"],
+  esimPromos: ["cards", "esim-promos"],
   reports: (filter: Record<string, string>) => ["cards", "reports", filter],
 };
 
@@ -353,3 +358,32 @@ export const cardReportReason: Record<string, string> = {
   wrong_amount: "الكمية غير صحيحة",
   other: "مشكلة أخرى",
 };
+
+/** A time-boxed discount on the eSIM shelf; `destination` empty is every destination. */
+export type EsimPromo = {
+  id: string;
+  destination?: string;
+  percent: number;
+  badge?: string;
+  starts_at: string;
+  ends_at: string;
+  state: "running" | "scheduled" | "ended";
+  /** How many plans it really cuts, and how many the relay's floor holds back. */
+  plans_cut?: number;
+  plans_held?: number;
+};
+
+export type EsimPromoAnswer = {
+  promos: EsimPromo[];
+  actor?: string;
+  updated_at?: string;
+  max_percent: number;
+  destinations: { key: string; name: string; kind: string; country?: string; from_price?: string }[];
+};
+
+export function useEsimPromos() {
+  return useQuery({
+    queryKey: cardKeys.esimPromos,
+    queryFn: () => api.get<EsimPromoAnswer>(`${BASE}/esim-promos`),
+  });
+}

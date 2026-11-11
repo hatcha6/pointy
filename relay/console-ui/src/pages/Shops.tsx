@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { CalendarPlus, Download, KeyRound, Plus, PlusCircle, Search, Store, TriangleAlert } from "lucide-react";
 import { keys, useFleet, useInstallationsWithPresence, useWallets } from "../lib/queries";
-import { useRouter, useSearchParam } from "../lib/router";
+import { useRouter, useSearchParam, useSearchText } from "../lib/router";
 import { matches } from "../lib/search";
 import { count, date, days as dayCount, daysUntil } from "../lib/format";
 import { saveText } from "../lib/files";
@@ -34,7 +34,7 @@ export function Shops() {
   const installations = useInstallationsWithPresence();
   const wallets = useWallets();
   const fleet = useFleet();
-  const [query, setQuery] = useSearchParam("q");
+  const { text, setText, query } = useSearchText();
   const [filter, setFilter] = useSearchParam("filter");
   const [sortParam, setSort] = useSearchParam("sort");
   const sort = (sortParam || "name") as Sort;
@@ -170,7 +170,7 @@ export function Shops() {
         <div className="toolbar stacks">
           <div className="search-input">
             <Search />
-            <input className="input" placeholder="اسم المتجر أو رقمه" value={query} onChange={(e) => setQuery(e.target.value)} />
+            <input className="input" placeholder="اسم المتجر أو رقمه" value={text} onChange={(e) => setText(e.target.value)} />
           </div>
           <Segmented<Filter>
             value={current}

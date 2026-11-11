@@ -23,7 +23,7 @@ import { PasskeyHint } from "../../components/guarded";
 import { useToast } from "../../components/toast";
 import { Badge, Button, Field, Notice, Segmented } from "../../components/ui";
 import { Combobox, type ComboOption } from "../../components/Combobox";
-import { useCatalog } from "./Catalog";
+import { useCatalogItems } from "../../lib/picker";
 
 /** Rows the grid draws; a bigger CSV is summarized, not drawn. */
 const gridLimit = 200;
@@ -45,7 +45,7 @@ export function AddStockDialog({ open, onClose, initialMode = "manual", initialI
 }
 
 function AddStockForm({ onClose, initialMode, initialItem }: { onClose: () => void; initialMode: Mode; initialItem: string }) {
-  const catalog = useCatalog();
+  const catalog = useCatalogItems();
   const queryClient = useQueryClient();
   const toast = useToast();
   const [mode, setMode] = useState<Mode>(initialMode);
@@ -64,9 +64,7 @@ function AddStockForm({ onClose, initialMode, initialItem }: { onClose: () => vo
 
   const options = useMemo<ComboOption[]>(
     () =>
-      (catalog.data?.view?.brands ?? []).flatMap((b) =>
-        b.items.map((i) => ({ value: i.key, label: `${b.name} · ${i.label || `${i.face_value} ${i.face_currency}`}`, group: b.key })),
-      ),
+      (catalog.data?.items ?? []).map((i) => ({ value: i.key, label: i.name, group: i.brand })),
     [catalog.data],
   );
   const nameOf = useMemo(() => new Map(options.map((o) => [o.value, o.label])), [options]);

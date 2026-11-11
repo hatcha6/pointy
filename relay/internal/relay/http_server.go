@@ -439,6 +439,13 @@ func (s HTTPServer) route(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.withConnectorToken(w, r, s.handleAgentStatus)
+	case r.URL.Path == "/v1/agent/runs" && r.Method == http.MethodPost:
+		// On-prem update agent hands over what its updates cost the shop.
+		if !s.RouteMode.allowsPublic() {
+			writeNotFound(w)
+			return
+		}
+		s.withConnectorToken(w, r, s.handleAgentRuns)
 	case strings.HasPrefix(r.URL.Path, "/invoices/") && r.Method == http.MethodGet:
 		if !s.RouteMode.allowsPublic() {
 			writeNotFound(w)
@@ -477,6 +484,12 @@ func (s HTTPServer) route(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.withAdmin(w, r, s.handleFleetStatus)
+	case r.URL.Path == "/v1/fleet/runs" && r.Method == http.MethodGet:
+		if !s.RouteMode.allowsAdmin() {
+			writeNotFound(w)
+			return
+		}
+		s.withAdmin(w, r, s.handleFleetRuns)
 	case strings.HasPrefix(r.URL.Path, "/v1/fleet/channels/") && r.Method == http.MethodPut:
 		if !s.RouteMode.allowsAdmin() {
 			writeNotFound(w)

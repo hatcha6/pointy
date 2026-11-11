@@ -637,6 +637,7 @@ type fileStoreData struct {
 	EnrollmentTokens                 map[string]EnrollmentTokenRecord          `json:"enrollment_tokens,omitempty"`
 	SMSMessages                      map[string]SMSMessage                     `json:"sms_messages,omitempty"`
 	IntegrationSwitches              map[string]IntegrationSwitch              `json:"integration_switches,omitempty"`
+	UpdateRuns                       map[string]UpdateRun                      `json:"update_runs,omitempty"`
 	MoamalatLinks                    map[string]MoamalatLink                   `json:"moamalat_links,omitempty"`
 	WalletEntries                    map[string]WalletEntry                    `json:"wallet_entries,omitempty"`
 	WalletTopUps                     map[string]WalletTopUp                    `json:"wallet_topups,omitempty"`
@@ -648,6 +649,7 @@ type fileStoreData struct {
 	VoucherStock                     map[string]VoucherStockCode               `json:"voucher_stock,omitempty"`
 	AlertSettings                    *AlertSettings                            `json:"alert_settings,omitempty"`
 	CustomerShelf                    *CustomerShelfSettings                    `json:"customer_shelf,omitempty"`
+	ESIMPromos                       *ESIMPromoSettings                        `json:"esim_promos,omitempty"`
 	CustomerESIMs                    map[string]CustomerESIM                   `json:"customer_esims,omitempty"`
 	CustomerESIMNotices              map[string]time.Time                      `json:"customer_esim_notices,omitempty"`
 	CustomerOrderReports             map[string]CustomerOrderReport            `json:"customer_order_reports,omitempty"`

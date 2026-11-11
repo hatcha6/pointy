@@ -1,0 +1,403 @@
+# Phones and tablets that take eSIMs, by the name they are sold under.
+#
+#   Brand: name              a model that takes eSIMs
+#   !Brand: name             a model that takes none, though people expect it to
+#   =CODE | Brand | name     a model code the Play catalogue does not carry
+#
+# generate.py turns each name into the model codes a phone reports
+# (android.os.Build.MODEL) with Google Play's device catalogue. Names are matched
+# loosely: case, spaces, the brand and a trailing "5G" do not count.
+#
+# Sources, read November 2026: Airalo's help centre list, the lists of Gigago,
+# Holafly, MobiMatter, Ubigi, eSIMfo and MyBestSIM, and the makers' own pages.
+
+# --- Samsung ---------------------------------------------------------------
+Samsung: Galaxy S20
+Samsung: Galaxy S20+
+Samsung: Galaxy S20 Ultra
+Samsung: Galaxy Note20
+Samsung: Galaxy Note20 Ultra
+Samsung: Galaxy S21
+Samsung: Galaxy S21+
+Samsung: Galaxy S21 Ultra
+Samsung: Galaxy S22
+Samsung: Galaxy S22+
+Samsung: Galaxy S22 Ultra
+Samsung: Galaxy S23
+Samsung: Galaxy S23+
+Samsung: Galaxy S23 Ultra
+Samsung: Galaxy S23 FE
+Samsung: Galaxy S24
+Samsung: Galaxy S24+
+Samsung: Galaxy S24 Ultra
+Samsung: Galaxy S24 FE
+Samsung: Galaxy S25
+Samsung: Galaxy S25+
+Samsung: Galaxy S25 Ultra
+Samsung: Galaxy S25 Edge
+Samsung: Galaxy S25 FE
+Samsung: Galaxy S26
+Samsung: Galaxy S26+
+Samsung: Galaxy S26 Ultra
+Samsung: Galaxy S26 FE
+Samsung: Galaxy Fold
+Samsung: Galaxy Z Fold2
+Samsung: Galaxy Z Fold3
+Samsung: Galaxy Z Fold4
+Samsung: Galaxy Z Fold5
+Samsung: Galaxy Z Fold6
+Samsung: Galaxy Z Fold Special Edition
+Samsung: Galaxy Z Fold7
+Samsung: Galaxy Z Fold8
+Samsung: Galaxy Z Fold8 Ultra
+Samsung: Galaxy Z TriFold
+Samsung: Galaxy Z Flip
+Samsung: Galaxy Z Flip3
+Samsung: Galaxy Z Flip4
+Samsung: Galaxy Z Flip5
+Samsung: Galaxy Z Flip6
+Samsung: Galaxy Z Flip7
+Samsung: Galaxy Z Flip7 FE
+Samsung: Galaxy Z Flip8
+Samsung: Galaxy A54
+Samsung: Galaxy A55
+Samsung: Galaxy A56
+Samsung: Galaxy A57
+Samsung: Galaxy A35
+Samsung: Galaxy A36
+Samsung: Galaxy A37
+Samsung: Galaxy A27
+Samsung: Galaxy A17
+Samsung: Galaxy A23
+Samsung: Galaxy XCover7
+Samsung: Galaxy XCover7 Pro
+Samsung: Galaxy Tab S9
+Samsung: Galaxy Tab S9+
+Samsung: Galaxy Tab S9 Ultra
+Samsung: Galaxy Tab S9 FE
+Samsung: Galaxy Tab S9 FE+
+Samsung: Galaxy Tab S10+
+Samsung: Galaxy Tab S10 Ultra
+Samsung: Galaxy Tab S11
+Samsung: Galaxy Tab S11 Ultra
+Samsung: Galaxy Tab Active5 Pro
+=SCG21 | Samsung | Galaxy A54
+=SC-53D | Samsung | Galaxy A54
+!Samsung: Galaxy S20 FE
+!Samsung: Galaxy S21 FE
+
+# --- Google ----------------------------------------------------------------
+Google: Pixel 2
+Google: Pixel 2 XL
+Google: Pixel 3
+Google: Pixel 3 XL
+Google: Pixel 3a
+Google: Pixel 3a XL
+Google: Pixel 4
+Google: Pixel 4 XL
+Google: Pixel 4a
+Google: Pixel 4a (5G)
+Google: Pixel 5
+Google: Pixel 5a
+Google: Pixel 6
+Google: Pixel 6 Pro
+Google: Pixel 6a
+Google: Pixel 7
+Google: Pixel 7 Pro
+Google: Pixel 7a
+Google: Pixel Fold
+Google: Pixel 8
+Google: Pixel 8 Pro
+Google: Pixel 8a
+Google: Pixel 9
+Google: Pixel 9 Pro
+Google: Pixel 9 Pro XL
+Google: Pixel 9 Pro Fold
+Google: Pixel 9a
+Google: Pixel 10
+Google: Pixel 10 Pro
+Google: Pixel 10 Pro XL
+Google: Pixel 10 Pro Fold
+Google: Pixel 10a
+Google: Pixel 11
+Google: Pixel 11 Pro
+Google: Pixel 11 Pro XL
+Google: Pixel 11 Pro Fold
+
+# --- Xiaomi, Redmi, POCO ---------------------------------------------------
+Xiaomi: Xiaomi 12T Pro
+Xiaomi: Xiaomi 13
+Xiaomi: Xiaomi 13 Pro
+Xiaomi: Xiaomi 13 Lite
+Xiaomi: Xiaomi 13T
+Xiaomi: Xiaomi 13T Pro
+Xiaomi: Xiaomi 14
+Xiaomi: Xiaomi 14 Pro
+Xiaomi: Xiaomi 14 Ultra
+Xiaomi: Xiaomi 14T
+Xiaomi: Xiaomi 14T Pro
+Xiaomi: Xiaomi 15
+Xiaomi: Xiaomi 15 Ultra
+Xiaomi: Xiaomi 15T
+Xiaomi: Xiaomi 15T Pro
+Xiaomi: Xiaomi 17
+Xiaomi: Xiaomi 17 Pro
+Xiaomi: Xiaomi 17 Ultra
+Xiaomi: Xiaomi 17T
+Xiaomi: Xiaomi 17T Pro
+Xiaomi: Redmi Note 11 Pro 5G
+Xiaomi: Redmi Note 13 Pro
+Xiaomi: Redmi Note 13 Pro+
+Xiaomi: Redmi Note 14 Pro
+Xiaomi: Redmi Note 14 Pro+
+Xiaomi: Redmi Note 15 Pro
+Xiaomi: Redmi Note 15 Pro+
+Xiaomi: POCO X7
+Xiaomi: POCO X7 Pro
+Xiaomi: POCO F6 Pro
+Xiaomi: POCO F7 Pro
+Xiaomi: POCO F7 Ultra
+Xiaomi: POCO F8 Pro
+Xiaomi: POCO F8 Ultra
+Xiaomi: POCO X8 Pro Max
+!Xiaomi: Xiaomi 12T
+!Xiaomi: Xiaomi 12
+!Xiaomi: Xiaomi 12 Pro
+
+# --- OPPO, OnePlus, realme -------------------------------------------------
+Oppo: Find X3
+Oppo: Find X3 Pro
+Oppo: Find X5
+Oppo: Find X5 Pro
+Oppo: Find X8
+Oppo: Find X8 Pro
+Oppo: Find X9
+Oppo: Find X9 Pro
+Oppo: Find X9 Ultra
+Oppo: Find N2 Flip
+Oppo: Find N3
+Oppo: Find N3 Flip
+Oppo: Find N5
+Oppo: Reno5 A
+Oppo: Reno9 A
+Oppo: Reno13
+Oppo: Reno13 Pro
+Oppo: Reno14
+Oppo: Reno14 Pro
+Oppo: Reno14 F
+Oppo: Reno14 FS
+Oppo: Reno15
+Oppo: Reno15 Pro
+Oppo: Reno15 Pro Max
+Oppo: Reno15 FS
+Oppo: A55s 5G
+OnePlus: OnePlus 11
+OnePlus: OnePlus 12
+OnePlus: OnePlus 12R
+OnePlus: OnePlus 13
+OnePlus: OnePlus 13R
+OnePlus: OnePlus 13T
+OnePlus: OnePlus 13s
+OnePlus: OnePlus 15
+OnePlus: OnePlus 15R
+OnePlus: Open
+realme: realme 14 Pro+
+realme: realme GT 7 Pro
+
+# --- vivo ------------------------------------------------------------------
+vivo: X80 Pro
+vivo: X90 Pro
+vivo: X100 Pro
+vivo: X200
+vivo: X200 Pro
+vivo: X200 FE
+vivo: X200s
+vivo: X200T
+vivo: X300
+vivo: X300 Pro
+vivo: X300 FE
+vivo: V29
+vivo: V29 Lite 5G
+vivo: V40
+vivo: V40 Lite
+vivo: V40 SE
+vivo: V50
+vivo: iQOO 15
+
+# --- HONOR -----------------------------------------------------------------
+Honor: HONOR 90
+Honor: HONOR 200
+Honor: HONOR 200 Pro
+Honor: HONOR 400
+Honor: HONOR 400 Pro
+Honor: HONOR 400 Lite
+Honor: HONOR Magic4 Pro
+Honor: HONOR Magic5 Pro
+Honor: HONOR Magic6 Pro
+Honor: HONOR Magic6 RSR
+Honor: HONOR Magic7 Pro
+Honor: HONOR Magic7 Lite
+Honor: HONOR Magic7 RSR
+Honor: HONOR Magic8 Pro
+Honor: HONOR Magic8 Lite
+Honor: HONOR Magic V2
+Honor: HONOR Magic V2 RSR
+Honor: HONOR Magic V3
+Honor: HONOR Magic V5
+
+# --- Huawei (no Google Play: codes given here) -----------------------------
+=ANA-NX9 | Huawei | P40
+=ANA-LX4 | Huawei | P40
+=ELS-NX9 | Huawei | P40 Pro
+=ELS-N04 | Huawei | P40 Pro
+=NOH-NX9 | Huawei | Mate 40 Pro
+=DCO-LX9 | Huawei | Mate 50 Pro
+=HBN-LX9 | Huawei | Pura 70 Pro
+Huawei: P40
+Huawei: P40 Pro
+Huawei: Mate 40 Pro
+!Huawei: P40 Pro+
+!Huawei: P50 Pro
+
+# --- Motorola --------------------------------------------------------------
+Motorola: motorola razr
+Motorola: motorola razr 5G
+Motorola: motorola razr 2022
+Motorola: motorola razr 40
+Motorola: motorola razr 40 ultra
+Motorola: motorola razr 50
+Motorola: motorola razr 50 ultra
+Motorola: motorola razr 60
+Motorola: motorola razr 60 ultra
+Motorola: motorola razr 2023
+Motorola: motorola razr+ 2023
+Motorola: motorola razr 2024
+Motorola: motorola razr+ 2024
+Motorola: motorola razr 2025
+Motorola: motorola razr+ 2025
+Motorola: motorola razr ultra 2025
+Motorola: motorola edge 2022
+Motorola: motorola edge 2023
+Motorola: motorola edge 2024
+Motorola: motorola edge+ 2023
+Motorola: motorola edge 40
+Motorola: motorola edge 40 pro
+Motorola: motorola edge 40 neo
+Motorola: motorola edge 50
+Motorola: motorola edge 50 pro
+Motorola: motorola edge 50 ultra
+Motorola: motorola edge 50 fusion
+Motorola: motorola edge 50 neo
+Motorola: motorola edge 60
+Motorola: motorola edge 60 pro
+Motorola: motorola edge 60 fusion
+Motorola: motorola edge 60 stylus
+Motorola: motorola edge 70
+Motorola: motorola edge 70 pro
+Motorola: motorola edge 70 pro+
+Motorola: motorola edge 70 fusion +
+Motorola: motorola edge 70 fusion
+Motorola: motorola razr 70
+Motorola: motorola razr 70 ultra
+Motorola: motorola razr 70 plus
+Motorola: motorola razr fold
+Motorola: motorola razr 2026
+Motorola: motorola razr+ 2026
+Motorola: motorola razr ultra 2026
+Motorola: moto g34 5G
+Motorola: moto g35 5G
+Motorola: moto g52j 5G
+Motorola: moto g53 5G
+Motorola: moto g53j 5G
+Motorola: moto g54 5G
+Motorola: moto g55 5G
+Motorola: moto g75 5G
+Motorola: moto g84 5G
+Motorola: moto g85 5G
+Motorola: moto g86 5G
+Motorola: moto g - 2024
+Motorola: moto g - 2025
+Motorola: moto g power 5G - 2024
+Motorola: moto g stylus 5G - 2024
+Motorola: ThinkPhone 25 by motorola
+
+# --- Sony ------------------------------------------------------------------
+Sony: Xperia 10 III Lite
+Sony: Xperia 10 IV
+Sony: Xperia 10 V
+Sony: Xperia 10 VI
+Sony: Xperia 10 VII
+Sony: Xperia 1 IV
+Sony: Xperia 1 V
+Sony: Xperia 1 VI
+Sony: Xperia 1 VII
+Sony: Xperia 5 IV
+Sony: Xperia 5 V
+Sony: Xperia Ace III
+
+# --- Sharp, Rakuten --------------------------------------------------------
+Sharp: AQUOS sense4 lite SH-RM15
+Sharp: AQUOS sense6s
+Sharp: AQUOS sense7
+Sharp: AQUOS sense7 plus
+Sharp: AQUOS sense8
+Sharp: AQUOS sense9
+Sharp: AQUOS wish
+Sharp: AQUOS wish2
+Sharp: AQUOS wish3
+Sharp: AQUOS zero6
+Sharp: AQUOS R7
+Sharp: AQUOS R8
+Sharp: AQUOS R8 pro
+Sharp: AQUOS R9
+Sharp: AQUOS R9 pro
+Sharp: AQUOS R10
+=C330 | Rakuten | Rakuten Mini
+Rakuten: Rakuten BIG s
+Rakuten: Rakuten Hand
+Rakuten: Rakuten Hand 5G
+
+# --- Others ----------------------------------------------------------------
+Nothing: Phone (2)
+Nothing: Phone (2a)
+Nothing: Phone (3)
+Nothing: Phone (3a) Pro
+Nothing: Phone (4a) Pro
+Fairphone: Fairphone 4
+Fairphone: Fairphone 5
+Fairphone: The Fairphone (Gen. 6)
+Nokia: Nokia G60 5G
+Nokia: Nokia X30 5G
+Nokia: Nokia XR21
+HMD: HMD Skyline
+TCL: TCL 40 XL
+TCL: TCL 50 5G
+TCL: TCL 50 NXTPAPER 5G
+TCL: TCL 50 Pro NXTPAPER 5G
+TCL: TCL 60 XE NXTPAPER 5G
+TCL: TCL 60 5G
+TCL: TCL NXTPAPER 70 Pro
+TCL: Alcatel V3 Ultra
+T-Mobile: REVVL 7 5G
+T-Mobile: REVVL 7 Pro 5G
+Asus: Zenfone 12 Ultra
+Asus: ROG Phone 9
+Asus: ROG Phone 9 Pro
+ZTE: nubia Flip 5G
+ZTE: nubia Flip 2
+Doogee: V30
+=WP30 Pro | Oukitel | WP30 Pro
+=WP33 Pro | Oukitel | WP33 Pro
+Nuu: X5
+Hammer: Hammer Explorer Pro
+Hammer: Hammer Blade 3
+Hammer: Hammer Blade 5G
+Hammer: Hammer Construction
+Hammer: myPhone Now eSIM
+Tecno: CAMON 50 Ultra
+Infinix: NOTE 60 Pro
+Infinix: NOTE 60 Ultra
+=Surface Duo | Microsoft | Surface Duo
+=Surface Duo 2 | Microsoft | Surface Duo 2
+TrumpMobile: T1
+Planet Computers: Gemini

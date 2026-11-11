@@ -388,3 +388,26 @@ func TestCompareFlagsAnItemSoldBelowItsCost(t *testing.T) {
 		}
 	}
 }
+
+// The eSIM Access webhook needs no setting of its own: it follows the relay's
+// public address, and an explicit one still wins.
+func TestESIMAccessWebhookFollowsThePublicURL(t *testing.T) {
+	attach := func(settings esimAccessSettings) relayserver.ESIMConfig {
+		config := relayserver.VoucherConfig{}
+		esim, _ := attachESIMAccessSupplier(&config, relayserver.ESIMConfig{}, settings, nil, nil)
+		return esim
+	}
+	derived := attach(esimAccessSettings{AccessCode: "code", PublicURL: "https://relay.example/"})
+	if derived.AccessWebhookURL != "https://relay.example/v1/customers/esim/webhook/access" || derived.AccessWebhookToken == "" {
+		t.Fatalf("derived webhook = %q", derived.AccessWebhookURL)
+	}
+	if explicit := attach(esimAccessSettings{AccessCode: "code", PublicURL: "https://relay.example", WebhookURL: "https://other.example/hook"}); explicit.AccessWebhookURL != "https://other.example/hook" {
+		t.Fatalf("explicit webhook = %q", explicit.AccessWebhookURL)
+	}
+	if plain := attach(esimAccessSettings{AccessCode: "code", PublicURL: "http://relay.example"}); plain.AccessWebhookURL != "" {
+		t.Fatalf("a plain-http address was registered: %q", plain.AccessWebhookURL)
+	}
+	if off := attach(esimAccessSettings{PublicURL: "https://relay.example"}); off.Access != nil || off.AccessWebhookURL != "" {
+		t.Fatalf("no access code should leave eSIM Access off: %+v", off)
+	}
+}

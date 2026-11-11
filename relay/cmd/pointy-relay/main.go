@@ -715,6 +715,41 @@ func runServer(args []string) error {
 		envString("POINTY_RELAY_AIRALO_RRP_PERCENT", "100"),
 		"the share of Airalo's recommended retail price the eSIM shelf sells at, in percent; the card margin on the net cost is always the floor",
 	)
+	esimAccessCode := flags.String(
+		"esimaccess-access-code",
+		envString("POINTY_RELAY_ESIMACCESS_ACCESS_CODE", ""),
+		"the company's eSIM Access API access code; turns on eSIM Access as the eSIM shelf's second supplier. It has no sandbox: every order is real",
+	)
+	esimAccessBaseURL := flags.String(
+		"esimaccess-url",
+		envString("POINTY_RELAY_ESIMACCESS_URL", ""),
+		"eSIM Access's API host (empty: https://api.esimaccess.com)",
+	)
+	esimAccessWebhookURL := flags.String(
+		"esimaccess-webhook-url",
+		envString("POINTY_RELAY_ESIMACCESS_WEBHOOK_URL", ""),
+		"this relay's public address for eSIM Access's events (…/v1/customers/esim/webhook/access); the relay adds its secret and registers it. Empty: derived from --public-url, so it normally needs no setting",
+	)
+	esimAccessLowBalance := flags.String(
+		"esimaccess-low-balance-usd",
+		envString("POINTY_RELAY_ESIMACCESS_LOW_BALANCE_USD", "20"),
+		"the eSIM Access prepaid balance, in dollars, under which the operator is alerted; 0: never",
+	)
+	esimFallbackPercent := flags.String(
+		"esim-fallback-percent",
+		envString("POINTY_RELAY_ESIM_FALLBACK_PERCENT", "157"),
+		"an eSIM Access plan sells at the suggested retail price set in eSIM Access's dashboard, at the dollar rate; this is the retail price as a percentage of the cost for a plan with no suggested price",
+	)
+	esimMinPrice := flags.String(
+		"esim-min-price",
+		envString("POINTY_RELAY_ESIM_MIN_PRICE", ""),
+		"the lowest price of any eSIM Access plan, in dinars; empty: none",
+	)
+	esimPriceStep := flags.String(
+		"esim-price-step",
+		envString("POINTY_RELAY_ESIM_PRICE_STEP", "1"),
+		"what an eSIM Access plan's price is rounded up to, in dinars; empty: the card margin's step",
+	)
 	airaloWebhookURL := flags.String(
 		"airalo-webhook-url",
 		envString("POINTY_RELAY_AIRALO_WEBHOOK_URL", ""),
@@ -1547,6 +1582,18 @@ func runServer(args []string) error {
 		RRPPercent:   *airaloRRPPercent,
 		WebhookURL:   *airaloWebhookURL,
 	}, &http.Client{Timeout: 60 * time.Second, Transport: outboundTransport}, logger)
+	esimConfig, esimAccessWarnings := attachESIMAccessSupplier(&voucherConfig, esimConfig, esimAccessSettings{
+		AccessCode:      *esimAccessCode,
+		BaseURL:         *esimAccessBaseURL,
+		WebhookURL:      *esimAccessWebhookURL,
+		PublicURL:       *publicURL,
+		FallbackPercent: *esimFallbackPercent,
+		MinPrice:        *esimMinPrice,
+		PriceStep:       *esimPriceStep,
+		LowBalanceUSD:   *esimAccessLowBalance,
+	}, &http.Client{Timeout: 60 * time.Second, Transport: outboundTransport}, logger)
+	esimConfig = relayserver.NewESIMConfig(esimConfig)
+	airaloWarnings = append(airaloWarnings, esimAccessWarnings...)
 	for _, warning := range airaloWarnings {
 		logger.Warn(warning)
 	}
@@ -1924,7 +1971,7 @@ func runServer(args []string) error {
 			go offerSync.Run(ctx)
 		}
 		// The eSIM shelf's catalog, an hour fresh, and Airalo's webhooks opted in.
-		if esimConfig.Client != nil {
+		if esimConfig.Syncs() {
 			esimSync := &relayserver.ESIMCatalogSync{Server: baseHTTPHandler, Logger: logger}
 			go esimSync.Run(ctx)
 		}

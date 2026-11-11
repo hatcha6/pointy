@@ -26,6 +26,8 @@ import (
 //	GET  /v1/vouchers/admin/config
 //	GET  /v1/vouchers/admin/catalog               current document, what shops see, supply per item
 //	PUT  /v1/vouchers/admin/catalog               publish {document, actor, note}
+//	GET  /v1/vouchers/admin/catalog/items         the listed cards by name, for a picker (vouchers_picker.go)
+//	GET  /v1/vouchers/admin/catalog/items/{key}   one card priced and ranked now
 //	GET  /v1/vouchers/admin/catalogs              history
 //	GET  /v1/vouchers/admin/settings              pricing settings of top-up and bills (vouchers_settings.go)
 //	PUT  /v1/vouchers/admin/settings              publish them: the fields, plus note and actor
@@ -63,6 +65,10 @@ func (s HTTPServer) handleVoucherAdminRoutes(w http.ResponseWriter, r *http.Requ
 		s.handleVoucherAdminConfig(w, r, store)
 	case path == "/catalog" && r.Method == http.MethodGet:
 		s.handleVoucherAdminCatalog(w, r, store)
+	case path == "/catalog/items" && r.Method == http.MethodGet:
+		s.handleVoucherAdminPickerItems(w, r, store)
+	case strings.HasPrefix(path, "/catalog/items/") && r.Method == http.MethodGet:
+		s.handleVoucherAdminPickerItem(w, r, store, strings.TrimPrefix(path, "/catalog/items/"))
 	case path == "/catalog" && r.Method == http.MethodPut:
 		s.handleVoucherAdminPublish(w, r, store)
 	case path == "/catalogs" && r.Method == http.MethodGet:
@@ -477,7 +483,8 @@ func (s HTTPServer) handleVoucherAdminPurchases(w http.ResponseWriter, r *http.R
 		s.writeVoucherInternalError(w, "", "voucher purchase listing failed", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"purchases": purchases})
+	usdRate, _ := s.financeUSDRate(r)
+	writeJSON(w, http.StatusOK, map[string]any{"purchases": withPurchaseProfit(purchases, usdRate)})
 }
 
 func (s HTTPServer) handleVoucherAdminCheck(w http.ResponseWriter, r *http.Request, store control.VoucherStore, id string) {

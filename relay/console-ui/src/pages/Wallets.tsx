@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Search, Settings2, Wallet2 } from "lucide-react";
 import { useInstallations, useWallets } from "../lib/queries";
-import { Link, useRouter, useSearchParam } from "../lib/router";
+import { Link, useRouter, useSearchParam, useSearchText } from "../lib/router";
 import { matches } from "../lib/search";
 import { money } from "../lib/format";
 import { account as accountLabels } from "../lib/labels";
@@ -16,7 +16,7 @@ export function Wallets() {
   const { navigate } = useRouter();
   const wallets = useWallets();
   const installations = useInstallations();
-  const [query, setQuery] = useSearchParam("q");
+  const { text, setText, query } = useSearchText();
   const [sort, setSort] = useSearchParam("sort");
   const order = (sort || "main") as Sort;
 
@@ -65,7 +65,7 @@ export function Wallets() {
           <div className="toolbar stacks">
             <div className="search-input">
               <Search />
-              <input className="input" placeholder="اسم المتجر أو رقمه" value={query} onChange={(e) => setQuery(e.target.value)} />
+              <input className="input" placeholder="اسم المتجر أو رقمه" value={text} onChange={(e) => setText(e.target.value)} />
             </div>
             <Segmented<Sort>
               value={order}

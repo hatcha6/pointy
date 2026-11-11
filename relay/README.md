@@ -1390,7 +1390,7 @@ pointy-relay sms config                                    # templates (MISSING 
   (`sms_deliveries_by_outcome`). Per-shop numbers live in the ledger
   (`pointy-relay sms usage`), not in metric labels.
 
-## Card App eSIMs (Airalo)
+## Card App eSIMs (Airalo, eSIM Access)
 
 The eSIM shelf of «دفتر كروت», from Airalo's Partner API. Routes:
 
@@ -1403,7 +1403,14 @@ GET  /v1/customers/esims/{iccid}             one eSIM: how to install it, what i
 PUT  /v1/customers/esims/{iccid}             {label}: who it is for (Bearer)
 GET  /v1/customers/esims/{iccid}/topups      what it can be topped up with (Bearer)
 HEAD|POST /v1/customers/esim/webhook         Airalo's low-data and credit alerts (signed)
+POST /v1/customers/esim/webhook/access/{token}  eSIM Access's events (secret in the address)
 ```
+
+The device check answers from the relay's own list first
+(`internal/esimdevices`: Apple's hardware identifiers and about a thousand
+Android model codes, with a yes or a no each) and asks Airalo only for a model
+that list does not know; `source` in the answer is `relay` or `airalo`. To add
+new phones, see `internal/esimdevices/gen/README.md`.
 
 - **Buying** is `POST /v1/customers/orders` with item `esim:<package>` or
   `esim-topup:<iccid>:<package>`: the same payment, credit, fee, refund and
@@ -1421,6 +1428,29 @@ HEAD|POST /v1/customers/esim/webhook         Airalo's low-data and credit alerts
 - **Alerts** at 75%, 90%, 3 days and 1 day are pushed to the buyer once per level
   and package (a top-up starts them over), opening the eSIM's page. Credit alerts go
   to the operator's alert channel.
+- **A second supplier, eSIM Access** (`POINTY_RELAY_ESIMACCESS_ACCESS_CODE`). The app
+  sees one shelf. A country both suppliers sell is one destination, and a plan both
+  sell in the same size is listed once, from whoever charges the company less; plan
+  ids of eSIM Access start with `ea.`. Each eSIM row records its supplier, and its
+  install details, usage, top-ups and alerts are read from that supplier.
+  - **Prices** of eSIM Access plans are the *suggested retail price* set in eSIM
+    Access's dashboard (a percentage of the cost) × the dollar rate, rounded up to
+    `POINTY_RELAY_ESIM_PRICE_STEP`, never under the card margin on the real cost. So
+    the markup is tuned in their dashboard and the dinar price follows the dollar.
+  - **Orders** carry the catalog's price; eSIM Access refuses one whose package costs
+    something else by then, and the customer is refunded. The eSIM is made after the
+    order answers (up to ~30 s): the purchase waits briefly, then stays open for the
+    reconciler, which reads the order again. The purchase id is the order's
+    `transactionId`, which is how a lost answer is found.
+  - **Alerts.** eSIM Access does not sign webhooks. The address ends in a secret, and
+    a delivery only says which eSIM to read: the relay reads the usage from the API
+    and pushes 75%, 90%, used up, 3 days and 1 day, once each per package.
+  - **Not sold:** day passes, plans under 1 GB, countries with no Arabic name in
+    `vouchers.CountryName`, and regions with no name in `esimAccessRegions`.
+  - **Beside a Sandbox Airalo** the shelf opens to everyone with eSIM Access plans
+    only; the review account then buys simulated eSIMs, as against any live supplier.
+  - eSIM Access reuses ICCIDs: an eSIM is asked for by its `esimTranNo`
+    (`supplier_ref`), and a reissued ICCID moves the ended eSIM's row aside.
 - **Local runs:** `make relay-airalo-fake` serves a fake Partner API on :8097 (with
   Airalo's documented sandbox error packages); point `POINTY_RELAY_AIRALO_URL` at it.
 - **Go-live:** [`cards/ESIM_GO_LIVE.md`](../cards/ESIM_GO_LIVE.md).
@@ -1752,6 +1782,25 @@ Settings:
     drawing; one asked for before its turn is drawn at once. New art is a
     new address. If the catalog or an image cannot be read, the shelf's own
     picture stands in.
+  - Search engines: the app draws on a canvas, which a crawler reads as an
+    empty page, so each page is sent with what it shows (`seo.go`,
+    `static.go`, `sitemap.go`):
+    - Its own title and description, a `canonical` address on the first
+      host, and schema.org data: a brand is a `Product` with its price range
+      and stock, a card on sale (`/brand/pubg?item=…`) a `Product` with one
+      `Offer`, with breadcrumbs.
+    - Its content as plain HTML first in the body: every card with its price,
+      how it is used, and links to the other brands. A browser without
+      scripts shows it as the page; where the app runs it is clipped away
+      and made inert. It carries no pictures.
+    - `/robots.txt` and `/sitemap.xml`, the latter written from the catalog
+      on each request (503 with `Retry-After` while it cannot be read).
+    - `/my-cards`, `/account`, `/search`, `/esim` and `/esims/…` ask not to
+      be listed. An address the app does not know, or a brand the shelf does
+      not have, answers 404 with the app still in it. Add `/esim` to the
+      listed pages and the sitemap when eSIMs go on sale.
+    - The app must not replace the served title as it starts
+      (`cards/lib/src/shared/page_title.dart`).
   - Each host's `https://` origin is added to the customer web origins below.
   - The build comes from the `pointy-cards-web` image, which
     `.github/workflows/cards-web.yml` publishes whenever `cards/` changes.
@@ -2254,6 +2303,13 @@ owners may take; cash from a resale is a ledger income line
 | `POINTY_RELAY_AIRALO_RRP_PERCENT` | `100` | the share of Airalo's recommended retail price the shelf sells at; the card margin on the net cost is always the floor |
 | `POINTY_RELAY_AIRALO_BRAND` | empty | the brand (Partner Platform) a shared eSIM's page shows |
 | `POINTY_RELAY_AIRALO_WEBHOOK_URL` | empty | this relay's public `…/v1/customers/esim/webhook`; the sync opts it in. Empty: no low-data or expiry alerts reach customers |
+| `POINTY_RELAY_ESIMACCESS_ACCESS_CODE` | empty | the company's eSIM Access API access code. Turns on eSIM Access as the eSIM shelf's second supplier. It has no sandbox: every order is a real eSIM, paid from the prepaid balance |
+| `POINTY_RELAY_ESIMACCESS_URL` | `https://api.esimaccess.com` | another host, for local runs |
+| `POINTY_RELAY_ESIMACCESS_WEBHOOK_URL` | `POINTY_RELAY_PUBLIC_URL` + `/v1/customers/esim/webhook/access` | normally left unset. The relay adds a secret derived from the access code and registers the address with eSIM Access itself. With neither this nor an https `POINTY_RELAY_PUBLIC_URL`, eSIM Access eSIMs get no low-data or expiry alerts |
+| `POINTY_RELAY_ESIMACCESS_LOW_BALANCE_USD` | `20` | the prepaid balance under which the operator is alerted (every 12 hours at most); `0`: never |
+| `POINTY_RELAY_ESIM_FALLBACK_PERCENT` | `157` | the retail price as a percentage of the cost, for an eSIM Access plan the API gives no suggested retail price for |
+| `POINTY_RELAY_ESIM_MIN_PRICE` | empty | the lowest price of any eSIM Access plan, in dinars |
+| `POINTY_RELAY_ESIM_PRICE_STEP` | `1` | what an eSIM Access plan's price is rounded up to, in dinars |
 | `POINTY_RELAY_RELOADLY_SANDBOX` | `false` | `true` uses Reloadly's SANDBOX hosts: fake money, a different catalog, sandbox keys only (the startup log says `SANDBOX` loudly, and everything the relay sells is marked test) |
 | `POINTY_RELAY_RELOADLY_REQUEST_TIMEOUT` | `45s` | one Reloadly purchase call (the relay's per-call limit is the larger of this and the BN Plus one) |
 | `POINTY_RELAY_RELOADLY_DIRECTORY_INTERVAL` | `15m` | how often the countries, operators and billers of direct top-up and bill payments are read from Reloadly again; `0` reads them once |
@@ -2749,3 +2805,27 @@ runs the Redis presence and registry tests. It needs only Redis
 make redis
 make relay-fleet-test
 ```
+
+### eSIM promotions
+
+Time-boxed discounts on the eSIM shelf are written in the console under «عروض eSIM»
+(`GET`/`PUT /v1/customers/admin/esim-promos`, the whole list at once, passkey step-up).
+A promotion takes a percentage off every plan of one destination, or of all of them,
+between `starts_at` and `ends_at`. The shelf, a destination's page and the order's quote
+read the same offer, so the price shown is the price charged; it is rounded up to a
+quarter dinar and never goes under what the card margin asks on the plan's cost.
+Top-ups of an eSIM already bought keep their regular price. Stored in
+`relay_esim_promos` (migration 45); a change reaches the app within 30 seconds.
+
+### eSIM link previews
+
+While eSIMs are on sale to everyone, `cards.dftr.ly/esim`, `/esim/<destination>` and
+`/esim/<destination>/<plan-id>` are sent with their own title, description, canonical
+address, `og:`/`twitter:` tags, price and schema.org Product data, and are listed in
+`/sitemap.xml`. Each destination's picture (`/og/esim/<country>.<id>.jpg`, 1200x630) is
+the app's eSIM card with the country's flag; a region or the shelf keeps the globe. The
+card and the flags are embedded in the relay (`internal/cardsweb/assets/esim`), drawn by
+the app itself: regenerate them with `flutter test tool/esim_link_art_test.dart` from
+`cards/`. While eSIMs are review-only these addresses stay unlisted with the site's
+picture.
+

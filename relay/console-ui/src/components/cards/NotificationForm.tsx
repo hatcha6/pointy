@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { BellRing } from "lucide-react";
 import { Field } from "../ui";
 import { Combobox } from "../Combobox";
-import { useCatalog } from "../../pages/vouchers/Catalog";
+import { useCatalogItems } from "../../lib/picker";
 
 export type NotificationDraft = { title: string; body: string; link: string; campaign: string };
 
@@ -23,8 +23,8 @@ const places = [
  * phone's lock screen.
  */
 export function NotificationForm({ draft, onChange }: { draft: NotificationDraft; onChange: (next: NotificationDraft) => void }) {
-  const catalog = useCatalog();
-  const brands = catalog.data?.view?.brands ?? [];
+  const catalog = useCatalogItems();
+  const brands = catalog.data?.brands ?? [];
   const brandKey = draft.link.startsWith(`${ORIGIN}/brand/`) ? draft.link.slice(`${ORIGIN}/brand/`.length) : "";
   const options = useMemo(
     () => [

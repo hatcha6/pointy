@@ -17,7 +17,7 @@ import { Dialog } from "../../components/dialog";
 import { PasskeyHint, useAction } from "../../components/guarded";
 import { Combobox } from "../../components/Combobox";
 import { Unavailable } from "../../components/Unavailable";
-import { useCatalog } from "../vouchers/Catalog";
+import { useCatalogItems } from "../../lib/picker";
 
 const clickPlatforms: [string, string][] = [
   ["ios", "آيفون"],
@@ -287,8 +287,8 @@ function CampaignDialog({ campaign, onClose }: { campaign: CardCampaign | "new" 
     success: existing ? "حُفظت الحملة" : "أُنشئت الحملة",
     passkey: true,
   });
-  const catalog = useCatalog();
-  const brands = catalog.data?.view?.brands ?? [];
+  const catalog = useCatalogItems();
+  const brands = catalog.data?.brands ?? [];
   const landings = useMemo(
     () => [
       { value: "/", label: "الرئيسية", group: "التطبيق" },

@@ -13,7 +13,9 @@ import (
 	"pointy/relay/internal/airalo"
 	"pointy/relay/internal/alerts"
 	"pointy/relay/internal/control"
+	"pointy/relay/internal/esimaccess"
 	"pointy/relay/internal/fcm"
+	"pointy/relay/internal/vouchers"
 )
 
 const (
@@ -31,6 +33,8 @@ func (s HTTPServer) routeCustomerESIM(w http.ResponseWriter, r *http.Request, st
 	switch {
 	case path == "/v1/customers/esim/webhook":
 		s.handleAiraloWebhook(w, r)
+	case strings.HasPrefix(path, ESIMAccessWebhookPath+"/"):
+		s.handleESIMAccessWebhook(w, r, strings.TrimPrefix(path, ESIMAccessWebhookPath+"/"))
 	case path == "/v1/customers/esim/destinations" && r.Method == http.MethodGet:
 		if visible, answered := s.esimShelfVisible(w, r, store); answered {
 			return
@@ -142,6 +146,16 @@ func (s HTTPServer) readESIMUsage(ctx context.Context, esim control.CustomerESIM
 		total := 1024
 		return control.CustomerESIMUsage{Status: airalo.UsageNotActive, RemainingMB: total, TotalMB: total}, true
 	}
+	if esimSupplierOf(esim) == vouchers.SupplierESIMAccess {
+		callCtx, cancel := context.WithTimeout(ctx, esimReadBudget)
+		defer cancel()
+		usage, err := s.esimAccessUsage(callCtx, esim)
+		if err != nil {
+			s.logger().Warn("reading an eSIM's usage failed", "iccid_tail", iccidTail(esim.ICCID), "error", err)
+			return control.CustomerESIMUsage{}, false
+		}
+		return usage, true
+	}
 	if s.ESIM.Client == nil {
 		return control.CustomerESIMUsage{}, false
 	}
@@ -241,7 +255,7 @@ func (s HTTPServer) handleCustomerESIMRead(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, map[string]any{"esim": body})
 }
 
-// esimInstall is everything that installs an eSIM, read from Airalo each time:
+// esimInstall is everything that installs an eSIM, read from its supplier each time:
 // the direct links, the QR's text, the manual details, the APN and the share page.
 func (s HTTPServer) esimInstall(ctx context.Context, esim control.CustomerESIM) (map[string]any, error) {
 	if esim.Simulated {
@@ -255,11 +269,14 @@ func (s HTTPServer) esimInstall(ctx context.Context, esim control.CustomerESIM) 
 			"share_link": "https://cards.dftr.ly", "share_code": "0000",
 		}, nil
 	}
+	callCtx, cancel := context.WithTimeout(ctx, esimReadBudget)
+	defer cancel()
+	if esimSupplierOf(esim) == vouchers.SupplierESIMAccess {
+		return s.esimAccessInstall(callCtx, esim)
+	}
 	if s.ESIM.Client == nil {
 		return nil, errors.New("eSIMs are not configured")
 	}
-	callCtx, cancel := context.WithTimeout(ctx, esimReadBudget)
-	defer cancel()
 	sim, err := s.ESIM.Client.SIM(callCtx, esim.ICCID)
 	if err != nil {
 		return nil, err
@@ -325,7 +342,8 @@ func (s HTTPServer) handleCustomerESIMTopUps(w http.ResponseWriter, r *http.Requ
 	plans, err := s.esimTopUps(ctx, esim)
 	if err != nil {
 		// A top-up the operator disabled, or a recycled eSIM: nothing to offer.
-		if airalo.IsCode(err, airalo.CodeRecycled) || airalo.IsCode(err, airalo.CodeTopUpDisabled) || airalo.IsNotFound(err) {
+		if airalo.IsCode(err, airalo.CodeRecycled) || airalo.IsCode(err, airalo.CodeTopUpDisabled) || airalo.IsNotFound(err) ||
+			errors.Is(err, esimaccess.ErrNoProfile) {
 			writeJSON(w, http.StatusOK, map[string]any{"plans": []any{}})
 			return
 		}
@@ -335,7 +353,7 @@ func (s HTTPServer) handleCustomerESIMTopUps(w http.ResponseWriter, r *http.Requ
 	}
 	rows := make([]map[string]any, 0, len(plans))
 	for _, plan := range plans {
-		price, ok := pricing.price(plan.NetUSD, plan.RetailUSD)
+		price, ok := pricing.price(plan)
 		if !ok {
 			continue
 		}
@@ -430,33 +448,38 @@ func (s HTTPServer) tellESIMLowData(ctx context.Context, event airalo.Event) err
 	if err != nil {
 		return err
 	}
-	first, err := store.ClaimCustomerESIMNotice(ctx, event.ICCID, event.Level, event.PackageName)
-	if err != nil {
-		return err
+	_, err = s.tellESIMLevel(ctx, store, esim, event.Level, event.PackageName)
+	return err
+}
+
+// tellESIMLevel pushes one alert level of an eSIM to its buyer's phones, once
+// per level and package, whichever supplier the eSIM is from. told is false for
+// a level already told (or one with no message).
+func (s HTTPServer) tellESIMLevel(ctx context.Context, store control.CustomerESIMStore, esim control.CustomerESIM, level, packageName string) (bool, error) {
+	if _, ok := esimLowDataMessage(esim, level); !ok {
+		s.logger().Warn("an eSIM alert of an unknown level", "level", level)
+		return false, nil
 	}
-	if !first {
-		return nil
+	first, err := store.ClaimCustomerESIMNotice(ctx, esim.ICCID, level, packageName)
+	if err != nil || !first {
+		return false, err
 	}
-	message, ok := esimLowDataMessage(esim, event.Level)
-	if !ok {
-		s.logger().Warn("an Airalo alert of an unknown level", "level", event.Level)
-		return nil
-	}
+	message, _ := esimLowDataMessage(esim, level)
 	admin, ok := s.Store.(customerAdminStore)
 	if s.CustomerPush == nil || !ok {
-		return nil
+		return true, nil
 	}
 	pushCtx, cancel := context.WithTimeout(ctx, customerOrderPushBudget)
 	defer cancel()
 	sessions, err := admin.CustomerSessions(pushCtx, esim.CustomerID)
 	if err != nil {
-		return err
+		return true, err
 	}
 	var record control.CustomerNotification
 	s.pushToDevices(pushCtx, admin, sessions, message, &record)
-	s.logger().Info("told a customer about their eSIM", "iccid_tail", iccidTail(event.ICCID), "level", event.Level,
+	s.logger().Info("told a customer about their eSIM", "iccid_tail", iccidTail(esim.ICCID), "level", level,
 		"devices", record.Devices, "sent", record.Sent, "failed", record.Failed)
-	return nil
+	return true, nil
 }
 
 // esimLowDataMessage is what the phone says at each level, and it always ends on
@@ -480,6 +503,9 @@ func esimLowDataMessage(esim control.CustomerESIM, level string) (fcm.Message, b
 		body = whose + ": " + action
 	case airalo.Level1Day:
 		title, tag = "تنتهي باقتك غداً", "1day"
+		body = whose + ": " + action
+	case esimLevelUsedUp:
+		title, tag = "انتهت بيانات باقتك", "used_up"
 		body = whose + ": " + action
 	default:
 		return fcm.Message{}, false

@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type AnchorHTMLAttributes, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useDeferredValue, useEffect, useMemo, useRef, useState, type AnchorHTMLAttributes, type ReactNode } from "react";
 
 // A small router over the History API. The console's paths are its own, so
 // navigate() only accepts paths inside /console/ — never an arbitrary URL.
@@ -32,7 +32,9 @@ export function RouterProvider({ children }: { children: ReactNode }) {
     if (opts?.replace) window.history.replaceState(null, "", url);
     else window.history.pushState(null, "", url);
     setLocation(current());
-    window.scrollTo({ top: 0 });
+    // A new page starts at its top; a filter or a search typed into the
+    // address (replace) leaves the reader where they are.
+    if (!opts?.replace) window.scrollTo({ top: 0 });
   }, []);
   const value = useMemo(() => ({ location, navigate }), [location, navigate]);
   return <RouterContext.Provider value={value}>{children}</RouterContext.Provider>;
@@ -62,6 +64,34 @@ export function useSearchParam(name: string): [string, (value: string) => void] 
     [name, navigate, path, search],
   );
   return [value, set];
+}
+
+/**
+ * A search box kept in the address without the address slowing the typing.
+ * `text` is what the box shows and changes at once; `query` follows it when
+ * the browser has time (filter a list already loaded by it); `settled` is the
+ * address's copy, written once typing pauses (ask the server by it).
+ */
+export function useSearchText(name = "q"): { text: string; setText: (value: string) => void; query: string; settled: string } {
+  const [param, setParam] = useSearchParam(name);
+  const [text, setText] = useState(param);
+  const written = useRef(param);
+  useEffect(() => {
+    // The address changed under us (Back, a link, the palette): follow it.
+    if (param !== written.current) {
+      written.current = param;
+      setText(param);
+    }
+  }, [param]);
+  useEffect(() => {
+    if (text === written.current) return;
+    const id = window.setTimeout(() => {
+      written.current = text;
+      setParam(text);
+    }, 300);
+    return () => window.clearTimeout(id);
+  }, [text, setParam]);
+  return { text, setText, query: useDeferredValue(text), settled: param };
 }
 
 /** Sets several query parameters in one step (an empty value removes one). */

@@ -109,6 +109,11 @@ export type Purchase = {
   supplier_order_id?: string;
   supplier_cost?: string;
   supplier_currency?: string;
+  /** What it cost the company in dinars, and what the company kept of the
+   *  amount: both only on a real sale that went through (the relay works
+   *  them out, by the books' rule). */
+  cost_lyd?: string;
+  profit?: string;
   status: string;
   error_code?: string;
   error_detail?: string;

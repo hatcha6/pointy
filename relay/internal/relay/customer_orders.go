@@ -156,7 +156,8 @@ func (s HTTPServer) handleCustomerOrderCreate(w http.ResponseWriter, r *http.Req
 		}
 		itemKey, brandKey, itemName, price = request.Item, esimOrderBrand(quote.Details.Country), quote.Name, quote.Price
 		account = esimOrderAccount(request.Account)
-		sandbox = s.ESIM.Sandbox
+		// Only Airalo has a Sandbox; a plan bought from eSIM Access is real.
+		sandbox = s.ESIM.Sandbox && (quote.Details.Supplier == "" || quote.Details.Supplier == vouchers.SupplierAiralo)
 	} else {
 		located, ranking, failure := s.locateCustomerCard(ctx, cards, request.Item, review)
 		if failure != "" {

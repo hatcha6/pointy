@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, Search } from "lucide-react";
-import { matches } from "../lib/search";
+import { folded, matcher } from "../lib/search";
 
 export type ComboOption = { value: string; label: string; sub?: string; group?: string };
 
@@ -30,10 +30,15 @@ export function Combobox({ value, onChange, options, placeholder = "ابحث و�
   const list = useRef<HTMLDivElement>(null);
   const selected = options.find((o) => o.value === value);
 
-  const filtered = useMemo(
-    () => options.filter((o) => matches(query, o.label, o.value, o.sub ?? "", o.group ?? "")).slice(0, shownLimit),
-    [options, query],
-  );
+  // Folded once per list, and the search stops at the first screenful: a
+  // letter typed over five thousand cards costs a scan, not five thousand folds.
+  const index = useMemo(() => options.map((o) => folded(o.label, o.value, o.sub, o.group)), [options]);
+  const filtered = useMemo(() => {
+    const hit = matcher(query);
+    const out: ComboOption[] = [];
+    for (let i = 0; i < options.length && out.length < shownLimit; i++) if (hit(index[i])) out.push(options[i]);
+    return out;
+  }, [options, index, query]);
 
   const place = () => {
     const rect = input.current?.getBoundingClientRect();

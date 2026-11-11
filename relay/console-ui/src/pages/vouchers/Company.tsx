@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Banknote, CreditCard, Eye, FlaskConical, Info, Search, ShoppingBag, Smartphone, TriangleAlert, UserCheck, UserSearch } from "lucide-react";
 import { api, qs } from "../../lib/api";
 import { idempotencyKey } from "../../lib/stepup";
-import { useSearchParam } from "../../lib/router";
+import { useSearchText } from "../../lib/router";
 import { matches } from "../../lib/search";
 import { count, money } from "../../lib/format";
 import { purchasePurpose } from "../../lib/labels";
@@ -19,7 +19,7 @@ import { PurchasesTable } from "../../components/tables";
 import { Unavailable } from "../../components/Unavailable";
 import { EntryDialog, type EntryDraft } from "../../components/finance/EntryDialog";
 import { Badge, Button, Card, CopyText, Field, Money, Notice, Segmented, Skeleton } from "../../components/ui";
-import { useCatalog } from "./Catalog";
+import { useCatalogItem, useCatalogItems } from "../../lib/picker";
 
 // The company buying for itself, from the suppliers that serve the shops: a
 // card to pay for a subscription, a top-up, a bill, cards to sell on for cash
@@ -67,7 +67,7 @@ function useResales() {
 export function Company() {
   const purchases = useCompanyPurchases();
   const resales = useResales();
-  const [query, setQuery] = useSearchParam("q");
+  const { text, setText, query } = useSearchText();
   const [buying, setBuying] = useState<null | "card" | "service">(null);
   const [revealing, setRevealing] = useState<Purchase | null>(null);
   const [selling, setSelling] = useState<EntryDraft | null>(null);
@@ -154,13 +154,15 @@ export function Company() {
             <div className="toolbar stacks">
               <div className="search-input">
                 <Search />
-                <input className="input" placeholder="صنف، ملاحظة، رقم…" value={query} onChange={(e) => setQuery(e.target.value)} />
+                <input className="input" placeholder="صنف، ملاحظة، رقم…" value={text} onChange={(e) => setText(e.target.value)} />
               </div>
             </div>
             <PurchasesTable
               purchases={rows.filter((p) => matches(query, p.name, p.note ?? "", p.id, p.supplier_order_id, p.target, p.requested_by ?? ""))}
               loading={purchases.isLoading}
               showShop={false}
+              profit={false}
+              resetKey={query}
               columnsBefore={extra}
               actions={(p) =>
                 p.status === "succeeded" ? (
@@ -236,8 +238,9 @@ function OutcomeNotice({ purchase }: { purchase: CompanyAnswer["purchase"] }) {
 }
 
 function BuyCardDialog({ onClose }: { onClose: () => void }) {
-  const catalog = useCatalog();
+  const catalog = useCatalogItems();
   const [item, setItem] = useState("");
+  const picked = useCatalogItem(item).data;
   const [quantity, setQuantity] = useState(1);
   const [purpose, setPurpose] = useState<Purpose>("own_use");
   const [note, setNote] = useState("");
@@ -250,23 +253,14 @@ function BuyCardDialog({ onClose }: { onClose: () => void }) {
 
   const options = useMemo<ComboOption[]>(
     () =>
-      (catalog.data?.view?.brands ?? []).flatMap((b) =>
-        b.items.map((i) => ({
-          value: i.key,
-          label: `${b.name} · ${i.label || `${i.face_value} ${i.face_currency}`}`,
-          sub: i.available ? undefined : "غير متاحة الآن",
-          group: b.key,
-        })),
-      ),
+      (catalog.data?.items ?? []).map((i) => ({ value: i.key, label: i.name, group: i.brand })),
     [catalog.data],
   );
-  const supply = catalog.data?.supply.find((s) => s.item === item);
-  const winner = supply?.suppliers?.find((s) => s.candidate && s.supplier !== "stock" && s.cost_lyd);
-  const shopPrice = catalog.data?.view?.brands.flatMap((b) => b.items).find((i) => i.key === item)?.unit_price;
-  const each = winner?.cost_lyd ?? shopPrice;
-  const testMode = !!catalog.data?.view?.test_mode;
+  const winner = picked?.suppliers?.find((s) => s.candidate && s.supplier !== "stock" && s.cost_lyd);
+  const each = winner?.cost_lyd ?? picked?.unit_price;
+  const testMode = !!catalog.data?.test_mode;
   // A card sent to an account (a game by player ID, Telegram, Steam) asks for it.
-  const target = catalog.data?.view?.brands.find((b) => b.items.some((i) => i.key === item))?.target ?? null;
+  const target = picked?.target ?? null;
   const accountReady = !target || target.fields.every((f) => (account[f.key] ?? "").trim() !== "");
   const pick = (next: string) => {
     setItem(next);
@@ -374,9 +368,9 @@ function BuyCardDialog({ onClose }: { onClose: () => void }) {
             )}
           </>
         )}
-        {supply && !supply.available && (
+        {picked && !picked.available && (
           <Notice tone="danger" icon={<TriangleAlert />}>
-            غير متاحة الآن: {reasonText(supply.reason)}
+            غير متاحة الآن: {reasonText(picked.reason)}
           </Notice>
         )}
         {!target && (
@@ -385,11 +379,11 @@ function BuyCardDialog({ onClose }: { onClose: () => void }) {
           </Field>
         )}
         <PurposeFields purpose={purpose} setPurpose={setPurpose} note={note} setNote={setNote} />
-        {item && (
+        {item && picked && (
           <Notice tone="info" icon={<Info />}>
             {winner
               ? `تُشترى من المورّد الأرخص الآن بنحو ${money(winner.cost_lyd)} للبطاقة، ويُخصم من رصيدنا لديه.`
-              : `سعر المورّد غير معروف؛ التقدير بسعر المتاجر ${money(shopPrice)} للبطاقة، والتكلفة الحقيقية تُسجَّل بعد الشراء.`}{" "}
+              : `سعر المورّد غير معروف؛ التقدير بسعر المتاجر ${money(picked.unit_price)} للبطاقة، والتكلفة الحقيقية تُسجَّل بعد الشراء.`}{" "}
             لا يُؤخذ شيء من مخزوننا ولا من محفظة أي متجر.
           </Notice>
         )}

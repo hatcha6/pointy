@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Download, KeyRound, TriangleAlert } from "lucide-react";
+import { Download, FileKey, KeyRound, TriangleAlert } from "lucide-react";
 import { date } from "../lib/format";
 import { saveText } from "../lib/files";
 import { Button, Card, CopyText, Field, Notice, Switch } from "../components/ui";
@@ -7,6 +7,11 @@ import { PageHeader } from "../components/PageHeader";
 import { PasskeyHint, useAction } from "../components/guarded";
 
 type Minted = { tokens: string[]; count: number; expires_at?: string | null };
+
+/** One key as the file a shop's installer reads beside it: license.key. */
+function saveKey(token: string) {
+  saveText(token + "\n", "license.key");
+}
 
 const durations = [
   { id: "", label: "بلا اشتراك" },
@@ -109,15 +114,20 @@ export function Licenses() {
         <Card
           title="المفاتيح الصادرة"
           actions={
-            minted && (
-              <Button size="sm" icon={<Download />} onClick={() => saveText(minted.tokens.join("\n") + "\n", `pointy-licenses-${new Date().toISOString().slice(0, 10)}.txt`)}>
-                تنزيل
+            minted &&
+            (minted.tokens.length === 1 ? (
+              <Button size="sm" variant="primary" icon={<Download />} onClick={() => saveKey(minted.tokens[0])}>
+                تنزيل license.key
               </Button>
-            )
+            ) : (
+              <Button size="sm" icon={<Download />} onClick={() => saveText(minted.tokens.join("\n") + "\n", `pointy-licenses-${new Date().toISOString().slice(0, 10)}.txt`)}>
+                تنزيل الكل (.txt)
+              </Button>
+            ))
           }
         >
           {!minted ? (
-            <p className="muted">تظهر هنا مرة واحدة بعد الإصدار. لا يحفظها الخادم بصيغتها الأصلية، فانسخها أو نزّلها.</p>
+            <p className="muted">تظهر هنا مرة واحدة بعد الإصدار. لا يحفظها الخادم بصيغتها الأصلية، فانسخها أو نزّلها. الملف license.key هو ما يقرؤه مثبّت خادم المتجر.</p>
           ) : (
             <div className="form">
               <Notice tone="warning" icon={<TriangleAlert />}>
@@ -126,7 +136,10 @@ export function Licenses() {
               </Notice>
               <div className="secret-list">
                 {minted.tokens.map((t) => (
-                  <CopyText key={t} value={t} />
+                  <div key={t} className="row" style={{ justifyContent: "space-between", gap: 8 }}>
+                    <CopyText value={t} />
+                    <Button size="sm" variant="ghost" icon={<FileKey />} title="تنزيله ملف license.key" aria-label="تنزيله ملف license.key" onClick={() => saveKey(t)} />
+                  </div>
                 ))}
               </div>
               {minted.tokens.length > 1 && <CopyText value={minted.tokens.join("\n")} display={<span>نسخ الكل ({minted.tokens.length})</span>} />}

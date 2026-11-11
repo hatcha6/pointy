@@ -20,6 +20,7 @@ import (
 
 	"pointy/relay/internal/airalo"
 	"pointy/relay/internal/bnplus"
+	"pointy/relay/internal/esimaccess"
 	"pointy/relay/internal/fazer"
 	"pointy/relay/internal/ratelimit"
 	relayserver "pointy/relay/internal/relay"
@@ -250,6 +251,70 @@ type airaloSettings struct {
 	Sandbox                                                        bool
 }
 
+// esimAccessSettings is eSIM Access's part of the relay's flags: the eSIM
+// shelf's second supplier, and how its plans are priced.
+type esimAccessSettings struct {
+	AccessCode, BaseURL, WebhookURL string
+	// PublicURL is the relay's own public origin (POINTY_RELAY_PUBLIC_URL):
+	// where the webhook address comes from when none is set.
+	PublicURL                                           string
+	FallbackPercent, MinPrice, PriceStep, LowBalanceUSD string
+}
+
+// attachESIMAccessSupplier builds eSIM Access's client and registers it beside
+// Airalo. Without an access code the shelf is Airalo's alone.
+func attachESIMAccessSupplier(config *relayserver.VoucherConfig, esim relayserver.ESIMConfig, settings esimAccessSettings, client *http.Client, logger *slog.Logger) (relayserver.ESIMConfig, []string) {
+	var warnings []string
+	number := func(name, raw string) *big.Rat {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			return nil
+		}
+		value, ok := new(big.Rat).SetString(raw)
+		if !ok || value.Sign() < 0 {
+			warnings = append(warnings, fmt.Sprintf("%s %q is not a number; ignored", name, raw))
+			return nil
+		}
+		return value
+	}
+	esim.Retail = vouchers.ESIMRetail{
+		FallbackPercent: number("POINTY_RELAY_ESIM_FALLBACK_PERCENT", settings.FallbackPercent),
+		MinPrice:        number("POINTY_RELAY_ESIM_MIN_PRICE", settings.MinPrice),
+		Step:            number("POINTY_RELAY_ESIM_PRICE_STEP", settings.PriceStep),
+	}
+	credentials := esimaccess.Config{
+		BaseURL:    settings.BaseURL,
+		AccessCode: strings.TrimSpace(settings.AccessCode),
+		HTTPClient: withoutRedirects(client),
+		Logger:     logger,
+	}
+	if !credentials.Configured() {
+		return esim, warnings
+	}
+	esim.Access = esimaccess.New(credentials)
+	esim.AccessWebhookURL = strings.TrimSpace(settings.WebhookURL)
+	if origin := strings.TrimRight(strings.TrimSpace(settings.PublicURL), "/"); esim.AccessWebhookURL == "" && strings.HasPrefix(origin, "https://") {
+		// Nothing to set up: the relay already knows its public address.
+		esim.AccessWebhookURL = origin + relayserver.ESIMAccessWebhookPath
+	}
+	esim.AccessWebhookToken = relayserver.ESIMAccessWebhookToken(credentials.AccessCode)
+	if low := number("POINTY_RELAY_ESIMACCESS_LOW_BALANCE_USD", settings.LowBalanceUSD); low != nil {
+		units, _ := new(big.Rat).Mul(low, big.NewRat(esimaccess.Units, 1)).Float64()
+		esim.AccessLowBalance = int64(units)
+	}
+	if config.Suppliers == nil {
+		config.Suppliers = map[string]vouchers.Supplier{}
+	}
+	config.Suppliers[vouchers.SupplierESIMAccess] = &vouchers.ESIMAccessSupplier{Client: esim.Access}
+	if esim.AccessWebhookURL == "" {
+		warnings = append(warnings, "neither POINTY_RELAY_PUBLIC_URL (https) nor POINTY_RELAY_ESIMACCESS_WEBHOOK_URL is set: eSIM Access eSIMs get no low-data or expiry alerts")
+	}
+	if esim.Sandbox {
+		warnings = append(warnings, "eSIM Access is live beside a Sandbox Airalo: the shelf is open to everyone and lists eSIM Access plans only")
+	}
+	return esim, warnings
+}
+
 // attachAiraloSupplier builds Airalo's client and registers it. Without
 // credentials the shelf stays off, unless the vouchers run in test mode, when a
 // stored catalog sells test eSIMs.
@@ -287,7 +352,7 @@ func attachAiraloSupplier(config *relayserver.VoucherConfig, settings airaloSett
 	} else if settings.ClientID != "" || settings.ClientSecret != "" {
 		warnings = append(warnings, "Airalo needs both a client id and a client secret; the eSIM shelf is off")
 	}
-	return relayserver.NewESIMConfig(esim), warnings
+	return esim, warnings
 }
 
 // reloadlyStartupMode is how the startup log says which Reloadly the relay talks

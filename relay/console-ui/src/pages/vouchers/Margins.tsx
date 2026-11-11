@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
 import { Coins, Search, TriangleAlert } from "lucide-react";
-import { useSearchParam } from "../../lib/router";
-import { matches } from "../../lib/search";
+import { useSearchParam, useSearchText } from "../../lib/router";
+import { folded, matcher } from "../../lib/search";
 import { count, money } from "../../lib/format";
 import { label, supplier as supplierLabels } from "../../lib/labels";
 import { splitOf, type Split } from "../../lib/vouchers";
-import { Badge, Button, Card, Empty, Money, Notice, Segmented } from "../../components/ui";
+import { Badge, Card, Empty, Money, Notice, Segmented } from "../../components/ui";
 import { DataTable, Stacked, type Column } from "../../components/DataTable";
 import { PageHeader } from "../../components/PageHeader";
 import { ProfitCell } from "../../components/profit";
@@ -29,20 +29,18 @@ type Line = Split & {
   /** Who it is bought from (cards only). */
   supplier?: string;
   available: boolean;
-  search: string[];
+  /** What the line is searched by, folded once. */
+  search: string;
 };
-
-const PAGE = 150;
 
 export function Margins() {
   const catalog = useCatalog();
   const directory = useDirectory();
   const [kind, setKind] = useSearchParam("kind");
   const current = (kind || "card") as Kind;
-  const [query, setQuery] = useSearchParam("q");
+  const { text, setText, query } = useSearchText();
   const [sort, setSort] = useState<Sort>("");
   const [onlyLoss, setOnlyLoss] = useState(false);
-  const [shown, setShown] = useState(PAGE);
 
   const cards = useMemo<Line[]>(() => {
     const supplyOf = new Map((catalog.data?.supply ?? []).map((s) => [s.item, s]));
@@ -58,7 +56,7 @@ export function Margins() {
           sub: i.key,
           supplier: s?.winner,
           available: i.available,
-          search: [b.name, b.key, name, i.key, i.country],
+          search: folded(b.name, b.key, name, i.key, i.country),
         };
       }),
     );
@@ -78,7 +76,7 @@ export function Margins() {
             name: `${op.name} · ${a.amount} ${op.amount_currency}`,
             sub: `${c.name} · يستلم ${a.receive} ${a.receive_currency}${op.approximate ? " (تقريبي)" : ""}`,
             available: true,
-            search: [c.name, c.name_en, c.code, op.name, op.name_en],
+            search: folded(c.name, c.name_en, c.code, op.name, op.name_en),
           });
         }
       }
@@ -95,7 +93,7 @@ export function Margins() {
             name: `${b.name} · ${e.amount} ${b.amount_currency}`,
             sub: `${c.name}${e.label ? " · " + e.label : ""}`,
             available: true,
-            search: [c.name, c.name_en, c.code, b.name, b.name_en, e.label],
+            search: folded(c.name, c.name_en, c.code, b.name, b.name_en, e.label),
           });
         }
       }
@@ -107,7 +105,8 @@ export function Margins() {
   const loading = current === "card" ? catalog.isLoading : directory.isLoading;
   const failed = current === "card" ? catalog : directory;
   const rows = useMemo(() => {
-    const filtered = all.filter((l) => matches(query, ...l.search) && (!onlyLoss || (l.company !== undefined && l.company <= 0)));
+    const hit = matcher(query);
+    const filtered = all.filter((l) => hit(l.search) && (!onlyLoss || (l.company !== undefined && l.company <= 0)));
     const by: Record<Exclude<Sort, "">, (l: Line) => number> = {
       "ours-desc": (l) => -(l.company ?? -Infinity),
       "ours-asc": (l) => l.company ?? Infinity,
@@ -151,10 +150,7 @@ export function Margins() {
       <div className="stack">
         <Segmented<Kind>
           value={current}
-          onChange={(k) => {
-            setKind(k === "card" ? "" : k);
-            setShown(PAGE);
-          }}
+          onChange={(k) => setKind(k === "card" ? "" : k)}
           options={[
             { id: "card", label: `البطاقات ${cards.length ? count(cards.length) : ""}`.trim() },
             { id: "airtime", label: `الشحن المباشر ${services.airtime.length ? count(services.airtime.length) : ""}`.trim() },
@@ -195,11 +191,8 @@ export function Margins() {
               <input
                 className="input"
                 placeholder={current === "card" ? "علامة أو صنف أو دولة" : "دولة أو مشغّل أو مفوتر"}
-                value={query}
-                onChange={(e) => {
-                  setQuery(e.target.value);
-                  setShown(PAGE);
-                }}
+                value={text}
+                onChange={(e) => setText(e.target.value)}
               />
             </div>
             <Segmented<Sort>
@@ -221,19 +214,13 @@ export function Margins() {
             <Unavailable feature={current === "card" ? "vouchers" : "services"} error={failed.error} onRetry={() => void failed.refetch()} />
           ) : (
             <DataTable
-              rows={rows.slice(0, shown)}
+              rows={rows}
+              resetKey={`${current}|${query}|${sort}|${onlyLoss}`}
               columns={columns}
               rowKey={(l) => l.key}
               loading={loading}
               empty={<Empty icon={<Coins />} title={all.length ? "لا أصناف بهذه الشروط" : "لا أصناف مسعّرة"} />}
             />
-          )}
-          {rows.length > shown && (
-            <div className="card-body" style={{ textAlign: "center" }}>
-              <Button size="sm" onClick={() => setShown(shown + PAGE * 2)}>
-                عرض المزيد ({count(rows.length - shown)} متبقية)
-              </Button>
-            </div>
           )}
         </Card>
       </div>

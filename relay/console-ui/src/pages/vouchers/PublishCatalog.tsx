@@ -300,10 +300,10 @@ export function PublishCatalogDialog({ open, onClose }: { open: boolean; onClose
   );
 }
 
-const fieldNames: Record<string, string> = { price: "سعر المتجر", retail_price: "سعر الزبون", active: "الظهور" };
+const fieldNames: Record<string, string> = { price: "سعر المتجر", retail_price: "سعر الزبون", active: "الظهور", promo: "العرض", other: "تعديل" };
 
 /** What this version changes, before the tap: removals first, they cost the most. */
-function CatalogChanges({ diff }: { diff: CatalogDiff }) {
+export function CatalogChanges({ diff }: { diff: CatalogDiff }) {
   const [all, setAll] = useState(false);
   if (diff.empty) {
     return (
@@ -317,9 +317,13 @@ function CatalogChanges({ diff }: { diff: CatalogDiff }) {
     ...diff.itemsRemoved.map((i) => ({ tone: "danger" as const, text: `يُحذف ${i.brand} — ${i.label}` })),
     ...diff.brandsAdded.map((b) => ({ tone: "success" as const, text: `علامة جديدة: ${b}` })),
     ...diff.itemsAdded.map((i) => ({ tone: "success" as const, text: `صنف جديد: ${i.brand} — ${i.label}` })),
-    ...diff.changed.map((c) => ({ tone: "info" as const, text: `${c.brand} — ${c.label}: ${fieldNames[c.field]} ${c.before || "—"} ← ${c.after || "—"}` })),
+    ...diff.changed.map((c) => ({
+      tone: "info" as const,
+      text: c.field === "other" ? `${c.brand} — ${c.label}: تعديل في البيانات` : `${c.brand} — ${c.label}: ${fieldNames[c.field]} ${c.before || "—"} ← ${c.after || "—"}`,
+    })),
   ];
-  const shown = all ? lines : lines.slice(0, 8);
+  // A bulk edit can change thousands of cards: the list stays one a phone can scroll.
+  const shown = all ? lines.slice(0, 200) : lines.slice(0, 8);
   return (
     <div className="catalog-changes">
       <div className="cc-summary">
@@ -337,7 +341,7 @@ function CatalogChanges({ diff }: { diff: CatalogDiff }) {
       </ul>
       {lines.length > 8 && (
         <button type="button" className="disclosure" onClick={() => setAll(!all)}>
-          {all ? "أقل" : `كل التغييرات (${lines.length})`}
+          {all ? "أقل" : lines.length > 200 ? `أول 200 من ${lines.length} تغييراً` : `كل التغييرات (${lines.length})`}
         </button>
       )}
     </div>

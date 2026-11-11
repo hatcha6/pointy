@@ -1,5 +1,5 @@
 import { Search, Smartphone, Users, BellRing } from "lucide-react";
-import { useRouter, useSearchParam } from "../../lib/router";
+import { useRouter, useSearchParam, useSearchText } from "../../lib/router";
 import { cardPlatform, useCardCustomers, useCardSummary, type CardCustomer } from "../../lib/cards";
 import { count } from "../../lib/format";
 import { label } from "../../lib/labels";
@@ -19,7 +19,7 @@ export function customerBadge(c: CardCustomer) {
 /** «دفتر كروت»'s customers: who signed in, who buys, who can be notified. */
 export function Customers() {
   const { navigate } = useRouter();
-  const [query, setQuery] = useSearchParam("q");
+  const { text, setText, settled: query } = useSearchText();
   const [segment, setSegment] = useSearchParam("segment");
   const [pageParam, setPage] = useSearchParam("page");
   const page = Math.max(0, Number(pageParam) || 0);
@@ -104,9 +104,9 @@ export function Customers() {
             <input
               className="input"
               placeholder="رقم الهاتف (091…) أو معرّف الزبون"
-              value={query}
+              value={text}
               onChange={(e) => {
-                setQuery(e.target.value);
+                setText(e.target.value);
                 setPage("");
               }}
             />

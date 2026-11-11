@@ -1,0 +1,176 @@
+# Apple's hardware identifiers: identifier | name | takes eSIMs.
+#
+# Every iPhone from the XS and XR on takes eSIMs (units sold in mainland China
+# aside, which share the identifier and cannot be told apart). An iPhone newer
+# than this file is settled by that rule in devices.go. An iPad takes one only
+# as a Wi-Fi + Cellular model, from 2018's iPad Pro on.
+
+iPhone1,1 | iPhone | no
+iPhone1,2 | iPhone 3G | no
+iPhone2,1 | iPhone 3GS | no
+iPhone3,1 | iPhone 4 | no
+iPhone3,2 | iPhone 4 | no
+iPhone3,3 | iPhone 4 | no
+iPhone4,1 | iPhone 4S | no
+iPhone5,1 | iPhone 5 | no
+iPhone5,2 | iPhone 5 | no
+iPhone5,3 | iPhone 5C | no
+iPhone5,4 | iPhone 5C | no
+iPhone6,1 | iPhone 5S | no
+iPhone6,2 | iPhone 5S | no
+iPhone7,1 | iPhone 6 Plus | no
+iPhone7,2 | iPhone 6 | no
+iPhone8,1 | iPhone 6s | no
+iPhone8,2 | iPhone 6s Plus | no
+iPhone8,4 | iPhone SE | no
+iPhone9,1 | iPhone 7 | no
+iPhone9,2 | iPhone 7 Plus | no
+iPhone9,3 | iPhone 7 | no
+iPhone9,4 | iPhone 7 Plus | no
+iPhone10,1 | iPhone 8 | no
+iPhone10,2 | iPhone 8 Plus | no
+iPhone10,3 | iPhone X | no
+iPhone10,4 | iPhone 8 | no
+iPhone10,5 | iPhone 8 Plus | no
+iPhone10,6 | iPhone X | no
+iPhone11,2 | iPhone XS | yes
+iPhone11,4 | iPhone XS Max | yes
+iPhone11,6 | iPhone XS Max | yes
+iPhone11,8 | iPhone XR | yes
+iPhone12,1 | iPhone 11 | yes
+iPhone12,3 | iPhone 11 Pro | yes
+iPhone12,5 | iPhone 11 Pro Max | yes
+iPhone12,8 | iPhone SE (2nd generation) | yes
+iPhone13,1 | iPhone 12 mini | yes
+iPhone13,2 | iPhone 12 | yes
+iPhone13,3 | iPhone 12 Pro | yes
+iPhone13,4 | iPhone 12 Pro Max | yes
+iPhone14,2 | iPhone 13 Pro | yes
+iPhone14,3 | iPhone 13 Pro Max | yes
+iPhone14,4 | iPhone 13 mini | yes
+iPhone14,5 | iPhone 13 | yes
+iPhone14,6 | iPhone SE (3rd generation) | yes
+iPhone14,7 | iPhone 14 | yes
+iPhone14,8 | iPhone 14 Plus | yes
+iPhone15,2 | iPhone 14 Pro | yes
+iPhone15,3 | iPhone 14 Pro Max | yes
+iPhone15,4 | iPhone 15 | yes
+iPhone15,5 | iPhone 15 Plus | yes
+iPhone16,1 | iPhone 15 Pro | yes
+iPhone16,2 | iPhone 15 Pro Max | yes
+iPhone17,1 | iPhone 16 Pro | yes
+iPhone17,2 | iPhone 16 Pro Max | yes
+iPhone17,3 | iPhone 16 | yes
+iPhone17,4 | iPhone 16 Plus | yes
+iPhone17,5 | iPhone 16e | yes
+iPhone18,1 | iPhone 17 Pro | yes
+iPhone18,2 | iPhone 17 Pro Max | yes
+iPhone18,3 | iPhone 17 | yes
+iPhone18,4 | iPhone Air | yes
+iPhone18,5 | iPhone 17e | yes
+iPad1,1 | iPad (Wi-Fi) | no
+iPad1,2 | iPad (Wi-Fi + Cellular) | no
+iPad2,1 | 2nd Gen iPad (Wi-Fi) | no
+iPad2,2 | 2nd Gen iPad (Wi-Fi + Cellular) | no
+iPad2,3 | 2nd Gen iPad (Wi-Fi + Cellular) | no
+iPad2,4 | 2nd Gen iPad New Revision (Wi-Fi) | no
+iPad3,1 | 3rd Gen iPad (Wi-Fi) | no
+iPad3,2 | 3rd Gen iPad (Wi-Fi + Cellular) | no
+iPad3,3 | 3rd Gen iPad (Wi-Fi + Cellular) | no
+iPad2,5 | iPad mini (Wi-Fi) | no
+iPad2,6 | iPad mini (Wi-Fi + Cellular) | no
+iPad2,7 | iPad mini (Wi-Fi + Cellular) | no
+iPad3,4 | 4th Gen iPad (Wi-Fi) | no
+iPad3,5 | 4th Gen iPad (Wi-Fi + Cellular) | no
+iPad3,6 | 4th Gen iPad (Wi-Fi + Cellular) | no
+iPad4,1 | iPad Air (Wi-Fi) | no
+iPad4,2 | iPad Air (GSM+CDMA) (Wi-Fi + Cellular) | no
+iPad4,3 | 1st Gen iPad Air (China) (Wi-Fi) | no
+iPad4,4 | iPad mini Retina (Wi-Fi) | no
+iPad4,5 | iPad mini Retina (GSM+CDMA) (Wi-Fi + Cellular) | no
+iPad4,6 | iPad mini Retina (China) (Wi-Fi) | no
+iPad4,7 | iPad mini 3 (Wi-Fi) | no
+iPad4,8 | iPad mini 3 (GSM+CDMA) (Wi-Fi + Cellular) | no
+iPad4,9 | iPad Mini 3 (China) (Wi-Fi) | no
+iPad5,1 | iPad mini 4 (Wi-Fi) | no
+iPad5,2 | iPad mini 4 (Wi-Fi + Cellular) | no
+iPad5,3 | iPad Air 2 (Wi-Fi) | no
+iPad5,4 | iPad Air 2 (Cellular) (Wi-Fi + Cellular) | no
+iPad6,3 | iPad Pro (9.7 inch) (Wi-Fi) | no
+iPad6,4 | iPad Pro (9.7 inch) (Wi-Fi + Cellular) | no
+iPad6,7 | iPad Pro (12.9 inch) (Wi-Fi) | no
+iPad6,8 | iPad Pro (12.9 inch) (Wi-Fi + Cellular) | no
+iPad6,11 | iPad (2017) (Wi-Fi) | no
+iPad6,12 | iPad (2017) (Wi-Fi + Cellular) | no
+iPad7,1 | iPad Pro 2nd Gen (Wi-Fi) | no
+iPad7,2 | iPad Pro 2nd Gen (Wi-Fi + Cellular) | no
+iPad7,3 | iPad Pro 10.5-inch 2nd Gen (Wi-Fi) | no
+iPad7,4 | iPad Pro 10.5-inch 2nd Gen (Wi-Fi + Cellular) | no
+iPad7,5 | iPad 6th Gen (Wi-Fi) | no
+iPad7,6 | iPad 6th Gen (Wi-Fi + Cellular) | no
+iPad7,11 | iPad 7th Gen 10.2-inch (Wi-Fi) | no
+iPad7,12 | iPad 7th Gen 10.2-inch (Wi-Fi + Cellular) | yes
+iPad8,1 | iPad Pro 11-inch (1st generation) (Wi-Fi) | no
+iPad8,2 | iPad Pro 11-inch (1st generation) (Wi-Fi) | no
+iPad8,3 | iPad Pro 11-inch (1st generation) (Wi-Fi + Cellular) | yes
+iPad8,4 | iPad Pro 11-inch (1st generation) (Wi-Fi + Cellular) | yes
+iPad8,5 | iPad Pro 12.9 inch 3rd Gen (Wi-Fi) | no
+iPad8,6 | iPad Pro 12.9 inch 3rd Gen (Wi-Fi) | no
+iPad8,7 | iPad Pro 12.9 inch 3rd Gen (Wi-Fi + Cellular) | yes
+iPad8,8 | iPad Pro 12.9 inch 3rd Gen (Wi-Fi + Cellular) | yes
+iPad8,9 | iPad Pro 11-inch (2nd generation) (Wi-Fi) | no
+iPad8,10 | iPad Pro 11-inch (2nd generation) (Wi-Fi + Cellular) | yes
+iPad8,11 | iPad Pro 12.9 inch 4th Gen (Wi-Fi) | no
+iPad8,12 | iPad Pro 12.9 inch 4th Gen (Wi-Fi + Cellular) | yes
+iPad11,1 | iPad mini 5th Gen (Wi-Fi) | no
+iPad11,2 | iPad mini 5th Gen (Wi-Fi + Cellular) | yes
+iPad11,3 | iPad Air 3rd Gen (Wi-Fi) | no
+iPad11,4 | iPad Air 3rd Gen (Wi-Fi + Cellular) | yes
+iPad11,6 | iPad 8th Gen (Wi-Fi) | no
+iPad11,7 | iPad 8th Gen (Wi-Fi + Cellular) | yes
+iPad12,1 | iPad 9th Gen (Wi-Fi) | no
+iPad12,2 | iPad 9th Gen (Wi-Fi + Cellular) | yes
+iPad14,1 | iPad mini 6th Gen (Wi-Fi) | no
+iPad14,2 | iPad mini 6th Gen (Wi-Fi + Cellular) | yes
+iPad13,1 | iPad Air 4th Gen (Wi-Fi) | no
+iPad13,2 | iPad Air 4th Gen (Wi-Fi + Cellular) | yes
+iPad13,4 | iPad Pro 11-inch (3rd generation) (Wi-Fi) | no
+iPad13,5 | iPad Pro 11-inch (3rd generation) (Wi-Fi) | no
+iPad13,6 | iPad Pro 11-inch (3rd generation) (Wi-Fi + Cellular) | yes
+iPad13,7 | iPad Pro 11-inch (3rd generation) (Wi-Fi + Cellular) | yes
+iPad13,8 | iPad Pro 12.9 inch 5th Gen (Wi-Fi) | no
+iPad13,9 | iPad Pro 12.9 inch 5th Gen (Wi-Fi) | no
+iPad13,10 | iPad Pro 12.9 inch 5th Gen (Wi-Fi + Cellular) | yes
+iPad13,11 | iPad Pro 12.9 inch 5th Gen (Wi-Fi + Cellular) | yes
+iPad13,16 | iPad Air 5th Gen (Wi-Fi) | no
+iPad13,17 | iPad Air 5th Gen (Wi-Fi + Cellular) | yes
+iPad13,18 | iPad 10th Gen (Wi-Fi) | no
+iPad13,19 | iPad 10th Gen (Wi-Fi + Cellular) | yes
+iPad14,3 | iPad Pro 11 inch 4th Gen (Wi-Fi) | no
+iPad14,4 | iPad Pro 11 inch 4th Gen (Wi-Fi + Cellular) | yes
+iPad14,5 | iPad Pro 12.9 inch 6th Gen (Wi-Fi) | no
+iPad14,6 | iPad Pro 12.9 inch 6th Gen (Wi-Fi + Cellular) | yes
+iPad14,8 | iPad Air 11 inch 6th Gen (Wi-Fi) | no
+iPad14,9 | iPad Air 11 inch 6th Gen (Wi-Fi + Cellular) | yes
+iPad14,10 | iPad Air 13 inch 6th Gen (Wi-Fi) | no
+iPad14,11 | iPad Air 13 inch 6th Gen (Wi-Fi + Cellular) | yes
+iPad15,3 | iPad Air 11-inch 7th Gen (Wi-Fi) | no
+iPad15,4 | iPad Air 11-inch 7th Gen (Wi-Fi + Cellular) | yes
+iPad15,5 | iPad Air 13-inch 7th Gen (Wi-Fi) | no
+iPad15,6 | iPad Air 13-inch 7th Gen (Wi-Fi + Cellular) | yes
+iPad15,7 | iPad 11th Gen (Wi-Fi) | no
+iPad15,8 | iPad 11th Gen (Wi-Fi + Cellular) | yes
+iPad16,1 | iPad mini 7th Gen (Wi-Fi) | no
+iPad16,2 | iPad mini 7th Gen (Wi-Fi + Cellular) | yes
+iPad16,3 | iPad Pro 11-inch (M4) (Wi-Fi) | no
+iPad16,4 | iPad Pro 11-inch (M4) (Wi-Fi + Cellular) | yes
+iPad16,5 | iPad Pro 13-inch (M4) (Wi-Fi) | no
+iPad16,6 | iPad Pro 13-inch (M4) (Wi-Fi + Cellular) | yes
+iPad16,8 | iPad Air 11-inch 8th Gen (Wi-Fi) | no
+iPad16,9 | iPad Air 11-inch 8th Gen (Wi-Fi + Cellular) | yes
+iPad16,10 | iPad Air 13-inch 8th Gen (Wi-Fi) | no
+iPad16,11 | iPad Air 13-inch 8th Gen (Wi-Fi + Cellular) | yes
+iPad17,1 | iPad Pro 11-inch (M5) (Wi-Fi) | no
+iPad17,2 | iPad Pro 11-inch (M5) (Wi-Fi + Cellular) | yes
+iPad17,3 | iPad Pro 13-inch (M5) (Wi-Fi) | no
+iPad17,4 | iPad Pro 13-inch (M5) (Wi-Fi + Cellular) | yes

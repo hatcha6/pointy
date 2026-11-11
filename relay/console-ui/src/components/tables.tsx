@@ -18,6 +18,7 @@ import type { Purchase, TopUp, WalletEntry } from "../lib/types";
 import { Badge, Button, Empty, Money, TimeAgo } from "./ui";
 import { DataTable, Stacked, type Column } from "./DataTable";
 import { useAction } from "./guarded";
+import { SaleProfit } from "./profit";
 import { useToast } from "./toast";
 import { ConfirmTopUpDialog, ResolvePurchaseDialog } from "./money-dialogs";
 import { StockRefundDialog, refundableStockSale } from "./StockReturnChoice";
@@ -177,10 +178,14 @@ export function TopUpsTable({ topUps, loading, showShop = true }: { topUps: TopU
   );
 }
 
-export function PurchasesTable({ purchases, loading, showShop = true, columnsBefore = [], actions }: {
+export function PurchasesTable({ purchases, loading, showShop = true, profit = true, columnsBefore = [], actions, resetKey }: {
   purchases: Purchase[];
   loading?: boolean;
   showShop?: boolean;
+  /** «ربحنا» on every row: what the company kept of the sale. Off for the
+   *  company's own purchases, which are spending. */
+  profit?: boolean;
+  resetKey?: unknown;
   /** Columns drawn before «الوقت» (the company's purchases add why). */
   columnsBefore?: Column<Purchase>[];
   /** Actions for a purchase that is not pending. */
@@ -217,6 +222,9 @@ export function PurchasesTable({ purchases, loading, showShop = true, columnsBef
       ),
     },
     { key: "amount", header: "المبلغ", align: "end", mobile: "trailing", cell: (p) => <Money value={p.amount} /> },
+    ...(profit
+      ? [{ key: "profit", header: "ربحنا", align: "end", cell: (p: Purchase) => <SaleProfit profit={p.profit} cost={p.cost_lyd} /> } as Column<Purchase>]
+      : []),
     {
       key: "status",
       header: "الحالة",
@@ -288,6 +296,7 @@ export function PurchasesTable({ purchases, loading, showShop = true, columnsBef
         columns={columns}
         rowKey={(p) => p.id}
         loading={loading}
+        resetKey={resetKey}
         onRowClick={showShop ? (p) => navigate(`/shops/${encodeURIComponent(p.installation_id)}?tab=purchases`) : undefined}
         empty={<Empty icon={<CreditCard />} title="لا عمليات هنا" />}
       />

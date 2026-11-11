@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Ban, FileSpreadsheet, FlaskConical, KeyRound, Layers, PackageOpen, PackagePlus, Search, Undo2, X } from "lucide-react";
 import { api, qs } from "../../lib/api";
-import { useSearchParam } from "../../lib/router";
+import { useSearchParam, useSearchText } from "../../lib/router";
 import { matches } from "../../lib/search";
 import { count, date, daysUntil } from "../../lib/format";
 import { statusLabels, type StockAnswer, type StockBatch, type StockCode, type StockLevel } from "../../lib/stock";
@@ -19,7 +19,7 @@ const soonDays = 14;
 
 export function Stock() {
   const stock = useQuery({ queryKey: ["vouchers", "stock"], queryFn: () => api.get<StockAnswer>("/v1/vouchers/admin/stock"), retry: false });
-  const [query, setQuery] = useSearchParam("q");
+  const { text, setText, query } = useSearchText();
   const [item, setItem] = useSearchParam("item");
   const [batch, setBatch] = useSearchParam("batch");
   const [status, setStatus] = useState<"" | StockCode["status"]>("available");
@@ -205,7 +205,7 @@ export function Stock() {
             <div className="toolbar stacks">
               <div className="search-input">
                 <Search />
-                <input className="input" placeholder="بطاقة أو علامة" value={query} onChange={(e) => setQuery(e.target.value)} />
+                <input className="input" placeholder="بطاقة أو علامة" value={text} onChange={(e) => setText(e.target.value)} />
               </div>
             </div>
             <DataTable

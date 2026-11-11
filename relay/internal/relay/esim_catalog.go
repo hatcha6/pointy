@@ -18,11 +18,14 @@ import (
 
 	"pointy/relay/internal/airalo"
 	"pointy/relay/internal/control"
+	"pointy/relay/internal/esimaccess"
+	"pointy/relay/internal/esimdevices"
 	"pointy/relay/internal/ratelimit"
 	"pointy/relay/internal/vouchers"
 )
 
-// The eSIM shelf of «دفتر كروت», from Airalo's Partner API:
+// The eSIM shelf of «دفتر كروت», from Airalo's Partner API and eSIM Access's
+// (esim_access.go):
 //
 //	GET  /v1/customers/esim/destinations         where eSIMs are sold, with a "from" price (public)
 //	GET  /v1/customers/esim/destinations/{key}   a destination's plans (public)
@@ -54,6 +57,22 @@ type ESIMConfig struct {
 	// DeviceRateLimit bounds the public device check per address.
 	DeviceRateLimit ratelimit.Policy
 
+	// Access is the company's eSIM Access account, the shelf's second
+	// supplier. Nil: Airalo alone.
+	Access *esimaccess.Client
+	// AccessWebhookURL is this relay's public address for eSIM Access's events
+	// (…/v1/customers/esim/webhook/access), without the token. Empty: never
+	// registered, so eSIM Access's eSIMs get no low-data or expiry alerts.
+	AccessWebhookURL string
+	// AccessWebhookToken is the secret that address ends in
+	// (ESIMAccessWebhookToken of the access code).
+	AccessWebhookToken string
+	// AccessLowBalance is the prepaid balance, in ten-thousandths of a dollar,
+	// under which the operator is alerted. Zero: never.
+	AccessLowBalance int64
+	// Retail is how eSIM Access's plans are priced.
+	Retail vouchers.ESIMRetail
+
 	// Shared state; New builds it.
 	state *esimState
 }
@@ -62,6 +81,28 @@ type ESIMConfig struct {
 func NewESIMConfig(config ESIMConfig) ESIMConfig {
 	config.state = &esimState{devices: map[string]esimDeviceAnswer{}, topups: map[string]esimTopUpsAnswer{}}
 	return config
+}
+
+// reviewOnly says the shelf is the stores' review account's alone: Airalo is in
+// Sandbox and there is no other supplier to sell real eSIMs.
+func (c ESIMConfig) reviewOnly() bool { return c.Sandbox && c.Access == nil }
+
+// airaloOnShelf says Airalo's plans are listed. A Sandbox Airalo beside a live
+// supplier is left off: its eSIMs cannot be installed.
+func (c ESIMConfig) airaloOnShelf() bool { return c.Client != nil && !(c.Sandbox && c.Access != nil) }
+
+// syncs says there is a supplier to read a catalog from.
+func (c ESIMConfig) syncs() bool { return c.Client != nil || c.Access != nil }
+
+// Syncs reports whether the shelf has a supplier whose catalog must be kept fresh.
+func (c ESIMConfig) Syncs() bool { return c.syncs() }
+
+// accessWebhookAddress is the whole address eSIM Access posts to.
+func (c ESIMConfig) accessWebhookAddress() string {
+	if c.AccessWebhookURL == "" || c.AccessWebhookToken == "" {
+		return ""
+	}
+	return strings.TrimRight(c.AccessWebhookURL, "/") + "/" + c.AccessWebhookToken
 }
 
 func (c ESIMConfig) rrpPercent() *big.Rat {
@@ -80,6 +121,13 @@ type esimState struct {
 
 	devices map[string]esimDeviceAnswer
 	topups  map[string]esimTopUpsAnswer
+
+	// balanceToldAt is when the operator was last told eSIM Access runs low.
+	balanceToldAt time.Time
+
+	// promos is the promotions as last read, at promosAt (esim_promos.go).
+	promos   []control.ESIMPromo
+	promosAt time.Time
 }
 
 // --- the catalog -----------------------------------------------------------
@@ -101,7 +149,7 @@ const (
 	esimSyncSkip = 50 * time.Minute
 )
 
-// esimCatalog is Airalo's catalog cut down to what the shelf shows and sells.
+// esimCatalog is the suppliers' catalogs cut down to what the shelf shows and sells.
 type esimCatalog struct {
 	Destinations []esimDestination `json:"destinations"`
 }
@@ -123,7 +171,13 @@ type esimCountry struct {
 }
 
 type esimPlan struct {
-	ID        string  `json:"id"`
+	ID string `json:"id"`
+	// Supplier is who the plan is bought from; empty is Airalo. Ref is the
+	// supplier's own code for it where that is not ID, and CostUnits what eSIM
+	// Access charges, in its own units, sent with the order as a price check.
+	Supplier  string  `json:"supplier,omitempty"`
+	Ref       string  `json:"ref,omitempty"`
+	CostUnits int64   `json:"cost_units,omitempty"`
 	Title     string  `json:"title"`
 	Data      string  `json:"data"`
 	AmountMB  int     `json:"amount_mb"`
@@ -270,10 +324,14 @@ func esimDataLabel(source airalo.Package) string {
 	if source.Unlimited {
 		return ""
 	}
-	megabytes := source.AmountMB.Int()
+	if megabytes := source.AmountMB.Int(); megabytes > 0 {
+		return esimDataLabelMB(megabytes)
+	}
+	return source.Data
+}
+
+func esimDataLabelMB(megabytes int) string {
 	switch {
-	case megabytes <= 0:
-		return source.Data
 	case megabytes < 1024:
 		return fmt.Sprintf("%d MB", megabytes)
 	case megabytes%1024 == 0:
@@ -336,17 +394,43 @@ func (s HTTPServer) esimCatalogNow(ctx context.Context) *esimCatalog {
 	return state.catalog
 }
 
-// syncESIMCatalog reads the catalog from Airalo and stores it. A read that
-// finds nothing keeps what is stored: an outage must not empty the shelf.
+// syncESIMCatalog reads each supplier's catalog and stores them as one. A
+// supplier that cannot be read, or answers nothing, keeps the plans it had: an
+// outage must not empty the shelf, nor one supplier's take the other's down.
 func (s HTTPServer) syncESIMCatalog(ctx context.Context, store control.CustomerESIMStore) error {
-	pricing, destinations, err := s.ESIM.Client.Packages(ctx, "ar")
-	if err != nil {
-		return err
+	var previous *esimCatalog
+	if stored, err := store.ReadESIMCatalog(ctx); err == nil && stored.Document != "" {
+		var catalog esimCatalog
+		if json.Unmarshal([]byte(stored.Document), &catalog) == nil {
+			previous = &catalog
+		}
 	}
-	catalog := shapeESIMCatalog(pricing, destinations)
+	var failed error
+	var first, second esimCatalog
+	if s.ESIM.airaloOnShelf() {
+		pricing, destinations, err := s.ESIM.Client.Packages(ctx, "ar")
+		if err == nil {
+			first = shapeESIMCatalog(pricing, destinations)
+		}
+		if err != nil || len(first.Destinations) == 0 {
+			s.logger().Error("Airalo's catalog could not be read; keeping its stored plans", "error", err)
+			first, failed = previous.only(vouchers.SupplierAiralo), errors.Join(failed, err)
+		}
+	}
+	if s.ESIM.Access != nil {
+		packages, err := s.ESIM.Access.Packages(ctx)
+		if err == nil {
+			second = shapeESIMAccessCatalog(packages)
+		}
+		if err != nil || len(second.Destinations) == 0 {
+			s.logger().Error("eSIM Access's catalog could not be read; keeping its stored plans", "error", err)
+			second, failed = previous.only(vouchers.SupplierESIMAccess), errors.Join(failed, err)
+		}
+	}
+	catalog := mergeESIMCatalogs(first, second)
 	if len(catalog.Destinations) == 0 {
-		s.logger().Error("Airalo answered an empty catalog; keeping the stored one")
-		return nil
+		s.logger().Error("no eSIM supplier answered a catalog; keeping the stored one")
+		return failed
 	}
 	raw, err := json.Marshal(catalog)
 	if err != nil {
@@ -370,7 +454,8 @@ func (s HTTPServer) syncESIMCatalog(ctx context.Context, store control.CustomerE
 // ensureESIMWebhooks opts the webhook in, for low-data alerts (customers hear
 // them, and are asked to top up) and credit alerts (the operator hears them).
 func (s HTTPServer) ensureESIMWebhooks(ctx context.Context) {
-	if s.ESIM.WebhookURL == "" {
+	s.ensureESIMAccessWebhook(ctx)
+	if s.ESIM.WebhookURL == "" || s.ESIM.Client == nil {
 		return
 	}
 	for _, kind := range []string{airalo.NotifyLowData, airalo.NotifyCreditLimit} {
@@ -420,7 +505,7 @@ func (e *ESIMCatalogSync) Run(ctx context.Context) {
 
 func (e *ESIMCatalogSync) once(ctx context.Context) {
 	store, ok := e.Server.Store.(control.CustomerESIMStore)
-	if !ok || e.Server.ESIM.Client == nil {
+	if !ok || !e.Server.ESIM.syncs() {
 		return
 	}
 	callCtx, cancel := context.WithTimeout(ctx, 3*time.Minute)
@@ -433,9 +518,12 @@ func (e *ESIMCatalogSync) once(ctx context.Context) {
 	if err := e.Server.syncESIMCatalog(callCtx, store); err != nil {
 		e.Server.logger().Error("syncing the eSIM catalog failed", "error", err)
 	}
-	if balance, found, err := e.Server.ESIM.Client.Balance(callCtx); err == nil && found {
-		e.Server.logger().Info("Airalo balance", "amount", balance.Amount, "currency", balance.Currency)
+	if e.Server.ESIM.Client != nil {
+		if balance, found, err := e.Server.ESIM.Client.Balance(callCtx); err == nil && found {
+			e.Server.logger().Info("Airalo balance", "amount", balance.Amount, "currency", balance.Currency)
+		}
 	}
+	e.Server.watchESIMAccessBalance(callCtx)
 }
 
 // --- prices ----------------------------------------------------------------
@@ -445,6 +533,10 @@ type esimPricing struct {
 	rate   *big.Rat
 	margin vouchers.Margin
 	rrp    *big.Rat
+	retail vouchers.ESIMRetail
+	// promos are the operator's promotions, judged at now (esim_promos.go).
+	promos []control.ESIMPromo
+	now    time.Time
 }
 
 // esimPricingNow reads the dollar rate and the margin the cards are priced with.
@@ -462,16 +554,36 @@ func (s HTTPServer) esimPricingNow(ctx context.Context) (esimPricing, bool) {
 	if rate == nil || rate.Sign() <= 0 {
 		return esimPricing{}, false
 	}
-	return esimPricing{rate: rate, margin: settings.MarginFor(vouchers.ServiceKindCard), rrp: s.ESIM.rrpPercent()}, true
+	return esimPricing{
+		rate: rate, margin: settings.MarginFor(vouchers.ServiceKindCard), rrp: s.ESIM.rrpPercent(), retail: s.ESIM.Retail,
+		promos: s.esimPromosNow(ctx), now: s.clock().Now(),
+	}, true
 }
 
-func (p esimPricing) price(netUSD, retailUSD float64) (*big.Rat, bool) {
-	return vouchers.ESIMPrice(vouchers.AiraloDollars(netUSD), vouchers.AiraloDollars(retailUSD), p.rate, p.margin, p.rrp)
+// price is what a plan sells for now, by its supplier's rule: Airalo's at a
+// share of its recommended price, eSIM Access's at the suggested retail price
+// the company set there. Both at today's dollar rate, both never under what the
+// margin asks on the cost.
+func (p esimPricing) price(plan esimPlan) (*big.Rat, bool) {
+	net, retail := vouchers.AiraloDollars(plan.NetUSD), vouchers.AiraloDollars(plan.RetailUSD)
+	if planSupplier(plan) == vouchers.SupplierESIMAccess {
+		return vouchers.ESIMRetailPrice(net, retail, p.rate, p.margin, p.retail)
+	}
+	return vouchers.ESIMPrice(net, retail, p.rate, p.margin, p.rrp)
+}
+
+func ratText(value *big.Rat) string {
+	if value == nil {
+		return ""
+	}
+	return value.RatString()
 }
 
 func (p esimPricing) fingerprint() string {
 	raw, _ := json.Marshal(p.margin)
-	return p.rate.RatString() + "|" + p.rrp.RatString() + "|" + string(raw)
+	return p.rate.RatString() + "|" + p.rrp.RatString() + "|" + string(raw) + "|" +
+		ratText(p.retail.FallbackPercent) + "|" + ratText(p.retail.MinPrice) + "|" + ratText(p.retail.Step) +
+		"|" + p.promoFingerprint()
 }
 
 // --- public routes ---------------------------------------------------------
@@ -499,25 +611,47 @@ func (s HTTPServer) handleESIMDestinations(w http.ResponseWriter, r *http.Reques
 	}
 	rows := make([]map[string]any, 0, len(catalog.Destinations))
 	for _, destination := range catalog.Destinations {
-		var from *big.Rat
+		// The cheapest plan names the row; every plan's size, days and price go
+		// with it, so the app can filter the shelf by the trip.
+		var from *esimOffer
+		list := make([]map[string]any, 0, len(destination.Plans))
 		for _, plan := range destination.Plans {
-			if price, ok := pricing.price(plan.NetUSD, plan.RetailUSD); ok && (from == nil || price.Cmp(from) < 0) {
-				from = price
+			offer, ok := pricing.offer(destination.Key, plan)
+			if !ok {
+				continue
 			}
+			if from == nil || offer.Price.Cmp(from.Price) < 0 {
+				from = &offer
+			}
+			entry := map[string]any{"mb": plan.AmountMB, "days": plan.Days, "price": control.FormatWalletAmount(offer.Price)}
+			if plan.Unlimited {
+				entry["unlimited"] = true
+			}
+			list = append(list, entry)
 		}
 		if from == nil {
 			continue
 		}
-		rows = append(rows, map[string]any{
+		row := map[string]any{
 			"key": destination.Key, "kind": destination.Kind, "country": destination.Country,
 			"name": destination.Name, "image": destination.Image, "plans": len(destination.Plans),
-			"countries":  len(destination.Countries),
-			"from_price": control.FormatWalletAmount(from),
-		})
+			"countries": len(destination.Countries),
+			"plan_list": list,
+		}
+		from.fields(row, "from_price")
+		// A region is found by the countries in it.
+		if destination.Kind != esimKindLocal {
+			covers := make([]string, 0, len(destination.Countries))
+			for _, country := range destination.Countries {
+				covers = append(covers, country.Name)
+			}
+			row["covers"] = covers
+		}
+		rows = append(rows, row)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"available":    len(rows) > 0,
-		"test_mode":    s.ESIM.Sandbox || s.Vouchers.MarksTest(),
+		"test_mode":    s.ESIM.reviewOnly() || s.Vouchers.MarksTest(),
 		"destinations": rows,
 	})
 }
@@ -531,14 +665,14 @@ func (s HTTPServer) handleESIMDestinations(w http.ResponseWriter, r *http.Reques
 
 // esimOpenTo says whether customer may see and buy eSIMs.
 func (s HTTPServer) esimOpenTo(customer control.Customer) bool {
-	return !s.ESIM.Sandbox || s.Customers.isReviewPhone(customer.Phone)
+	return !s.ESIM.reviewOnly() || s.Customers.isReviewPhone(customer.Phone)
 }
 
 // esimShelfVisible says whether the caller of a public eSIM route may see the
 // shelf. answered is true when it already answered: a stale session is told to
 // refresh, so the review account does not lose the shelf for an hour's token.
 func (s HTTPServer) esimShelfVisible(w http.ResponseWriter, r *http.Request, store control.CustomerStore) (visible, answered bool) {
-	if !s.ESIM.Sandbox {
+	if !s.ESIM.reviewOnly() {
 		return true, false
 	}
 	raw, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
@@ -557,10 +691,10 @@ func (s HTTPServer) esimShelfVisible(w http.ResponseWriter, r *http.Request, sto
 	return s.esimOpenTo(customer), false
 }
 
-// esimSells says whether a purchase can be made: from Airalo or, in test mode,
-// from the test supplier.
+// esimSells says whether a purchase can be made: from a supplier or, in test
+// mode, from the test supplier.
 func (s HTTPServer) esimSells() bool {
-	return s.ESIM.Client != nil || s.Vouchers.TestMode
+	return s.ESIM.syncs() || s.Vouchers.TestMode
 }
 
 // handleESIMDestination serves one destination with its plans.
@@ -579,11 +713,11 @@ func (s HTTPServer) handleESIMDestination(w http.ResponseWriter, r *http.Request
 	}
 	plans := make([]map[string]any, 0, len(destination.Plans))
 	for _, plan := range destination.Plans {
-		price, ok := pricing.price(plan.NetUSD, plan.RetailUSD)
+		offer, ok := pricing.offer(destination.Key, plan)
 		if !ok {
 			continue
 		}
-		plans = append(plans, map[string]any{
+		row := map[string]any{
 			"item": esimItemPrefix + plan.ID, "id": plan.ID, "title": plan.Title, "data": plan.Data,
 			"amount_mb": plan.AmountMB, "days": plan.Days, "unlimited": plan.Unlimited,
 			"voice": plan.Voice, "text": plan.Text, "info": plan.Info,
@@ -592,8 +726,9 @@ func (s HTTPServer) handleESIMDestination(w http.ResponseWriter, r *http.Request
 			"install_window_days": plan.InstallWindowDays,
 			"topup_grace_days":    plan.TopUpGraceDays,
 			"other_info":          plan.OtherInfo,
-			"price":               control.FormatWalletAmount(price),
-		})
+		}
+		offer.fields(row, "price")
+		plans = append(plans, row)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"key": destination.Key, "kind": destination.Kind, "country": destination.Country,
@@ -622,8 +757,10 @@ type esimDeviceRequest struct {
 }
 
 // handleESIMDevice serves POST /v1/customers/esim/device. "known": false means
-// nobody can tell right now, which the app treats as no warning. Airalo's
-// list is about hardware: a carrier-locked phone can still refuse an eSIM, and
+// nobody can tell right now, which the app treats as no warning. The relay's
+// own list (internal/esimdevices) answers first, and Airalo's is asked only for
+// a model it does not know; "source" says which answered. Both lists are about
+// hardware: a carrier-locked phone can still refuse an eSIM, and
 // a model missing from the list may well take one. So the app warns and asks;
 // it never blocks a purchase on this answer.
 func (s HTTPServer) handleESIMDevice(w http.ResponseWriter, r *http.Request) {
@@ -634,6 +771,14 @@ func (s HTTPServer) handleESIMDevice(w http.ResponseWriter, r *http.Request) {
 	model := strings.TrimSpace(request.Model)
 	if !esimDeviceModel.MatchString(model) {
 		writeCustomerError(w, http.StatusBadRequest, "invalid_request", "a hardware model is required", nil)
+		return
+	}
+	// The relay's own list first: it knows the codes phones report, which
+	// Airalo's mostly does not, and it needs no call to anybody.
+	if device, ok := esimdevices.Lookup(model); ok {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"known": true, "supported": device.Supported, "listed": true, "name": device.Name, "source": "relay",
+		})
 		return
 	}
 	state := s.ESIM.state
@@ -663,7 +808,9 @@ func (s HTTPServer) handleESIMDevice(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"known": false})
 		return
 	}
-	body := map[string]any{"known": true, "supported": check.Supported, "listed": check.Reason != airalo.ReasonNotInList}
+	body := map[string]any{
+		"known": true, "supported": check.Supported, "listed": check.Reason != airalo.ReasonNotInList, "source": "airalo",
+	}
 	if check.Device != nil {
 		body["name"] = check.Device.Name
 	}

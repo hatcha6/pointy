@@ -251,11 +251,27 @@ func TestESIMDeviceCheckNeverSaysNoOnASlowOrUnknownAnswer(t *testing.T) {
 	if body["known"] != true || body["supported"] != false || body["listed"] != false {
 		t.Fatalf("a model off the list is not a verdict: %v", body)
 	}
+	// The relay's own list knows the codes Airalo's does not, and its noes are
+	// verdicts.
+	for model, supported := range map[string]bool{
+		"iPhone17,1": true, "SM-S918B": true, "iPad13,17": true,
+		"iPhone10,3": false, "iPad13,16": false, "SM-S9180": false,
+	} {
+		_, body = h.do(http.MethodPost, "/v1/customers/esim/device", "", map[string]any{"model": model})
+		if body["known"] != true || body["supported"] != supported || body["listed"] != true || body["source"] != "relay" {
+			t.Fatalf("%s from the relay's own list, supported=%v: %v", model, supported, body)
+		}
+	}
 	if status, _ := h.do(http.MethodPost, "/v1/customers/esim/device", "", map[string]any{"model": "<script>"}); status != http.StatusBadRequest {
 		t.Fatalf("a junk model: %d", status)
 	}
+	// With no Airalo account the relay's own list still answers; what it does
+	// not know, nobody can tell.
 	h.server.ESIM.Client = nil
-	if _, body := h.do(http.MethodPost, "/v1/customers/esim/device", "", map[string]any{"model": "iPhone13,2"}); body["known"] != false {
+	if _, body := h.do(http.MethodPost, "/v1/customers/esim/device", "", map[string]any{"model": "iPhone13,2"}); body["supported"] != true {
+		t.Fatalf("no account, a model the relay knows: %v", body)
+	}
+	if _, body := h.do(http.MethodPost, "/v1/customers/esim/device", "", map[string]any{"model": "SM-A155F"}); body["known"] != false {
 		t.Fatalf("no account: %v", body)
 	}
 }

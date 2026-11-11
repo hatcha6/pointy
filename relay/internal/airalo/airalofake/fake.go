@@ -211,6 +211,9 @@ func (s *Server) Handler() http.Handler {
 		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		switch {
+		// Like the real list: the newer iPhone identifiers are missing from it.
+		case strings.HasPrefix(body.Model, "iPhone17,"):
+			answer(w, 200, map[string]any{"data": map[string]any{"supported": false, "reason": "not_in_compatible_list", "device": nil}})
 		case strings.HasPrefix(body.Model, "iPhone") || strings.HasPrefix(body.Model, "SM-S"):
 			answer(w, 200, map[string]any{"data": map[string]any{"supported": true, "reason": nil,
 				"device": map[string]any{"os": "ios", "brand": "Apple", "name": "iPhone"}}})

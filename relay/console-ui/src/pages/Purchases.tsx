@@ -1,7 +1,8 @@
 import { usePurchases } from "../lib/queries";
 import { Unavailable } from "../components/Unavailable";
-import { useSearchParam, useSetSearch } from "../lib/router";
-import { matches } from "../lib/search";
+import { useMemo } from "react";
+import { useSearchParam, useSearchText, useSetSearch } from "../lib/router";
+import { folded, matcher } from "../lib/search";
 import { Search } from "lucide-react";
 import { Card, Segmented } from "../components/ui";
 import { PurchasesTable } from "../components/tables";
@@ -10,7 +11,7 @@ export function Purchases() {
   const [held] = useSearchParam("held");
   const [kind, setKind] = useSearchParam("kind");
   const [status] = useSearchParam("status");
-  const [query, setQuery] = useSearchParam("q");
+  const { text, setText, query } = useSearchText();
   const setSearch = useSetSearch();
   // The company's own purchases have their page (/company).
   const filter: Record<string, string> = { buyer: "shops" };
@@ -18,19 +19,27 @@ export function Purchases() {
   if (kind) filter.kind = kind;
   if (status) filter.status = status;
   const purchases = usePurchases(filter);
+  const index = useMemo(
+    () => (purchases.data ?? []).map((p) => ({ p, text: folded(p.shop_name, p.name, p.id, p.supplier_order_id, p.target, p.amount) })),
+    [purchases.data],
+  );
+  const shown = useMemo(() => {
+    const hit = matcher(query);
+    return index.filter((row) => hit(row.text)).map((row) => row.p);
+  }, [index, query]);
   return (
     <>
       <div className="page-head">
         <div className="titles">
           <h1>البطاقات والخدمات</h1>
-          <p>كل بطاقة أو شحن رصيد أو فاتورة اشتراها متجر. «معلّقة» تعني أن المورّد لم يؤكد النتيجة وتنتظر تسويتك.</p>
+          <p>كل بطاقة أو شحن رصيد أو فاتورة اشتراها متجر، وربحنا من كل عملية تمّت. «معلّقة» تعني أن المورّد لم يؤكد النتيجة وتنتظر تسويتك.</p>
         </div>
       </div>
       <Card tight>
         <div className="toolbar stacks">
           <div className="search-input">
             <Search />
-            <input className="input" placeholder="متجر، صنف، رقم طلب المورّد، المبلغ…" value={query} onChange={(e) => setQuery(e.target.value)} />
+            <input className="input" placeholder="متجر، صنف، رقم طلب المورّد، المبلغ…" value={text} onChange={(e) => setText(e.target.value)} />
           </div>
           <Segmented
             value={held ? "held" : status}
@@ -58,8 +67,9 @@ export function Purchases() {
           <Unavailable feature="vouchers" error={purchases.error} onRetry={() => void purchases.refetch()} />
         ) : (
           <PurchasesTable
-            purchases={(purchases.data ?? []).filter((p) => matches(query, p.shop_name, p.name, p.id, p.supplier_order_id, p.target, p.amount))}
+            purchases={shown}
             loading={purchases.isLoading}
+            resetKey={`${query}|${held}|${status}|${kind}`}
           />
         )}
       </Card>

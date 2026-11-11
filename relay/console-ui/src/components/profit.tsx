@@ -1,6 +1,11 @@
 import { money } from "../lib/format";
 
 /** A profit with its share of the base it is earned on ("12.5%" of our cost, of the shop's price). */
+/** What one sale made the company, as the relay worked it out ("" or missing: not known). */
+export function SaleProfit({ profit, cost }: { profit?: string; cost?: string }) {
+  return <ProfitCell value={profit ? Number(profit) : undefined} of={cost ? Number(cost) : undefined} />;
+}
+
 export function ProfitCell({ value, of }: { value?: number; of?: number }) {
   if (value === undefined || !Number.isFinite(value)) return <span className="faint">—</span>;
   const pct = of !== undefined && of > 0 ? (value / of) * 100 : undefined;

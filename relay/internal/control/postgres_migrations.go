@@ -1374,6 +1374,64 @@ CREATE INDEX IF NOT EXISTS relay_customer_order_reports_customer
 	ON relay_customer_order_reports (customer_id);
 `,
 	},
+	{
+		version: 43,
+		name:    "update runs: what each apply cost a shop",
+		sql: `
+-- One row per update or install a shop's server reports (control.UpdateRun).
+-- New table only: older relays never read it. The shop re-sends a run until it
+-- is acknowledged, hence the key. No foreign key: a shop's history outlives
+-- nothing it needs, and its reports must not fail on an ordering accident.
+CREATE TABLE IF NOT EXISTS relay_update_runs (
+	installation_id text NOT NULL,
+	id text NOT NULL,
+	kind text NOT NULL,
+	trigger text NOT NULL DEFAULT '',
+	from_version text NOT NULL DEFAULT '',
+	to_version text NOT NULL DEFAULT '',
+	strategy text NOT NULL DEFAULT '',
+	outcome text NOT NULL,
+	error text NOT NULL DEFAULT '',
+	agent_version text NOT NULL DEFAULT '',
+	started_at timestamptz NOT NULL,
+	finished_at timestamptz NOT NULL,
+	duration_seconds integer NOT NULL DEFAULT 0,
+	downtime_seconds integer,
+	longest_outage_seconds integer,
+	probe_samples integer,
+	phases jsonb NOT NULL DEFAULT '{}'::jsonb,
+	received_at timestamptz NOT NULL,
+	PRIMARY KEY (installation_id, id)
+);
+CREATE INDEX IF NOT EXISTS relay_update_runs_finished_idx
+	ON relay_update_runs (finished_at DESC);
+`,
+	},
+	{
+		version: 44,
+		name:    "daftar cards: which supplier issued an eSIM",
+		sql: `
+-- A second eSIM supplier: who issued each eSIM, and the supplier's own name for
+-- it where the ICCID is not one for good. New columns with defaults only: a
+-- relay from before them writes rows that read as Airalo's.
+ALTER TABLE relay_customer_esims ADD COLUMN IF NOT EXISTS supplier text NOT NULL DEFAULT '';
+ALTER TABLE relay_customer_esims ADD COLUMN IF NOT EXISTS supplier_ref text NOT NULL DEFAULT '';
+`,
+	},
+	{
+		version: 45,
+		name:    "daftar cards: eSIM promotions",
+		sql: `
+-- Time-boxed discounts on the eSIM shelf, written from the console: one row
+-- holding the whole list. No row: no promotions.
+CREATE TABLE IF NOT EXISTS relay_esim_promos (
+	id integer PRIMARY KEY CHECK (id = 1),
+	promos jsonb NOT NULL DEFAULT '[]'::jsonb,
+	actor text NOT NULL DEFAULT '',
+	updated_at timestamptz NOT NULL
+);
+`,
+	},
 }
 
 // migrationsAdvisoryLockKey serializes concurrent migrators (e.g. autoscaled

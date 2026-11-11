@@ -3,7 +3,7 @@ import { Unavailable } from "../components/Unavailable";
 import { useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CloudDownload, Expand, History, Pause, Play, Plus, Rocket, Search, ShieldAlert, Undo2, Upload, WifiOff, X } from "lucide-react";
 import { keys, useFleet } from "../lib/queries";
-import { useRouter, useSearchParam } from "../lib/router";
+import { useRouter, useSearchParam, useSearchText } from "../lib/router";
 import { matches } from "../lib/search";
 import { count, date } from "../lib/format";
 import { bytes } from "../lib/files";
@@ -20,6 +20,7 @@ import { Dialog } from "../components/dialog";
 import { PasskeyHint, useAction } from "../components/guarded";
 import { useToast } from "../components/toast";
 import { ChannelPicker, VersionPicker } from "../components/updates";
+import { UpdateRunsCard } from "../components/update-runs";
 
 // Remote updates, in the order an operator works them: where each channel is
 // and how far its rollout got (with the brakes — pause, roll back — beside
@@ -54,7 +55,7 @@ export function Fleet() {
   const { navigate } = useRouter();
   const fleet = useFleet();
   const artifacts = useArtifacts();
-  const [query, setQuery] = useSearchParam("q");
+  const { text, setText, query } = useSearchText();
   const [show, setShow] = useSearchParam("show");
   const [publishing, setPublishing] = useState<{ channel: string; target?: ChannelTarget; version?: string } | null>(null);
   const [rollingBack, setRollingBack] = useState<{ target: ChannelTarget; to: ArtifactMeta } | null>(null);
@@ -209,7 +210,7 @@ export function Fleet() {
             <div className="toolbar stacks">
               <div className="search-input">
                 <Search />
-                <input className="input" placeholder="متجر أو إصدار" value={query} onChange={(e) => setQuery(e.target.value)} />
+                <input className="input" placeholder="متجر أو إصدار" value={text} onChange={(e) => setText(e.target.value)} />
               </div>
               <Segmented<Show>
                 value={(show as Show) || ""}
@@ -232,6 +233,8 @@ export function Fleet() {
               empty={<Empty icon={<Rocket />} title={show ? "لا متاجر في هذا التصنيف" : "لا متاجر أبلغت عن إصدارها بعد"} />}
             />
           </Card>
+
+          <UpdateRunsCard onOpenShop={(id) => navigate(`/shops/${encodeURIComponent(id)}`)} />
 
           <BundlesCard
             bundles={bundles}

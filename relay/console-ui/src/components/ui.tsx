@@ -1,4 +1,4 @@
-import { useEffect, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { useEffect, useState, useSyncExternalStore, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { Check, Copy, Inbox, Loader2 } from "lucide-react";
 import type { Tone } from "../lib/labels";
 import { ago, dateTime, money, moneySigned } from "../lib/format";
@@ -100,13 +100,29 @@ export function Money({ value, signed, currency }: { value: string | number | nu
   return <span className={`money ${cls}`}>{text}</span>;
 }
 
+// One clock for every relative time on the page: a list of 200 rows is one
+// timer, not 200.
+const minuteListeners = new Set<() => void>();
+let minute = 0;
+let minuteTimer: number | undefined;
+function subscribeMinute(listener: () => void) {
+  minuteListeners.add(listener);
+  minuteTimer ??= window.setInterval(() => {
+    minute++;
+    minuteListeners.forEach((l) => l());
+  }, 60000);
+  return () => {
+    minuteListeners.delete(listener);
+    if (minuteListeners.size === 0) {
+      window.clearInterval(minuteTimer);
+      minuteTimer = undefined;
+    }
+  };
+}
+
 /** Relative time that re-renders every minute, with the exact time on hover. */
 export function TimeAgo({ value }: { value: string | null | undefined }) {
-  const [, tick] = useState(0);
-  useEffect(() => {
-    const id = window.setInterval(() => tick((n) => n + 1), 60000);
-    return () => window.clearInterval(id);
-  }, []);
+  useSyncExternalStore(subscribeMinute, () => minute);
   if (!value) return <span className="faint">—</span>;
   return (
     <time dateTime={value} title={dateTime(value)}>
@@ -187,6 +203,21 @@ export function Segmented<T extends string>({ value, onChange, options }: { valu
         </button>
       ))}
     </div>
+  );
+}
+
+/**
+ * A folding section whose inside is built only while it is open: a page of
+ * a hundred folded groups costs a hundred lines, not a hundred tables.
+ */
+export function Fold({ summary, open: wanted = false, className = "", children }: { summary: ReactNode; open?: boolean; className?: string; children: ReactNode }) {
+  const [open, setOpen] = useState(wanted);
+  useEffect(() => setOpen(wanted), [wanted]);
+  return (
+    <details className={className} open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
+      <summary>{summary}</summary>
+      {open && children}
+    </details>
   );
 }
 
