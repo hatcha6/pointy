@@ -1449,6 +1449,10 @@ new phones, see `internal/esimdevices/gen/README.md`.
     `vouchers.CountryName`, and regions with no name in `esimAccessRegions`.
   - **Beside a Sandbox Airalo** the shelf opens to everyone with eSIM Access plans
     only; the review account then buys simulated eSIMs, as against any live supplier.
+  - **The review account on a live relay** walks the whole flow for show: a simulated
+    eSIM showing the plan bought, test top-ups that add their data, and nothing asked
+    of a supplier. An eSIM it bought in Airalo's Sandbox is treated the same once the
+    relay is live (`esimAsHeld`), since the live account does not know it.
   - eSIM Access reuses ICCIDs: an eSIM is asked for by its `esimTranNo`
     (`supplier_ref`), and a reissued ICCID moves the ended eSIM's row aside.
 - **Local runs:** `make relay-airalo-fake` serves a fake Partner API on :8097 (with

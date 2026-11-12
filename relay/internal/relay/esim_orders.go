@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"pointy/relay/internal/airalo"
 	"pointy/relay/internal/alerts"
 	"pointy/relay/internal/control"
 	"pointy/relay/internal/esimaccess"
@@ -94,6 +95,8 @@ type esimQuote struct {
 	Details esimPurchaseDetails
 	// Ref is what the supplier is asked for.
 	Ref vouchers.Ref
+	// ForShow: a top-up of a simulated eSIM, which no supplier knows.
+	ForShow bool
 }
 
 // esimPurchaseDetails is the plan as sold, kept on the purchase row until the
@@ -179,6 +182,7 @@ func (s HTTPServer) quoteESIMTopUp(ctx context.Context, customer control.Custome
 	if err != nil || esim.CustomerID != customer.ID {
 		return esimQuote{}, 404, "unknown_item"
 	}
+	esim = s.esimAsHeld(ctx, esim)
 	plans, err := s.esimTopUps(ctx, esim)
 	if err != nil {
 		return esimQuote{}, 409, "item_unavailable"
@@ -192,9 +196,10 @@ func (s HTTPServer) quoteESIMTopUp(ctx context.Context, customer control.Custome
 			break
 		}
 		return esimQuote{
-			Name:  esimOrderName(esim.DestinationName, plan),
-			Price: price,
-			Ref:   esimTopUpRef(esim, plan),
+			Name:    esimOrderName(esim.DestinationName, plan),
+			Price:   price,
+			Ref:     esimTopUpRef(esim, plan),
+			ForShow: esim.Simulated,
 			Details: esimPurchaseDetails{
 				PackageID: plan.ID, Title: plan.Title, Data: plan.Data, Days: plan.Days, AmountMB: plan.AmountMB,
 				Operator: esim.Operator, Destination: esim.Destination, DestinationName: esim.DestinationName, Country: esim.Country,
@@ -212,13 +217,15 @@ func (s HTTPServer) quoteESIMTopUp(ctx context.Context, customer control.Custome
 // there too: its eSIM is Airalo's dummy one, on Airalo's Sandbox dashboard, and
 // nothing is paid for it. Against a live account (and eSIM Access has no other
 // kind) a review order would be a real eSIM, so it stays with the test supplier.
-func (s HTTPServer) esimSupplierFor(order control.CustomerOrder, supplier string) (vouchers.Supplier, bool) {
+// So does a top-up of a simulated eSIM (forShow), wherever it is bought: the
+// Sandbox has never heard of it.
+func (s HTTPServer) esimSupplierFor(order control.CustomerOrder, supplier string, forShow bool) (vouchers.Supplier, bool) {
 	if supplier == "" {
 		supplier = vouchers.SupplierAiralo
 	}
 	switch {
 	case order.Review:
-		if airalo, ok := s.Vouchers.Suppliers[vouchers.SupplierAiralo]; ok && s.ESIM.Sandbox && supplier == vouchers.SupplierAiralo {
+		if airalo, ok := s.Vouchers.Suppliers[vouchers.SupplierAiralo]; ok && s.ESIM.Sandbox && supplier == vouchers.SupplierAiralo && !forShow {
 			return airalo, true
 		}
 		return vouchers.TestSupplier{Plain: true}, true
@@ -253,7 +260,7 @@ func (s HTTPServer) claimCustomerESIM(
 		refund("item_unavailable", "the plan left the catalog before it could be bought")
 		return control.VoucherPurchase{}, nil, false
 	}
-	supplier, ok := s.esimSupplierFor(order, quote.Details.Supplier)
+	supplier, ok := s.esimSupplierFor(order, quote.Details.Supplier, quote.ForShow)
 	if !ok {
 		refund("item_unavailable", "the plan's supplier is not configured on this relay")
 		return control.VoucherPurchase{}, nil, false
@@ -300,6 +307,9 @@ func (s HTTPServer) completeESIMOrder(ctx context.Context, order control.Custome
 	}
 	s.warnESIMSoldAtALoss(ctx, order, purchase)
 	if item.topUp() {
+		if esim, err := store.GetCustomerESIM(ctx, item.ICCID); err == nil && s.esimAsHeld(ctx, esim).Simulated {
+			return store.UpdateCustomerESIMUsage(ctx, item.ICCID, simulatedESIMUsage(esim, esimPurchaseAmountMB(purchase)))
+		}
 		// The new package will cross the same levels; the usage read is stale.
 		if err := store.ClearCustomerESIMNotices(ctx, item.ICCID); err != nil {
 			return err
@@ -373,7 +383,59 @@ func (s HTTPServer) completeESIMOrder(ctx context.Context, order control.Custome
 	if saved.CustomerID != order.CustomerID || saved.OrderID != order.ID {
 		return fmt.Errorf("the eSIM ending %s already belongs to another customer", iccidTail(row.ICCID))
 	}
+	if saved.Simulated {
+		// Its page shows the plan that was bought. A failure costs only that.
+		if err := store.UpdateCustomerESIMUsage(ctx, saved.ICCID, simulatedESIMUsage(saved, details.AmountMB)); err != nil {
+			s.logger().Warn("storing a simulated eSIM's usage failed", "order_id", order.ID, "error", err)
+		}
+	}
 	return nil
+}
+
+// esimAsHeld is an eSIM as this relay must treat it now. One the stores' review
+// account bought in Airalo's Sandbox is unknown to a live account, so once the
+// relay is live it is an eSIM for show, like any that account buys from then on:
+// nothing about it is asked of Airalo. Any other eSIM is returned as stored.
+func (s HTTPServer) esimAsHeld(ctx context.Context, esim control.CustomerESIM) control.CustomerESIM {
+	// Only test money can be the review account's, so a customer's eSIM costs no read.
+	if esim.Simulated || !esim.TestMode || s.ESIM.Sandbox || esimSupplierOf(esim) != vouchers.SupplierAiralo {
+		return esim
+	}
+	orders, ok := s.Store.(control.CustomerOrderStore)
+	if !ok {
+		return esim
+	}
+	if order, err := orders.GetCustomerOrder(ctx, esim.OrderID); err == nil && order.Review {
+		esim.Simulated = true
+	}
+	return esim
+}
+
+// simulatedESIMDefaultMB is a simulated eSIM's data when its plan's size is unknown.
+const simulatedESIMDefaultMB = 1024
+
+// simulatedESIMUsage is what a simulated eSIM's page shows: the data bought so
+// far, none of it used and never activated, with addMB more of it.
+func simulatedESIMUsage(esim control.CustomerESIM, addMB int) control.CustomerESIMUsage {
+	usage := control.CustomerESIMUsage{Status: airalo.UsageNotActive}
+	if esim.Unlimited {
+		return usage
+	}
+	usage.TotalMB = max(esim.TotalMB, 0) + max(addMB, 0)
+	if usage.TotalMB == 0 {
+		usage.TotalMB = simulatedESIMDefaultMB
+	}
+	usage.RemainingMB = usage.TotalMB
+	return usage
+}
+
+// esimPurchaseAmountMB is how much data the plan a purchase bought carries.
+func esimPurchaseAmountMB(purchase control.VoucherPurchase) int {
+	var details esimPurchaseDetails
+	if json.Unmarshal(purchase.Details, &details) != nil {
+		return 0
+	}
+	return details.AmountMB
 }
 
 // warnESIMSoldAtALoss tells the operator when the supplier charged more than the

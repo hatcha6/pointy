@@ -101,7 +101,7 @@ func (s HTTPServer) ownCustomerESIM(w http.ResponseWriter, r *http.Request, stor
 		s.customerInternalError(w, "customer eSIM read failed", err)
 		return control.CustomerESIM{}, false
 	}
-	return esim, true
+	return s.esimAsHeld(r.Context(), esim), true
 }
 
 func customerESIMPayload(esim control.CustomerESIM) map[string]any {
@@ -143,8 +143,7 @@ func (s HTTPServer) refreshESIMUsage(ctx context.Context, store control.Customer
 
 func (s HTTPServer) readESIMUsage(ctx context.Context, esim control.CustomerESIM) (control.CustomerESIMUsage, bool) {
 	if esim.Simulated {
-		total := 1024
-		return control.CustomerESIMUsage{Status: airalo.UsageNotActive, RemainingMB: total, TotalMB: total}, true
+		return simulatedESIMUsage(esim, 0), true
 	}
 	if esimSupplierOf(esim) == vouchers.SupplierESIMAccess {
 		callCtx, cancel := context.WithTimeout(ctx, esimReadBudget)
@@ -214,6 +213,9 @@ func (s HTTPServer) handleCustomerESIMList(w http.ResponseWriter, r *http.Reques
 			s.customerInternalError(w, "customer eSIMs read failed", err)
 			return
 		}
+	}
+	for i := range list {
+		list[i] = s.esimAsHeld(ctx, list[i])
 	}
 	// Reads the newest few that are out of date, at once.
 	var wait sync.WaitGroup

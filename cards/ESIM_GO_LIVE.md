@@ -40,6 +40,19 @@ there too. Its orders are test money and stay out of the books, and the loss ale
 (Sandbox prices are emulated). On a live account (`_SANDBOX=false`) the shelf opens to everyone
 and the review account goes back to simulated eSIMs, so a review never buys a real one.
 
+On a live relay the review account's whole flow is for show, and none of it reaches a
+supplier (`esim_review_test.go`):
+
+- **Buying and installing:** a simulated eSIM whose page shows the plan that was bought,
+  not yet activated. Its install link and QR are test ones: the phone refuses them.
+- **Top-ups:** two test plans are offered; buying one adds its data to the page.
+- **Its Sandbox eSIMs:** an eSIM it bought while the relay was on Sandbox is unknown to
+  the live Airalo account, so it becomes one for show too (`esimAsHeld`).
+- **Not simulated:** low-data alerts, since nothing uses a simulated eSIM's data.
+
+Tell the stores' reviewers that the review account's eSIMs are test ones that cannot be
+installed (the note below, without its first two sentences).
+
 Old app builds read the shelf without a session, so they never see a Sandbox shelf.
 
 **App Review note (paste into the review notes while `_SANDBOX=true`):** «eSIM data plans are
