@@ -5,14 +5,17 @@ import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 import 'package:pointy_frontend/src/core/result.dart';
 import 'package:pointy_frontend/src/data/models/product.dart';
 import 'package:pointy_frontend/src/data/models/product_query.dart';
+import 'package:pointy_frontend/src/data/models/product_unit.dart';
 import 'package:pointy_frontend/src/data/models/product_variant.dart';
 import 'package:pointy_frontend/src/data/models/product_variant_page.dart';
 import 'package:pointy_frontend/src/data/models/tracking_mode.dart';
+import 'package:pointy_frontend/src/data/models/unit_of_measure.dart';
 import 'package:pointy_frontend/src/data/repositories/catalog_repository.dart';
 import 'package:pointy_frontend/src/data/repositories/purchase_repository.dart';
 import 'package:pointy_frontend/src/data/services/pos_api_service.dart';
 import 'package:pointy_frontend/src/features/purchasing/view_models/purchase_view_model.dart';
 import 'package:pointy_frontend/src/features/purchasing/views/purchase_draft_lines.dart';
+import 'package:pointy_frontend/src/features/purchasing/views/purchase_line_entry_guide.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
 
 /// Entering a supplier's invoice from the keyboard alone: a line is walked
@@ -35,6 +38,26 @@ void main() {
     sku: 'PAPER',
     productName: 'ورق',
     unitPrice: 3,
+  );
+
+  // Bought by the piece or by the carton of twelve.
+  final water = ProductVariant(
+    id: 13,
+    productId: 7,
+    sku: 'WTR',
+    productName: 'ماء',
+    unitPrice: 3,
+    productDetail: Product(
+      id: 7,
+      name: 'ماء',
+      quantityOnHand: 0,
+      units: const [
+        ProductUnit(
+          unit: UnitOfMeasure(id: 1, code: 'carton', name: 'كرتونة'),
+          factorToBase: 12,
+        ),
+      ],
+    ),
   );
 
   late DateTime now;
@@ -88,6 +111,11 @@ void main() {
       await tester.pump();
     }
   }
+
+  PurchaseLineEntryStep? guideStep(WidgetTester tester) => tester
+      .widgetList<PurchaseLineEntryGuide>(find.byType(PurchaseLineEntryGuide))
+      .firstOrNull
+      ?.current;
 
   EditableText focusedField() => FocusManager.instance.primaryFocus!.context!
       .findAncestorWidgetOfExactType<EditableText>()!;
@@ -160,6 +188,129 @@ void main() {
 
     expect(viewModel.selectedVariantId, isNull);
     expect(searchFocusRequests, greaterThan(0));
+  });
+
+  testWidgets('a product bought in several units stops on its unit', (
+    tester,
+  ) async {
+    final viewModel = await pumpLines(tester, [water]);
+    viewModel.requestLineEntry(water.id);
+    await tester.pumpAndSettle();
+    expect(guideStep(tester), PurchaseLineEntryStep.quantity);
+
+    await typeKeys(tester, [
+      LogicalKeyboardKey.digit4,
+      LogicalKeyboardKey.enter,
+    ]);
+    await tester.pumpAndSettle();
+    expect(viewModel.draft.single.quantity, 4);
+    expect(guideStep(tester), PurchaseLineEntryStep.unit);
+
+    // The arrows change the unit there, and the cost follows it.
+    final before = viewModel.draft.single.unitFactor;
+    await typeKeys(tester, [LogicalKeyboardKey.arrowDown]);
+    await tester.pumpAndSettle();
+    expect(viewModel.draft.single.unitFactor, isNot(before));
+    expect(viewModel.draft.single.quantity, 4);
+    await typeKeys(tester, [LogicalKeyboardKey.arrowUp]);
+    await tester.pumpAndSettle();
+    expect(viewModel.draft.single.unitFactor, before);
+
+    await typeKeys(tester, [LogicalKeyboardKey.enter]);
+    await tester.pumpAndSettle();
+    expect(guideStep(tester), PurchaseLineEntryStep.cost);
+    expect(focusedField(), isNotNull);
+  });
+
+  testWidgets('left and right flip the unit without leaving the quantity', (
+    tester,
+  ) async {
+    final viewModel = await pumpLines(tester, [water]);
+    viewModel.requestLineEntry(water.id);
+    await tester.pumpAndSettle();
+    final before = viewModel.draft.single.unitFactor;
+
+    await typeKeys(tester, [LogicalKeyboardKey.arrowRight]);
+    await tester.pumpAndSettle();
+
+    expect(viewModel.draft.single.unitFactor, isNot(before));
+    expect(guideStep(tester), PurchaseLineEntryStep.quantity);
+  });
+
+  testWidgets('up and down step between lines from the quantity', (
+    tester,
+  ) async {
+    final viewModel = await pumpLines(tester, [paper, medicine]);
+    // Newest first: the medicine is the top line.
+    viewModel.requestLineEntry(medicine.id);
+    await tester.pumpAndSettle();
+
+    await typeKeys(tester, [LogicalKeyboardKey.arrowDown]);
+    await tester.pumpAndSettle();
+    expect(viewModel.selectedVariantId, paper.id);
+    expect(guideStep(tester), PurchaseLineEntryStep.quantity);
+
+    // The typed quantity lands on the line the arrow reached.
+    await typeKeys(tester, [
+      LogicalKeyboardKey.digit7,
+      LogicalKeyboardKey.enter,
+    ]);
+    await tester.pumpAndSettle();
+    expect(
+      viewModel.draft.firstWhere((l) => l.variant.id == paper.id).quantity,
+      7,
+    );
+
+    await typeKeys(tester, [LogicalKeyboardKey.escape]);
+    await tester.pumpAndSettle();
+    viewModel.requestLineEntry(paper.id);
+    await tester.pumpAndSettle();
+    await typeKeys(tester, [LogicalKeyboardKey.arrowUp]);
+    await tester.pumpAndSettle();
+    expect(viewModel.selectedVariantId, medicine.id);
+  });
+
+  testWidgets('up and down inside a cost go down the column of costs', (
+    tester,
+  ) async {
+    final viewModel = await pumpLines(tester, [paper, medicine]);
+    viewModel.requestLineEntry(medicine.id);
+    await tester.pumpAndSettle();
+    await typeKeys(tester, [LogicalKeyboardKey.enter]);
+    await tester.pumpAndSettle();
+    final first = focusedField();
+    expect(guideStep(tester), PurchaseLineEntryStep.cost);
+
+    await typeKeys(tester, [LogicalKeyboardKey.arrowDown]);
+    await tester.pumpAndSettle();
+
+    final second = focusedField();
+    expect(second.controller, isNot(same(first.controller)));
+    expect(viewModel.selectedVariantId, paper.id);
+    expect(guideStep(tester), PurchaseLineEntryStep.cost);
+    tester.testTextInput.enterText('9');
+    await tester.pump();
+    expect(
+      viewModel.draft.firstWhere((l) => l.variant.id == paper.id).unitCost,
+      9,
+    );
+
+    await typeKeys(tester, [LogicalKeyboardKey.arrowUp]);
+    await tester.pumpAndSettle();
+    expect(focusedField().controller, same(first.controller));
+    expect(viewModel.selectedVariantId, medicine.id);
+  });
+
+  testWidgets('the guide leaves with the walk', (tester) async {
+    final viewModel = await pumpLines(tester, [paper]);
+    expect(guideStep(tester), isNull);
+    viewModel.requestLineEntry(paper.id);
+    await tester.pumpAndSettle();
+    expect(guideStep(tester), PurchaseLineEntryStep.quantity);
+
+    await typeKeys(tester, [LogicalKeyboardKey.escape]);
+    await tester.pumpAndSettle();
+    expect(guideStep(tester), isNull);
   });
 
   testWidgets('a scanner burst never becomes the quantity', (tester) async {

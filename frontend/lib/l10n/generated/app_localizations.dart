@@ -34039,7 +34039,7 @@ abstract class AppLocalizations {
   /// No description provided for @purchasingShortcutCycleUnitArrows.
   ///
   /// In ar, this message translates to:
-  /// **'تبديل الوحدة للأمام والخلف'**
+  /// **'تبديل وحدة السطر المحدد وهو على الكمية'**
   String get purchasingShortcutCycleUnitArrows;
 
   /// No description provided for @purchasingShortcutOpenPricing.
@@ -34057,7 +34057,7 @@ abstract class AppLocalizations {
   /// No description provided for @purchasingShortcutTypeQuantity.
   ///
   /// In ar, this message translates to:
-  /// **'اكتب الكمية ثم Enter للانتقال إلى التكلفة'**
+  /// **'اكتب الكمية ثم Enter للانتقال إلى الحقل التالي'**
   String get purchasingShortcutTypeQuantity;
 
   /// No description provided for @purchasingShortcutStepQuantity.
@@ -34093,7 +34093,7 @@ abstract class AppLocalizations {
   /// No description provided for @purchasingShortcutSearchEnter.
   ///
   /// In ar, this message translates to:
-  /// **'باركود ثم Enter يضيف المنتج، والاسم ثم Enter يبحث'**
+  /// **'امسح الباركود أو اكتبه ثم Enter لإضافة المنتج والانتقال إلى كميته، والاسم ثم Enter يبحث'**
   String get purchasingShortcutSearchEnter;
 
   /// No description provided for @purchasingShortcutResults.
@@ -34111,7 +34111,7 @@ abstract class AppLocalizations {
   /// No description provided for @purchasingShortcutWalkLine.
   ///
   /// In ar, this message translates to:
-  /// **'إدخال السطر المحدد: الكمية ثم التكلفة ثم الصلاحية'**
+  /// **'إدخال السطر المحدد: الكمية ثم الوحدة ثم التكلفة ثم الصلاحية'**
   String get purchasingShortcutWalkLine;
 
   /// No description provided for @purchasingShortcutWalkNext.
@@ -34123,7 +34123,7 @@ abstract class AppLocalizations {
   /// No description provided for @purchasingShortcutAdjacentLine.
   ///
   /// In ar, this message translates to:
-  /// **'السطر التالي أو السابق'**
+  /// **'السطر التالي أو السابق من أي مكان'**
   String get purchasingShortcutAdjacentLine;
 
   /// No description provided for @purchasingShortcutCaptureLine.
@@ -34233,6 +34233,60 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'اضبط الكمية على {quantity} {unit} — الكمية المعتادة من هذا المورد'**
   String purchaseSuggestionQuantityHintTooltip(String quantity, String unit);
+
+  /// No description provided for @purchasingShortcutArrowLines.
+  ///
+  /// In ar, this message translates to:
+  /// **'السطر التالي أو السابق، وفي التكلفة أو الصلاحية ينتقل إلى الحقل نفسه'**
+  String get purchasingShortcutArrowLines;
+
+  /// No description provided for @purchaseEntryStepUnit.
+  ///
+  /// In ar, this message translates to:
+  /// **'الوحدة'**
+  String get purchaseEntryStepUnit;
+
+  /// No description provided for @purchaseEntryStepExpiry.
+  ///
+  /// In ar, this message translates to:
+  /// **'الصلاحية'**
+  String get purchaseEntryStepExpiry;
+
+  /// No description provided for @purchaseEntryGuideNext.
+  ///
+  /// In ar, this message translates to:
+  /// **'التالي'**
+  String get purchaseEntryGuideNext;
+
+  /// No description provided for @purchaseEntryGuideDone.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنهاء السطر'**
+  String get purchaseEntryGuideDone;
+
+  /// No description provided for @purchaseEntryGuideLines.
+  ///
+  /// In ar, this message translates to:
+  /// **'تنقل بين السطور'**
+  String get purchaseEntryGuideLines;
+
+  /// No description provided for @purchaseEntryGuideSameField.
+  ///
+  /// In ar, this message translates to:
+  /// **'السطر المجاور'**
+  String get purchaseEntryGuideSameField;
+
+  /// No description provided for @purchaseEntryGuideChangeUnit.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيير الوحدة'**
+  String get purchaseEntryGuideChangeUnit;
+
+  /// No description provided for @purchaseEntryGuideSearch.
+  ///
+  /// In ar, this message translates to:
+  /// **'البحث'**
+  String get purchaseEntryGuideSearch;
 
   /// No description provided for @purchasingShortcutAcceptQuantity.
   ///

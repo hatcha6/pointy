@@ -65,9 +65,7 @@ import 'package:pointy_frontend/src/shared/app_navigation_drawer.dart';
 import 'package:pointy_frontend/src/shared/barcode/scan_feedback_sounds.dart';
 import 'package:pointy_frontend/src/shared/unit_options.dart';
 import 'package:pointy_frontend/src/features/purchasing/view_models/purchase_view_model.dart';
-import 'package:pointy_frontend/src/features/purchasing/views/purchase_catalog_pane.dart';
-import 'package:pointy_frontend/src/features/purchasing/views/purchase_draft_pane.dart';
-import 'package:pointy_frontend/src/features/purchasing/views/purchasing_shortcuts_sheet.dart';
+import 'package:pointy_frontend/src/features/purchasing/views/purchasing_screen.dart';
 import 'package:pointy_frontend/src/shared/design/design.dart';
 import 'package:pointy_frontend/src/shared/product_filter_sheet.dart';
 import 'package:pointy_frontend/src/shared/product_search/product_search_mode_controller.dart';
@@ -479,100 +477,14 @@ class _PurchaseSurfaceState extends State<_PurchaseSurface> {
 
   @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: _viewModel,
-      builder: (context, _) {
-        final l10n = AppLocalizations.of(context)!;
-        return PointyScaffold(
-          // The real rail, as on the till surface: the purchasing screen
-          // spends the same 88px on it at desktop widths.
-          drawer: const AppNavigationDrawer(
-            selectedDestination: AppNavigationDestination.purchasing,
-            navigation: _PreviewNavigation(),
-          ),
-          appBar: PointyAppBar(
-            leading: const PointyNavigationMenuButton(),
-            title: Text(l10n.newPurchaseOrderTitle),
-            actions: [
-              IconButton(
-                tooltip: l10n.purchasingShortcutsTooltip,
-                onPressed: () => showPurchasingShortcutsSheet(context),
-                icon: const Icon(Icons.keyboard_outlined),
-              ),
-              const Padding(
-                padding: EdgeInsetsDirectional.only(end: 8),
-                child: Icon(Icons.sync),
-              ),
-            ],
-          ),
-          body: _PurchaseWorkspace(
-            viewModel: _viewModel,
-            contactRepository: _contacts,
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _PurchaseWorkspace extends StatelessWidget {
-  const _PurchaseWorkspace({
-    required this.viewModel,
-    required this.contactRepository,
-  });
-
-  final PurchaseViewModel viewModel;
-  final ContactRepository contactRepository;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.hasBoundedWidth
-            ? constraints.maxWidth
-            : MediaQuery.sizeOf(context).width;
-        if (AppBreakpoints.usesTwoPane(width)) {
-          return TwoPaneLayout(
-            minPrimaryWidth: 390,
-            secondaryPaneMaxWidth: AppPaneWidths.orderPaneMaxWidthFor(width),
-            primaryPane: PurchaseCatalogPane(
-              viewModel: viewModel,
-              capabilities: _managerCaps,
-            ),
-            secondaryPane: PurchaseDraftPane(
-              viewModel: viewModel,
-              contactRepository: contactRepository,
-            ),
-          );
-        }
-
-        final l10n = AppLocalizations.of(context)!;
-        return Column(
-          children: [
-            Expanded(
-              child: PurchaseCatalogPane(
-                viewModel: viewModel,
-                capabilities: _managerCaps,
-              ),
-            ),
-            PointyCompactOrderLauncher(
-              title: l10n.purchaseDraftTitle,
-              lineCountLabel: l10n.lineItemCount(viewModel.draft.length),
-              totalLabel: formatMoney(viewModel.total),
-              actionLabel: l10n.openPurchaseDraftSheetButton,
-              icon: Icons.assignment_outlined,
-              onPressed: () => _showSheet(
-                context,
-                backgroundColor: context.pointyColors.surface,
-                child: PurchaseDraftPane(
-                  viewModel: viewModel,
-                  contactRepository: contactRepository,
-                ),
-              ),
-            ),
-          ],
-        );
-      },
+    // The real screen, not a copy of its layout: its scan listener is what
+    // carries the function keys, Page ↓/↑ and wedge scans, so the keyboard
+    // behaves here exactly as it does in the app.
+    return PurchasingScreen(
+      viewModel: _viewModel,
+      contactRepository: _contacts,
+      capabilities: _managerCaps,
+      navigation: const _PreviewNavigation(),
     );
   }
 }

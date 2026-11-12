@@ -45,9 +45,9 @@ void main() {
       '−',
     ]);
     expect(shortcutKeysBeside(tester, l10n.purchasingShortcutCycleUnitArrows), [
-      '↑',
+      '→',
       '/',
-      '↓',
+      '←',
     ]);
     expect(shortcutKeysBeside(tester, l10n.purchasingShortcutTypeQuantity), [
       '0-9',

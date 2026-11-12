@@ -6011,6 +6011,12 @@ PosApiService _mockApiService({
         if (requestedBarcode != null && requestedBarcode != productBarcode) {
           return _jsonResponse({'next': null, 'results': []});
         }
+        // A number nothing carries finds nothing, as on a real server; every
+        // other search term is answered with the one product, as before.
+        final search = request.url.queryParameters['search'] ?? '';
+        if (RegExp(r'^\d+$').hasMatch(search) && search != productBarcode) {
+          return _jsonResponse({'next': null, 'results': []});
+        }
         return _jsonResponse({
           'count': 1,
           'next': null,

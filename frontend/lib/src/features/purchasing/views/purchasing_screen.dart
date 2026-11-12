@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:pointy_frontend/l10n/generated/app_localizations.dart';
 
 import '../../../core/authorization.dart';
-import '../../../data/models/product.dart';
 import '../../../data/repositories/contact_repository.dart';
 import '../view_models/purchase_order_documents.dart';
 import '../../../shared/app_navigation_drawer.dart';
@@ -17,11 +16,11 @@ import '../../../shared/order/order.dart';
 import '../../../shared/responsive/responsive.dart';
 import '../../../shared/tracking/unit_intake_permissions.dart';
 import '../../../shared/shell/shell.dart';
-import '../../../shared/unit_options.dart';
 import '../view_models/purchase_view_model.dart';
 import 'purchase_catalog_pane.dart';
 import 'purchase_draft_pane.dart';
 import 'purchase_line_capture_row.dart';
+import 'purchase_line_entry_guide.dart';
 import 'purchase_pricing_sheet.dart';
 import 'purchasing_shortcuts_sheet.dart';
 import 'purchase_product_create.dart';
@@ -143,32 +142,22 @@ class _PurchasingWorkspaceState extends State<_PurchasingWorkspace> {
 
   PurchaseViewModel get viewModel => widget.viewModel;
 
+  /// Whether the draft pane is on screen beside the catalog.
+  bool _twoPane = false;
+
   /// Cycles the active line through the product's purchasable units. Arrow
   /// Up/Right = next, Down/Left = previous; F2 (no [key]) advances forward.
+  /// The arrows only get here with the keyboard parked nowhere — in the draft
+  /// pane they are the pane's own.
   bool _cycleActiveLineUnit([LogicalKeyboardKey? key]) {
     final line = viewModel.activeDraftLine;
-    if (line == null) {
-      return false;
-    }
-    final next = cycledUnitOption(
-      purchasableUnitOptions(
-        AppLocalizations.of(context)!,
-        Product.fromVariant(line.variant),
-      ),
-      line.unitCode,
-      key,
-    );
-    if (next == null) {
-      return false;
-    }
-    viewModel.updateLineUnit(
-      line.variant,
-      unitCode: next.isBase ? '' : next.code,
-      unitLabel: next.label,
-      unitFactor: next.factorToBase,
-      allowsFractional: next.allowsFractional,
-    );
-    return true;
+    return line != null &&
+        cyclePurchaseLineUnit(
+          AppLocalizations.of(context)!,
+          viewModel,
+          line,
+          key,
+        );
   }
 
   /// F3 — price the active line. The cost was just typed; pricing is the
@@ -229,7 +218,7 @@ class _PurchasingWorkspaceState extends State<_PurchasingWorkspace> {
   }
 
   /// F5 — walk the active line from the keyboard: its quantity, then Enter
-  /// to its cost, then its expiry, then back to the search box.
+  /// to its unit, its cost, its expiry, then back to the search box.
   bool _walkActiveLine() {
     final line = viewModel.activeDraftLine;
     if (line == null || viewModel.isSubmitting) {
@@ -270,8 +259,7 @@ class _PurchasingWorkspaceState extends State<_PurchasingWorkspace> {
         unawaited(_addBarcode(context, barcode));
       },
       // A scan only ever adds its own product; it never touches a line's
-      // quantity. Arrow keys flip the active line's unit of measure — the
-      // deliberate quantity edit lives behind a line tap.
+      // quantity — it selects the line, and the quantity is typed after it.
       onArrowKey: (key) => _cycleActiveLineUnit(key),
       // Till function keys, dispatched through the same global hardware-keyboard
       // handler as scans — NOT focus-tree Shortcuts, which silently die when
@@ -319,7 +307,8 @@ class _PurchasingWorkspaceState extends State<_PurchasingWorkspace> {
           final width = constraints.hasBoundedWidth
               ? constraints.maxWidth
               : MediaQuery.sizeOf(context).width;
-          if (AppBreakpoints.usesTwoPane(width)) {
+          _twoPane = AppBreakpoints.usesTwoPane(width);
+          if (_twoPane) {
             return TwoPaneLayout(
               minPrimaryWidth: 390,
               secondaryPaneMaxWidth: AppPaneWidths.orderPaneMaxWidthFor(width),
@@ -355,6 +344,11 @@ class _PurchasingWorkspaceState extends State<_PurchasingWorkspace> {
         context,
         viewModel: viewModel,
         barcode: barcode,
+        // With the draft beside the catalog, a scan leaves the keyboard on its
+        // line: the count on the box is typed next, then Enter walks the rest.
+        // The next scan lands as a scan all the same. On a phone the draft is
+        // a sheet away, so the search box keeps the focus.
+        walkLine: _twoPane,
       );
 }
 

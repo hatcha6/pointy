@@ -15,11 +15,22 @@ import '../view_models/purchase_view_model.dart';
 /// walks the user through the full product-creation workflow when nothing
 /// matches. A failed lookup (unreadable/rejected code, request error) chimes
 /// and throws instead of offering to create a product that may well exist.
+///
+/// A [typed] code gets one more reading before it is called unknown, because
+/// a person types SKUs as readily as barcodes and no barcode answers to an
+/// SKU: the catalog search is asked. The one product carrying exactly that
+/// SKU is the answer; any other results mean the text is a search, and
+/// [onSearchInstead] hands it back to the search box (null is returned) —
+/// what Enter does with it on the till. Only a code nothing matches at all
+/// opens the creation wizard. A scanner's code is always a barcode and skips
+/// this.
 Future<BarcodeResolution?> resolveOrCreatePurchaseBarcode(
   BuildContext context, {
   required PurchaseViewModel viewModel,
   required String barcode,
   ValueChanged<bool>? onLookupSettled,
+  bool typed = false,
+  VoidCallback? onSearchInstead,
 }) async {
   final result = await viewModel.resolveBarcode(barcode);
   switch (result) {
@@ -28,6 +39,22 @@ Future<BarcodeResolution?> resolveOrCreatePurchaseBarcode(
         ScanFeedbackSounds.instance.play(ScanFeedback.success);
         onLookupSettled?.call(true);
         return value;
+      }
+      if (typed) {
+        final matches = await viewModel.searchTypedCode(barcode);
+        final code = barcode.trim().toLowerCase();
+        final exact = matches
+            .where((variant) => variant.sku.trim().toLowerCase() == code)
+            .toList(growable: false);
+        if (exact.length == 1) {
+          ScanFeedbackSounds.instance.play(ScanFeedback.success);
+          onLookupSettled?.call(true);
+          return BarcodeResolution(variant: exact.single);
+        }
+        if (matches.isNotEmpty) {
+          onSearchInstead?.call();
+          return null;
+        }
       }
       ScanFeedbackSounds.instance.play(ScanFeedback.notFound);
       // Reported BEFORE the creation wizard opens: the lookup is genuinely
@@ -58,24 +85,32 @@ Future<BarcodeResolution?> resolveOrCreatePurchaseBarcode(
 /// and the search field's submit (the catalog pane) — because a scan must
 /// behave identically whichever door it comes through.
 ///
-/// [walkLine] is for a code a person typed and pressed Enter on: the keyboard
-/// then walks the line it landed on (quantity, cost, expiry) instead of going
-/// back to the search box, because that person is entering an invoice row.
+/// [walkLine] leaves the keyboard on the line the code landed on, ready for
+/// its quantity and then Enter through the rest (unit, cost, expiry), instead
+/// of going back to the search box — the code is the start of an invoice row.
+/// Off where the draft is not on screen to be walked.
+///
+/// [typed] marks a code typed into the search box rather than scanned: it may
+/// be an SKU, or a search (see [resolveOrCreatePurchaseBarcode]).
 Future<void> addScannedPurchaseBarcode(
   BuildContext context, {
   required PurchaseViewModel viewModel,
   required String barcode,
   bool walkLine = false,
+  bool typed = false,
 }) async {
   final messenger = ScaffoldMessenger.of(context);
   final l10n = AppLocalizations.of(context)!;
   viewModel.reportScanStatus(PurchaseScanStatus.resolving, barcode: barcode);
   BarcodeResolution? resolution;
+  var searchInstead = false;
   try {
     resolution = await resolveOrCreatePurchaseBarcode(
       context,
       viewModel: viewModel,
       barcode: barcode,
+      typed: typed,
+      onSearchInstead: () => searchInstead = true,
       onLookupSettled: (found) => viewModel.reportScanStatus(
         found ? PurchaseScanStatus.found : PurchaseScanStatus.notFound,
         barcode: barcode,
@@ -89,6 +124,12 @@ Future<void> addScannedPurchaseBarcode(
     messenger
       ..clearSnackBars()
       ..showSnackBar(SnackBar(content: Text(l10n.barcodeScanError)));
+    return;
+  }
+  if (searchInstead) {
+    // The typed text is a search, not a code: it stays in the box, with its
+    // results under it, and nothing claims a barcode was not found.
+    viewModel.clearScanStatus();
     return;
   }
   if (resolution != null) {

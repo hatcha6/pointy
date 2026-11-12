@@ -20008,7 +20008,8 @@ class AppLocalizationsAr extends AppLocalizations {
   String get purchasingShortcutCycleUnit => 'تبديل وحدة السطر المحدد';
 
   @override
-  String get purchasingShortcutCycleUnitArrows => 'تبديل الوحدة للأمام والخلف';
+  String get purchasingShortcutCycleUnitArrows =>
+      'تبديل وحدة السطر المحدد وهو على الكمية';
 
   @override
   String get purchasingShortcutOpenPricing => 'تسعير المنتج في السطر المحدد';
@@ -20018,7 +20019,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get purchasingShortcutTypeQuantity =>
-      'اكتب الكمية ثم Enter للانتقال إلى التكلفة';
+      'اكتب الكمية ثم Enter للانتقال إلى الحقل التالي';
 
   @override
   String get purchasingShortcutStepQuantity => 'زيادة أو إنقاص واحد';
@@ -20038,7 +20039,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get purchasingShortcutSearchEnter =>
-      'باركود ثم Enter يضيف المنتج، والاسم ثم Enter يبحث';
+      'امسح الباركود أو اكتبه ثم Enter لإضافة المنتج والانتقال إلى كميته، والاسم ثم Enter يبحث';
 
   @override
   String get purchasingShortcutResults =>
@@ -20049,13 +20050,14 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get purchasingShortcutWalkLine =>
-      'إدخال السطر المحدد: الكمية ثم التكلفة ثم الصلاحية';
+      'إدخال السطر المحدد: الكمية ثم الوحدة ثم التكلفة ثم الصلاحية';
 
   @override
   String get purchasingShortcutWalkNext => 'تأكيد الحقل والانتقال إلى التالي';
 
   @override
-  String get purchasingShortcutAdjacentLine => 'السطر التالي أو السابق';
+  String get purchasingShortcutAdjacentLine =>
+      'السطر التالي أو السابق من أي مكان';
 
   @override
   String get purchasingShortcutCaptureLine =>
@@ -20151,6 +20153,34 @@ class AppLocalizationsAr extends AppLocalizations {
   String purchaseSuggestionQuantityHintTooltip(String quantity, String unit) {
     return 'اضبط الكمية على $quantity $unit — الكمية المعتادة من هذا المورد';
   }
+
+  @override
+  String get purchasingShortcutArrowLines =>
+      'السطر التالي أو السابق، وفي التكلفة أو الصلاحية ينتقل إلى الحقل نفسه';
+
+  @override
+  String get purchaseEntryStepUnit => 'الوحدة';
+
+  @override
+  String get purchaseEntryStepExpiry => 'الصلاحية';
+
+  @override
+  String get purchaseEntryGuideNext => 'التالي';
+
+  @override
+  String get purchaseEntryGuideDone => 'إنهاء السطر';
+
+  @override
+  String get purchaseEntryGuideLines => 'تنقل بين السطور';
+
+  @override
+  String get purchaseEntryGuideSameField => 'السطر المجاور';
+
+  @override
+  String get purchaseEntryGuideChangeUnit => 'تغيير الوحدة';
+
+  @override
+  String get purchaseEntryGuideSearch => 'البحث';
 
   @override
   String get purchasingShortcutAcceptQuantity =>

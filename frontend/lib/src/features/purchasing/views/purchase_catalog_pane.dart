@@ -191,7 +191,10 @@ class PurchaseCatalogPane extends StatelessWidget {
     return quantities;
   }
 
-  /// Enter in the search box. A code is looked up exactly; a NAME is not —
+  /// Enter in the search box. A code is looked up exactly — as a barcode, then
+  /// as an SKU; one that is neither but still finds products stays a search,
+  /// and only a code nothing matches opens the new product wizard. A NAME is
+  /// never looked up —
   /// «حليب» + Enter used to go to the barcode lookup, miss, and open the new
   /// product wizard with «حليب» as its barcode. Returning false hands the text
   /// back to the search box, which runs the search; ↓ then walks the results.
@@ -204,9 +207,10 @@ class PurchaseCatalogPane extends StatelessWidget {
       context,
       viewModel: viewModel,
       barcode: barcode,
-      // Typed by a person (a wedge's Enter never reaches the field): walk the
-      // line it landed on.
+      // The same as a scan: on to the line it landed on.
       walkLine: true,
+      // But typed, so it may be an SKU — or a search after all.
+      typed: true,
     );
     return viewModel.scanStatus == PurchaseScanStatus.found;
   }

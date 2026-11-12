@@ -41,11 +41,15 @@ Future<void> showPurchasingShortcutsSheet(BuildContext context) {
           'Page ↓',
           'Page ↑',
         ], l10n.purchasingShortcutAdjacentLine),
+        PointyShortcut.either(const [
+          '↓',
+          '↑',
+        ], l10n.purchasingShortcutArrowLines),
         PointyShortcut(const ['F9'], l10n.purchasingShortcutCaptureLine),
         PointyShortcut(const ['F2'], l10n.purchasingShortcutCycleUnit),
         PointyShortcut.either(const [
-          '↑',
-          '↓',
+          '→',
+          '←',
         ], l10n.purchasingShortcutCycleUnitArrows),
         PointyShortcut(const ['F3'], l10n.purchasingShortcutOpenPricing),
         PointyShortcut(const ['F4'], l10n.purchasingShortcutDeleteLine),

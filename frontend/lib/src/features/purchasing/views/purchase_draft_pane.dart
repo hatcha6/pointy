@@ -1447,6 +1447,7 @@ class PurchaseDraftLineTile extends StatefulWidget {
     this.onUnitChanged,
     this.onQuantityChanged,
     this.selected = false,
+    this.unitHighlighted = false,
     this.onSelect,
     this.onChangePrices,
     this.onLineTotalEntry,
@@ -1468,6 +1469,10 @@ class PurchaseDraftLineTile extends StatefulWidget {
   /// Keyboard-entry selection (tap-to-focus, like the POS cart): the selected
   /// line renders highlighted and receives typed quantities.
   final bool selected;
+
+  /// The keyboard walk is on this line's unit: the unit field is drawn the way
+  /// a focused field is, though the arrows that change it are the line's.
+  final bool unitHighlighted;
   final VoidCallback? onSelect;
   final Future<void> Function() onAdd;
   final VoidCallback onRemove;
@@ -1720,11 +1725,16 @@ class _PurchaseDraftLineTileState extends State<PurchaseDraftLineTile> {
       return DropdownButtonFormField<String>(
         initialValue: selectedUnitCode,
         isDense: true,
-        isExpanded: compact,
+        // Expanded at every width: a long unit name is cut short rather than
+        // overflowing the field.
+        isExpanded: true,
         decoration: InputDecoration(
           labelText: l10n.purchaseLineUnitLabel,
           isDense: true,
           prefixIcon: compact ? null : const Icon(Icons.straighten_outlined),
+          enabledBorder: widget.unitHighlighted
+              ? theme.inputDecorationTheme.focusedBorder
+              : null,
         ),
         items: [
           for (final option in unitOptions)

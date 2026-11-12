@@ -575,6 +575,24 @@ class PurchaseViewModel extends ChangeNotifier {
     );
   }
 
+  /// What the catalog search makes of a code somebody TYPED and that no
+  /// barcode answers to — an SKU, most often. The same search the box itself
+  /// runs, so "found here" and "shown in the grid" cannot disagree. Empty on
+  /// a failed request: the caller then treats the code as unknown.
+  Future<List<ProductVariant>> searchTypedCode(String code) async {
+    final text = code.trim();
+    if (text.isEmpty) {
+      return const [];
+    }
+    final result = await _catalogRepository.loadProductVariants(
+      query: _query.copyWith(search: text),
+    );
+    return switch (result) {
+      Ok<ProductVariantPage>(:final value) => value.variants,
+      Error<ProductVariantPage>() => const [],
+    };
+  }
+
   Future<void> addVariant(
     ProductVariant variant, {
     double quantity = 1,
