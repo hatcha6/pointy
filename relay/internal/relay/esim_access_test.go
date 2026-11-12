@@ -469,3 +469,36 @@ func TestESIMAccessWebhookIsRegisteredWithItsSecret(t *testing.T) {
 		t.Fatal("the webhook token must follow the access code")
 	}
 }
+
+// A relay restarted with eSIM Access added finds a catalog an old node synced
+// minutes ago: it must sync anyway, or the shelf sells Airalo's plans alone
+// until the next hour.
+func TestESIMCatalogSyncsAtStartWhenTheSuppliersChanged(t *testing.T) {
+	h := newESIMAccessHarness(t, true, nil)
+	access := h.server.ESIM.Access
+	// The catalog the old node left: Airalo's alone, just synced.
+	h.server.ESIM.Access = nil
+	if err := h.server.syncESIMCatalog(context.Background(), h.store); err != nil {
+		t.Fatal(err)
+	}
+	h.server.ESIM.state.checkedAt = time.Time{}
+	for _, plan := range h.plans("turkey") {
+		if strings.HasPrefix(plan["id"].(string), esimAccessPlanPrefix) {
+			t.Fatalf("the old catalog: %v", plan)
+		}
+	}
+	h.server.ESIM.Access = access
+	sync := &ESIMCatalogSync{Server: h.server}
+	sync.once(context.Background())
+	h.server.ESIM.state.checkedAt = time.Time{}
+	if plan := h.plan("turkey", 1024, 7); plan["id"] != "ea.PTR1G7" {
+		t.Fatalf("the new supplier waited for the next sync: %v", plan)
+	}
+	// With nothing changed, a fresh catalog is left to the node that made it.
+	_, synced, _ := h.store.ESIMCatalogVersion(context.Background())
+	h.clock.advance(10 * time.Minute)
+	sync.once(context.Background())
+	if _, again, _ := h.store.ESIMCatalogVersion(context.Background()); !again.Equal(synced) {
+		t.Fatalf("a fresh catalog was synced again: %v → %v", synced, again)
+	}
+}

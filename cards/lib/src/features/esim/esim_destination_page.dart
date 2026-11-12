@@ -349,9 +349,12 @@ class _PlanCard extends StatelessWidget {
             const SizedBox(width: CardsSpace.sm),
             // The price as the thing to press, the regular one struck over it.
             // At the largest text it shrinks before it pushes the plan out.
-            Flexible(
+            // It sits at the card's far edge: a loose share of the row left
+            // it floating in the middle of a wide card.
+            Expanded(
               child: FittedBox(
                 fit: BoxFit.scaleDown,
+                alignment: AlignmentDirectional.centerEnd,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [

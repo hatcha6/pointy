@@ -94,6 +94,7 @@ class _FilterBar extends StatelessWidget {
   const _FilterBar({
     required this.gutter,
     required this.wrap,
+    this.trailing = false,
     required this.hasOffers,
     required this.offersOnly,
     required this.minDays,
@@ -111,6 +112,9 @@ class _FilterBar extends StatelessWidget {
 
   /// On a wide page the chips wrap; on a phone they swipe.
   final bool wrap;
+
+  /// Beside the tabs on one line: the chips gather at the line's far end.
+  final bool trailing;
   final bool hasOffers;
   final bool offersOnly;
   final int minDays;
@@ -193,6 +197,7 @@ class _FilterBar extends StatelessWidget {
       return Padding(
         padding: EdgeInsets.symmetric(horizontal: gutter),
         child: Wrap(
+          alignment: trailing ? WrapAlignment.end : WrapAlignment.start,
           spacing: CardsSpace.sm,
           runSpacing: CardsSpace.sm,
           children: chips,
@@ -236,6 +241,22 @@ class _MenuChip<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // The button's own ink is a square around the capsule: the chip is
+    // clipped to its shape, so hover and press stay inside it.
+    final scheme = theme.colorScheme;
+    return Material(
+      color: selected ? scheme.primary : scheme.surface,
+      shape: StadiumBorder(
+        side: selected
+            ? BorderSide.none
+            : BorderSide(color: scheme.outline.withValues(alpha: 0.7)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: _menu(theme),
+    );
+  }
+
+  Widget _menu(ThemeData theme) {
     return PopupMenuButton<T>(
       tooltip: '',
       initialValue: value,
@@ -269,6 +290,7 @@ class _MenuChip<T> extends StatelessWidget {
         icon: icon,
         selected: selected,
         menu: true,
+        bare: true,
       ),
     );
   }
@@ -281,6 +303,7 @@ class _ChipFace extends StatelessWidget {
     required this.selected,
     this.menu = false,
     this.plain = false,
+    this.bare = false,
   });
 
   final String label;
@@ -292,6 +315,9 @@ class _ChipFace extends StatelessWidget {
 
   /// No surface of its own: «مسح».
   final bool plain;
+
+  /// The capsule is drawn by whoever holds this face: only the words here.
+  final bool bare;
 
   @override
   Widget build(BuildContext context) {
@@ -305,17 +331,19 @@ class _ChipFace extends StatelessWidget {
     return Container(
       constraints: const BoxConstraints(minHeight: 40),
       padding: const EdgeInsets.symmetric(horizontal: CardsSpace.md + 2),
-      decoration: BoxDecoration(
-        color: selected
-            ? scheme.primary
-            : plain
-            ? Colors.transparent
-            : scheme.surface,
-        borderRadius: BorderRadius.circular(CardsRadii.pill),
-        border: plain || selected
-            ? null
-            : Border.all(color: scheme.outline.withValues(alpha: 0.7)),
-      ),
+      decoration: bare
+          ? null
+          : BoxDecoration(
+              color: selected
+                  ? scheme.primary
+                  : plain
+                  ? Colors.transparent
+                  : scheme.surface,
+              borderRadius: BorderRadius.circular(CardsRadii.pill),
+              border: plain || selected
+                  ? null
+                  : Border.all(color: scheme.outline.withValues(alpha: 0.7)),
+            ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -605,9 +633,13 @@ class _EsimStorePageState extends State<EsimStorePage> {
     final offers = browsing
         ? shelf.destinations.where((d) => d.promo != null).toList()
         : const <EsimDestinationRow>[];
-    final filters = _FilterBar(
-      gutter: page.left,
+    // Room for the tabs and the chips on one line, edge to edge under the
+    // banner: a desktop.
+    final toolbar = wide && inner >= 960;
+    Widget filterBar({bool trailing = false}) => _FilterBar(
+      gutter: trailing ? 0 : page.left,
       wrap: wide,
+      trailing: trailing,
       hasOffers: shelf.destinations.any((d) => d.promo != null),
       offersOnly: _offersOnly,
       minDays: _minDays,
@@ -619,6 +651,19 @@ class _EsimStorePageState extends State<EsimStorePage> {
       onData: (mb) => setState(() => _minMb = mb),
       onSort: (sort) => setState(() => _sort = sort),
       onClear: _clearFilters,
+    );
+    final filters = filterBar();
+    final kinds = SegmentedPill<EsimKind>(
+      segments: [
+        (EsimKind.local, l10n.esimKindLocal),
+        (EsimKind.regional, l10n.esimKindRegional),
+        (EsimKind.global, l10n.esimKindGlobal),
+      ],
+      selected: _kind,
+      onChanged: (kind) {
+        Haptics.select();
+        setState(() => _kind = kind);
+      },
     );
     final none = Padding(
       padding: const EdgeInsets.all(CardsSpace.xl),
@@ -702,28 +747,23 @@ class _EsimStorePageState extends State<EsimStorePage> {
                 _MineShelf(esims: _mine, gutter: page.left, onChanged: _load),
               const SizedBox(height: CardsSpace.xl),
             ],
-            pad(
-              Align(
-                alignment: AlignmentDirectional.centerStart,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 440),
-                  child: SegmentedPill<EsimKind>(
-                    segments: [
-                      (EsimKind.local, l10n.esimKindLocal),
-                      (EsimKind.regional, l10n.esimKindRegional),
-                      (EsimKind.global, l10n.esimKindGlobal),
-                    ],
-                    selected: _kind,
-                    onChanged: (kind) {
-                      Haptics.select();
-                      setState(() => _kind = kind);
-                    },
-                  ),
+            if (toolbar)
+              pad(
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(width: 400, child: kinds),
+                    const SizedBox(width: CardsSpace.lg),
+                    Expanded(child: filterBar(trailing: true)),
+                  ],
                 ),
-              ),
-            ),
-            const SizedBox(height: CardsSpace.md),
-            filters,
+              )
+            else ...[
+              // A tablet: the tabs run the page's width, the chips under them.
+              pad(kinds),
+              const SizedBox(height: CardsSpace.md),
+              filters,
+            ],
             if (browsing) ...[
               if (offers.isNotEmpty) ...[
                 header(l10n.esimOffersTitle),

@@ -226,10 +226,12 @@ mid-flip it points the front door back at the managed backend.
 
 ### A big jump, and flattening imported variants
 
-A shop several releases behind (v0.6.1 → v0.9.9) takes a **restart** update:
-contract migrations between those releases cannot share a database with the old
-backend. `deploy/onprem/UPDATE_STRATEGY.txt` ships that decision in the bundle;
-delete the file again in the release after.
+A shop several releases behind (v0.6.1 → v0.9.9) had to take a **restart**
+update: contract migrations between those releases cannot share a database with
+the old backend. That was decided by an `UPDATE_STRATEGY.txt` in the bundle; the
+file is gone again, so releases now apply **live**. A shop still on a release
+that old should step through an intermediate release first, or run
+`update.sh --restart` by hand.
 
 Before updating such a shop, by hand on its machine:
 

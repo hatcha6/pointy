@@ -451,6 +451,29 @@ func (s HTTPServer) syncESIMCatalog(ctx context.Context, store control.CustomerE
 	return nil
 }
 
+// esimCatalogFromItsSuppliers says the stored catalog was built from the
+// suppliers this node sells from. A node started with a supplier added (or
+// Airalo taken off the shelf) must not leave a fresh catalog be: until the next
+// sync the shelf would list the old suppliers' plans alone, at their prices.
+func (s HTTPServer) esimCatalogFromItsSuppliers(ctx context.Context, store control.CustomerESIMStore) bool {
+	stored, err := store.ReadESIMCatalog(ctx)
+	if err != nil {
+		return false
+	}
+	var catalog esimCatalog
+	if json.Unmarshal([]byte(stored.Document), &catalog) != nil {
+		return false
+	}
+	has := map[string]bool{}
+	for _, destination := range catalog.Destinations {
+		for _, plan := range destination.Plans {
+			has[planSupplier(plan)] = true
+		}
+	}
+	return has[vouchers.SupplierAiralo] == s.ESIM.airaloOnShelf() &&
+		has[vouchers.SupplierESIMAccess] == (s.ESIM.Access != nil)
+}
+
 // ensureESIMWebhooks opts the webhook in, for low-data alerts (customers hear
 // them, and are asked to top up) and credit alerts (the operator hears them).
 func (s HTTPServer) ensureESIMWebhooks(ctx context.Context) {
@@ -512,7 +535,8 @@ func (e *ESIMCatalogSync) once(ctx context.Context) {
 	defer cancel()
 	e.Server.ensureESIMWebhooks(callCtx)
 	if _, syncedAt, err := store.ESIMCatalogVersion(callCtx); err == nil &&
-		!syncedAt.IsZero() && e.Server.clock().Now().Sub(syncedAt) < esimSyncSkip {
+		!syncedAt.IsZero() && e.Server.clock().Now().Sub(syncedAt) < esimSyncSkip &&
+		e.Server.esimCatalogFromItsSuppliers(callCtx, store) {
 		return
 	}
 	if err := e.Server.syncESIMCatalog(callCtx, store); err != nil {
