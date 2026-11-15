@@ -47,10 +47,39 @@ extension CardsEvents on Analytics {
 
   void orderPlaced(CardOrder order) => capture('order_placed', _order(order));
 
-  void orderPlaceFailed(String errorCode, {required String method}) => capture(
-    'order_place_failed',
-    {'error_code': errorCode, 'method': method},
+  /// The relay refused the order, or Dafa would not start its payment. Dafa's
+  /// own code and the relay's `detail` (written for the operator, never with
+  /// the payer's number) say which step refused.
+  void orderPlaceFailed(Object error, {required String method}) {
+    final body = error is RelayApiException ? error.body : const {};
+    final gatewayCode = body['gateway_code'];
+    final detail = body['detail'];
+    capture('order_place_failed', {
+      'error_code': errorCodeOf(error),
+      'method': method,
+      if (gatewayCode is String && gatewayCode.isNotEmpty)
+        'gateway_code': gatewayCode,
+      if (detail is String && detail.isNotEmpty) 'detail': detail,
+    });
+  }
+
+  /// Dafa's card page did not load in the app's web view.
+  void paymentPageLoadFailed(CardOrder order, String reason) => capture(
+    'payment_page_load_failed',
+    {'order_id': order.id, 'reason': reason},
   );
+
+  /// Dafa's card page closed: `returned` (its «المتابعة»), `settled` (the
+  /// relay heard first) or `closed` (the payer closed it).
+  void paymentPageClosed(
+    CardOrder order, {
+    required String result,
+    required Duration open,
+  }) => capture('payment_page_closed', {
+    'order_id': order.id,
+    'result': result,
+    'seconds': open.inSeconds,
+  });
 
   /// Paid, whatever happens next: the money event. `revenue` (in dinars) is
   /// what revenue analytics reads.

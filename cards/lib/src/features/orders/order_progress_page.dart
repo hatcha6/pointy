@@ -327,14 +327,23 @@ class _OrderProgressPageState extends State<OrderProgressPage>
     if (url == null || !mounted) {
       return;
     }
+    final analytics = CardsScope.of(context).analytics;
+    final opened = DateTime.now();
     final result = await PaymentPageView.open(
       context,
       url: url,
       changes: widget.watcher,
       settled: () => widget.watcher.order.status != OrderStatus.awaitingPayment,
       onRoute: (route) => _paymentRoute = route,
+      onLoadFailed: (reason) =>
+          analytics.paymentPageLoadFailed(widget.watcher.order, reason),
     );
     _paymentRoute = null;
+    analytics.paymentPageClosed(
+      widget.watcher.order,
+      result: result.name,
+      open: DateTime.now().difference(opened),
+    );
     if (!mounted) {
       return;
     }
@@ -359,7 +368,7 @@ class _OrderProgressPageState extends State<OrderProgressPage>
     final route = _paymentRoute;
     _paymentRoute = null;
     if (route != null && route.isActive) {
-      Navigator.of(context).removeRoute(route);
+      Navigator.of(context).removeRoute(route, PaymentPageResult.settled);
     }
   }
 

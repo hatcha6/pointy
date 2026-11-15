@@ -1,6 +1,9 @@
 import '../models/order_report.dart';
 
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/analytics/analytics.dart';
 import '../../core/analytics/events.dart';
@@ -48,17 +51,26 @@ class OrdersRepository {
     required this.api,
     required this.channel,
     Analytics? analytics,
+    this.preferences,
   }) : analytics = analytics ?? NoAnalytics();
 
   final RelayApi api;
   final String channel;
 
-  /// Told when an order placed here is paid, delivered or ends.
+  /// Told when an order this phone saw open is paid, delivered or ends.
   final Analytics analytics;
 
-  /// The last status seen of each order placed here, so each step of its
-  /// life is told once, however often it is asked about.
-  final Map<String, OrderStatus> _placed = {};
+  /// Keeps the orders still open across launches. Null in tests.
+  final SharedPreferencesAsync? preferences;
+
+  static const _followedKey = 'cards.followed_orders';
+
+  /// The last status seen of each order this phone saw open, so each step of
+  /// its life is told once, however often it is asked about. The open ones
+  /// are kept on the phone: a payment that lands after the app restarts is
+  /// still told.
+  final Map<String, OrderStatus> _followed = {};
+  Future<void>? _restoring;
 
   /// Moves whenever an order is placed or paid here: the shelf listens, so
   /// «اشترِ مجدداً» and the credit follow a purchase at once.
@@ -92,8 +104,7 @@ class OrdersRepository {
         changes.value++;
         final order = _order(answer);
         analytics.orderPlaced(order);
-        _placed[order.id] = OrderStatus.awaitingPayment;
-        return _track(order);
+        return _track(order, placed: true);
       });
 
   /// Looks up the account a top-up would go to, before anything is paid:
@@ -143,7 +154,7 @@ class OrdersRepository {
         );
         final session = answer['card_session'];
         return (
-          _track(_order(answer)),
+          await _track(_order(answer)),
           session is Map<String, dynamic>
               ? CardSession.fromJson(session)
               : null,
@@ -203,6 +214,9 @@ class OrdersRepository {
     // An answer that was on its way while the customer changed is not kept.
     if (customer == _customer) {
       lastOrders = list;
+      for (final order in list) {
+        await _track(order);
+      }
     }
     return list;
   });
@@ -219,7 +233,9 @@ class OrdersRepository {
   void forget() {
     _customer++;
     lastOrders = null;
-    _placed.clear();
+    _followed.clear();
+    _restoring = Future.value();
+    preferences?.remove(_followedKey).ignore();
   }
 
   Future<Result<CreditStatement>> credit() => Result.guard(() async {
@@ -228,15 +244,58 @@ class OrdersRepository {
     );
   });
 
-  /// Tells analytics how far an order placed here has come since it was
-  /// last seen: paid (once, whatever follows), delivered, or ended.
-  CardOrder _track(CardOrder order) {
-    final before = _placed[order.id];
+  /// The open orders kept from an earlier launch, read once.
+  Future<void> _restore() => _restoring ??= () async {
+    final customer = _customer;
+    try {
+      final saved = jsonDecode(
+        await preferences?.getString(_followedKey) ?? '{}',
+      );
+      if (saved is Map && customer == _customer) {
+        final statuses = OrderStatus.values.asNameMap();
+        for (final MapEntry(:key, :value) in saved.entries) {
+          final status = statuses[value];
+          if (key is String && status != null) {
+            _followed.putIfAbsent(key, () => status);
+          }
+        }
+      }
+    } on Exception {
+      // Nothing kept: orders are followed from the next time they are seen.
+    }
+  }();
+
+  Future<void> _save() async {
+    try {
+      await preferences?.setString(
+        _followedKey,
+        jsonEncode({
+          for (final MapEntry(:key, :value) in _followed.entries)
+            if (value.isOpen) key: value.name,
+        }),
+      );
+    } on Exception {
+      // Kept in memory for this launch all the same.
+    }
+  }
+
+  /// Tells analytics how far an order this phone saw open has come since it
+  /// was last seen: paid (once, whatever follows), delivered, or ended. An
+  /// order first seen open is followed from then on; one first seen closed
+  /// is past telling. An order [placed] here starts as awaiting payment.
+  Future<CardOrder> _track(CardOrder order, {bool placed = false}) async {
+    await _restore();
+    final before =
+        _followed[order.id] ?? (placed ? OrderStatus.awaitingPayment : null);
     final now = order.status;
-    if (before == null || before == now) {
+    if (_followed[order.id] == now || (before == null && !now.isOpen)) {
       return order;
     }
-    _placed[order.id] = now;
+    _followed[order.id] = now;
+    await _save();
+    if (before == null) {
+      return order;
+    }
     bool paidBy(OrderStatus status) =>
         status == OrderStatus.paid ||
         status == OrderStatus.fulfilling ||
