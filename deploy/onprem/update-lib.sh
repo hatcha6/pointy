@@ -859,12 +859,23 @@ pu_probe_start() {
 # pu_probe_stop — prints "<down seconds> <longest outage> <samples>", or
 # nothing when no probe ran. A failed sample costs the time until the next one.
 pu_probe_stop() {
-  local file="$POINTY_PROBE_FILE" pid="$POINTY_PROBE_PID" copy
+  local file="$POINTY_PROBE_FILE" pid="$POINTY_PROBE_PID" copy tries=0
   [ -n "$file" ] || return 0
+  # The probe goes first, and is seen gone, before its file is taken away: one
+  # caught between its check and its write would put the file back for good.
+  # This usually runs inside $( ), where the probe is no child to wait for, so
+  # it is watched until it is gone.
+  if [ -n "$pid" ]; then
+    kill "$pid" 2>/dev/null
+    wait "$pid" 2>/dev/null
+    while kill -0 "$pid" 2>/dev/null && [ "$tries" -lt 50 ]; do
+      tries=$((tries + 1))
+      sleep 0.1 2>/dev/null || sleep 1
+    done
+  fi
   copy="$(mktemp 2>/dev/null)" || copy=""
   [ -n "$copy" ] && cp "$file" "$copy" 2>/dev/null
   rm -f "$file"
-  [ -n "$pid" ] && { kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; }
   [ -n "$copy" ] || return 0
   awk -v now="$(pu_epoch)" '
     { t[NR] = $1; up[NR] = $2 }

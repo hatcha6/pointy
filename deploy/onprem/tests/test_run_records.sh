@@ -146,8 +146,13 @@ test_a_live_update_that_never_dropped_a_request_records_zero() {
 test_the_probe_asks_what_a_till_asks_and_stops_with_the_apply() {
   installed_deploy 1.0.0; stub_cmd curl
   pu_probe_start
-  local pid="$POINTY_PROBE_PID" file="$POINTY_PROBE_FILE"
-  sleep 1.5
+  local pid="$POINTY_PROBE_PID" file="$POINTY_PROBE_FILE" waited=0
+  # Until the probe has asked once, however busy the machine is: a fixed
+  # sleep was too short on a loaded CI runner.
+  while [ ! -s "$file" ] && [ "$waited" -lt 100 ]; do
+    waited=$((waited + 1))
+    sleep 0.1
+  done
   local result; result="$(pu_probe_stop)"
   assert_called curl '*http://127.0.0.1:8000/readyz/*'
   assert_no_file "$file"
