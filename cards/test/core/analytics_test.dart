@@ -3,12 +3,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pointy_cards/dev/cards_fixtures.dart';
 import 'package:pointy_cards/src/app.dart';
 import 'package:pointy_cards/src/core/analytics/analytics.dart';
+import 'package:pointy_cards/src/core/analytics/events.dart';
 import 'package:pointy_cards/src/core/analytics/follow_customer.dart';
 import 'package:pointy_cards/src/core/money.dart';
 import 'package:pointy_cards/src/core/result.dart';
+import 'package:pointy_cards/src/data/api/relay_api.dart';
 import 'package:pointy_cards/src/data/models/order.dart';
 import 'package:pointy_cards/src/data/repositories/orders_repository.dart';
 import 'package:pointy_cards/src/data/session/session_store.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences_platform_interface/in_memory_shared_preferences_async.dart';
+import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
 
 /// Writes down what the app tells analytics.
 class RecordingAnalytics extends NoAnalytics {
@@ -165,6 +170,89 @@ void main() {
     expect(paid['currency'], 'LYD');
     expect(paid['method'], 'dafa_sadad');
     expect(paid.containsKey('codes'), isFalse);
+  });
+
+  test('a payment that lands after the app restarts is told, once', () async {
+    SharedPreferencesAsyncPlatform.instance =
+        InMemorySharedPreferencesAsync.empty();
+    final preferences = SharedPreferencesAsync();
+    OrdersRepository launch(Analytics analytics) => OrdersRepository(
+      api: RelayApi(
+        baseUrl: Uri.parse('https://relay.preview'),
+        sessions: MemorySessionStore(fixtureSession),
+        client: fixtureRelay(),
+      ),
+      channel: 'apk',
+      analytics: analytics,
+      preferences: preferences,
+    );
+    final placed = await launch(RecordingAnalytics()).place(
+      OrderRequest(
+        itemKey: 'libyana-10',
+        quantity: 1,
+        unitPrice: Money.parse('10.000'),
+        idempotencyKey: 'k1',
+        method: 'dafa_moamalat',
+      ),
+    );
+    final order = (placed as Ok<CardOrder>).value;
+
+    // The app closes before the relay hears of the payment.
+    final analytics = RecordingAnalytics();
+    final relaunched = launch(analytics);
+    // Orders never seen open on this phone are past telling.
+    await relaunched.orders();
+    expect(analytics.events, isEmpty);
+    await relaunched.order(order.id);
+    await relaunched.order(order.id);
+    expect(analytics.events.map((e) => e.$1), [
+      'order_paid',
+      'order_delivered',
+    ]);
+  });
+
+  test("a refused payment says Dafa's code and the relay's detail", () {
+    final analytics = RecordingAnalytics();
+    analytics.orderPlaceFailed(
+      const RelayApiException(
+        status: 502,
+        code: 'gateway_rejected',
+        body: {
+          'code': 'gateway_rejected',
+          'gateway_code': 'PROVIDER_DOWN',
+          'detail': '502 PROVIDER_DOWN',
+          'retryable': false,
+        },
+      ),
+      method: 'dafa_moamalat',
+    );
+    expect(analytics.events.single.$1, 'order_place_failed');
+    expect(analytics.events.single.$2, {
+      'error_code': 'gateway_rejected',
+      'method': 'dafa_moamalat',
+      'gateway_code': 'PROVIDER_DOWN',
+      'detail': '502 PROVIDER_DOWN',
+    });
+  });
+
+  test("a payer's number in Dafa's words never reaches analytics", () {
+    final analytics = RecordingAnalytics();
+    analytics.orderPlaceFailed(
+      const RelayApiException(
+        status: 422,
+        code: 'invalid_card_number',
+        body: {
+          'detail':
+              '422 user_identifier: 6396 0412 3456 7890 is not valid, '
+              'nor 0912345678',
+        },
+      ),
+      method: 'dafa_moamalat',
+    );
+    expect(
+      analytics.events.single.$2['detail'],
+      '422 user_identifier: ••• is not valid, nor •••',
+    );
   });
 
   test('turning sharing off stops it; on starts it again', () {

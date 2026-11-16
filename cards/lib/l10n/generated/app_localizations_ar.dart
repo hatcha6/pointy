@@ -804,7 +804,7 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get payNotFinishedBody =>
-      'لم يُخصم شيء بعد. أكمل الدفع بالبطاقة، أو ألغِ الطلب.';
+      'لم يتأكد الدفع بعد. إن كنت قد دفعت فسيظهر طلبك هنا حين يتأكد، فلا تدفع مرة أخرى. وإلا فأكمل الدفع بالبطاقة، أو ألغِ الطلب.';
 
   @override
   String get payNotFinishedWalletBody =>

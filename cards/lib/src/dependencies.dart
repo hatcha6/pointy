@@ -122,6 +122,7 @@ class CardsDependencies {
         api: api,
         channel: config.channel,
         analytics: analytics,
+        preferences: preferences,
       ),
       vault: SecureCodeVault(),
       cards: SecureCardVault(),

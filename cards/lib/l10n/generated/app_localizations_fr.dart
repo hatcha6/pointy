@@ -820,7 +820,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get payNotFinishedBody =>
-      'Rien n’a encore été débité. Terminez le paiement par carte, ou annulez la commande.';
+      'Votre paiement n’est pas encore confirmé. Si vous avez payé, votre commande apparaîtra ici dès la confirmation : ne payez pas une seconde fois. Sinon, terminez le paiement par carte, ou annulez la commande.';
 
   @override
   String get payNotFinishedWalletBody =>

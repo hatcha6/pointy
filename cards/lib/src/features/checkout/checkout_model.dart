@@ -208,7 +208,7 @@ class CheckoutModel extends ChangeNotifier {
         error = exception;
         _key = _newKey();
         orders.analytics.orderPlaceFailed(
-          errorCodeOf(exception),
+          exception,
           method: creditCovers ? 'credit' : method?.key ?? '',
         );
     }

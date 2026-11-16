@@ -47,10 +47,53 @@ extension CardsEvents on Analytics {
 
   void orderPlaced(CardOrder order) => capture('order_placed', _order(order));
 
-  void orderPlaceFailed(String errorCode, {required String method}) => capture(
-    'order_place_failed',
-    {'error_code': errorCode, 'method': method},
+  /// The relay refused the order, or Dafa would not start its payment. Dafa's
+  /// own code and the relay's `detail` (written for the operator) say which
+  /// step refused. The detail quotes Dafa's own sentences, so any long run of
+  /// digits in it is masked here: a payer's number never leaves the phone.
+  void orderPlaceFailed(Object error, {required String method}) {
+    final body = error is RelayApiException ? error.body : const {};
+    final gatewayCode = body['gateway_code'];
+    final detail = body['detail'];
+    capture('order_place_failed', {
+      'error_code': errorCodeOf(error),
+      'method': method,
+      if (gatewayCode is String && gatewayCode.isNotEmpty)
+        'gateway_code': gatewayCode,
+      if (detail is String && detail.isNotEmpty) 'detail': _masked(detail),
+    });
+  }
+
+  /// [text] cut short, with every run of six digits or more (a phone or a
+  /// card number) replaced.
+  static String _masked(String text) {
+    final masked = text.replaceAll(_longNumber, '•••');
+    return masked.length <= 200 ? masked : masked.substring(0, 200);
+  }
+
+  static final _longNumber = RegExp(
+    r'[0-9\u0660-\u0669](?:[ -]?[0-9\u0660-\u0669]){5,}',
   );
+
+  /// Dafa's card page did not load in the app's web view.
+  void paymentPageLoadFailed(CardOrder order, String reason) => capture(
+    'payment_page_load_failed',
+    {'order_id': order.id, 'reason': reason},
+  );
+
+  /// Dafa's card page closed: `returned` (its «المتابعة»), `settled` (the
+  /// relay heard first) or `closed` (the payer closed it). `status` is the
+  /// order as the app knew it then: a `settled` page may have ended unpaid.
+  void paymentPageClosed(
+    CardOrder order, {
+    required String result,
+    required Duration open,
+  }) => capture('payment_page_closed', {
+    'order_id': order.id,
+    'result': result,
+    'status': order.status.name,
+    'seconds': open.inSeconds,
+  });
 
   /// Paid, whatever happens next: the money event. `revenue` (in dinars) is
   /// what revenue analytics reads.

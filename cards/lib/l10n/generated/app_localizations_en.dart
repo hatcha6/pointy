@@ -808,7 +808,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get payNotFinishedBody =>
-      'Nothing has been charged yet. Finish paying by card, or cancel the order.';
+      'Your payment is not confirmed yet. If you paid, your order will show here once it is confirmed, so don’t pay again. If not, finish paying by card, or cancel the order.';
 
   @override
   String get payNotFinishedWalletBody =>

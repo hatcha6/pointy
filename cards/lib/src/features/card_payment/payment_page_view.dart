@@ -39,11 +39,16 @@ class PaymentPageView extends StatefulWidget {
     required this.url,
     required this.changes,
     required this.settled,
+    this.onLoadFailed,
   });
 
   final Uri url;
   final Listenable changes;
   final bool Function() settled;
+
+  /// The page did not load, with the web view's reason (its error type, or
+  /// its code when it gives no type).
+  final ValueChanged<String>? onLoadFailed;
 
   /// Shows the page over the app until it closes.
   static Future<PaymentPageResult> open(
@@ -52,13 +57,19 @@ class PaymentPageView extends StatefulWidget {
     required Listenable changes,
     required bool Function() settled,
     ValueChanged<Route<PaymentPageResult>>? onRoute,
+    ValueChanged<String>? onLoadFailed,
   }) {
     final route = MaterialPageRoute<PaymentPageResult>(
       settings: screenSettings('payment_page'),
       fullscreenDialog: true,
       // A bank card's details: never in a session replay.
       builder: (_) => Sensitive(
-        child: PaymentPageView(url: url, changes: changes, settled: settled),
+        child: PaymentPageView(
+          url: url,
+          changes: changes,
+          settled: settled,
+          onLoadFailed: onLoadFailed,
+        ),
       ),
     );
     onRoute?.call(route);
@@ -111,8 +122,13 @@ class _PaymentPageViewState extends State<PaymentPageView> {
           onPageFinished: (_) => _setLoading(false),
           onWebResourceError: (error) {
             _setLoading(false);
-            if ((error.isForMainFrame ?? true) && mounted) {
+            // Closing stops the page's own navigation, which some web
+            // views report as an error: that is not a failed load.
+            if ((error.isForMainFrame ?? true) && mounted && !_closing) {
               setState(() => _failed = true);
+              widget.onLoadFailed?.call(
+                error.errorType?.name ?? 'code_${error.errorCode}',
+              );
             }
           },
         ),

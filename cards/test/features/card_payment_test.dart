@@ -575,13 +575,15 @@ void main() {
       expect(opened, isEmpty);
       expect(analytics.asked, ['card-payment-form']);
       expect(analytics.forms, ['hosted']);
+      expect(analytics.closes, ['settled']);
     });
 
     testWidgets("closing Dafa's page with nothing paid asks the relay, then "
         'offers to pay again or call the order off', (tester) async {
+      final analytics = _ArmAnalytics('hosted');
       await openOrder(
         tester,
-        analytics: _ArmAnalytics('hosted'),
+        analytics: analytics,
         relay: fixtureRelay(orderStatus: 'awaiting_payment'),
         settle: false,
       );
@@ -597,10 +599,15 @@ void main() {
       expect(find.byType(PaymentPageView), findsNothing);
       expect(find.byType(OrderProgressPage), findsOneWidget);
       expect(find.text('لم يكتمل الدفع'), findsOneWidget);
+      // Only the relay knows whether money was taken: never "nothing was
+      // deducted", and never an invitation to pay twice.
+      expect(find.textContaining('لم يتأكد الدفع بعد'), findsOneWidget);
+      expect(find.textContaining('لم يُخصم'), findsNothing);
       expect(find.text('أكمل الدفع'), findsOneWidget);
       expect(find.text('إلغاء الطلب'), findsOneWidget);
       // Never the wait for a payment Dafa never confirmed.
       expect(find.text('نتحقق من الدفع'), findsNothing);
+      expect(analytics.closes, ['closed']);
 
       // Leaving the order stops its watch.
       tester.state<NavigatorState>(find.byType(Navigator).first).pop();
@@ -669,6 +676,7 @@ class _ArmAnalytics extends NoAnalytics {
   final String arm;
   final asked = <String>[];
   final forms = <Object?>[];
+  final closes = <Object?>[];
 
   @override
   Future<String?> variant(String key) async {
@@ -680,6 +688,9 @@ class _ArmAnalytics extends NoAnalytics {
   void capture(String event, [Map<String, Object> properties = const {}]) {
     if (event == 'payment_form_shown') {
       forms.add(properties['form']);
+    }
+    if (event == 'payment_page_closed') {
+      closes.add(properties['result']);
     }
   }
 }
