@@ -1495,7 +1495,7 @@ abstract class AppLocalizations {
   /// No description provided for @payNotFinishedBody.
   ///
   /// In ar, this message translates to:
-  /// **'لم يتأكد الدفع بعد. إن كنت قد دفعت فسيظهر كرتك هنا حين يتأكد، فلا تدفع مرة أخرى. وإلا فأكمل الدفع بالبطاقة، أو ألغِ الطلب.'**
+  /// **'لم يتأكد الدفع بعد. إن كنت قد دفعت فسيظهر طلبك هنا حين يتأكد، فلا تدفع مرة أخرى. وإلا فأكمل الدفع بالبطاقة، أو ألغِ الطلب.'**
   String get payNotFinishedBody;
 
   /// No description provided for @payNotFinishedWalletBody.

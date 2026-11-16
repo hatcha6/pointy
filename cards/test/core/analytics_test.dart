@@ -235,6 +235,26 @@ void main() {
     });
   });
 
+  test("a payer's number in Dafa's words never reaches analytics", () {
+    final analytics = RecordingAnalytics();
+    analytics.orderPlaceFailed(
+      const RelayApiException(
+        status: 422,
+        code: 'invalid_card_number',
+        body: {
+          'detail':
+              '422 user_identifier: 6396 0412 3456 7890 is not valid, '
+              'nor 0912345678',
+        },
+      ),
+      method: 'dafa_moamalat',
+    );
+    expect(
+      analytics.events.single.$2['detail'],
+      '422 user_identifier: ••• is not valid, nor •••',
+    );
+  });
+
   test('turning sharing off stops it; on starts it again', () {
     final analytics = RecordingAnalytics();
     final dependencies = fixtureDependencies(analytics: analytics);

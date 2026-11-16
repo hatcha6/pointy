@@ -65,6 +65,10 @@ class OrdersRepository {
 
   static const _followedKey = 'cards.followed_orders';
 
+  /// The most open orders kept on the phone: the newest. One that is never
+  /// read again (it left the list) must not stay there for good.
+  static const _followedKept = 50;
+
   /// The last status seen of each order this phone saw open, so each step of
   /// its life is told once, however often it is asked about. The open ones
   /// are kept on the phone: a payment that lands after the app restarts is
@@ -266,13 +270,20 @@ class OrdersRepository {
   }();
 
   Future<void> _save() async {
+    final open = [
+      for (final MapEntry(:key, :value) in _followed.entries)
+        if (value.isOpen) MapEntry(key, value.name),
+    ];
     try {
       await preferences?.setString(
         _followedKey,
-        jsonEncode({
-          for (final MapEntry(:key, :value) in _followed.entries)
-            if (value.isOpen) key: value.name,
-        }),
+        jsonEncode(
+          Map.fromEntries(
+            open.skip(
+              open.length > _followedKept ? open.length - _followedKept : 0,
+            ),
+          ),
+        ),
       );
     } on Exception {
       // Kept in memory for this launch all the same.
@@ -284,7 +295,13 @@ class OrdersRepository {
   /// order first seen open is followed from then on; one first seen closed
   /// is past telling. An order [placed] here starts as awaiting payment.
   Future<CardOrder> _track(CardOrder order, {bool placed = false}) async {
+    final customer = _customer;
     await _restore();
+    // An answer that was on its way while the customer changed is not theirs
+    // to follow.
+    if (customer != _customer) {
+      return order;
+    }
     final before =
         _followed[order.id] ?? (placed ? OrderStatus.awaitingPayment : null);
     final now = order.status;

@@ -232,7 +232,7 @@
   "removeCardBody": "Elle sera supprimée de ce téléphone. Vous pourrez l’enregistrer à nouveau en payant.",
   "savedCardLocked": "Votre identité n’a pas été confirmée, la carte enregistrée n’a pas été utilisée.",
   "payNotFinishedTitle": "Paiement non terminé",
-  "payNotFinishedBody": "Votre paiement n’est pas encore confirmé. Si vous avez payé, votre carte apparaîtra ici dès la confirmation : ne payez pas une seconde fois. Sinon, terminez le paiement par carte, ou annulez la commande.",
+  "payNotFinishedBody": "Votre paiement n’est pas encore confirmé. Si vous avez payé, votre commande apparaîtra ici dès la confirmation : ne payez pas une seconde fois. Sinon, terminez le paiement par carte, ou annulez la commande.",
   "payNotFinishedWalletBody": "Rien n’a encore été débité. Le code du portefeuille n’est demandé qu’à l’achat : annulez cette commande, puis achetez à nouveau.",
   "finishPaying": "Terminer le paiement",
   "orderCancelled": "Commande annulée.",

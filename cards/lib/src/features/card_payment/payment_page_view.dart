@@ -122,7 +122,9 @@ class _PaymentPageViewState extends State<PaymentPageView> {
           onPageFinished: (_) => _setLoading(false),
           onWebResourceError: (error) {
             _setLoading(false);
-            if ((error.isForMainFrame ?? true) && mounted) {
+            // Closing stops the page's own navigation, which some web
+            // views report as an error: that is not a failed load.
+            if ((error.isForMainFrame ?? true) && mounted && !_closing) {
               setState(() => _failed = true);
               widget.onLoadFailed?.call(
                 error.errorType?.name ?? 'code_${error.errorCode}',

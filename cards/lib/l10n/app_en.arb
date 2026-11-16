@@ -232,7 +232,7 @@
   "removeCardBody": "It will be deleted from this phone. You can save it again when you pay with it.",
   "savedCardLocked": "We could not confirm it’s you, so the saved card was not used.",
   "payNotFinishedTitle": "Payment not finished",
-  "payNotFinishedBody": "Your payment is not confirmed yet. If you paid, your card will show here once it is confirmed, so don’t pay again. If not, finish paying by card, or cancel the order.",
+  "payNotFinishedBody": "Your payment is not confirmed yet. If you paid, your order will show here once it is confirmed, so don’t pay again. If not, finish paying by card, or cancel the order.",
   "payNotFinishedWalletBody": "Nothing has been charged yet. A wallet’s code is only asked for at purchase, so cancel this order and buy again.",
   "finishPaying": "Finish paying",
   "orderCancelled": "Order cancelled.",
