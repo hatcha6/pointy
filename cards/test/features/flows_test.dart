@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:pointy_cards/dev/cards_fixtures.dart';
 import 'package:pointy_cards/src/app.dart';
+import 'package:pointy_cards/src/shared/container_route.dart';
 import 'package:pointy_cards/src/data/models/catalog.dart';
 import 'package:pointy_cards/src/data/models/order.dart';
 import 'package:pointy_cards/src/data/vault/code_vault.dart';
@@ -104,14 +105,8 @@ void main() {
       ),
       findsNothing,
     );
-    // The card flies back on the iPhone's edge swipe too.
-    expect(
-      tester
-          .widgetList<Hero>(find.byType(Hero))
-          .where((h) => '${h.tag}'.startsWith('brand-'))
-          .every((h) => h.transitionOnUserGestures),
-      isTrue,
-    );
+    // The page opened out of the tile's card, which stands empty meanwhile.
+    expect(find.byType(ContainerSource, skipOffstage: false), findsWidgets);
   });
 
   testWidgets('the iPhone\'s edge swipe flies the card back to its tile', (
@@ -143,17 +138,6 @@ void main() {
     expect(glow(), 0);
     await tester.pumpAndSettle();
     expect(glow(), greaterThan(0));
-    // The page's card and the tile it came from share a tag. In flight,
-    // both Heroes stand in as empty placeholders while the card flies above.
-    final tag = tester.widget<BrandPage>(find.byType(BrandPage)).heroTag;
-    int drawn() => find
-        .descendant(
-          of: find.byWidgetPredicate((w) => w is Hero && w.tag == tag),
-          matching: find.byType(CardArt),
-        )
-        .evaluate()
-        .length;
-    expect(drawn(), 1);
 
     // Right to left: the back swipe starts at the right edge.
     final gesture = await tester.startGesture(const Offset(388, 400));
@@ -161,7 +145,6 @@ void main() {
     await tester.pump();
     await gesture.moveBy(const Offset(-80, 0));
     await tester.pump();
-    expect(drawn(), 0);
     // The swipe put the glow out before the card left it behind.
     await tester.pump(const Duration(milliseconds: 150));
     expect(glow(), 0);
@@ -180,7 +163,6 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 120));
     expect(glow(), 0);
-    expect(drawn(), 0);
     await tester.pumpAndSettle();
     expect(find.byType(BrandPage), findsNothing);
     debugDefaultTargetPlatformOverride = null;
@@ -240,9 +222,8 @@ void main() {
     expect(opacities().every((o) => o == 1), isTrue);
   });
 
-  testWidgets('the home tab starts the shelf over: search, category, top', (
-    tester,
-  ) async {
+  testWidgets('the home tab goes back to the whole shelf where the customer '
+      'was in it; pressed again, to the top', (tester) async {
     await phone(tester);
     await tester.pumpWidget(CardsApp(dependencies: fixtureDependencies()));
     await tester.pumpAndSettle();
@@ -262,25 +243,84 @@ void main() {
     // Down the page, into a category.
     await tester.drag(find.byType(Scrollable).first, const Offset(0, -500));
     await tester.pumpAndSettle();
-    expect(page().pixels, greaterThan(0));
+    final was = page().pixels;
+    expect(was, greaterThan(0));
     await tester.tap(seeAll.first);
     await tester.pumpAndSettle();
     expect(seeAll, findsNothing);
 
+    // Home: the whole shelf, where they were in it.
     await tester.tap(find.text('الرئيسية'));
     await tester.pumpAndSettle();
     expect(seeAll, findsWidgets);
+    expect(page().pixels, was);
+
+    // Home again: the top.
+    await tester.tap(find.text('الرئيسية'));
+    await tester.pumpAndSettle();
     expect(page().pixels, 0);
 
-    // From another tab, the shelf is simply back at its start.
+    // From another tab, the shelf is as it was left; Home again, the top.
     await tester.drag(find.byType(Scrollable).first, const Offset(0, -300));
     await tester.pumpAndSettle();
+    final left = page().pixels;
+    expect(left, greaterThan(0));
     await tester.tap(find.text('حسابي'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('الرئيسية'));
     await tester.pumpAndSettle();
+    expect(page().pixels, left);
+    await tester.tap(find.text('الرئيسية'));
+    await tester.pumpAndSettle();
     expect(page().pixels, 0);
   });
+
+  testWidgets("a tap on the iPhone's status bar scrolls the shelf, and a "
+      "brand's page, to the top", (tester) async {
+    await phone(tester);
+    tester.view.padding = const FakeViewPadding(top: 59 * 3);
+    await tester.pumpWidget(CardsApp(dependencies: fixtureDependencies()));
+    await tester.pumpAndSettle();
+    ScrollPosition page() =>
+        tester.state<ScrollableState>(find.byType(Scrollable).first).position;
+
+    // As the iPhone tells the app of it.
+    Future<void> statusBarTap() async {
+      await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+        'flutter/status_bar',
+        const JSONMethodCodec().encodeMethodCall(
+          const MethodCall('handleScrollToTop'),
+        ),
+        (_) {},
+      );
+      await tester.pumpAndSettle();
+    }
+
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -500));
+    await tester.pumpAndSettle();
+    expect(page().pixels, greaterThan(0));
+    await statusBarTap();
+    expect(page().pixels, 0);
+
+    // A brand's page scrolls by a controller of its own.
+    await tester.pumpWidget(
+      CardsApp(
+        key: UniqueKey(),
+        dependencies: fixtureDependencies(),
+        home: BrandPage(
+          brand: CardBrand.fromJson(
+            (fixtureCatalog['brands'] as List).first as Map<String, dynamic>,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -300));
+    await tester.pumpAndSettle();
+    expect(page().pixels, greaterThan(0));
+    await statusBarTap();
+    expect(page().pixels, 0);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
 
   testWidgets('«عرض الكل» brings its category into the bar\'s view', (
     tester,

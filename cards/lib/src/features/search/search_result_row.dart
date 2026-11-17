@@ -12,6 +12,7 @@ import '../../shared/pressable.dart';
 import '../brand/brand_page.dart';
 import '../shelf/shelf_model.dart';
 import '../../shared/name_text.dart';
+import '../../shared/container_route.dart';
 
 /// One brand found by a search: its art, its name and category, and the
 /// price it starts from. Tapping it opens the brand.
@@ -30,10 +31,9 @@ class SearchResultRow extends StatelessWidget {
             .firstOrNull
             ?.name ??
         '';
-    final tag = 'brand-${brand.key}-search';
     return Pressable(
       semanticLabel: brand.name,
-      onTap: () => BrandPage.open(context, brand, heroTag: tag),
+      onTap: () => BrandPage.open(context, brand, from: context),
       child: Padding(
         padding: const EdgeInsets.symmetric(
           horizontal: CardsSpace.gutter,
@@ -44,7 +44,6 @@ class SearchResultRow extends StatelessWidget {
             context,
             from,
             category,
-            tag,
             // The narrowest phones: the price goes under the name, or the
             // name and its badges would have a column too thin to hold them.
             priceBelow: constraints.maxWidth < 300,
@@ -57,8 +56,7 @@ class SearchResultRow extends StatelessWidget {
   Widget _row(
     BuildContext context,
     Money? from,
-    String category,
-    String tag, {
+    String category, {
     required bool priceBelow,
   }) {
     final l10n = AppLocalizations.of(context);
@@ -73,10 +71,7 @@ class SearchResultRow extends StatelessWidget {
       children: [
         SizedBox(
           width: 96,
-          child: Hero(
-            createRectTween: cardRectTween,
-            transitionOnUserGestures: true,
-            tag: tag,
+          child: ContainerSource(
             child: CardArt(
               brand: brand,
               radius: 10,

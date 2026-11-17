@@ -20,6 +20,9 @@ import '../orders/order_watcher.dart';
 import 'topup_receipt.dart';
 import 'topup_text.dart';
 import 'topup_timeline.dart';
+import '../../shared/glass_bar.dart';
+import '../../shared/side_back.dart';
+import '../../shared/container_route.dart';
 
 /// A top-up as it stands, opened from «كروتي» (or its notification): where it
 /// is now, step by step, live while it moves; the receipt; and a way to tell
@@ -38,6 +41,9 @@ class TopUpOrderPage extends StatefulWidget {
     BuildContext context, {
     required CardOrder order,
     CardBrand? brand,
+
+    /// The row it opens out of, and closes back into.
+    BuildContext? from,
   }) {
     final dependencies = CardsScope.of(context);
     final watcher = OrderWatcher(
@@ -47,7 +53,8 @@ class TopUpOrderPage extends StatefulWidget {
     );
     return Navigator.of(context)
         .push(
-          MaterialPageRoute<void>(
+          routeFrom<void>(
+            from,
             settings: screenSettings('topup_order'),
             builder: (_) => TopUpOrderPage(watcher: watcher, brand: brand),
           ),
@@ -177,70 +184,81 @@ class _TopUpOrderPageState extends State<TopUpOrderPage>
         order.status != OrderStatus.awaitingPayment &&
         order.status != OrderStatus.cancelled;
     final width = math.min(MediaQuery.sizeOf(context).width * 0.44, 200.0);
-    return Scaffold(
-      appBar: AppBar(title: NameText(order.name, maxLines: 1)),
-      body: SafeArea(
-        top: false,
-        child: RefreshIndicator(
-          onRefresh: widget.watcher.poll,
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 520),
-              child: ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(
-                  CardsSpace.gutter,
-                  CardsSpace.sm,
-                  CardsSpace.gutter,
-                  CardsSpace.xxl,
-                ),
-                children: [
-                  if (brand != null) ...[
-                    Center(
-                      child: SizedBox(
-                        width: width,
-                        child: CardArt(brand: brand),
+    // The bar is over the list on a glass phone: the list starts under it.
+    final barTop = MediaQuery.paddingOf(context).top + kToolbarHeight;
+    // Its back button stands in the side column where the screen has one.
+    return SideBack(
+      child: Scaffold(
+        extendBodyBehindAppBar: GlassBar.extendsBody,
+        appBar: GlassBar(title: NameText(order.name, maxLines: 1)),
+        body: SafeArea(
+          top: false,
+          child: RefreshIndicator(
+            onRefresh: widget.watcher.poll,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 520),
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: EdgeInsets.fromLTRB(
+                    CardsSpace.gutter,
+                    CardsSpace.sm + (GlassBar.extendsBody ? barTop : 0),
+                    CardsSpace.gutter,
+                    CardsSpace.xxl,
+                  ),
+                  children: [
+                    if (brand != null) ...[
+                      Center(
+                        child: SizedBox(
+                          width: width,
+                          child: ContainerLanding(
+                            radius: CardsRadii.card,
+                            child: CardArt(brand: brand),
+                          ),
+                        ),
                       ),
+                      const SizedBox(height: CardsSpace.lg),
+                    ],
+                    _StatusCard(order: order, kind: kind, slow: _slow),
+                    if (report != null) ...[
+                      const SizedBox(height: CardsSpace.md),
+                      OrderReportCard(report: report, kind: kind),
+                    ],
+                    const SizedBox(height: CardsSpace.xl),
+                    _Section(
+                      title: l10n.orderStatusHeading,
+                      child: TopUpTimeline(order: order, kind: kind),
                     ),
                     const SizedBox(height: CardsSpace.lg),
-                  ],
-                  _StatusCard(order: order, kind: kind, slow: _slow),
-                  if (report != null) ...[
-                    const SizedBox(height: CardsSpace.md),
-                    OrderReportCard(report: report, kind: kind),
-                  ],
-                  const SizedBox(height: CardsSpace.xl),
-                  _Section(
-                    title: l10n.orderStatusHeading,
-                    child: TopUpTimeline(order: order, kind: kind),
-                  ),
-                  const SizedBox(height: CardsSpace.lg),
-                  Text(
-                    l10n.orderDetailsHeading,
-                    style: theme.textTheme.titleSmall,
-                  ),
-                  const SizedBox(height: CardsSpace.sm),
-                  TopUpReceipt(order: order, target: target, player: ''),
-                  const SizedBox(height: CardsSpace.xl),
-                  // Again, once this one ended: not while it is still on its way.
-                  if (brand != null &&
-                      brand.items.isNotEmpty &&
-                      !order.status.isOpen)
-                    FilledButton(
-                      onPressed: () => _again(brand),
-                      child: Text(l10n.topUpAgain(kind)),
+                    Text(
+                      l10n.orderDetailsHeading,
+                      style: theme.textTheme.titleSmall,
                     ),
-                  if (reportable && (report == null || report.resolved)) ...[
                     const SizedBox(height: CardsSpace.sm),
-                    OutlinedButton.icon(
-                      onPressed: _report,
-                      icon: const Icon(Icons.flag_outlined, size: 18),
-                      label: Text(
-                        report == null ? l10n.reportProblem : l10n.reportAgain,
+                    TopUpReceipt(order: order, target: target, player: ''),
+                    const SizedBox(height: CardsSpace.xl),
+                    // Again, once this one ended: not while it is still on its way.
+                    if (brand != null &&
+                        brand.items.isNotEmpty &&
+                        !order.status.isOpen)
+                      FilledButton(
+                        onPressed: () => _again(brand),
+                        child: Text(l10n.topUpAgain(kind)),
                       ),
-                    ),
+                    if (reportable && (report == null || report.resolved)) ...[
+                      const SizedBox(height: CardsSpace.sm),
+                      OutlinedButton.icon(
+                        onPressed: _report,
+                        icon: const Icon(Icons.flag_outlined, size: 18),
+                        label: Text(
+                          report == null
+                              ? l10n.reportProblem
+                              : l10n.reportAgain,
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ),

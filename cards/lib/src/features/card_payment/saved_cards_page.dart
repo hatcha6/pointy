@@ -9,6 +9,8 @@ import '../../shared/haptics.dart';
 import '../../shared/side_back.dart';
 import 'card_payment_page.dart';
 import '../../core/analytics/analytics.dart';
+import '../../shared/glass_bar.dart';
+import '../../shared/motion.dart';
 
 /// The cards kept on this phone, each one removable. Reached from the
 /// settings; saving happens only when paying.
@@ -48,7 +50,7 @@ class _SavedCardsPageState extends State<SavedCardsPage> {
     final l10n = AppLocalizations.of(context);
     final vault = CardsScope.of(context).cards;
     Haptics.warning();
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showCardsDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(l10n.removeCardTitle),
@@ -85,10 +87,8 @@ class _SavedCardsPageState extends State<SavedCardsPage> {
     );
     return SideBack(
       child: Scaffold(
-        appBar: AppBar(
-          title: Text(l10n.savedCardsSettings),
-          automaticallyImplyLeading: !SideBack.active(context),
-        ),
+        extendBodyBehindAppBar: GlassBar.extendsBody,
+        appBar: GlassBar(title: Text(l10n.savedCardsSettings)),
         body: cards == null
             ? const SizedBox.shrink()
             : Builder(

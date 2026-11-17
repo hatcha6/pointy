@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../design/cards_layout.dart';
 import '../design/cards_tokens.dart';
+import 'glass_bar.dart';
 import 'side_back.dart';
 
 /// A page to read (the privacy policy, the terms, the licenses): one column
@@ -47,9 +48,6 @@ class _ReadingPageState extends State<ReadingPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final bottom = MediaQuery.paddingOf(context).bottom + CardsSpace.huge;
-    // Asked here, outside the side column's room: inside it the column is
-    // already set aside and cannot be seen.
-    final sideBack = SideBack.active(context);
     return SideBack(
       child: Scaffold(
         body: NotificationListener<ScrollNotification>(
@@ -64,10 +62,8 @@ class _ReadingPageState extends State<ReadingPage> {
           child: LayoutBuilder(
             builder: (context, constraints) => CustomScrollView(
               slivers: [
-                SliverAppBar(
-                  pinned: true,
-                  centerTitle: true,
-                  automaticallyImplyLeading: !sideBack,
+                GlassBar.sliver(
+                  context,
                   title: ValueListenableBuilder<bool>(
                     valueListenable: _titleGone,
                     builder: (context, gone, child) => AnimatedOpacity(

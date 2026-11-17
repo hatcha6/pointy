@@ -89,7 +89,7 @@ class _GetAppBannerState extends State<GetAppBanner> {
 
   @override
   Widget build(BuildContext context) {
-    final media = MediaQuery.of(context);
+    final top = MediaQuery.paddingOf(context).top;
     return Column(
       children: [
         AnimatedSize(
@@ -97,7 +97,7 @@ class _GetAppBannerState extends State<GetAppBanner> {
           curve: CardsMotion.curve,
           alignment: Alignment.topCenter,
           child: _shown
-              ? _Bar(top: media.padding.top, onOpen: _open, onClose: _close)
+              ? _Bar(top: top, onOpen: _open, onClose: _close)
               : const SizedBox(width: double.infinity),
         ),
         Expanded(

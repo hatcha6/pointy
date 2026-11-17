@@ -28,6 +28,9 @@ import 'order_watcher.dart';
 import '../../core/analytics/analytics.dart';
 import '../../core/analytics/events.dart';
 import '../../core/analytics/experiments.dart';
+import '../../shared/glass_bar.dart';
+import '../../shared/motion.dart';
+import '../../shared/container_route.dart';
 
 /// An order on its way: it watches the relay and turns into the card the
 /// moment it arrives. The customer may leave; the card waits in «كروتي».
@@ -57,10 +60,13 @@ class OrderProgressPage extends StatefulWidget {
     required CardOrder order,
     CardBrand? brand,
     bool fresh = false,
+
+    /// The row it opens out of, and closes back into.
+    BuildContext? from,
   }) {
     final dependencies = CardsScope.of(context);
     if (order.isEsim && order.status == OrderStatus.delivered) {
-      return EsimPage.openDelivered(context, order, fresh: fresh);
+      return EsimPage.openDelivered(context, order, fresh: fresh, from: from);
     }
     if (order.toppedUp) {
       return TopUpDonePage.open(context, order: order, brand: brand);
@@ -68,7 +74,8 @@ class OrderProgressPage extends StatefulWidget {
     if (order.status == OrderStatus.delivered && order.codes.isNotEmpty) {
       dependencies.vault.keep(order.id, order.codes);
       return Navigator.of(context).push(
-        MaterialPageRoute(
+        routeFrom<void>(
+          from,
           settings: screenSettings('reveal'),
           builder: (_) => RevealPage(order: order, brand: brand),
         ),
@@ -83,7 +90,8 @@ class OrderProgressPage extends StatefulWidget {
     )..start();
     return Navigator.of(context)
         .push(
-          MaterialPageRoute(
+          routeFrom<void>(
+            from,
             settings: screenSettings('order_progress'),
             builder: (_) => OrderProgressPage(watcher: watcher, brand: brand),
           ),
@@ -548,10 +556,7 @@ class _OrderProgressPageState extends State<OrderProgressPage>
       edgeToEdge: true,
       child: Scaffold(
         extendBodyBehindAppBar: true,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          automaticallyImplyLeading: !SideBack.active(context),
-        ),
+        appBar: const GlassBar(clear: true),
         body: ListenableBuilder(
           listenable: _changes!,
           builder: (context, _) {
@@ -580,22 +585,9 @@ class _OrderProgressPageState extends State<OrderProgressPage>
                       padding: const EdgeInsets.all(CardsSpace.xl),
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 420),
-                        // Each state cross-fades into the next as the relay
+                        // Each state fades through to the next as the relay
                         // answers, instead of snapping.
-                        child: AnimatedSwitcher(
-                          duration: CardsMotion.standard,
-                          switchInCurve: CardsMotion.curve,
-                          transitionBuilder: (child, animation) =>
-                              FadeTransition(
-                                opacity: animation,
-                                child: ScaleTransition(
-                                  scale: Tween(
-                                    begin: 0.97,
-                                    end: 1.0,
-                                  ).animate(animation),
-                                  child: child,
-                                ),
-                              ),
+                        child: CardsSwitcher(
                           child: KeyedSubtree(
                             key: ValueKey(
                               '${_outcomeOf(order)}${_slow ? '-slow' : ''}',

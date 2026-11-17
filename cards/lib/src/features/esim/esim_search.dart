@@ -13,6 +13,7 @@ import '../../shared/pressable.dart';
 import '../../shared/section_header.dart';
 import 'esim_destination_page.dart';
 import 'esim_store_page.dart';
+import '../../shared/container_route.dart';
 
 const _shown = 6;
 
@@ -88,7 +89,13 @@ class _EsimSearchRow extends StatelessWidget {
       semanticLabel: l10n.esimSearchRowLabel(row.name),
       onTap: () {
         Haptics.tap();
-        EsimDestinationPage.open(context, row.key, name: row.name);
+        EsimDestinationPage.open(
+          context,
+          row.key,
+          name: row.name,
+          country: row.country,
+          from: context,
+        );
       },
       child: Padding(
         padding: const EdgeInsets.symmetric(
@@ -99,11 +106,13 @@ class _EsimSearchRow extends StatelessWidget {
           children: [
             SizedBox(
               width: 96,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: AspectRatio(
-                  aspectRatio: kCardAspect,
-                  child: EsimCardArt(name: '', country: row.country),
+              child: ContainerSource(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: AspectRatio(
+                    aspectRatio: kCardAspect,
+                    child: EsimCardArt(name: '', country: row.country),
+                  ),
                 ),
               ),
             ),

@@ -250,10 +250,10 @@ abstract class AppLocalizations {
   /// **'تعذّر تحميل الكروت'**
   String get catalogLoadFailedTitle;
 
-  /// Shown when the shelf is the saved copy because the network failed.
+  /// Shown over a saved copy (the shelf, the eSIM pages) when the relay could not be reached.
   ///
   /// In ar, this message translates to:
-  /// **'تعرض آخر نسخة محفوظة'**
+  /// **'لا يوجد اتصال بالإنترنت'**
   String get savedShelfNote;
 
   /// Home chip showing the customer's credit.
@@ -273,6 +273,18 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'الدولة أو المنطقة'**
   String get chooseCountry;
+
+  /// Brand page: heading above the currency chips of a card sold in several currencies.
+  ///
+  /// In ar, this message translates to:
+  /// **'العملة'**
+  String get chooseCurrency;
+
+  /// Brand page: a currency chip's label.
+  ///
+  /// In ar, this message translates to:
+  /// **'{code, select, USD{دولار} EUR{يورو} GBP{جنيه إسترليني} other{{code}}}'**
+  String currencyName(String code);
 
   /// Brand page / reveal: how to redeem the card.
   ///

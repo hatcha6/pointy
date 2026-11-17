@@ -14,6 +14,7 @@ import 'legal_document.dart';
 import 'legal_page.dart';
 import 'licenses_page.dart';
 import '../../core/analytics/analytics.dart';
+import '../../shared/glass_bar.dart';
 
 /// Who makes the app and how to reach them, its version, and the legal
 /// texts in one place.
@@ -62,10 +63,8 @@ class _AboutPageState extends State<AboutPage> {
     final version = _version;
     return SideBack(
       child: Scaffold(
-        appBar: AppBar(
-          title: Text(l10n.aboutTitle),
-          automaticallyImplyLeading: !SideBack.active(context),
-        ),
+        extendBodyBehindAppBar: GlassBar.extendsBody,
+        appBar: GlassBar(title: Text(l10n.aboutTitle)),
         body: Builder(
           builder: (context) => ListView(
             padding: CardsLayout.page(

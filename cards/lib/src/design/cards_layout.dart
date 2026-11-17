@@ -52,6 +52,8 @@ abstract final class CardsLayout {
       maxWidth: maxWidth,
     );
     return inner.copyWith(
+      // Under a bar the body runs beneath, the list starts clear of it.
+      top: inner.top + padding.top,
       left: inner.left + padding.left,
       right: inner.right + padding.right,
     );

@@ -17,6 +17,7 @@ import '../../shared/empty_state.dart';
 import '../../shared/esim_card_art.dart';
 import '../../shared/grouped.dart';
 import '../../shared/haptics.dart';
+import '../../shared/pill.dart';
 import '../../shared/relay_error_text.dart';
 import '../../shared/side_back.dart';
 import '../../shared/skeleton.dart';
@@ -28,12 +29,30 @@ import 'esim_page_mode.dart';
 import 'esim_split.dart';
 import 'esim_topups.dart';
 import 'esim_usage_card.dart';
+import '../../shared/glass_bar.dart';
+import '../../shared/motion.dart';
+import '../../shared/container_route.dart';
+import 'esim_checkout.dart';
 
 /// One eSIM, from the moment it is bought: a ticket with one thing to do, pinned
 /// at the bottom. Install it, send it to whoever it is for, or top it up.
 class EsimPage extends StatefulWidget {
-  const EsimPage({super.key, this.iccid, this.orderId, this.justBought = false})
-    : assert(iccid != null || orderId != null);
+  const EsimPage({
+    super.key,
+    this.iccid,
+    this.orderId,
+    this.justBought = false,
+    this.known,
+    this.knownName = '',
+    this.knownCountry = '',
+  }) : assert(iccid != null || orderId != null);
+
+  /// The eSIM as the card it was opened from holds it, or at least its name
+  /// and country: the page shows its banner from the first frame, before its
+  /// own reading comes, so the card has something to land on.
+  final CustomerEsim? known;
+  final String knownName;
+  final String knownCountry;
 
   final String? iccid;
 
@@ -45,13 +64,19 @@ class EsimPage extends StatefulWidget {
 
   static const screen = 'esim';
 
-  static Future<void> open(BuildContext context, String iccid) =>
-      Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          settings: screenSettings(screen),
-          builder: (_) => EsimPage(iccid: iccid),
-        ),
-      );
+  /// Opens an eSIM's page: out of its card at [from], where there is one.
+  static Future<void> open(
+    BuildContext context,
+    String iccid, {
+    BuildContext? from,
+    CustomerEsim? known,
+  }) => Navigator.of(context).push(
+    routeFrom<void>(
+      from,
+      settings: screenSettings(screen),
+      builder: (_) => EsimPage(iccid: iccid, known: known),
+    ),
+  );
 
   /// A paid order delivered its eSIM: this page takes the order's place.
   static Future<void> openDelivered(
@@ -59,15 +84,24 @@ class EsimPage extends StatefulWidget {
     CardOrder order, {
     bool replace = false,
     bool fresh = false,
+
+    /// The row it opens out of, and closes back into.
+    BuildContext? from,
   }) {
     final topUpOf = EsimItems.topUpIccid(order.itemKey);
     if (topUpOf != null) {
       return afterTopUp(context, topUpOf);
     }
     CardsScope.of(context).esim.changes.value++;
-    final route = MaterialPageRoute<void>(
+    final route = routeFrom<void>(
+      replace ? null : from,
       settings: screenSettings(screen),
-      builder: (_) => EsimPage(orderId: order.id, justBought: fresh || replace),
+      builder: (_) => EsimPage(
+        orderId: order.id,
+        justBought: fresh || replace,
+        knownName: esimBrandOfOrder(order).name,
+        knownCountry: esimBrandOfOrder(order).flagCountry,
+      ),
     );
     final navigator = Navigator.of(context);
     return replace ? navigator.pushReplacement(route) : navigator.push(route);
@@ -164,6 +198,32 @@ class _EsimPageState extends State<EsimPage> with WidgetsBindingObserver {
     final dependencies = CardsScope.of(context);
     final store = _store;
     var iccid = widget.iccid ?? _esim?.iccid;
+    if (_esim == null) {
+      // What this phone holds of it first: the page opens at once, and with
+      // no network still shows how to install it.
+      final kept = await dependencies.esim.keptEsim(
+        iccid: iccid,
+        orderId: widget.orderId,
+      );
+      if (kept != null) {
+        final confirmed = await store.isInstalled(kept.iccid);
+        final sent = await store.wasSent(kept.iccid);
+        if (!mounted) {
+          return;
+        }
+        if (_esim == null) {
+          setState(() {
+            _esim = kept;
+            _confirmed = confirmed;
+            _sent = sent;
+          });
+        }
+        iccid ??= kept.iccid;
+      }
+    }
+    if (!mounted) {
+      return;
+    }
     if (iccid == null) {
       // The row is written before the order is told delivered.
       final found = await dependencies.esim.esimOfOrder(widget.orderId!);
@@ -247,7 +307,7 @@ class _EsimPageState extends State<EsimPage> with WidgetsBindingObserver {
       return;
     }
     final l10n = AppLocalizations.of(context);
-    final worked = await showDialog<bool>(
+    final worked = await showCardsDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(l10n.esimInstallAskTitle),
@@ -308,7 +368,7 @@ class _EsimPageState extends State<EsimPage> with WidgetsBindingObserver {
   Future<String?> _askName(CustomerEsim esim, String title, String action) {
     final l10n = AppLocalizations.of(context);
     final controller = TextEditingController(text: esim.label);
-    return showDialog<String>(
+    return showCardsDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(title),
@@ -454,7 +514,6 @@ class _EsimPageState extends State<EsimPage> with WidgetsBindingObserver {
                 now: DateTime.now(),
               );
         final wide = EsimSplit.of(context);
-        final side = SideBack.active(context);
         return SideBack(
           actions: [
             if (esim != null)
@@ -466,15 +525,16 @@ class _EsimPageState extends State<EsimPage> with WidgetsBindingObserver {
               ),
           ],
           child: Scaffold(
-            appBar: AppBar(
+            extendBodyBehindAppBar: GlassBar.extendsBody,
+            appBar: GlassBar(
               title: Text(esim?.destinationName ?? ''),
-              automaticallyImplyLeading: !side,
               actions: [
-                if (esim != null && !side)
-                  IconButton(
+                if (esim != null)
+                  SideAction(
+                    symbol: 'pencil',
+                    icon: Icons.edit_outlined,
                     tooltip: l10n.esimRenameTitle,
-                    icon: const Icon(Icons.edit_outlined),
-                    onPressed: () => _rename(esim),
+                    onPressed: (_) => _rename(esim),
                   ),
               ],
             ),
@@ -501,14 +561,48 @@ class _EsimPageState extends State<EsimPage> with WidgetsBindingObserver {
                         )
                       : ListView(
                           padding: padding,
-                          children: const [
-                            Skeleton(height: 148, radius: CardsRadii.card),
-                            SizedBox(height: CardsSpace.lg),
-                            Skeleton(height: 120, radius: CardsRadii.card),
+                          children: [
+                            // What is already known of it, at once.
+                            if (widget.known case final known?)
+                              _hero(context, known)
+                            else if (widget.knownCountry.isNotEmpty)
+                              _banner(
+                                context,
+                                name: widget.knownName,
+                                country: widget.knownCountry,
+                              )
+                            else
+                              const Skeleton(
+                                height: 148,
+                                radius: CardsRadii.card,
+                              ),
+                            const SizedBox(height: CardsSpace.lg),
+                            const Skeleton(
+                              height: 120,
+                              radius: CardsRadii.card,
+                            ),
                           ],
                         );
                 }
                 final sections = _sections(context, esim, mode);
+                if (_error != null) {
+                  // The relay could not be reached: this is the eSIM as this
+                  // phone holds it, its usage as last read.
+                  sections.insert(
+                    1,
+                    Padding(
+                      padding: const EdgeInsets.only(top: CardsSpace.md),
+                      child: Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: Pill(
+                          text: l10n.savedShelfNote,
+                          tone: PillTone.warning,
+                          icon: Icons.cloud_off_rounded,
+                        ),
+                      ),
+                    ),
+                  );
+                }
                 if (wide) {
                   return EsimSplit(
                     start: Builder(
@@ -631,6 +725,47 @@ class _EsimPageState extends State<EsimPage> with WidgetsBindingObserver {
     );
   }
 
+  /// The eSIM's banner: where the card it was opened from lands.
+  Widget _hero(BuildContext context, CustomerEsim esim) {
+    final l10n = AppLocalizations.of(context);
+    final plan = esimPlanText(
+      l10n,
+      data: esim.data,
+      days: esim.days,
+      unlimited: esim.unlimited,
+    );
+    final named = esim.gift && esim.label.isNotEmpty;
+    return _banner(
+      context,
+      kicker: !esim.gift
+          ? ''
+          : named
+          ? l10n.esimGiftTo
+          : l10n.esimGiftKicker,
+      name: named ? esim.label : esim.destinationName,
+      country: esim.country,
+      caption: named ? '${esim.destinationName} · $plan' : plan,
+    );
+  }
+
+  Widget _banner(
+    BuildContext context, {
+    required String name,
+    required String country,
+    String kicker = '',
+    String caption = '',
+  }) => ContainerLanding(
+    same: false,
+    radius: CardsRadii.card,
+    child: EsimHero(
+      kicker: kicker,
+      name: name,
+      country: country,
+      caption: caption,
+      height: EsimSplit.of(context) ? 220 : 164,
+    ),
+  );
+
   List<Widget> _sections(
     BuildContext context,
     CustomerEsim esim,
@@ -641,12 +776,6 @@ class _EsimPageState extends State<EsimPage> with WidgetsBindingObserver {
     final install = esim.install;
     final muted = theme.textTheme.bodyMedium?.copyWith(
       color: theme.colorScheme.onSurfaceVariant,
-    );
-    final plan = esimPlanText(
-      l10n,
-      data: esim.data,
-      days: esim.days,
-      unlimited: esim.unlimited,
     );
     final named = esim.gift && esim.label.isNotEmpty;
     Widget heading(String title, String body) => Padding(
@@ -660,17 +789,7 @@ class _EsimPageState extends State<EsimPage> with WidgetsBindingObserver {
         ],
       ),
     );
-    final hero = EsimHero(
-      kicker: !esim.gift
-          ? ''
-          : named
-          ? l10n.esimGiftTo
-          : l10n.esimGiftKicker,
-      name: named ? esim.label : esim.destinationName,
-      country: esim.country,
-      caption: named ? '${esim.destinationName} · $plan' : plan,
-      height: EsimSplit.of(context) ? 220 : 164,
-    );
+    final hero = _hero(context, esim);
     final canInstallHere = _directUrl(install) != null;
     final alternativesOpen = _showAlternatives || !canInstallHere;
     final alternatives = install == null || !alternativesOpen

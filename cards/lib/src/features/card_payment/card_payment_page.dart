@@ -17,6 +17,8 @@ import 'card_payment_model.dart';
 import 'moamalat_client.dart';
 import 'three_ds_view.dart';
 import '../../core/analytics/analytics.dart';
+import '../../shared/glass_bar.dart';
+import '../../shared/motion.dart';
 
 /// How the card page ended.
 enum CardPaymentResult {
@@ -241,26 +243,19 @@ class _CardPaymentPageState extends State<CardPaymentPage> {
             ? _model.verificationAbandoned
             : () => _leave(CardPaymentResult.closed),
         child: Scaffold(
-          appBar: AppBar(
+          appBar: GlassBar(
+            close: true,
             title: Text(verifying ? l10n.cardVerifyTitle : l10n.cardPayTitle),
-            automaticallyImplyLeading: false,
-            leading: SideBack.active(context)
-                ? null
-                : IconButton(
-                    tooltip: MaterialLocalizations.of(context)
-                        .closeButtonTooltip,
-                    icon: const Icon(Icons.close_rounded),
-                    onPressed: settling
-                        ? null
-                        : verifying
-                        ? _model.verificationAbandoned
-                        : () => _leave(CardPaymentResult.closed),
-                  ),
+            // Mid-payment the button does nothing, as the side column's.
+            onLeading: settling
+                ? () {}
+                : verifying
+                ? _model.verificationAbandoned
+                : () => _leave(CardPaymentResult.closed),
           ),
           body: SafeArea(
             top: false,
-            child: AnimatedSwitcher(
-              duration: CardsMotion.standard,
+            child: CardsSwitcher(
               child: switch (_model.stage) {
                 CardPaymentStage.opening ||
                 CardPaymentStage.done ||

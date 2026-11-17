@@ -362,7 +362,7 @@ class EsimUsage {
 }
 
 /// How to install an eSIM. It installs the eSIM: never logged, never in
-/// analytics, and kept only as long as the page is open.
+/// analytics, and kept nowhere but the keychain, beside the cards' codes.
 class EsimInstall {
   const EsimInstall({
     required this.qr,

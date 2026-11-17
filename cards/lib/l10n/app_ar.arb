@@ -115,9 +115,9 @@
   "@catalogLoadFailedTitle": {
     "description": "The shelf could not load and none is saved."
   },
-  "savedShelfNote": "تعرض آخر نسخة محفوظة",
+  "savedShelfNote": "لا يوجد اتصال بالإنترنت",
   "@savedShelfNote": {
-    "description": "Shown when the shelf is the saved copy because the network failed."
+    "description": "Shown over a saved copy (the shelf, the eSIM pages) when the relay could not be reached."
   },
   "creditChip": "رصيدك {amount}",
   "@creditChip": {
@@ -135,6 +135,15 @@
   "chooseCountry": "الدولة أو المنطقة",
   "@chooseCountry": {
     "description": "Brand page: heading above the country and region chips."
+  },
+  "chooseCurrency": "العملة",
+  "@chooseCurrency": {
+    "description": "Brand page: heading above the currency chips of a card sold in several currencies."
+  },
+  "currencyName": "{code, select, USD{دولار} EUR{يورو} GBP{جنيه إسترليني} other{{code}}}",
+  "@currencyName": {
+    "description": "Brand page: a currency chip's label.",
+    "placeholders": {"code": {"type": "String"}}
   },
   "howToRedeem": "طريقة الاستخدام",
   "@howToRedeem": {

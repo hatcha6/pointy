@@ -183,12 +183,37 @@ class CardBrand {
 
   bool get anyAvailable => items.any((item) => item.available);
 
+  /// The currencies its cards come in, where that is what tells them apart:
+  /// a card sold in no one country, in dollars and in euros. Its page then
+  /// shows one currency at a time, as it shows one country at a time for a
+  /// card sold per country. Empty for every other card.
+  List<String> get currencies {
+    if (items.any(
+      (item) => item.country.isNotEmpty || item.faceCurrency.isEmpty,
+    )) {
+      return const [];
+    }
+    final seen = <String>{};
+    final all = [
+      for (final item in items)
+        if (seen.add(item.faceCurrency)) item.faceCurrency,
+    ];
+    return all.length < 2 ? const [] : all;
+  }
+
   /// The cheapest price among the sellable cards (all, when none is). Sold
   /// per country or region, the one its page opens on: a cheaper price in a
   /// store the buyer cannot use says nothing.
   Money? get fromPrice {
     final first = items.firstOrNull?.country ?? '';
-    final shown = items.where((item) => item.country == first).toList();
+    final currency = currencies.firstOrNull;
+    final shown = items
+        .where(
+          (item) =>
+              item.country == first &&
+              (currency == null || item.faceCurrency == currency),
+        )
+        .toList();
     final available = shown.where((item) => item.available).toList();
     return (available.isEmpty ? shown : available)
         .map((item) => item.price)

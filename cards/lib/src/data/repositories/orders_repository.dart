@@ -1,5 +1,6 @@
 import '../models/order_report.dart';
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -13,6 +14,8 @@ import '../api/relay_api.dart';
 import '../../features/card_payment/moamalat_client.dart';
 import '../models/account_target.dart';
 import '../models/order.dart';
+import '../vault/code_vault.dart';
+import '../vault/orders_vault.dart';
 
 /// What the checkout sends to place an order.
 class OrderRequest {
@@ -52,7 +55,23 @@ class OrdersRepository {
     required this.channel,
     Analytics? analytics,
     this.preferences,
-  }) : analytics = analytics ?? NoAnalytics();
+    this.kept,
+    this.codes,
+    String Function()? owner,
+  }) : analytics = analytics ?? NoAnalytics(),
+       _owner = owner ?? (() => '');
+
+  /// Where the orders as last listed are kept, for «كروتي» with no network.
+  /// Null keeps none.
+  final OrdersVault? kept;
+
+  /// Where the codes of delivered cards are kept. With it, every card the
+  /// customer bought is read once and kept, opened here or not, so all of
+  /// them show with no network. Null reads none ahead.
+  final CodeVault? codes;
+
+  /// The signed-in customer: kept orders are theirs alone.
+  final String Function() _owner;
 
   final RelayApi api;
   final String channel;
@@ -211,19 +230,119 @@ class OrdersRepository {
   Future<Result<List<CardOrder>>> orders() => Result.guard(() async {
     final customer = _customer;
     final answer = await api.get('/v1/customers/orders', signedIn: true);
-    final list = [
+    final rows = [
       for (final row in (answer['orders'] as List? ?? const []))
-        if (row is Map<String, dynamic>) CardOrder.fromJson(row),
+        if (row is Map<String, dynamic>) row,
     ];
+    final list = [for (final row in rows) CardOrder.fromJson(row)];
     // An answer that was on its way while the customer changed is not kept.
     if (customer == _customer) {
       lastOrders = list;
+      await _keepOrders(rows);
       for (final order in list) {
         await _track(order);
       }
+      unawaited(_keepCodes(list, customer));
     }
     return list;
   });
+
+  Future<void> _keepOrders(List<Map<String, dynamic>> rows) async {
+    final owner = _owner();
+    if (owner.isEmpty) {
+      return;
+    }
+    try {
+      await kept?.write(
+        jsonEncode({
+          'owner': owner,
+          // Codes live in the code vault only.
+          'orders': [
+            for (final row in rows) {...row, 'codes': const <Object>[]},
+          ],
+        }),
+      );
+    } on Object {
+      // A keychain that cannot be written costs the saved copy only.
+    }
+  }
+
+  /// The customer's orders as this phone holds them, newest first as the
+  /// relay listed them: what «كروتي» shows with no network. Empty when none.
+  Future<List<CardOrder>> keptOrders() async {
+    if (lastOrders case final known?) {
+      return known;
+    }
+    final customer = _customer;
+    final owner = _owner();
+    try {
+      final raw = owner.isEmpty ? null : await kept?.read();
+      if (raw == null) {
+        return const [];
+      }
+      final saved = jsonDecode(raw) as Map<String, dynamic>;
+      if (saved['owner'] != owner || customer != _customer) {
+        return const [];
+      }
+      return [
+        for (final row in saved['orders'] as List)
+          if (row is Map<String, dynamic>) CardOrder.fromJson(row),
+      ];
+    } on Object {
+      // A keychain that cannot be read is an empty one.
+      return const [];
+    }
+  }
+
+  /// Signed out, or the account deleted: the keychain forgets the orders.
+  Future<void> clearKept() async {
+    await kept?.clear();
+  }
+
+  /// The most cards read ahead after one listing: the newest. The rest are
+  /// read after the next, so a long history never floods the relay.
+  static const _codesAhead = 12;
+
+  Future<void>? _keepingCodes;
+
+  /// Reads the codes of delivered cards this phone does not hold yet, one
+  /// after another, and keeps them: a card never opened here still shows
+  /// its code with no network. The first one that cannot be read stops it
+  /// (no network, most likely); the next listing takes it up again.
+  Future<void> _keepCodes(List<CardOrder> orders, int customer) =>
+      _keepingCodes ??= () async {
+        final vault = codes;
+        if (vault == null) {
+          return;
+        }
+        var read = 0;
+        try {
+          for (final order in orders) {
+            if (order.status != OrderStatus.delivered ||
+                order.isEsim ||
+                order.toAccount) {
+              continue;
+            }
+            if (await vault.codes(order.id) != null) {
+              continue;
+            }
+            if (customer != _customer || read++ >= _codesAhead) {
+              return;
+            }
+            final answer = await api.get(
+              '/v1/customers/orders/${order.id}',
+              signedIn: true,
+            );
+            final codes = _order(answer).codes;
+            if (customer != _customer) {
+              return;
+            }
+            await vault.keep(order.id, codes);
+          }
+        } on Object {
+          // Taken up again after the next listing.
+        }
+      }().whenComplete(() => _keepingCodes = null);
 
   /// Moves with every [forget].
   int _customer = 0;

@@ -25,6 +25,8 @@ import '../../shared/name_text.dart';
 import '../../data/models/account_target.dart';
 import '../topup/account_form_model.dart';
 import '../topup/topup_text.dart';
+import '../../shared/motion.dart';
+import '../../shared/micro.dart';
 
 /// Checkout in one sheet, laid out like a wallet's pay sheet: what is bought,
 /// how it is paid (one row, «تغيير» to pick another), what it costs line by
@@ -34,7 +36,6 @@ Future<void> showCheckout(
   required CardBrand brand,
   required CardItem item,
   int quantity = 1,
-  String? heroTag,
   AccountFormModel? account,
   VoidCallback? onEditAccount,
   Map<String, String> orderAccount = const {},
@@ -247,8 +248,10 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
             child: AnimatedSize(
               duration: CardsMotion.standard,
               curve: CardsMotion.curve,
-              child: AnimatedSwitcher(
-                duration: CardsMotion.standard,
+              child: CardsSwitcher(
+                kind: SwitchKind.steps,
+                back: !waitingForCode,
+                alignment: Alignment.topCenter,
                 child: waitingForCode
                     ? _walletCodeStep(context, order)
                     : _reviewStep(context),
@@ -402,20 +405,17 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
             child: Text(l10n.retryAction),
           )
         else
-          FilledButton(
+          BusyButton(
+            busy: model.busy,
             onPressed:
-                model.busy ||
-                    !_accountReady ||
-                    (!model.creditCovers && model.method == null)
+                !_accountReady || (!model.creditCovers && model.method == null)
                 ? null
                 : _pay,
-            child: model.busy
-                ? const _Spinner()
-                : Text(
-                    model.creditCovers
-                        ? l10n.payFromCredit
-                        : l10n.payAmount(formatMoney(l10n, model.toPay)),
-                  ),
+            child: Text(
+              model.creditCovers
+                  ? l10n.payFromCredit
+                  : l10n.payAmount(formatMoney(l10n, model.toPay)),
+            ),
           ),
         const SizedBox(height: CardsSpace.md),
         Row(
@@ -501,9 +501,10 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
           ),
         ),
         const SizedBox(height: CardsSpace.xl),
-        FilledButton(
-          onPressed: model.busy || _otp.text.length < 4 ? null : _confirm,
-          child: model.busy ? const _Spinner() : Text(l10n.confirmPayment),
+        BusyButton(
+          busy: model.busy,
+          onPressed: _otp.text.length < 4 ? null : _confirm,
+          child: Text(l10n.confirmPayment),
         ),
         const SizedBox(height: CardsSpace.sm),
         TextButton(
@@ -744,11 +745,11 @@ class _Totals extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: CardsSpace.sm),
-              AnimatedSwitcher(
-                duration: CardsMotion.fast,
+              ValueSwitcher(
+                value: model.toPay,
+                alignment: AlignmentDirectional.centerEnd,
                 child: Text(
                   formatMoney(l10n, model.toPay),
-                  key: ValueKey(model.toPay),
                   style: PointyTypography.numeric(
                     theme.textTheme.headlineSmall!,
                   ),
@@ -807,15 +808,4 @@ class _ErrorLine extends StatelessWidget {
       ),
     );
   }
-}
-
-class _Spinner extends StatelessWidget {
-  const _Spinner();
-
-  @override
-  Widget build(BuildContext context) => const SizedBox(
-    width: 22,
-    height: 22,
-    child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
-  );
 }

@@ -27,6 +27,8 @@ import '../shelf/shelf_model.dart';
 import 'cards_sidebar.dart';
 import 'cards_tab_bar.dart';
 import '../../shared/web_edges.dart';
+import '../../shared/motion.dart';
+import '../../shared/status_tap.dart';
 
 /// The app's three places: the shelf, the customer's cards, their account.
 /// Each tab keeps its state when the customer moves between them. Links
@@ -47,6 +49,10 @@ class _CardsShellState extends State<CardsShell> {
   ValueNotifier<int>? _orders;
   LinkInbox? _links;
   final _homeReset = HomeReset();
+
+  /// The shelf's scroll: what a tap on the status bar scrolls while the
+  /// shelf is the tab on show.
+  final _homeScroll = ScrollController();
 
   /// What the web build's address bar last showed for the shell.
   String? _shownLocation;
@@ -122,6 +128,7 @@ class _CardsShellState extends State<CardsShell> {
       shelf.dispose();
     }
     _homeReset.dispose();
+    _homeScroll.dispose();
     super.dispose();
   }
 
@@ -296,11 +303,11 @@ class _CardsShellState extends State<CardsShell> {
     );
   }
 
-  /// The tab bar. Home always starts the shelf over (search cleared, all
-  /// categories, the top), visibly when it was already showing.
+  /// The tab bar. Home takes the shelf back from a category or a search to
+  /// where the customer was; pressed again, to the top.
   void _select(int tab) {
     if (tab == 0) {
-      _homeReset.reset(animate: _tab == 0);
+      _homeReset.home(onScreen: _tab == 0);
     }
     _go(tab);
   }
@@ -318,12 +325,24 @@ class _CardsShellState extends State<CardsShell> {
 
   @override
   Widget build(BuildContext context) {
+    // A tap on the status bar scrolls the tab on show to its top: the shelf
+    // by its own controller, the other tabs by the route's, as any page.
+    final route = PrimaryScrollController.maybeOf(context);
+    return StatusTapScrolls(
+      controller: _tab == CardsTab.shelf.index || route == null
+          ? _homeScroll
+          : route,
+      child: _layout(context, route),
+    );
+  }
+
+  Widget _layout(BuildContext context, ScrollController? route) {
     final padding = MediaQuery.paddingOf(context);
     final side = CardsTabBar.side(padding);
-    final pages = IndexedStack(
+    final stack = FadeThroughStack(
       index: _tab,
       children: [
-        HomePage(shelf: _shelf!, reset: _homeReset),
+        HomePage(shelf: _shelf!, reset: _homeReset, scroll: _homeScroll),
         // Rebuilt on each visit so a card bought a minute ago is there.
         _tab == 1
             ? MyCardsPage(key: ValueKey(_myCardsVisit), onBrowse: () => _go(0))
@@ -331,6 +350,10 @@ class _CardsShellState extends State<CardsShell> {
         AccountPage(visit: _accountVisit),
       ],
     );
+    // The tabs' own scroll views go by the route's controller, as before.
+    final Widget pages = route == null
+        ? stack
+        : PrimaryScrollController(controller: route, child: stack);
     if (sidebarFits(context)) {
       final media = MediaQuery.of(context);
       return Scaffold(

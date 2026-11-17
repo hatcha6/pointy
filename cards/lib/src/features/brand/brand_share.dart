@@ -10,6 +10,8 @@ import '../../../l10n/generated/app_localizations.dart';
 import '../../shared/cards_scope.dart';
 import '../../shared/side_back.dart';
 import '../links/cards_link.dart';
+import '../../shared/glass_button.dart';
+import '../shell/cards_tab_bar.dart';
 
 /// The brand page's share button, beside its back button: the brand's
 /// `cards.dftr.ly` link through the phone's own share sheet, which a
@@ -25,6 +27,17 @@ class BrandShareButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (CardsTabBar.nativeGlass) {
+      return Padding(
+        padding: const EdgeInsets.all(CardsSpace.sm),
+        child: GlassButton(
+          symbol: 'square.and.arrow.up',
+          icon: const Icon(CupertinoIcons.share),
+          tooltip: AppLocalizations.of(context).shareAction,
+          onPressed: (button) => shareBrand(button, brand, item),
+        ),
+      );
+    }
     return Padding(
       padding: const EdgeInsets.all(CardsSpace.sm),
       child: Material(

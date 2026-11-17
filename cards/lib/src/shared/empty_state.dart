@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../design/cards_tokens.dart';
+import 'micro.dart';
 
 /// A page with nothing in it yet: an icon in a soft disc, a title, a line of
 /// help, and at most one action.
@@ -29,17 +30,19 @@ class EmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 88,
-              height: 88,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primaryContainer,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                icon,
-                size: 40,
-                color: theme.colorScheme.onPrimaryContainer,
+            AppearRise(
+              child: Container(
+                width: 88,
+                height: 88,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primaryContainer,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  icon,
+                  size: 40,
+                  color: theme.colorScheme.onPrimaryContainer,
+                ),
               ),
             ),
             const SizedBox(height: CardsSpace.xl),

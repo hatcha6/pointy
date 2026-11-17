@@ -369,13 +369,13 @@ class _OnboardingPageState extends State<OnboardingPage>
   /// words' column. Either way the picture turns into the question's own
   /// and the last step's words sink and fade where the question appears.
   Widget _questionStage(List<_Step> steps, Widget art) {
-    final glide = CurvedAnimation(
-      parent: _toQuestion,
-      curve: const Interval(0, 0.7, curve: CardsMotion.curve),
+    // Driven, not CurvedAnimations: ones made in `build` would listen to the
+    // controller for good.
+    final glide = _toQuestion.drive(
+      CurveTween(curve: const Interval(0, 0.7, curve: CardsMotion.curve)),
     );
-    final leave = CurvedAnimation(
-      parent: _toQuestion,
-      curve: const Interval(0, 0.3, curve: Curves.easeIn),
+    final leave = _toQuestion.drive(
+      CurveTween(curve: const Interval(0, 0.3, curve: Curves.easeIn)),
     );
     Widget form({bool compact = false}) => ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 460),

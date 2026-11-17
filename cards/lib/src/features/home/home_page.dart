@@ -18,6 +18,7 @@ import '../../shared/glass_edge_header.dart';
 import '../../shared/money_text.dart';
 import '../../shared/pill.dart';
 import '../../shared/pressable.dart';
+import '../../shared/pull_refresh.dart';
 import '../../shared/section_header.dart';
 import '../../shared/search_field.dart';
 import '../../shared/skeleton.dart';
@@ -35,13 +36,18 @@ import 'home_reset.dart';
 import 'native_category_chips.dart';
 import 'shelf_reveal.dart';
 import '../../shared/name_text.dart';
+import '../../shared/container_route.dart';
 
 /// The shelf, the way the best storefronts lay one out: a large title, search
 /// and the categories pinned under the thumb, the most-wanted cards as a wide
 /// carousel, what the customer bought before, then one horizontal shelf per
 /// category with «عرض الكل». The card art is the hero throughout.
 class HomePage extends StatefulWidget {
-  const HomePage({super.key, required this.shelf, this.reset});
+  const HomePage({super.key, required this.shelf, this.reset, this.scroll});
+
+  /// The shelf's scroll, where the shell holds it (a tap on the status bar
+  /// scrolls it to the top).
+  final ScrollController? scroll;
 
   final ShelfModel shelf;
 
@@ -59,7 +65,7 @@ class _HomePageState extends State<HomePage>
     with SingleTickerProviderStateMixin {
   late final _search = TextEditingController(text: widget.shelf.query);
   final _searchFocus = FocusNode();
-  final _scroll = ScrollController();
+  late final _scroll = widget.scroll ?? ScrollController();
   late final _reveal = ShelfReveal(this);
 
   /// Where the search and the category bar have just pinned under the title.
@@ -74,8 +80,19 @@ class _HomePageState extends State<HomePage>
     shelf.addListener(_followQuery);
   }
 
+  /// Whether the whole shelf is showing (no category, no search), and how
+  /// far down it the customer was when they last left it for one: where
+  /// Home takes them back to.
+  bool _whole = true;
+  double? _before;
+
   /// A link can set the search: the field shows it.
   void _followQuery() {
+    final whole = shelf.category == null && !shelf.searching;
+    if (_whole && !whole) {
+      _before = _scroll.hasClients ? _scroll.offset : null;
+    }
+    _whole = whole;
     if (_search.text != shelf.query) {
       _search.text = shelf.query;
     }
@@ -101,7 +118,9 @@ class _HomePageState extends State<HomePage>
     _searchFocus.dispose();
     _reveal.dispose();
     _search.dispose();
-    _scroll.dispose();
+    if (widget.scroll == null) {
+      _scroll.dispose();
+    }
     super.dispose();
   }
 
@@ -131,6 +150,34 @@ class _HomePageState extends State<HomePage>
       shelf.filter(category);
     }
 
+    if (widget.reset!.back) {
+      if (changed) {
+        // Back to the whole shelf, where the customer was in it.
+        final before = _before ?? 0;
+        _before = null;
+        void restore() {
+          clear();
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && _scroll.hasClients) {
+              _scroll.jumpTo(
+                before.clamp(0, _scroll.position.maxScrollExtent).toDouble(),
+              );
+            }
+          });
+        }
+
+        if (widget.reset!.animate) {
+          _reveal.run(context, restore);
+        } else {
+          restore();
+        }
+        return;
+      }
+      if (!widget.reset!.animate) {
+        // Coming from another tab: the shelf as it was left.
+        return;
+      }
+    }
     if (!widget.reset!.animate) {
       clear();
       if (_scroll.hasClients) {
@@ -173,6 +220,31 @@ class _HomePageState extends State<HomePage>
             ? math.max(0.0, (width - CardsLayout.shelf) / 2)
             : 0.0;
         final content = column + EdgeInsets.symmetric(horizontal: centre);
+        final SliverPersistentHeaderDelegate header = CardsTabBar.nativeGlass
+            // Where the system draws Liquid Glass (iOS 26):
+            // the categories as its glass chips over a soft
+            // fade, and no search field (search is the tab
+            // bar's button, which opens the search page).
+            ? GlassEdgeHeader(
+                top: GlassEdgeHeader.topFor(padding),
+                statusBar: padding.top,
+                childHeight: NativeCategoryChips.height,
+                child: !shelf.searching && shelf.shelf.categories.length > 1
+                    ? NativeCategoryChips(
+                        shelf: shelf,
+                        column: column,
+                        onCategory: _pickCategory,
+                      )
+                    : null,
+              )
+            : _SearchAndCategories(
+                shelf: shelf,
+                controller: _search,
+                focus: _searchFocus,
+                column: column,
+                onCategory: _pickCategory,
+                textScaler: MediaQuery.textScalerOf(context),
+              );
         return ColumnBleedScope(
           insets: column,
           // The scroll view spans the column too, so the pinned chips can
@@ -181,8 +253,11 @@ class _HomePageState extends State<HomePage>
             bottom: false,
             left: column.left == 0,
             right: column.right == 0,
-            child: RefreshIndicator(
+            child: PullRefresh(
               onRefresh: shelf.refresh,
+              scroll: _scroll,
+              pinnedAt: _pinnedAt,
+              pinnedExtent: desktop ? 0 : header.minExtent,
               child: CustomScrollView(
                 controller: _scroll,
                 // Cards start loading well before a fast scroll reaches them.
@@ -205,36 +280,7 @@ class _HomePageState extends State<HomePage>
                   ),
                   // A desktop's sidebar holds search and the categories.
                   if (!desktop)
-                    SliverPersistentHeader(
-                      pinned: true,
-                      delegate: CardsTabBar.nativeGlass
-                          // Where the system draws Liquid Glass (iOS 26):
-                          // the categories as its glass chips over a soft
-                          // fade, and no search field (search is the tab
-                          // bar's button, which opens the search page).
-                          ? GlassEdgeHeader(
-                              top: GlassEdgeHeader.topFor(padding),
-                              statusBar: padding.top,
-                              childHeight: NativeCategoryChips.height,
-                              child:
-                                  !shelf.searching &&
-                                      shelf.shelf.categories.length > 1
-                                  ? NativeCategoryChips(
-                                      shelf: shelf,
-                                      column: column,
-                                      onCategory: _pickCategory,
-                                    )
-                                  : null,
-                            )
-                          : _SearchAndCategories(
-                              shelf: shelf,
-                              controller: _search,
-                              focus: _searchFocus,
-                              column: column,
-                              onCategory: _pickCategory,
-                              textScaler: MediaQuery.textScalerOf(context),
-                            ),
-                    ),
+                    SliverPersistentHeader(pinned: true, delegate: header),
                   for (final sliver in _content(context, width - centre * 2))
                     SliverPadding(padding: content, sliver: sliver),
                   SliverToBoxAdapter(child: SizedBox(height: bottomInset)),
@@ -313,7 +359,7 @@ class _HomePageState extends State<HomePage>
                 itemBuilder: (context, index) => ShelfRise(
                   reveal: _reveal,
                   order: index,
-                  child: _BrandTile(brand: brands[index], heroScope: 'grid'),
+                  child: _BrandTile(brand: brands[index]),
                 ),
               );
             },
@@ -587,8 +633,10 @@ class _CategoryBarState extends State<_CategoryBar> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final target = _keys[selected]?.currentContext;
       if (target != null && target.mounted) {
-        Scrollable.ensureVisible(
-          target,
+        // The bar's own scroll only: `Scrollable.ensureVisible` moves
+        // every scroll view above too, and took the page back to its top.
+        Scrollable.of(target).position.ensureVisible(
+          target.findRenderObject()!,
           alignment: 0.5,
           duration: CardsMotion.standard,
           curve: CardsMotion.curve,
@@ -725,7 +773,7 @@ class _FeaturedCarouselState extends State<_FeaturedCarousel> {
         columns: 3,
         children: [
           for (final brand in widget.brands)
-            _BrandTile(brand: brand, heroScope: 'featured', large: true),
+            _BrandTile(brand: brand, large: true),
         ],
       );
     }
@@ -757,7 +805,7 @@ class _FeaturedCarouselState extends State<_FeaturedCarousel> {
             padding: EdgeInsetsDirectional.only(
               start: index == 0 ? CardsSpace.gutter : CardsSpace.md,
             ),
-            child: _BrandTile(brand: brand, heroScope: 'featured', large: true),
+            child: _BrandTile(brand: brand, large: true),
           );
         },
       ),
@@ -791,7 +839,7 @@ class _BrandShelf extends StatelessWidget {
             columns: columns,
             children: [
               for (final brand in brands.take(columns))
-                _BrandTile(brand: brand, heroScope: scope),
+                _BrandTile(brand: brand),
             ],
           );
         },
@@ -811,7 +859,7 @@ class _BrandShelf extends StatelessWidget {
           separatorBuilder: (_, _) => const SizedBox(width: CardsSpace.md),
           itemBuilder: (context, index) => SizedBox(
             width: tileWidth,
-            child: _BrandTile(brand: brands[index], heroScope: scope),
+            child: _BrandTile(brand: brands[index]),
           ),
         ),
       ),
@@ -828,16 +876,9 @@ double _tileTextGrowth(BuildContext context) {
 }
 
 class _BrandTile extends StatelessWidget {
-  const _BrandTile({
-    required this.brand,
-    required this.heroScope,
-    this.large = false,
-  });
+  const _BrandTile({required this.brand, this.large = false});
 
   final CardBrand brand;
-
-  /// Where the tile sits: a brand on two shelves needs two Hero tags.
-  final String heroScope;
   final bool large;
 
   @override
@@ -851,19 +892,16 @@ class _BrandTile extends StatelessWidget {
       brand,
       section: large ? l10n.featuredTitle : null,
     );
-    final tag = 'brand-${brand.key}-$heroScope';
     return Pressable(
       semanticLabel: brand.name,
-      onTap: () => BrandPage.open(context, brand, heroTag: tag),
+      // The page opens out of the card's art, and closes back into it.
+      onTap: () => BrandPage.open(context, brand, from: context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Stack(
             children: [
-              Hero(
-                createRectTween: cardRectTween,
-                transitionOnUserGestures: true,
-                tag: tag,
+              ContainerSource(
                 child: CardArt(
                   brand: brand,
                   muted: !brand.anyAvailable,
@@ -940,7 +978,10 @@ class _BuyAgainShelf extends StatelessWidget {
               const EdgeInsets.symmetric(horizontal: CardsSpace.gutter) + extra,
           itemCount: entries.length,
           separatorBuilder: (_, _) => const SizedBox(width: CardsSpace.md),
-          itemBuilder: (context, index) => _entry(context, entries[index]),
+          // Each tile under a context of its own: the list's is shared by
+          // all of them, and a page opens out of the tile that was tapped.
+          itemBuilder: (_, index) =>
+              Builder(builder: (tile) => _entry(tile, entries[index])),
         ),
       ),
     );
@@ -951,12 +992,8 @@ class _BuyAgainShelf extends StatelessWidget {
     final theme = Theme.of(context);
     return Pressable(
       semanticLabel: entry.brand.name,
-      onTap: () => BrandPage.open(
-        context,
-        entry.brand,
-        item: entry.item,
-        heroTag: 'brand-${entry.brand.key}-again',
-      ),
+      onTap: () =>
+          BrandPage.open(context, entry.brand, item: entry.item, from: context),
       child: Container(
         padding: const EdgeInsets.all(CardsSpace.sm),
         decoration: BoxDecoration(
@@ -969,10 +1006,7 @@ class _BuyAgainShelf extends StatelessWidget {
           children: [
             SizedBox(
               width: 84,
-              child: Hero(
-                createRectTween: cardRectTween,
-                transitionOnUserGestures: true,
-                tag: 'brand-${entry.brand.key}-again',
+              child: ContainerSource(
                 child: CardArt(brand: entry.brand, radius: 10, shadow: false),
               ),
             ),

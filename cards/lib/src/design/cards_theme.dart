@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:pointy_brand/pointy_brand.dart';
 
 import 'cards_tokens.dart';
+import '../shared/motion.dart';
 
 /// The card app's theme, built on the Daftar brand palette and type face.
 ///
@@ -78,8 +79,17 @@ abstract final class CardsTheme {
       splashFactory: InkSparkle.splashFactory,
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {
+          // The system's slide, which follows the finger on a swipe back.
           TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-          TargetPlatform.android: FadeForwardsPageTransitionsBuilder(),
+          // Material's shared axis; a back swipe is the system's own
+          // predictive back.
+          TargetPlatform.android: CardsPageTransitionsBuilder(
+            predictiveBack: true,
+          ),
+          TargetPlatform.fuchsia: CardsPageTransitionsBuilder(),
+          TargetPlatform.linux: CardsPageTransitionsBuilder(),
+          TargetPlatform.macOS: CardsPageTransitionsBuilder(),
+          TargetPlatform.windows: CardsPageTransitionsBuilder(),
         },
       ),
       appBarTheme: AppBarTheme(

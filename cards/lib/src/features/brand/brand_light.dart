@@ -7,6 +7,7 @@ import '../../data/models/catalog.dart';
 import '../../design/cards_tokens.dart';
 import '../../shared/card_art.dart';
 import '../../shared/tilt_card.dart';
+import '../../shared/container_route.dart';
 
 /// The brand page's light: the card's own colours, cast like YouTube's
 /// ambient mode around a video. It fills the top of the page behind the
@@ -162,13 +163,11 @@ class BrandCardStage extends StatelessWidget {
   const BrandCardStage({
     super.key,
     required this.brand,
-    required this.heroTag,
     required this.width,
     required this.light,
   });
 
   final CardBrand brand;
-  final String heroTag;
   final double width;
   final Animation<double> light;
 
@@ -235,14 +234,13 @@ class BrandCardStage extends StatelessWidget {
                   ),
                 ),
               ),
-              // Flat in flight; it answers the phone's tilt once landed.
-              TiltCard(
-                radius: CardsRadii.tile,
-                strength: light,
-                child: Hero(
-                  tag: heroTag,
-                  createRectTween: cardRectTween,
-                  transitionOnUserGestures: true,
+              // The shelf's card, enlarging, lands here: on the whole
+              // tilting card, which stands back until it has.
+              ContainerLanding(
+                // It answers the phone's tilt.
+                child: TiltCard(
+                  radius: CardsRadii.tile,
+                  strength: light,
                   child: CardArt(
                     brand: brand,
                     radius: CardsRadii.tile,

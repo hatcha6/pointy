@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../design/cards_tokens.dart';
 import '../../shared/cards_scope.dart';
 import '../attribution/reward_sheet.dart';
 import 'onboarding_page.dart';
+import '../../shared/motion.dart';
 
 /// The onboarding in front of [child] the first time the app opens, once,
 /// ending on «من أين سمعت عنا؟». Not for someone already signed in (they know the
@@ -44,17 +44,8 @@ class _FirstRunState extends State<FirstRun> {
   @override
   Widget build(BuildContext context) {
     // The steps step back and fade as the shelf rises into place.
-    return AnimatedSwitcher(
+    return CardsSwitcher(
       duration: const Duration(milliseconds: 560),
-      switchInCurve: CardsMotion.curve,
-      switchOutCurve: Curves.easeIn,
-      transitionBuilder: (child, animation) => FadeTransition(
-        opacity: animation,
-        child: ScaleTransition(
-          scale: Tween(begin: 0.94, end: 1.0).animate(animation),
-          child: child,
-        ),
-      ),
       child: switch (_step!) {
         _Step.onboarding => OnboardingPage(
           key: const ValueKey('onboarding'),

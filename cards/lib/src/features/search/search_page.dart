@@ -16,6 +16,7 @@ import '../esim/esim_store_page.dart';
 import '../shelf/shelf_model.dart';
 import 'search_result_row.dart';
 import '../../core/analytics/analytics.dart';
+import '../../shared/glass_bar.dart';
 
 /// Search as a page of its own, as Apple's apps open it from a search
 /// button: a title, the field ready to type in, the categories to browse
@@ -85,7 +86,7 @@ class _SearchPageState extends State<SearchPage> {
                   keyboardDismissBehavior:
                       ScrollViewKeyboardDismissBehavior.onDrag,
                   slivers: [
-                    if (!sideBack) const SliverAppBar(pinned: true),
+                    if (!sideBack) GlassBar.sliver(context),
                     SliverPadding(
                       padding: inset,
                       sliver: SliverToBoxAdapter(

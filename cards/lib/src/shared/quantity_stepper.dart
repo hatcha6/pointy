@@ -4,6 +4,7 @@ import 'package:pointy_brand/pointy_brand.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../design/cards_tokens.dart';
 import 'haptics.dart';
+import 'motion.dart';
 
 /// − n + in a capsule, 44 px targets, a tick on each change, and the number
 /// rolling to its new value.
@@ -54,18 +55,10 @@ class QuantityStepper extends StatelessWidget {
           ),
           SizedBox(
             width: 28,
-            child: AnimatedSwitcher(
-              duration: CardsMotion.fast,
-              transitionBuilder: (child, animation) => FadeTransition(
-                opacity: animation,
-                child: ScaleTransition(
-                  scale: Tween(begin: 0.7, end: 1.0).animate(animation),
-                  child: child,
-                ),
-              ),
+            child: ValueSwitcher<num>(
+              value: value,
               child: Text(
                 '$value',
-                key: ValueKey(value),
                 textAlign: TextAlign.center,
                 style: PointyTypography.numeric(theme.textTheme.titleMedium!)
                     .copyWith(fontWeight: FontWeight.w700),

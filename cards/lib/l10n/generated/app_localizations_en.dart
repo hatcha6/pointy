@@ -95,7 +95,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get catalogLoadFailedTitle => 'Couldn\'t load the cards';
 
   @override
-  String get savedShelfNote => 'Showing the last saved copy';
+  String get savedShelfNote => 'No internet connection';
 
   @override
   String creditChip(String amount) {
@@ -107,6 +107,20 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chooseCountry => 'Country or region';
+
+  @override
+  String get chooseCurrency => 'Currency';
+
+  @override
+  String currencyName(String code) {
+    String _temp0 = intl.Intl.selectLogic(code, {
+      'USD': 'US dollar',
+      'EUR': 'Euro',
+      'GBP': 'Pound sterling',
+      'other': '$code',
+    });
+    return '$_temp0';
+  }
 
   @override
   String get howToRedeem => 'How to use';

@@ -20,6 +20,8 @@ import '../links/cards_link.dart';
 import '../orders/order_report_sheet.dart';
 import 'topup_receipt.dart';
 import 'topup_text.dart';
+import '../../shared/glass_bar.dart';
+import '../../shared/container_route.dart';
 
 /// A top-up that arrived: there is no code to turn over, so the moment is
 /// the receipt itself. A seal, «تمّ الشحن», the card, whose account it went
@@ -170,16 +172,11 @@ class _TopUpDonePageState extends State<TopUpDonePage>
       onPressed: _done,
       child: Scaffold(
         extendBodyBehindAppBar: true,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          automaticallyImplyLeading: !SideBack.active(context),
-          leading: SideBack.active(context)
-              ? null
-              : IconButton(
-                  tooltip: l10n.closeAction,
-                  icon: const Icon(Icons.close_rounded),
-                  onPressed: _done,
-                ),
+        appBar: GlassBar(
+          clear: true,
+          close: true,
+          leadingTooltip: l10n.closeAction,
+          onLeading: _done,
         ),
         body: DecoratedBox(
           decoration: BoxDecoration(
@@ -225,7 +222,10 @@ class _TopUpDonePageState extends State<TopUpDonePage>
                       Center(
                         child: SizedBox(
                           width: width,
-                          child: CardArt(brand: brand),
+                          child: ContainerLanding(
+                            radius: CardsRadii.card,
+                            child: CardArt(brand: brand),
+                          ),
                         ),
                       ),
                     ],

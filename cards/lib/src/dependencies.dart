@@ -16,6 +16,8 @@ import 'data/session/session_store.dart';
 import 'data/settings/app_settings.dart';
 import 'data/vault/card_vault.dart';
 import 'data/vault/code_vault.dart';
+import 'data/vault/esim_vault.dart';
+import 'data/vault/orders_vault.dart';
 import 'features/card_payment/moamalat_client.dart';
 import 'features/links/link_inbox.dart';
 import 'features/my_cards/my_cards_memory.dart';
@@ -40,12 +42,20 @@ class CardsDependencies {
     Push? push,
     SavedAccounts? accounts,
     EsimRepository? esim,
+    EsimVault? esimVault,
     EsimCompatibility? esimCompatibility,
     this.preferences,
     this.art,
   }) : settings = settings ?? AppSettings(),
        accounts = accounts ?? SavedAccounts(preferences: preferences),
-       esim = esim ?? EsimRepository(api: auth.api),
+       esim =
+           esim ??
+           EsimRepository(
+             api: auth.api,
+             preferences: preferences,
+             vault: esimVault,
+             owner: () => auth.session.value?.customerId ?? '',
+           ),
        analytics = analytics ?? NoAnalytics(),
        push = push ?? NoPush(),
        moamalat = moamalat ?? MoamalatClient(),
@@ -111,6 +121,7 @@ class CardsDependencies {
       channel: config.channel,
       preferences: preferences,
     );
+    final codeVault = SecureCodeVault();
     return CardsDependencies(
       config: config,
       auth: auth,
@@ -123,9 +134,13 @@ class CardsDependencies {
         channel: config.channel,
         analytics: analytics,
         preferences: preferences,
+        kept: SecureOrdersVault(),
+        codes: codeVault,
+        owner: () => auth.session.value?.customerId ?? '',
       ),
-      vault: SecureCodeVault(),
+      vault: codeVault,
       cards: SecureCardVault(),
+      esimVault: SecureEsimVault(),
       lock: CodeLock(settings: settings),
       settings: settings,
       analytics: analytics,

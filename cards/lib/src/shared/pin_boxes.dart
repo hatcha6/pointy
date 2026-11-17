@@ -15,6 +15,7 @@ class PinBoxes extends StatefulWidget {
     this.length = 6,
     this.enabled = true,
     this.error = false,
+    this.success = false,
     this.onChanged,
   });
 
@@ -22,6 +23,9 @@ class PinBoxes extends StatefulWidget {
   final int length;
   final bool enabled;
   final bool error;
+
+  /// The code was right: the boxes confirm one after another.
+  final bool success;
   final ValueChanged<String>? onChanged;
 
   @override
@@ -95,6 +99,7 @@ class _PinBoxesState extends State<PinBoxes> {
                         theme,
                         i < text.length ? text[i] : '',
                         i == text.length && _focus.hasFocus,
+                        i,
                       ),
                     ),
                   ],
@@ -107,12 +112,18 @@ class _PinBoxesState extends State<PinBoxes> {
     );
   }
 
-  Widget _box(ThemeData theme, String digit, bool active) {
+  Widget _box(ThemeData theme, String digit, bool active, int index) {
     final color = widget.error
         ? theme.colorScheme.error
+        : widget.success
+        ? theme.colorScheme.primary
         : (active ? theme.colorScheme.onSurface : theme.colorScheme.outline);
     return AnimatedContainer(
-      duration: CardsMotion.fast,
+      // Confirming, each box takes a little longer than the one before it,
+      // so the colour runs along the code.
+      duration: widget.success
+          ? CardsMotion.fast + Duration(milliseconds: 55 * index)
+          : CardsMotion.fast,
       width: 46,
       height: 56,
       alignment: Alignment.center,
@@ -121,7 +132,7 @@ class _PinBoxesState extends State<PinBoxes> {
         borderRadius: BorderRadius.circular(CardsRadii.field),
         border: Border.all(
           color: color,
-          width: active || widget.error ? 1.8 : 1,
+          width: active || widget.error || widget.success ? 1.8 : 1,
         ),
       ),
       child: AnimatedSwitcher(

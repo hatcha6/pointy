@@ -31,6 +31,9 @@ import '../../shared/haptics.dart';
 import '../shell/cards_tab_bar.dart';
 import '../../core/analytics/analytics.dart';
 import '../../shared/name_text.dart';
+import '../../shared/motion.dart';
+import '../../shared/container_route.dart';
+import '../../shared/micro.dart';
 
 /// What the list shows. «الكل» is the cards themselves: purchases that did
 /// not go through only clutter it, so they wait under their own filter.
@@ -167,7 +170,15 @@ class _MyCardsPageState extends State<MyCardsPage> {
     // A first visit: the shelf has usually read the orders already, so the
     // list is up as soon as this phone has said which cards are used.
     if (_orders == null) {
-      if (dependencies.orders.lastOrders case final known?) {
+      // Else what this phone holds from an earlier launch: the cards are up
+      // at once, and with no network they are what stays.
+      final known =
+          dependencies.orders.lastOrders ??
+          await dependencies.orders.keptOrders();
+      if (stale()) {
+        return;
+      }
+      if (known.isNotEmpty || dependencies.orders.lastOrders != null) {
         final (used, saved) = await _kept(dependencies, known);
         if (stale()) {
           return;
@@ -177,7 +188,7 @@ class _MyCardsPageState extends State<MyCardsPage> {
             () => _show(
               MyCardsSnapshot(
                 orders: known,
-                esims: dependencies.esim.lastEsims ?? const [],
+                esims: dependencies.esim.lastEsims ?? _esims,
                 used: used,
                 saved: saved,
               ),
@@ -190,6 +201,15 @@ class _MyCardsPageState extends State<MyCardsPage> {
     if (stale()) {
       return;
     }
+    // The eSIMs could not be read and none are on screen: the ones this
+    // phone holds are shown, so one can still be installed with no network.
+    var heldEsims = _esims;
+    if (esims is Error && heldEsims.isEmpty) {
+      heldEsims = await dependencies.esim.keptEsims();
+      if (stale()) {
+        return;
+      }
+    }
     switch (result) {
       case Ok(:final value):
         final (used, saved) = await _kept(dependencies, value);
@@ -200,7 +220,7 @@ class _MyCardsPageState extends State<MyCardsPage> {
           orders: value,
           esims: switch (esims) {
             Ok(:final value) => value,
-            Error() => _esims,
+            Error() => heldEsims,
           },
           used: used,
           saved: saved,
@@ -211,8 +231,12 @@ class _MyCardsPageState extends State<MyCardsPage> {
           _error = null;
         });
       case Error(:final exception):
-        // What is on screen stays; a page with nothing says why.
-        setState(() => _error = exception);
+        // What is on screen stays; a page with nothing says why, unless
+        // this phone holds eSIMs to show.
+        setState(() {
+          _error = exception;
+          _esims = heldEsims;
+        });
     }
   }
 
@@ -255,8 +279,15 @@ class _MyCardsPageState extends State<MyCardsPage> {
         codes.every((c) => _used.contains(c.code));
   }
 
-  Future<void> _open(CardOrder order) async {
-    await openCardOrder(context, order);
+  /// A row arriving in its turn: one after another, the first screenful.
+  static Widget _arriving(int index, CardOrder order, Widget row) => AppearRise(
+    key: ValueKey(order.id),
+    delay: AppearRise.stagger(index),
+    child: row,
+  );
+
+  Future<void> _open(CardOrder order, {BuildContext? from}) async {
+    await openCardOrder(context, order, from: from);
     if (mounted) {
       await _load();
     }
@@ -273,12 +304,8 @@ class _MyCardsPageState extends State<MyCardsPage> {
         valueListenable: auth.session,
         // A quick cross-fade from the placeholders to what came back, so a
         // fast answer reads as the page settling, not as a flicker.
-        builder: (context, session, _) => AnimatedSwitcher(
-          duration: CardsMotion.standard,
-          switchInCurve: CardsMotion.curve,
-          switchOutCurve: CardsMotion.curve,
-          child: _page(context, session, padding),
-        ),
+        builder: (context, session, _) =>
+            CardsSwitcher(child: _page(context, session, padding)),
       ),
     );
   }
@@ -300,7 +327,7 @@ class _MyCardsPageState extends State<MyCardsPage> {
       );
     }
     final orders = _orders;
-    if (orders == null && _error != null) {
+    if (orders == null && _error != null && _esims.isEmpty) {
       return EmptyState(
         key: const ValueKey('failed'),
         icon: Icons.cloud_off_rounded,
@@ -419,19 +446,31 @@ class _MyCardsPageState extends State<MyCardsPage> {
                   bottom: CardsTabBar.clearance(context),
                 ),
                 sliver: SliverToBoxAdapter(
-                  child: AnimatedSwitcher(
-                    duration: CardsMotion.standard,
-                    switchInCurve: CardsMotion.curve,
-                    switchOutCurve: CardsMotion.curve,
-                    layoutBuilder: (current, previous) => Stack(
-                      alignment: Alignment.topCenter,
-                      children: [...previous, ?current],
-                    ),
+                  child: CardsSwitcher(
+                    alignment: Alignment.topCenter,
                     child: Column(
-                      key: ValueKey(orders == null),
+                      // Loaded, or another filter: the list fades through.
+                      key: ValueKey((
+                        orders == null && _error == null,
+                        _filter,
+                      )),
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        if (orders == null)
+                        // The cards could not be read: what shows is what
+                        // this phone holds.
+                        if (_error != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: CardsSpace.md),
+                            child: Align(
+                              alignment: AlignmentDirectional.centerStart,
+                              child: Pill(
+                                text: l10n.savedShelfNote,
+                                tone: PillTone.warning,
+                                icon: Icons.cloud_off_rounded,
+                              ),
+                            ),
+                          )
+                        else if (orders == null)
                           for (var i = 0; i < 4; i++)
                             const Padding(
                               padding: EdgeInsets.only(top: CardsSpace.md),
@@ -459,15 +498,21 @@ class _MyCardsPageState extends State<MyCardsPage> {
                               bottom: CardsSpace.sm,
                             ),
                           ),
-                          for (final order in open)
+                          for (final (i, order) in open.indexed)
                             Padding(
                               padding: const EdgeInsets.only(
                                 bottom: CardsSpace.md,
                               ),
-                              child: _OrderRow(
-                                order: order,
-                                used: false,
-                                onTap: () => _open(order),
+                              child: _arriving(
+                                i,
+                                order,
+                                Builder(
+                                  builder: (row) => _OrderRow(
+                                    order: order,
+                                    used: false,
+                                    onTap: () => _open(order, from: row),
+                                  ),
+                                ),
                               ),
                             ),
                         ],
@@ -479,15 +524,21 @@ class _MyCardsPageState extends State<MyCardsPage> {
                               bottom: CardsSpace.sm,
                             ),
                           ),
-                          for (final order in done)
+                          for (final (i, order) in done.indexed)
                             Padding(
                               padding: const EdgeInsets.only(
                                 bottom: CardsSpace.md,
                               ),
-                              child: _OrderRow(
-                                order: order,
-                                used: _allUsed(order),
-                                onTap: () => _open(order),
+                              child: _arriving(
+                                open.length + i,
+                                order,
+                                Builder(
+                                  builder: (row) => _OrderRow(
+                                    order: order,
+                                    used: _allUsed(order),
+                                    onTap: () => _open(order, from: row),
+                                  ),
+                                ),
                               ),
                             ),
                         ],
@@ -609,71 +660,77 @@ class _OrderRow extends StatelessWidget {
     return Pressable(
       semanticLabel: order.name,
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(CardsSpace.md),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surface,
-          borderRadius: BorderRadius.circular(CardsRadii.card),
-          boxShadow: CardsShadows.raised,
-        ),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 104,
-              child: brand == null
-                  ? const Skeleton(aspectRatio: kCardAspect)
-                  : CardArt(
-                      brand: brand,
-                      radius: 10,
-                      shadow: false,
-                      // A top-up on its account is done, not spent.
-                      muted: used && !order.toAccount,
-                    ),
-            ),
-            const SizedBox(width: CardsSpace.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      child: // Its page opens out of the whole row; the row's card goes
+          // to the page's own from where it stands in the row.
+          ContainerSource(
+            child: Container(
+              padding: const EdgeInsets.all(CardsSpace.md),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface,
+                borderRadius: BorderRadius.circular(CardsRadii.card),
+                boxShadow: CardsShadows.raised,
+              ),
+              child: Row(
                 children: [
-                  NameText(
-                    order.name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
+                  SizedBox(
+                    width: 104,
+                    child: ContainerHero(
+                      child: brand == null
+                          ? const Skeleton(aspectRatio: kCardAspect)
+                          : CardArt(
+                              brand: brand,
+                              radius: 10,
+                              shadow: false,
+                              // A top-up on its account is done, not spent.
+                              muted: used && !order.toAccount,
+                            ),
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    order.toAccount && order.account.isNotEmpty
-                        ? '${l10n.orderTo(isolated(accountShown(order.account)))} · ${formatMoney(l10n, order.total)}'
-                        : '${l10n.cardCount(order.quantity)} · ${formatMoney(l10n, order.total)}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
+                  const SizedBox(width: CardsSpace.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        NameText(
+                          order.name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          order.toAccount && order.account.isNotEmpty
+                              ? '${l10n.orderTo(isolated(accountShown(order.account)))} · ${formatMoney(l10n, order.total)}'
+                              : '${l10n.cardCount(order.quantity)} · ${formatMoney(l10n, order.total)}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        if (status != null) ...[
+                          const SizedBox(height: CardsSpace.sm),
+                          // Smaller rather than cut off in a narrow row at a large
+                          // text size.
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: AlignmentDirectional.centerStart,
+                            child: Pill(text: status, tone: tone),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
-                  if (status != null) ...[
-                    const SizedBox(height: CardsSpace.sm),
-                    // Smaller rather than cut off in a narrow row at a large
-                    // text size.
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: AlignmentDirectional.centerStart,
-                      child: Pill(text: status, tone: tone),
-                    ),
-                  ],
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ],
               ),
             ),
-            Icon(
-              Icons.chevron_right_rounded,
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ],
-        ),
-      ),
+          ),
     );
   }
 }
@@ -681,24 +738,36 @@ class _OrderRow extends StatelessWidget {
 /// Opens one order as «كروتي» does: a delivered card shows its code (behind
 /// the phone's lock, when the customer set one), and an order still on its
 /// way shows how it is going.
-Future<void> openCardOrder(BuildContext context, CardOrder order) async {
+///
+/// A delivered card opens out of its row ([from]) and closes back into it.
+Future<void> openCardOrder(
+  BuildContext context,
+  CardOrder order, {
+  BuildContext? from,
+}) async {
   if (order.isEsim && order.status == OrderStatus.delivered) {
-    await EsimPage.openDelivered(context, order);
+    await EsimPage.openDelivered(context, order, from: from);
     return;
   }
   final brand = CardsScope.of(context).catalog.brandOf(order.brandKey);
   // A top-up past paying: where it stands, live, with a way to report it.
   if (order.toAccount && order.status != OrderStatus.awaitingPayment) {
-    await TopUpOrderPage.open(context, order: order, brand: brand);
+    await TopUpOrderPage.open(context, order: order, brand: brand, from: from);
   } else if (order.status == OrderStatus.delivered) {
     await Navigator.of(context).push(
-      MaterialPageRoute(
+      routeFrom<void>(
+        from,
         settings: screenSettings('card'),
         builder: (_) =>
             RevealPage(order: order, brand: brand, fromHistory: true),
       ),
     );
   } else {
-    await OrderProgressPage.open(context, order: order, brand: brand);
+    await OrderProgressPage.open(
+      context,
+      order: order,
+      brand: brand,
+      from: from,
+    );
   }
 }

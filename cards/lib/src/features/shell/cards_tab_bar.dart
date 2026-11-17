@@ -11,6 +11,7 @@ import '../../design/cards_theme.dart';
 import '../../design/cards_tokens.dart';
 import '../../shared/haptics.dart';
 import 'cards_sidebar.dart';
+import '../../shared/micro.dart';
 
 /// The app's tab bar. On iOS 26 and later it is Apple's own Liquid Glass tab
 /// bar, the real UIKit one hosted in the page, so it looks and moves exactly
@@ -164,7 +165,8 @@ class CardsTabBar extends StatelessWidget {
                 for (final (label, icon, selected) in tabs)
                   NavigationDestination(
                     icon: Icon(icon),
-                    selectedIcon: Icon(selected),
+                    // The filled mark settles in as its tab is chosen.
+                    selectedIcon: Settle(child: Icon(selected)),
                     label: label,
                   ),
               ],

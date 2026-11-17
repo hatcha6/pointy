@@ -73,10 +73,19 @@ Future<void> main() async {
   // cards.dftr.ly link: /category/gaming?screen=home, /brand/pubg?screen=home.
   usePathUrlStrategy();
   final query = Uri.base.queryParameters;
-  final screen = query['screen'] ?? 'board';
+  // A phone has no address to carry them: there the build says which screen
+  // (--dart-define=CARDS_PREVIEW_SCREEN=home, CARDS_PREVIEW_THEME=dark).
+  final screen =
+      query['screen'] ??
+      const String.fromEnvironment(
+        'CARDS_PREVIEW_SCREEN',
+        defaultValue: 'board',
+      );
   // `&slow=8`: every animation eight times slower, to look at a transition.
   timeDilation = double.tryParse(query['slow'] ?? '') ?? 1;
-  final dark = query['theme'] == 'dark';
+  final dark =
+      (query['theme'] ?? const String.fromEnvironment('CARDS_PREVIEW_THEME')) ==
+      'dark';
   // `&platform=ios` or `android`: the page as that phone's browser has it
   // (the web «get the app» bar). A desktop browser's phone emulation still
   // reports a Mac, so it has to be said.

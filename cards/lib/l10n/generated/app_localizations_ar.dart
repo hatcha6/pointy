@@ -93,7 +93,7 @@ class AppLocalizationsAr extends AppLocalizations {
   String get catalogLoadFailedTitle => 'تعذّر تحميل الكروت';
 
   @override
-  String get savedShelfNote => 'تعرض آخر نسخة محفوظة';
+  String get savedShelfNote => 'لا يوجد اتصال بالإنترنت';
 
   @override
   String creditChip(String amount) {
@@ -105,6 +105,20 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get chooseCountry => 'الدولة أو المنطقة';
+
+  @override
+  String get chooseCurrency => 'العملة';
+
+  @override
+  String currencyName(String code) {
+    String _temp0 = intl.Intl.selectLogic(code, {
+      'USD': 'دولار',
+      'EUR': 'يورو',
+      'GBP': 'جنيه إسترليني',
+      'other': '$code',
+    });
+    return '$_temp0';
+  }
 
   @override
   String get howToRedeem => 'طريقة الاستخدام';

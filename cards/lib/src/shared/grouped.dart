@@ -70,6 +70,73 @@ class Grouped extends StatelessWidget {
   }
 }
 
+/// [Grouped] for a long list: the same rounded, softly lifted card with
+/// hairlines, but a sliver that builds only the rows on screen. A row's
+/// ink paints on its own surface, and the first and last round the card's
+/// corners.
+class GroupedSliver extends StatelessWidget {
+  const GroupedSliver({
+    super.key,
+    required this.itemCount,
+    required this.itemBuilder,
+  });
+
+  final int itemCount;
+  final NullableIndexedWidgetBuilder itemBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    if (itemCount == 0) {
+      return const SliverToBoxAdapter(child: SizedBox.shrink());
+    }
+    final theme = Theme.of(context);
+    final radius = BorderRadius.circular(CardsRadii.card);
+    return DecoratedSliver(
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        boxShadow: CardsShadows.raised,
+      ),
+      sliver: DecoratedSliver(
+        position: DecorationPosition.foreground,
+        decoration: BoxDecoration(
+          borderRadius: radius,
+          border: Border.all(
+            color: theme.colorScheme.outline.withValues(alpha: 0.6),
+            width: 0.8,
+          ),
+        ),
+        sliver: SliverList.builder(
+          itemCount: itemCount,
+          itemBuilder: (context, index) {
+            final first = index == 0;
+            final last = index == itemCount - 1;
+            return Material(
+              color: theme.colorScheme.surface,
+              clipBehavior: Clip.antiAlias,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.vertical(
+                  top: first ? Radius.circular(CardsRadii.card) : Radius.zero,
+                  bottom: last ? Radius.circular(CardsRadii.card) : Radius.zero,
+                ),
+              ),
+              child: Column(
+                children: [
+                  if (!first)
+                    const Divider(
+                      indent: CardsSpace.lg,
+                      endIndent: CardsSpace.lg,
+                    ),
+                  itemBuilder(context, index) ?? const SizedBox.shrink(),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
 /// A sliding capsule control: the chosen segment's thumb glides under it.
 class SegmentedPill<T> extends StatelessWidget {
   const SegmentedPill({

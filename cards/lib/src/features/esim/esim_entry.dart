@@ -15,6 +15,7 @@ import '../../shared/pressable.dart';
 import 'esim_banner_art.dart';
 import 'esim_format.dart';
 import 'esim_store_page.dart';
+import '../../shared/container_route.dart';
 
 /// The shelf's door to eSIMs: a banner with its own picture. It asks the relay
 /// once and appears only when eSIMs are on sale, so a build talking to a relay
@@ -88,13 +89,16 @@ class _EsimEntryState extends State<EsimEntry>
           child: Pressable(
             onTap: () {
               Haptics.tap();
-              EsimStorePage.open(context);
+              EsimStorePage.open(context, from: context);
             },
-            child: _Banner(
-              flight: _flight,
-              from: _lowest(shelf),
-              countries: esimBannerCountries(shelf),
-              promo: _bestPromo(shelf),
+            child: // The shelf opens out of the banner.
+            ContainerSource(
+              child: _Banner(
+                flight: _flight,
+                from: _lowest(shelf),
+                countries: esimBannerCountries(shelf),
+                promo: _bestPromo(shelf),
+              ),
             ),
           ),
         );

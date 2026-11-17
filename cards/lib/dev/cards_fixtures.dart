@@ -16,6 +16,8 @@ import '../src/data/session/session_store.dart';
 import '../src/data/settings/app_settings.dart';
 import '../src/data/vault/card_vault.dart';
 import '../src/data/vault/code_vault.dart';
+import '../src/data/vault/esim_vault.dart';
+import '../src/data/vault/orders_vault.dart';
 import '../src/dependencies.dart';
 import '../src/features/card_payment/moamalat_client.dart';
 import '../src/features/links/link_inbox.dart';
@@ -1138,6 +1140,9 @@ CardsDependencies fixtureDependencies({
   String channel = 'apk',
   bool topUps = false,
   Duration lookUpTakes = Duration.zero,
+  EsimVault? esimVault,
+  OrdersVault? ordersVault,
+  CodeVault? codeVault,
 }) {
   final sessions = MemorySessionStore(signedIn ? fixtureSession : null);
   final base = shelfRelay ?? Uri.parse('https://relay.preview');
@@ -1170,8 +1175,17 @@ CardsDependencies fixtureDependencies({
     ),
     auth: auth,
     catalog: CatalogRepository(api: api, channel: channel),
-    orders: OrdersRepository(api: api, channel: channel, analytics: analytics),
-    vault: MemoryCodeVault(),
+    orders: OrdersRepository(
+      api: api,
+      channel: channel,
+      analytics: analytics,
+      kept: ordersVault,
+      // Only where a test hands one in: reading codes ahead is a request
+      // per card, which the previews and most tests do not expect.
+      codes: codeVault,
+      owner: () => auth.session.value?.customerId ?? '',
+    ),
+    vault: codeVault ?? MemoryCodeVault(),
     lock: CodeLock(enabled: false),
     settings: AppSettings(),
     moamalat: moamalat ?? FakeMoamalatClient(),
@@ -1179,6 +1193,7 @@ CardsDependencies fixtureDependencies({
     links: links,
     analytics: analytics,
     push: push ?? FixturePush(),
+    esimVault: esimVault,
   );
 }
 

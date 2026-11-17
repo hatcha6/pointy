@@ -6,6 +6,7 @@ import '../../data/models/catalog.dart';
 import '../../design/cards_tokens.dart';
 import '../../shared/card_art.dart';
 import '../../shared/money_text.dart';
+import '../../shared/container_route.dart';
 
 /// How an outcome should feel. None of them is red: when an order does not
 /// end in a card, the customer's money is safe, and the screen says so
@@ -73,7 +74,12 @@ class OrderOutcomePanel extends StatelessWidget {
         if (brand != null) ...[
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: CardsSpace.xl),
-            child: CardArt(brand: brand!, muted: !busy),
+            child: ContainerLanding(
+              // The same picture as its row's while it is under way.
+              same: busy,
+              radius: CardsRadii.card,
+              child: CardArt(brand: brand!, muted: !busy),
+            ),
           ),
           const SizedBox(height: CardsSpace.xl),
         ],

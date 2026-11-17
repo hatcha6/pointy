@@ -10,6 +10,7 @@ import '../../design/cards_theme.dart';
 import '../../design/cards_layout.dart';
 import '../../design/cards_tokens.dart';
 import '../../shared/cards_scope.dart';
+import '../../shared/glass_bar.dart';
 import '../../shared/grouped.dart';
 import '../../shared/pill.dart';
 import '../../shared/money_text.dart';
@@ -19,6 +20,9 @@ import '../../shared/haptics.dart';
 import '../shell/cards_tab_bar.dart';
 import 'about_section.dart';
 import 'settings_section.dart';
+import '../../shared/motion.dart';
+import '../../shared/micro.dart';
+import '../../core/money.dart';
 
 /// The customer: their number, their credit and where it came from, the
 /// devices signed in, signing out, and deleting the account (App Store
@@ -35,8 +39,7 @@ class AccountPage extends StatelessWidget {
     final auth = CardsScope.of(context).auth;
     // Like the other tabs, the page runs under the glass tab bar; its lists
     // pad their own ends past it.
-    return SafeArea(
-      bottom: false,
+    return GlassStatusEdge(
       child: ValueListenableBuilder(
         valueListenable: auth.session,
         builder: (context, session, _) => session == null
@@ -62,6 +65,7 @@ class _SignedOut extends StatelessWidget {
     final theme = Theme.of(context);
     return LayoutBuilder(
       builder: (context, constraints) => ListView(
+        clipBehavior: GlassStatusEdge.listClip,
         padding: CardsLayout.column(
           constraints.maxWidth,
           top: CardsSpace.xl,
@@ -221,6 +225,8 @@ class _SignedInState extends State<_SignedIn> {
       dependencies.vault.clear,
       dependencies.cards.clear,
       dependencies.accounts.clear,
+      dependencies.esim.clearKept,
+      dependencies.orders.clearKept,
     ]) {
       try {
         await clear();
@@ -234,7 +240,7 @@ class _SignedInState extends State<_SignedIn> {
     final l10n = AppLocalizations.of(context);
     // A step that cannot be undone is felt before it is read.
     Haptics.warning();
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showCardsDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(l10n.deleteAccountTitle),
@@ -264,6 +270,8 @@ class _SignedInState extends State<_SignedIn> {
       await dependencies.vault.clear();
       await dependencies.cards.clear();
       await dependencies.accounts.clear();
+      await dependencies.esim.clearKept();
+      await dependencies.orders.clearKept();
       messenger.showSnackBar(SnackBar(content: Text(l10n.accountDeleted)));
     } else {
       messenger.showSnackBar(
@@ -294,6 +302,7 @@ class _SignedInState extends State<_SignedIn> {
       onRefresh: _load,
       child: LayoutBuilder(
         builder: (context, constraints) => ListView(
+          clipBehavior: GlassStatusEdge.listClip,
           padding: CardsLayout.column(
             constraints.maxWidth,
             top: CardsSpace.xl,
@@ -344,11 +353,7 @@ class _SignedInState extends State<_SignedIn> {
               ],
             ),
             const SizedBox(height: CardsSpace.xl),
-            _CreditHero(
-              balance: credit == null
-                  ? null
-                  : formatMoney(l10n, credit.balance),
-            ),
+            _CreditHero(balance: credit?.balance),
             if (credit != null && credit.entries.isNotEmpty) ...[
               const SizedBox(height: CardsSpace.xl),
               Grouped(
@@ -470,7 +475,7 @@ class _SignedInState extends State<_SignedIn> {
 class _CreditHero extends StatelessWidget {
   const _CreditHero({required this.balance});
 
-  final String? balance;
+  final Money? balance;
 
   @override
   Widget build(BuildContext context) {
@@ -534,11 +539,20 @@ class _CreditHero extends StatelessWidget {
                       FittedBox(
                         fit: BoxFit.scaleDown,
                         alignment: AlignmentDirectional.centerStart,
-                        child: Text(
-                          balance ?? '—',
-                          style: PointyTypography.numeric(
-                            theme.textTheme.headlineLarge!,
-                          ).copyWith(color: Colors.white, fontSize: 36),
+                        // After a purchase or a refund it counts to the new
+                        // figure.
+                        child: CountUp(
+                          // Its first figure is simply shown.
+                          key: ValueKey(balance == null),
+                          value: balance?.dirhams ?? 0,
+                          builder: (context, dirhams) => Text(
+                            balance == null
+                                ? '—'
+                                : formatMoney(l10n, Money(dirhams)),
+                            style: PointyTypography.numeric(
+                              theme.textTheme.headlineLarge!,
+                            ).copyWith(color: Colors.white, fontSize: 36),
+                          ),
                         ),
                       ),
                       const SizedBox(height: CardsSpace.xs),

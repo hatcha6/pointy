@@ -226,7 +226,7 @@ class _SplashOverlayState extends State<SplashOverlay>
     }
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
-    final fade = CurvedAnimation(parent: _exit, curve: Curves.easeIn);
+    final fade = _exit.drive(CurveTween(curve: Curves.easeIn));
     final swell = Tween(begin: 1.0, end: 1.14).animate(fade);
     final nameStyle = theme.textTheme.headlineSmall?.copyWith(
       fontWeight: FontWeight.w700,
@@ -386,13 +386,11 @@ class _Name extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final first = CurvedAnimation(
-      parent: story,
-      curve: const Interval(0, 0.27, curve: Curves.easeOut),
+    final first = story.drive(
+      CurveTween(curve: const Interval(0, 0.27, curve: Curves.easeOut)),
     );
-    final second = CurvedAnimation(
-      parent: story,
-      curve: const Interval(0.49, 0.82, curve: Curves.easeOutCubic),
+    final second = story.drive(
+      CurveTween(curve: const Interval(0.49, 0.82, curve: Curves.easeOutCubic)),
     );
     return Row(
       mainAxisSize: MainAxisSize.min,

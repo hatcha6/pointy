@@ -10,6 +10,7 @@ import '../../shared/side_back.dart';
 import 'payment_frame.dart'
     if (dart.library.js_interop) 'payment_frame_web.dart';
 import 'three_ds_view.dart';
+import '../../shared/glass_bar.dart';
 
 /// How the payment page closed.
 enum PaymentPageResult {
@@ -210,15 +211,9 @@ class _PaymentPageViewState extends State<PaymentPageView> {
       close: true,
       onPressed: _close,
       child: Scaffold(
-        appBar: AppBar(
-          automaticallyImplyLeading: false,
-          leading: SideBack.active(context)
-              ? null
-              : IconButton(
-                  tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
-                  icon: const Icon(Icons.close_rounded),
-                  onPressed: _close,
-                ),
+        appBar: GlassBar(
+          close: true,
+          onLeading: _close,
           title: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -245,7 +240,6 @@ class _PaymentPageViewState extends State<PaymentPageView> {
               ),
             ],
           ),
-          centerTitle: true,
         ),
         body: ColoredBox(
           color: Colors.white,

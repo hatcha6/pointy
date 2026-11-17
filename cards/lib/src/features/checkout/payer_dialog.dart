@@ -7,6 +7,7 @@ import '../../core/money.dart';
 import '../../data/models/order.dart';
 import '../../design/cards_tokens.dart';
 import '../../shared/money_text.dart';
+import '../../shared/motion.dart';
 
 /// What the wallet asks of the payer, asked only after "pay" (the same rule
 /// as the shop wallet: nothing inline under the method list). Returns the
@@ -17,7 +18,7 @@ Future<(String, String)?> showPayerDialog(
   required Money amount,
   String phone = '',
 }) {
-  return showDialog<(String, String)>(
+  return showCardsDialog<(String, String)>(
     context: context,
     builder: (_) => _PayerDialog(method: method, amount: amount, phone: phone),
   );

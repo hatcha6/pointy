@@ -32,6 +32,11 @@ import 'esim_page.dart';
 import 'esim_share.dart';
 import '../links/cards_link.dart';
 import 'esim_support_banner.dart';
+import '../../shared/glass_bar.dart';
+import '../shell/cards_tab_bar.dart';
+import '../../shared/glass_filter_row.dart';
+import '../../shared/glass_edge_header.dart';
+import '../../shared/container_route.dart';
 
 /// Where Libyan travellers go most: shown first, by country code.
 const _popularCountries = [
@@ -94,6 +99,7 @@ class _FilterBar extends StatelessWidget {
   const _FilterBar({
     required this.gutter,
     required this.wrap,
+    this.clip = false,
     this.trailing = false,
     required this.hasOffers,
     required this.offersOnly,
@@ -109,6 +115,9 @@ class _FilterBar extends StatelessWidget {
   });
 
   final double gutter;
+
+  /// In the top bar, between the buttons: the glass row stops at its edges.
+  final bool clip;
 
   /// On a wide page the chips wrap; on a phone they swipe.
   final bool wrap;
@@ -127,9 +136,87 @@ class _FilterBar extends StatelessWidget {
   final ValueChanged<EsimSort> onSort;
   final VoidCallback onClear;
 
+  /// The filters for the system's glass: chips in a row, or round buttons
+  /// in the iPhone Duo's side column.
+  List<GlassFilter> glassFilters(AppLocalizations l10n) => [
+    if (filtering)
+      GlassFilter.toggle(
+        key: 'clear',
+        label: l10n.esimFilterClear,
+        symbol: 'xmark',
+        icon: Icons.close_rounded,
+        on: false,
+        onTap: onClear,
+      ),
+    if (hasOffers || offersOnly)
+      GlassFilter.toggle(
+        key: 'offers',
+        label: l10n.esimFilterOffers,
+        symbol: 'tag',
+        icon: Icons.local_offer_rounded,
+        on: offersOnly,
+        onTap: onOffers,
+      ),
+    GlassFilter.menu(
+      key: 'days',
+      label: minDays > 0
+          ? l10n.esimFilterDaysOption(minDays)
+          : l10n.esimFilterDays,
+      symbol: 'calendar',
+      icon: Icons.event_rounded,
+      on: minDays > 0,
+      title: l10n.esimFilterDays,
+      current: minDays,
+      choices: [
+        (0, l10n.esimFilterAny),
+        for (final days in _dayChoices) (days, l10n.esimFilterDaysOption(days)),
+      ],
+      onPick: (value) => onDays(value as int),
+    ),
+    GlassFilter.menu(
+      key: 'data',
+      label: minMb > 0 ? _dataLabel(minMb) : l10n.esimFilterData,
+      symbol: 'chart.bar.fill',
+      icon: Icons.signal_cellular_alt_rounded,
+      on: minMb > 0,
+      title: l10n.esimFilterData,
+      current: minMb,
+      choices: [
+        (0, l10n.esimFilterAny),
+        for (final mb in _dataChoices) (mb, _dataLabel(mb)),
+      ],
+      onPick: (value) => onData(value as int),
+    ),
+    GlassFilter.menu(
+      key: 'sort',
+      label: sort == EsimSort.cheapest
+          ? l10n.esimSortCheapest
+          : l10n.esimSortTitle,
+      symbol: 'arrow.up.arrow.down',
+      icon: Icons.swap_vert_rounded,
+      on: sort != EsimSort.name,
+      title: l10n.esimSortTitle,
+      current: sort,
+      choices: [
+        (EsimSort.name, l10n.esimSortName),
+        (EsimSort.cheapest, l10n.esimSortCheapest),
+      ],
+      onPick: (value) => onSort(value as EsimSort),
+    ),
+  ];
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    // Where the system draws Liquid Glass, the filters are its chips, like
+    // the home page's categories.
+    if (!wrap && CardsTabBar.nativeGlass) {
+      return GlassFilterRow(
+        gutter: gutter,
+        clip: clip,
+        filters: glassFilters(l10n),
+      );
+    }
     final chips = <Widget>[
       // First, so it is in sight however far the chips swipe.
       if (filtering)
@@ -388,11 +475,15 @@ class EsimStorePage extends StatefulWidget {
   /// What the shelf opens on: a link's search, tab and filters.
   final EsimShelfFilter filter;
 
+  /// Opens the shelf: out of the banner at [from] (the home page's), where
+  /// there is one, which the shelf's own opening then takes the place of.
   static Future<void> open(
     BuildContext context, {
     EsimShelfFilter filter = const EsimShelfFilter(),
+    BuildContext? from,
   }) => Navigator.of(context).push(
-    MaterialPageRoute<void>(
+    routeFrom<void>(
+      from,
       settings: screenSettings('esim_store'),
       builder: (_) => EsimStorePage(filter: filter),
     ),
@@ -422,6 +513,13 @@ class _EsimStorePageState extends State<EsimStorePage> {
     if (!_started) {
       _started = true;
       final dependencies = CardsScope.of(context);
+      // The shelf the app already holds, at once: the page opens on its
+      // banner rather than on placeholders, so the home page's banner has
+      // something to land on.
+      final held = dependencies.esim.shelf.value;
+      if (held.available) {
+        _shelf = held;
+      }
       dependencies.esimCompatibility.load();
       // A purchase made from here shows in «شرائحي» on the way back.
       _changes = dependencies.esim.changes..addListener(_load);
@@ -438,6 +536,26 @@ class _EsimStorePageState extends State<EsimStorePage> {
 
   Future<void> _load() async {
     final dependencies = CardsScope.of(context);
+    if (_shelf == null) {
+      // The saved copy first: the shelf shows at once, and offline.
+      final kept = await dependencies.esim.cachedShelf();
+      if (!mounted) {
+        return;
+      }
+      if (kept != null && _shelf == null) {
+        setState(() => _shelf = kept);
+      }
+    }
+    if (_mine.isEmpty && dependencies.auth.isSignedIn) {
+      // «شرائحي» as this phone holds them, the same way.
+      final mine = await dependencies.esim.keptEsims();
+      if (!mounted) {
+        return;
+      }
+      if (mine.isNotEmpty && _mine.isEmpty) {
+        setState(() => _mine = mine.where((e) => !e.ended).toList());
+      }
+    }
     // Side by side: neither waits on the other.
     final (shelf, mine) = await (
       dependencies.esim.loadShelf(),
@@ -538,12 +656,43 @@ class _EsimStorePageState extends State<EsimStorePage> {
     return hits;
   }
 
+  /// The shelf's filters, as the page has them now.
+  _FilterBar _filterBar(
+    EsimShelf shelf, {
+    required double gutter,
+    bool wrap = false,
+    bool clip = false,
+    bool trailing = false,
+  }) => _FilterBar(
+    gutter: gutter,
+    wrap: wrap,
+    clip: clip,
+    trailing: trailing,
+    hasOffers: shelf.destinations.any((d) => d.promo != null),
+    offersOnly: _offersOnly,
+    minDays: _minDays,
+    minMb: _minMb,
+    sort: _sort,
+    filtering: _filtering,
+    onOffers: () => setState(() => _offersOnly = !_offersOnly),
+    onDays: (days) => setState(() => _minDays = days),
+    onData: (mb) => setState(() => _minMb = mb),
+    onSort: (sort) => setState(() => _sort = sort),
+    onClear: _clearFilters,
+  );
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final shelf = _shelf;
-    final side = SideBack.active(context);
     final sells = shelf != null && shelf.available;
+    // Where the system draws Liquid Glass the filters live in the top bar,
+    // between the back and share buttons: one glass row, not two.
+    // On the iPhone Duo they stand in the side column, under back and share:
+    // round glass buttons, each filter's mark alone.
+    final inColumn = sells && GlassBar.extendsBody && SideBack.active(context);
+    final inBar =
+        sells && !inColumn && !esimStoreWide(context) && GlassBar.extendsBody;
     return SideBack(
       actions: [
         if (sells)
@@ -552,16 +701,33 @@ class _EsimStorePageState extends State<EsimStorePage> {
             link: _link,
             title: () => l10n.esimStoreTitle,
           ),
+        if (inColumn)
+          for (final (i, filter) in _filterBar(
+            shelf,
+            gutter: 0,
+          ).glassFilters(l10n).indexed)
+            filter.toSide(spaced: i == 0),
       ],
       child: Scaffold(
-        appBar: AppBar(
-          automaticallyImplyLeading: !side,
-          scrolledUnderElevation: 0,
-          actions: [
-            if (sells && !side)
-              EsimShareButton(link: _link, title: () => l10n.esimStoreTitle),
-          ],
-        ),
+        extendBodyBehindAppBar: GlassBar.extendsBody,
+        // On the iPhone Duo everything the bar would hold is in the column.
+        appBar: inColumn
+            ? null
+            : GlassBar(
+                fill: inBar,
+                topRoom: inBar
+                    ? GlassEdgeHeader.topFor(MediaQuery.paddingOf(context))
+                    : 0,
+                title: inBar ? _filterBar(shelf, gutter: 4, clip: true) : null,
+                actions: [
+                  if (sells)
+                    EsimShareButton.side(
+                      context,
+                      link: _link,
+                      title: () => l10n.esimStoreTitle,
+                    ),
+                ],
+              ),
         body: Builder(
           builder: (context) {
             if (shelf == null) {
@@ -636,21 +802,11 @@ class _EsimStorePageState extends State<EsimStorePage> {
     // Room for the tabs and the chips on one line, edge to edge under the
     // banner: a desktop.
     final toolbar = wide && inner >= 960;
-    Widget filterBar({bool trailing = false}) => _FilterBar(
+    Widget filterBar({bool trailing = false}) => _filterBar(
+      shelf,
       gutter: trailing ? 0 : page.left,
       wrap: wide,
       trailing: trailing,
-      hasOffers: shelf.destinations.any((d) => d.promo != null),
-      offersOnly: _offersOnly,
-      minDays: _minDays,
-      minMb: _minMb,
-      sort: _sort,
-      filtering: _filtering,
-      onOffers: () => setState(() => _offersOnly = !_offersOnly),
-      onDays: (days) => setState(() => _minDays = days),
-      onData: (mb) => setState(() => _minMb = mb),
-      onSort: (sort) => setState(() => _sort = sort),
-      onClear: _clearFilters,
     );
     final filters = filterBar();
     final kinds = SegmentedPill<EsimKind>(
@@ -697,106 +853,204 @@ class _EsimStorePageState extends State<EsimStorePage> {
               ),
       ),
     );
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: ListView(
-        padding: EdgeInsets.only(top: CardsSpace.xs, bottom: page.bottom),
-        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-        children: [
-          pad(
-            _StoreHero(
-              wide: wide,
-              countries: esimBannerCountries(shelf),
-              search: search,
+    // On a phone the filter chips stay in reach: they pin under the bar as
+    // the shelf scrolls, the way the home page pins its categories.
+    final glassBar = GlassBar.extendsBody;
+    final inColumn = glassBar && SideBack.active(context);
+    final inBar = !wide && glassBar && !inColumn;
+    final pin = !wide && !glassBar;
+    Widget filtersAt() => inBar || inColumn
+        ? const SizedBox.shrink()
+        : pin
+        ? const _PinnedFilters()
+        : filters;
+    final children = <Widget>[
+      pad(
+        // The home page's banner lands here.
+        ContainerLanding(
+          same: false,
+          radius: CardsRadii.card,
+          child: _StoreHero(
+            wide: wide,
+            countries: esimBannerCountries(shelf),
+            search: search,
+          ),
+        ),
+      ),
+      const SizedBox(height: CardsSpace.lg),
+      // The relay could not be reached: this is the shelf as last read.
+      if (_error != null) ...[
+        pad(
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: Pill(
+              text: l10n.savedShelfNote,
+              tone: PillTone.warning,
+              icon: Icons.cloud_off_rounded,
             ),
           ),
-          const SizedBox(height: CardsSpace.lg),
-          pad(const EsimSupportBanner()),
-          if (searching) ...[
-            filters,
-            const SizedBox(height: CardsSpace.md),
-            if (rows.isEmpty)
-              none
-            else
-              pad(_DestinationGroup(rows: rows, columns: columns)),
-          ] else ...[
-            if (_mine.isNotEmpty) ...[
-              pad(
-                SectionHeader(
-                  title: l10n.esimMineTitle,
-                  padding: const EdgeInsets.only(bottom: CardsSpace.md),
-                ),
+        ),
+        const SizedBox(height: CardsSpace.md),
+      ],
+      pad(const EsimSupportBanner()),
+      if (searching) ...[
+        filtersAt(),
+        const SizedBox(height: CardsSpace.md),
+        if (rows.isEmpty)
+          none
+        else
+          _DestinationList(rows: rows, columns: columns, page: page),
+      ] else ...[
+        if (_mine.isNotEmpty) ...[
+          pad(
+            SectionHeader(
+              title: l10n.esimMineTitle,
+              padding: const EdgeInsets.only(bottom: CardsSpace.md),
+            ),
+          ),
+          if (wide)
+            pad(
+              _Columns(
+                columns: columns,
+                children: [
+                  for (final esim in _mine)
+                    Builder(
+                      builder: (card) => EsimCard(
+                        esim: esim,
+                        onTap: () async {
+                          await EsimPage.open(
+                            context,
+                            esim.iccid,
+                            from: card,
+                            known: esim,
+                          );
+                          _load();
+                        },
+                      ),
+                    ),
+                ],
               ),
-              if (wide)
-                pad(
-                  _Columns(
-                    columns: columns,
-                    children: [
-                      for (final esim in _mine)
-                        EsimCard(
-                          esim: esim,
-                          onTap: () async {
-                            await EsimPage.open(context, esim.iccid);
-                            _load();
-                          },
-                        ),
-                    ],
-                  ),
-                )
-              else
-                _MineShelf(esims: _mine, gutter: page.left, onChanged: _load),
-              const SizedBox(height: CardsSpace.xl),
-            ],
-            if (toolbar)
-              pad(
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SizedBox(width: 400, child: kinds),
-                    const SizedBox(width: CardsSpace.lg),
-                    Expanded(child: filterBar(trailing: true)),
-                  ],
-                ),
-              )
-            else ...[
-              // A tablet: the tabs run the page's width, the chips under them.
-              pad(kinds),
-              const SizedBox(height: CardsSpace.md),
-              filters,
-            ],
-            if (browsing) ...[
-              if (offers.isNotEmpty) ...[
-                header(l10n.esimOffersTitle),
-                if (wide)
-                  pad(_TileGrid(rows: esimHits(offers), tile: 190))
-                else
-                  _PopularShelf(rows: offers, gutter: page.left),
+            )
+          else
+            _MineShelf(esims: _mine, gutter: page.left, onChanged: _load),
+          const SizedBox(height: CardsSpace.xl),
+        ],
+        if (toolbar)
+          pad(
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(width: 400, child: kinds),
+                const SizedBox(width: CardsSpace.lg),
+                Expanded(child: filterBar(trailing: true)),
               ],
-              if (popular.isNotEmpty) ...[
-                header(l10n.esimPopular),
-                if (wide)
-                  pad(_TileGrid(rows: esimHits(popular), tile: 190))
-                else
-                  _PopularShelf(rows: popular, gutter: page.left),
-              ],
-              header(l10n.esimAllCountries),
-              pad(_DestinationGroup(rows: rows, columns: columns)),
-            ] else if (rows.isEmpty)
-              none
-            else if (_kind == EsimKind.local) ...[
-              header(l10n.esimResultsCount(rows.length)),
-              pad(_DestinationGroup(rows: rows, columns: columns)),
-            ] else ...[
-              const SizedBox(height: CardsSpace.lg),
-              pad(_TileGrid(rows: rows, tile: wide ? 230 : 0)),
-            ],
-            header(l10n.esimHowTitle),
-            pad(EsimHowItWorks(row: wide)),
+            ),
+          )
+        else ...[
+          // A tablet: the tabs run the page's width, the chips under them.
+          pad(kinds),
+          const SizedBox(height: CardsSpace.md),
+          filtersAt(),
+        ],
+        if (browsing) ...[
+          if (offers.isNotEmpty) ...[
+            header(l10n.esimOffersTitle),
+            if (wide)
+              pad(_TileGrid(rows: esimHits(offers), tile: 190))
+            else
+              _PopularShelf(rows: offers, gutter: page.left),
           ],
+          if (popular.isNotEmpty) ...[
+            header(l10n.esimPopular),
+            if (wide)
+              pad(_TileGrid(rows: esimHits(popular), tile: 190))
+            else
+              _PopularShelf(rows: popular, gutter: page.left),
+          ],
+          header(l10n.esimAllCountries),
+          _DestinationList(rows: rows, columns: columns, page: page),
+        ] else if (rows.isEmpty)
+          none
+        else if (_kind == EsimKind.local) ...[
+          header(l10n.esimResultsCount(rows.length)),
+          _DestinationList(rows: rows, columns: columns, page: page),
+        ] else ...[
+          const SizedBox(height: CardsSpace.lg),
+          pad(_TileGrid(rows: rows, tile: wide ? 230 : 0)),
+        ],
+        header(l10n.esimHowTitle),
+        pad(EsimHowItWorks(row: wide)),
+      ],
+    ];
+    final glass = GlassBar.extendsBody;
+    final chipsHeight = glass
+        ? GlassFilterRow.height
+        : 44 + (MediaQuery.textScalerOf(context).scale(14) - 14) * 1.5;
+    // The shelf's boxes in runs, between the pinned chips and the long
+    // country list, which builds only what is on screen.
+    final slivers = <Widget>[];
+    var run = <Widget>[];
+    void flush() {
+      if (run.isNotEmpty) {
+        slivers.add(SliverList.list(children: run));
+        run = <Widget>[];
+      }
+    }
+
+    for (final child in children) {
+      if (child is _PinnedFilters) {
+        flush();
+        slivers.add(
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: GlassEdgeHeader(
+              // Up under the bar and the status bar, where there is glass.
+              statusBar: glass
+                  ? MediaQueryData.fromView(View.of(context)).padding.top +
+                        kToolbarHeight
+                  : 0,
+              childHeight: chipsHeight,
+              child: filters,
+            ),
+          ),
+        );
+      } else if (child is _DestinationList && child.lazy) {
+        flush();
+        slivers.add(child.sliver());
+      } else {
+        run.add(child);
+      }
+    }
+    flush();
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: CustomScrollView(
+        clipBehavior: glass ? Clip.none : Clip.hardEdge,
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        slivers: [
+          SliverToBoxAdapter(
+            // Under the glass bar the list starts clear of it.
+            child: SizedBox(
+              height:
+                  CardsSpace.xs +
+                  (glass ? MediaQuery.paddingOf(context).top : 0) +
+                  (inColumn ? CardsSpace.lg : 0),
+            ),
+          ),
+          ...slivers,
+          SliverToBoxAdapter(child: SizedBox(height: page.bottom)),
         ],
       ),
     );
   }
+}
+
+/// Where the pinned filter chips go in the shelf's list.
+class _PinnedFilters extends StatelessWidget {
+  const _PinnedFilters();
+
+  @override
+  Widget build(BuildContext context) => const SizedBox.shrink();
 }
 
 /// Whether the eSIM shelf lays out in columns: a tablet, a desktop.
@@ -992,7 +1246,13 @@ class _Loading extends StatelessWidget {
 
 void _openDestination(BuildContext context, EsimDestinationRow row) {
   Haptics.tap();
-  EsimDestinationPage.open(context, row.key, name: row.name);
+  EsimDestinationPage.open(
+    context,
+    row.key,
+    name: row.name,
+    country: row.country,
+    from: context,
+  );
 }
 
 /// A destination as a card on a rack, the way the home shelf shows a brand: its
@@ -1024,24 +1284,26 @@ class _DestinationTile extends StatelessWidget {
                   borderRadius: BorderRadius.circular(CardsRadii.tile),
                   boxShadow: CardsShadows.art,
                 ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(CardsRadii.tile),
-                  child: AspectRatio(
-                    aspectRatio: kCardAspect,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        EsimCardArt(name: '', country: row.country),
-                        if (row.promo case final promo?)
-                          PositionedDirectional(
-                            start: CardsSpace.sm,
-                            bottom: CardsSpace.sm,
-                            child: Pill(
-                              text: esimPromoLabel(l10n, promo),
-                              tone: PillTone.promo,
+                child: ContainerSource(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(CardsRadii.tile),
+                    child: AspectRatio(
+                      aspectRatio: kCardAspect,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          EsimCardArt(name: '', country: row.country),
+                          if (row.promo case final promo?)
+                            PositionedDirectional(
+                              start: CardsSpace.sm,
+                              bottom: CardsSpace.sm,
+                              child: Pill(
+                                text: esimPromoLabel(l10n, promo),
+                                tone: PillTone.promo,
+                              ),
                             ),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -1111,7 +1373,9 @@ class _PopularShelf extends StatelessWidget {
       children: [
         for (var i = 0; i < rows.length; i++) ...[
           if (i > 0) const SizedBox(width: CardsSpace.md),
-          _DestinationTile(hit: esimHits(rows)[i], width: 172),
+          ContainerSource(
+            child: _DestinationTile(hit: esimHits(rows)[i], width: 172),
+          ),
         ],
       ],
     ),
@@ -1140,7 +1404,10 @@ class _TileGrid extends StatelessWidget {
         spacing: CardsSpace.md,
         runSpacing: CardsSpace.lg,
         children: [
-          for (final hit in rows) _DestinationTile(hit: hit, width: width),
+          for (final hit in rows)
+            ContainerSource(
+              child: _DestinationTile(hit: hit, width: width),
+            ),
         ],
       );
     },
@@ -1149,6 +1416,37 @@ class _TileGrid extends StatelessWidget {
 
 /// Destinations as rows: one list on a phone, side by side lists, read down
 /// each, where there is room.
+/// The country list in the shelf, padded to the page. On a phone (one
+/// column) it is a lazy sliver; beside others it lays out in columns.
+class _DestinationList extends StatelessWidget {
+  const _DestinationList({
+    required this.rows,
+    required this.columns,
+    required this.page,
+  });
+
+  final List<EsimHit> rows;
+  final int columns;
+  final EdgeInsets page;
+
+  bool get lazy => columns <= 1;
+
+  /// The list as a sliver that builds only what is on screen.
+  Widget sliver() => SliverPadding(
+    padding: EdgeInsets.only(left: page.left, right: page.right),
+    sliver: GroupedSliver(
+      itemCount: rows.length,
+      itemBuilder: (context, index) => _DestinationRow(hit: rows[index]),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: EdgeInsets.only(left: page.left, right: page.right),
+    child: _DestinationGroup(rows: rows, columns: columns),
+  );
+}
+
 class _DestinationGroup extends StatelessWidget {
   const _DestinationGroup({required this.rows, this.columns = 1});
 
@@ -1192,70 +1490,79 @@ class _DestinationRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: () => _openDestination(context, row),
+      // The destination's page opens out of the whole row.
+      child: ContainerSource(
+        backing: theme.colorScheme.surface,
+        child: _content(context),
+      ),
+    );
+  }
+
+  Widget _content(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final muted = theme.colorScheme.onSurfaceVariant;
-    return InkWell(
-      onTap: () => _openDestination(context, row),
-      child: Padding(
-        padding: const EdgeInsetsDirectional.fromSTEB(
-          CardsSpace.lg,
-          CardsSpace.md,
-          CardsSpace.md,
-          CardsSpace.md,
-        ),
-        child: Row(
-          children: [
-            EsimFlag(country: row.country, width: 36),
-            const SizedBox(width: CardsSpace.md),
-            Expanded(
+    return Padding(
+      padding: const EdgeInsetsDirectional.fromSTEB(
+        CardsSpace.lg,
+        CardsSpace.md,
+        CardsSpace.md,
+        CardsSpace.md,
+      ),
+      child: Row(
+        children: [
+          ContainerHero(child: EsimFlag(country: row.country, width: 36)),
+          const SizedBox(width: CardsSpace.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(row.name, style: theme.textTheme.titleSmall),
+                if (row.kind != EsimKind.local)
+                  Text(
+                    l10n.esimCountriesCount(row.countries),
+                    style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                  ),
+              ],
+            ),
+          ),
+          if (row.promo case final promo?) ...[
+            Pill(text: esimPromoLabel(l10n, promo), tone: PillTone.promo),
+            const SizedBox(width: CardsSpace.sm),
+          ],
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 130),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(row.name, style: theme.textTheme.titleSmall),
-                  if (row.kind != EsimKind.local)
+                  Text(
+                    l10n.esimEntryFrom(formatMoney(l10n, hit.from)),
+                    style: hit.struck == null
+                        ? theme.textTheme.bodyMedium?.copyWith(color: muted)
+                        : theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                  ),
+                  if (hit.struck case final regular?)
                     Text(
-                      l10n.esimCountriesCount(row.countries),
-                      style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                      formatMoney(l10n, regular),
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: muted,
+                        decoration: TextDecoration.lineThrough,
+                      ),
                     ),
                 ],
               ),
             ),
-            if (row.promo case final promo?) ...[
-              Pill(text: esimPromoLabel(l10n, promo), tone: PillTone.promo),
-              const SizedBox(width: CardsSpace.sm),
-            ],
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 130),
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      l10n.esimEntryFrom(formatMoney(l10n, hit.from)),
-                      style: hit.struck == null
-                          ? theme.textTheme.bodyMedium?.copyWith(color: muted)
-                          : theme.textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
-                    ),
-                    if (hit.struck case final regular?)
-                      Text(
-                        formatMoney(l10n, regular),
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: muted,
-                          decoration: TextDecoration.lineThrough,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(width: CardsSpace.xs),
-            Icon(Icons.chevron_right_rounded, size: 20, color: muted),
-          ],
-        ),
+          ),
+          const SizedBox(width: CardsSpace.xs),
+          Icon(Icons.chevron_right_rounded, size: 20, color: muted),
+        ],
       ),
     );
   }
@@ -1289,12 +1596,19 @@ class _MineShelf extends StatelessWidget {
               if (i > 0) const SizedBox(width: CardsSpace.md),
               SizedBox(
                 width: width,
-                child: EsimCard(
-                  esim: esims[i],
-                  onTap: () async {
-                    await EsimPage.open(context, esims[i].iccid);
-                    onChanged();
-                  },
+                child: Builder(
+                  builder: (card) => EsimCard(
+                    esim: esims[i],
+                    onTap: () async {
+                      await EsimPage.open(
+                        context,
+                        esims[i].iccid,
+                        from: card,
+                        known: esims[i],
+                      );
+                      onChanged();
+                    },
+                  ),
                 ),
               ),
             ],
@@ -1399,12 +1713,19 @@ class EsimMineList extends StatelessWidget {
       for (final esim in esims)
         Padding(
           padding: const EdgeInsets.only(bottom: CardsSpace.md),
-          child: EsimCard(
-            esim: esim,
-            onTap: () async {
-              await EsimPage.open(context, esim.iccid);
-              onChanged?.call();
-            },
+          child: Builder(
+            builder: (card) => EsimCard(
+              esim: esim,
+              onTap: () async {
+                await EsimPage.open(
+                  context,
+                  esim.iccid,
+                  from: card,
+                  known: esim,
+                );
+                onChanged?.call();
+              },
+            ),
           ),
         ),
     ],
@@ -1428,98 +1749,106 @@ class EsimCard extends StatelessWidget {
     final left = usage.left;
     return Pressable(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(CardsSpace.lg),
-        decoration: BoxDecoration(
-          color: scheme.surface,
-          borderRadius: BorderRadius.circular(CardsRadii.card),
-          boxShadow: CardsShadows.raised,
-          border: Border.all(
-            color: scheme.outline.withValues(alpha: 0.6),
-            width: 0.8,
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                EsimFlag(country: esim.country, width: 40),
-                const SizedBox(width: CardsSpace.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+      child: // Its page opens out of the whole card; its flag goes to the
+          // page's banner from where it stands in the card.
+          ContainerSource(
+            child: Container(
+              padding: const EdgeInsets.all(CardsSpace.lg),
+              decoration: BoxDecoration(
+                color: scheme.surface,
+                borderRadius: BorderRadius.circular(CardsRadii.card),
+                boxShadow: CardsShadows.raised,
+                border: Border.all(
+                  color: scheme.outline.withValues(alpha: 0.6),
+                  width: 0.8,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     children: [
-                      Text(
-                        esim.destinationName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleSmall,
+                      ContainerHero(
+                        child: EsimFlag(country: esim.country, width: 40),
                       ),
-                      if (esim.label.isNotEmpty)
-                        Text(
-                          esim.label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                          ),
+                      const SizedBox(width: CardsSpace.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              esim.destinationName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleSmall,
+                            ),
+                            if (esim.label.isNotEmpty)
+                              Text(
+                                esim.label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: scheme.onSurfaceVariant,
+                                ),
+                              ),
+                            EsimPlanLine(
+                              data: esim.data,
+                              days: esim.days,
+                              unlimited: esim.unlimited,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
                         ),
-                      EsimPlanLine(
-                        data: esim.data,
-                        days: esim.days,
-                        unlimited: esim.unlimited,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
+                      ),
+                      Text(
+                        esimStatusText(l10n, usage.status),
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: usage.over
+                              ? scheme.error
+                              : scheme.onSurfaceVariant,
                         ),
                       ),
                     ],
                   ),
-                ),
-                Text(
-                  esimStatusText(l10n, usage.status),
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: usage.over ? scheme.error : scheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
+                  if (left != null && usage.status == EsimStatus.active) ...[
+                    const SizedBox(height: CardsSpace.md),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(CardsRadii.pill),
+                      child: LinearProgressIndicator(
+                        value: left,
+                        minHeight: 6,
+                        color: usage.dataLow ? scheme.error : scheme.primary,
+                        backgroundColor: scheme.surfaceContainerHighest,
+                      ),
+                    ),
+                  ],
+                  if (usage.status == EsimStatus.notActive) ...[
+                    const SizedBox(height: CardsSpace.md),
+                    Text(
+                      esim.gift ? l10n.esimTapToSend : l10n.esimTapToInstall,
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: CardsTheme.link(theme),
+                      ),
+                    ),
+                  ],
+                  if (low) ...[
+                    const SizedBox(height: CardsSpace.sm),
+                    Text(
+                      esim.rechargeable
+                          ? l10n.esimRunningOutTopUp
+                          : l10n.esimRunningOutNew,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.error,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
-            if (left != null && usage.status == EsimStatus.active) ...[
-              const SizedBox(height: CardsSpace.md),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(CardsRadii.pill),
-                child: LinearProgressIndicator(
-                  value: left,
-                  minHeight: 6,
-                  color: usage.dataLow ? scheme.error : scheme.primary,
-                  backgroundColor: scheme.surfaceContainerHighest,
-                ),
-              ),
-            ],
-            if (usage.status == EsimStatus.notActive) ...[
-              const SizedBox(height: CardsSpace.md),
-              Text(
-                esim.gift ? l10n.esimTapToSend : l10n.esimTapToInstall,
-                style: theme.textTheme.labelLarge?.copyWith(
-                  color: CardsTheme.link(theme),
-                ),
-              ),
-            ],
-            if (low) ...[
-              const SizedBox(height: CardsSpace.sm),
-              Text(
-                esim.rechargeable
-                    ? l10n.esimRunningOutTopUp
-                    : l10n.esimRunningOutNew,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: scheme.error,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
+          ),
     );
   }
 }

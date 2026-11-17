@@ -73,6 +73,36 @@ class RelayApi {
     headers: headers,
   );
 
+  /// A GET that names the copy already held: null when the relay says that
+  /// copy still stands (a 304, and nothing downloaded), else the new answer
+  /// with the tag to name it by next time.
+  Future<({Map<String, dynamic> body, String? etag})?> getIfChanged(
+    String path, {
+    String? etag,
+    Map<String, String>? query,
+    bool signedIn = false,
+    bool withSession = false,
+  }) async {
+    final answered = <String, String>{};
+    try {
+      final body = await _send(
+        'GET',
+        path,
+        query: query,
+        signedIn: signedIn,
+        withSession: withSession,
+        headers: {'If-None-Match': ?etag},
+        answered: answered,
+      );
+      return (body: body, etag: answered['etag']);
+    } on RelayApiException catch (error) {
+      if (error.status == 304 && etag != null) {
+        return null;
+      }
+      rethrow;
+    }
+  }
+
   /// [bearer] sends that access token as it is, whatever session is stored
   /// (or none): the sign-out that follows a session already forgotten here.
   Future<Map<String, dynamic>> post(
@@ -122,6 +152,7 @@ class RelayApi {
     bool signedIn = false,
     bool withSession = false,
     Map<String, String>? headers,
+    Map<String, String>? answered,
     bool retried = false,
   }) async {
     final request = http.Request(method, resolve(path, query));
@@ -155,6 +186,7 @@ class RelayApi {
     }
     final decoded = _decode(response.body);
     if (response.statusCode >= 200 && response.statusCode < 300) {
+      answered?.addAll(response.headers);
       return decoded;
     }
     final code = decoded['code'] as String? ?? 'http_${response.statusCode}';
@@ -179,6 +211,7 @@ class RelayApi {
           signedIn: signedIn,
           withSession: withSession,
           headers: headers,
+          answered: answered,
           retried: true,
         );
       }

@@ -361,12 +361,15 @@ class _Enter extends StatelessWidget {
       return child;
     }
     final start = (0.32 + order * 0.035).clamp(0.0, 0.8);
-    final curve = CurvedAnimation(
-      parent: entrance,
-      curve: Interval(
-        start,
-        (start + 0.38).clamp(0.0, 1.0),
-        curve: Curves.easeOutCubic,
+    // Driven, not a CurvedAnimation: one made in `build` would listen to the
+    // entrance for good.
+    final curve = entrance.drive(
+      CurveTween(
+        curve: Interval(
+          start,
+          (start + 0.38).clamp(0.0, 1.0),
+          curve: Curves.easeOutCubic,
+        ),
       ),
     );
     return AnimatedBuilder(

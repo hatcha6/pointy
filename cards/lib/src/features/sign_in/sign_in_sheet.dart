@@ -21,6 +21,7 @@ import '../attribution/heard_from_form.dart';
 import '../legal/legal_consent.dart';
 import '../../core/analytics/analytics.dart';
 import '../../core/analytics/events.dart';
+import '../../shared/motion.dart';
 
 /// Signs in when needed: true at once for a signed-in customer, otherwise
 /// the sheet decides. Called at the moment it matters (paying, opening
@@ -74,6 +75,9 @@ class _SignInSheetState extends State<SignInSheet> {
   String? _phoneError;
   String? _codeError;
   bool _busy = false;
+
+  /// The code was right: its boxes confirm before the sheet moves on.
+  bool _verified = false;
 
   /// Signed in, now asking «من أين سمعت عنا؟».
   late bool _asking = widget.askFirst;
@@ -184,6 +188,13 @@ class _SignInSheetState extends State<SignInSheet> {
     switch (result) {
       case Ok():
         Haptics.success();
+        if (!MediaQuery.disableAnimationsOf(context)) {
+          setState(() => _verified = true);
+          await Future<void>.delayed(const Duration(milliseconds: 420));
+          if (!mounted) {
+            return;
+          }
+        }
         if (CardsScope.of(context).attribution.shouldAskAfterSignIn) {
           // A new customer: where they heard of the app, then on.
           setState(() => _asking = true);
@@ -209,8 +220,12 @@ class _SignInSheetState extends State<SignInSheet> {
           CardsSpace.gutter,
           CardsSpace.xl,
         ),
-        child: AnimatedSwitcher(
-          duration: CardsMotion.standard,
+        // Phone, its code, then the question: steps of one task. Going back
+        // to the phone number moves the other way.
+        child: CardsSwitcher(
+          kind: SwitchKind.steps,
+          back: !_asking && _challenge == null,
+          alignment: Alignment.topCenter,
           child: _asking
               ? HeardFromForm(
                   key: const ValueKey('heard-from'),
@@ -324,6 +339,7 @@ class _SignInSheetState extends State<SignInSheet> {
               controller: _code,
               enabled: !_busy,
               error: _codeError != null,
+              success: _verified,
               onChanged: (value) {
                 if (_codeError != null) {
                   setState(() => _codeError = null);

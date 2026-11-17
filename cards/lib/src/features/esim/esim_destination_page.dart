@@ -23,6 +23,8 @@ import 'esim_share.dart';
 import 'esim_split.dart';
 import 'esim_store_page.dart';
 import 'esim_support_banner.dart';
+import '../../shared/glass_bar.dart';
+import '../../shared/container_route.dart';
 
 /// One destination: its plans, smallest first, and where they work.
 class EsimDestinationPage extends StatefulWidget {
@@ -30,8 +32,14 @@ class EsimDestinationPage extends StatefulWidget {
     super.key,
     required this.destination,
     this.name = '',
+    this.country = '',
     this.plan,
   });
+
+  /// Its country, where the tile it was opened from knows it: with [name],
+  /// the page shows its banner from the first frame, before its plans come,
+  /// so the tile has something to land on.
+  final String country;
 
   final String destination;
 
@@ -45,14 +53,29 @@ class EsimDestinationPage extends StatefulWidget {
     BuildContext context,
     String key, {
     String name = '',
+    String country = '',
     String? plan,
-  }) => Navigator.of(context).push(
-    MaterialPageRoute<void>(
-      settings: screenSettings('esim_destination'),
-      builder: (_) =>
-          EsimDestinationPage(destination: key, name: name, plan: plan),
-    ),
-  );
+
+    /// The tile it opens out of, and closes back into.
+    BuildContext? from,
+  }) {
+    Widget page(BuildContext _) => EsimDestinationPage(
+      destination: key,
+      name: name,
+      country: country,
+      plan: plan,
+    );
+    final settings = screenSettings('esim_destination');
+    return from == null
+        ? Navigator.of(context)
+              .push(MaterialPageRoute<void>(settings: settings, builder: page))
+        : openContainer<void>(
+            context,
+            from: from,
+            settings: settings,
+            builder: page,
+          );
+  }
 
   @override
   State<EsimDestinationPage> createState() => _EsimDestinationPageState();
@@ -75,8 +98,19 @@ class _EsimDestinationPageState extends State<EsimDestinationPage> {
   }
 
   Future<void> _load() async {
-    final result = await CardsScope.of(context).esim
-        .destination(widget.destination);
+    final esim = CardsScope.of(context).esim;
+    if (_destination == null) {
+      // The saved copy first: the plans show at once, and offline.
+      final kept = await esim.cachedDestination(widget.destination);
+      if (!mounted) {
+        return;
+      }
+      if (kept != null && _destination == null) {
+        setState(() => _destination = kept);
+        _openLinkedPlan();
+      }
+    }
+    final result = await esim.destination(widget.destination);
     if (!mounted) {
       return;
     }
@@ -119,14 +153,13 @@ class _EsimDestinationPageState extends State<EsimDestinationPage> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final destination = _destination;
-    final side = SideBack.active(context);
     return SideBack(
       actions: [EsimShareButton.side(context, link: _link, title: _title)],
       child: Scaffold(
-        appBar: AppBar(
+        extendBodyBehindAppBar: GlassBar.extendsBody,
+        appBar: GlassBar(
           title: Text(destination?.name ?? widget.name),
-          automaticallyImplyLeading: !side,
-          actions: [if (!side) EsimShareButton(link: _link, title: _title)],
+          actions: [EsimShareButton.side(context, link: _link, title: _title)],
         ),
         body: Builder(
           // Its own context: under SideBack, where the side column is
@@ -149,6 +182,19 @@ class _EsimDestinationPageState extends State<EsimDestinationPage> {
                   : ListView(
                       padding: padding,
                       children: [
+                        // What is already known of it, at once.
+                        if (widget.country.isNotEmpty) ...[
+                          ContainerLanding(
+                            same: false,
+                            radius: CardsRadii.card,
+                            child: EsimHero(
+                              name: widget.name,
+                              country: widget.country,
+                              height: EsimSplit.of(context) ? 220 : 148,
+                            ),
+                          ),
+                          const SizedBox(height: CardsSpace.lg),
+                        ],
                         for (var i = 0; i < 5; i++)
                           const Padding(
                             padding: EdgeInsets.only(bottom: CardsSpace.md),
@@ -161,14 +207,32 @@ class _EsimDestinationPageState extends State<EsimDestinationPage> {
                     );
             }
             final wide = EsimSplit.of(context);
-            final hero = EsimHero(
-              name: destination.name,
-              country: destination.country,
-              height: wide ? 220 : 148,
+            final hero = ContainerLanding(
+              same: false,
+              radius: CardsRadii.card,
+              child: EsimHero(
+                name: destination.name,
+                country: destination.country,
+                height: wide ? 220 : 148,
+              ),
             );
             final severalNetworks =
                 destination.plans.map((p) => p.operator).toSet().length > 1;
             final plans = [
+              // The relay could not be reached: these are the plans and
+              // prices as this device last read them.
+              if (_error != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: CardsSpace.md),
+                  child: Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: Pill(
+                      text: l10n.savedShelfNote,
+                      tone: PillTone.warning,
+                      icon: Icons.cloud_off_rounded,
+                    ),
+                  ),
+                ),
               Padding(
                 padding: const EdgeInsets.only(bottom: CardsSpace.md),
                 child: Text(
@@ -219,7 +283,9 @@ class _EsimDestinationPageState extends State<EsimDestinationPage> {
                 end: ListView(
                   padding: EdgeInsets.fromLTRB(
                     CardsSpace.gutter,
-                    CardsSpace.sm,
+                    // Under a glass bar the body runs beneath, the list
+                    // starts clear of it.
+                    CardsSpace.sm + MediaQuery.paddingOf(context).top,
                     CardsSpace.gutter,
                     MediaQuery.paddingOf(context).bottom + CardsSpace.xl,
                   ),

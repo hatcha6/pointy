@@ -1,9 +1,8 @@
-import 'dart:ui' show ImageFilter;
-
-import 'package:cupertino_native_better/cupertino_native_better.dart';
 import 'package:flutter/material.dart';
 
+import '../design/cards_theme.dart';
 import '../features/shell/cards_tab_bar.dart';
+import 'glass_button.dart';
 import 'haptics.dart';
 
 /// A page's back (or close) button, standing in the system's side column
@@ -61,7 +60,10 @@ class SideBack extends StatelessWidget {
   /// The space between one of the column's buttons and the next.
   static const double gap = 12;
 
+  /// Whether the column holds the page's buttons: asked from the page or
+  /// from anything inside it (where the column is already set aside).
   static bool active(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<_SideBackScope>() != null ||
       CardsTabBar.side(MediaQuery.paddingOf(context)) != null;
 
   @override
@@ -99,8 +101,14 @@ class SideBack extends StatelessWidget {
     final localizations = MaterialLocalizations.of(context);
     final top =
         padding.top + statusFoot(MediaQuery.sizeOf(context)) + statusGap;
+    // Where the column's foot group starts: those stand up from the bottom,
+    // where a tab's page has its tabs.
+    final foot = actions.indexWhere((action) => action.spaced);
     Widget at(int slot, Widget button) => Positioned(
-      top: top + slot * (size + gap),
+      top: foot >= 0 && slot > foot ? null : top + slot * (size + gap),
+      bottom: foot >= 0 && slot > foot
+          ? CardsSideTabBar.bottom + (actions.length - slot) * (size + gap)
+          : null,
       left: right ? null : statusCentre - size / 2,
       right: right ? statusCentre - size / 2 : null,
       width: size,
@@ -110,10 +118,11 @@ class SideBack extends StatelessWidget {
     final rtl = Directionality.of(context) == TextDirection.rtl;
     return Stack(
       children: [
-        page,
+        _SideBackScope(child: page),
         at(
           0,
-          _SideButton(
+          GlassButton(
+            size: size,
             symbol: close ? 'xmark' : (rtl ? 'chevron.right' : 'chevron.left'),
             icon: close
                 ? const Icon(Icons.close_rounded)
@@ -132,10 +141,12 @@ class SideBack extends StatelessWidget {
         for (final (i, action) in actions.indexed)
           at(
             i + 1,
-            _SideButton(
+            GlassButton(
+              size: size,
               symbol: action.symbol,
               icon: Icon(action.icon),
               tooltip: action.tooltip,
+              tint: action.on ? CardsTheme.link(Theme.of(context)) : null,
               onPressed: (button) {
                 Haptics.tap();
                 action.onPressed(button);
@@ -155,7 +166,17 @@ class SideAction {
     required this.icon,
     required this.tooltip,
     required this.onPressed,
+    this.on = false,
+    this.spaced = false,
   });
+
+  /// Starts the group that stands at the column's foot, where a tab's page
+  /// has its tabs (the page's filters), away from back and share.
+
+  final bool spaced;
+
+  /// Switched on (a filter in use): the mark takes the app's tint.
+  final bool on;
 
   /// The SF Symbol the system's glass button draws (`square.and.arrow.up`).
   final String symbol;
@@ -168,61 +189,10 @@ class SideAction {
   final void Function(BuildContext button) onPressed;
 }
 
-/// The button itself: the system's own Liquid Glass where the phone draws
-/// it (iOS 26 and later), like the status bar and tab bars beside it; our
-/// frosted glass elsewhere.
-class _SideButton extends StatelessWidget {
-  const _SideButton({
-    required this.symbol,
-    required this.icon,
-    required this.tooltip,
-    required this.onPressed,
-  });
-
-  final String symbol;
-  final Widget icon;
-  final String tooltip;
-  final void Function(BuildContext button) onPressed;
+/// Marks a page whose buttons stand in the side column.
+class _SideBackScope extends InheritedWidget {
+  const _SideBackScope({required super.child});
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    if (CardsTabBar.nativeGlass) {
-      return Semantics(
-        button: true,
-        label: tooltip,
-        child: CNButton.icon(
-          icon: CNSymbol(symbol, size: 17, color: theme.colorScheme.onSurface),
-          onPressed: () => onPressed(context),
-          config: const CNButtonConfig(
-            style: CNButtonStyle.glass,
-            width: SideBack.size,
-            minHeight: SideBack.size,
-          ),
-        ),
-      );
-    }
-    final dark = theme.brightness == Brightness.dark;
-    return ClipOval(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-        child: Material(
-          color: theme.colorScheme.surface.withValues(alpha: dark ? 0.6 : 0.72),
-          shape: CircleBorder(
-            side: BorderSide(
-              color: (dark ? Colors.white : Colors.black).withValues(
-                alpha: 0.08,
-              ),
-            ),
-          ),
-          child: IconButton(
-            tooltip: tooltip,
-            onPressed: () => onPressed(context),
-            icon: icon,
-            color: theme.colorScheme.onSurface,
-          ),
-        ),
-      ),
-    );
-  }
+  bool updateShouldNotify(_SideBackScope oldWidget) => false;
 }

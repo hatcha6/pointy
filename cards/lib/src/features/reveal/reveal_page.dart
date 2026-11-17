@@ -24,6 +24,9 @@ import 'card_faces.dart';
 import 'qr_pass.dart';
 import '../../core/analytics/events.dart';
 import '../../shared/name_text.dart';
+import '../../shared/glass_bar.dart';
+import '../../shared/micro.dart';
+import '../../shared/container_route.dart';
 
 /// The moment the purchase pays off. A seal says it worked, the card turns
 /// over to show its code (once, on the card itself), and a row of round
@@ -212,9 +215,36 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
   }
 
   void _reveal() {
-    if (widget.fromHistory || MediaQuery.disableAnimationsOf(context)) {
+    if (MediaQuery.disableAnimationsOf(context)) {
       _flip.value = 1;
       _seal.value = 1;
+      return;
+    }
+    if (widget.fromHistory) {
+      // The card arrives from its row in «كروتي» as the picture it is there,
+      // and turns to its code once it has landed.
+      _seal.value = 1;
+      final arriving = ModalRoute.of(context)?.animation;
+      if (arriving == null) {
+        _flip.value = 1;
+        return;
+      }
+      if (arriving.isCompleted) {
+        _flip.forward();
+        return;
+      }
+      void landed(AnimationStatus status) {
+        if (status == AnimationStatus.completed) {
+          arriving.removeStatusListener(landed);
+          if (mounted) {
+            _flip.forward();
+          }
+        } else if (status == AnimationStatus.dismissed) {
+          arriving.removeStatusListener(landed);
+        }
+      }
+
+      arriving.addStatusListener(landed);
       return;
     }
     Haptics.success();
@@ -332,18 +362,14 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
           : () => Navigator.of(context).popUntil((route) => route.isFirst),
       child: Scaffold(
         extendBodyBehindAppBar: true,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
+        appBar: GlassBar(
+          clear: true,
           title: Text(widget.fromHistory ? widget.order.name : ''),
-          automaticallyImplyLeading: !SideBack.active(context),
-          leading: widget.fromHistory || SideBack.active(context)
+          close: !widget.fromHistory,
+          leadingTooltip: widget.fromHistory ? null : l10n.closeAction,
+          onLeading: widget.fromHistory
               ? null
-              : IconButton(
-                  tooltip: l10n.closeAction,
-                  icon: const Icon(Icons.close_rounded),
-                  onPressed: () =>
-                      Navigator.of(context).popUntil((route) => route.isFirst),
-                ),
+              : () => Navigator.of(context).popUntil((route) => route.isFirst),
         ),
         body: DecoratedBox(
           decoration: BoxDecoration(
@@ -519,25 +545,55 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
     // The card answers the phone's tilt once it has turned to its code.
     Widget card(CardCode? code, {bool shown = true}) => Opacity(
       opacity: shown && _passUp ? 0 : 1,
-      child: TiltCard(
-        key: shown ? _shown : null,
-        radius: CardsRadii.tile,
-        strength: _flip,
-        child: _FlipCard(
-          animation: _flip,
-          brand: brand,
-          palette: palette,
-          code: code?.code,
-          used: code != null && _used.contains(code.code),
-          qrScratched: code != null && _scratched.contains(code.code),
-          onTap: code == null
-              ? null
-              : () {
-                  _track('qr');
-                  _showQr(brand, palette, code);
-                },
-        ),
-      ),
+      child: shown
+          // The row's card in «كروتي» lands here.
+          ? ContainerLanding(
+              // The card as it arrives (its picture side), for a row to
+              // turn into: the card itself holds a key.
+              arriving: CardArt(
+                brand: brand,
+                radius: CardsRadii.tile,
+                shadow: false,
+              ),
+              child: TiltCard(
+                key: shown ? _shown : null,
+                radius: CardsRadii.tile,
+                strength: _flip,
+                child: _FlipCard(
+                  animation: _flip,
+                  brand: brand,
+                  palette: palette,
+                  code: code?.code,
+                  used: code != null && _used.contains(code.code),
+                  qrScratched: code != null && _scratched.contains(code.code),
+                  onTap: code == null
+                      ? null
+                      : () {
+                          _track('qr');
+                          _showQr(brand, palette, code);
+                        },
+                ),
+              ),
+            )
+          : TiltCard(
+              key: shown ? _shown : null,
+              radius: CardsRadii.tile,
+              strength: _flip,
+              child: _FlipCard(
+                animation: _flip,
+                brand: brand,
+                palette: palette,
+                code: code?.code,
+                used: code != null && _used.contains(code.code),
+                qrScratched: code != null && _scratched.contains(code.code),
+                onTap: code == null
+                    ? null
+                    : () {
+                        _track('qr');
+                        _showQr(brand, palette, code);
+                      },
+              ),
+            ),
     );
     if (codes.length == 1) {
       return card(codes.first);
@@ -755,8 +811,7 @@ class _ActionRow extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final step = this.step;
     final actions = <Widget>[
-      _RoundAction(
-        icon: Icons.copy_rounded,
+      _CopyAction(
         label: l10n.copyAction,
         primary: step == null,
         onTap: () {
@@ -819,6 +874,48 @@ class _ActionRow extends StatelessWidget {
 }
 
 /// A round action with its label under it, like a music player's actions.
+/// The copy button: its mark turns into a check for a moment once pressed.
+class _CopyAction extends StatefulWidget {
+  const _CopyAction({
+    required this.label,
+    required this.onTap,
+    required this.primary,
+  });
+
+  final String label;
+  final VoidCallback onTap;
+  final bool primary;
+
+  @override
+  State<_CopyAction> createState() => _CopyActionState();
+}
+
+class _CopyActionState extends State<_CopyAction>
+    with SingleTickerProviderStateMixin {
+  /// Runs while the check shows.
+  late final AnimationController _done = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1400),
+  )..addStatusListener((_) => setState(() {}));
+
+  @override
+  void dispose() {
+    _done.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => _RoundAction(
+    icon: _done.isAnimating ? Icons.check_rounded : Icons.copy_rounded,
+    label: widget.label,
+    primary: widget.primary,
+    onTap: () {
+      widget.onTap();
+      _done.forward(from: 0);
+    },
+  );
+}
+
 class _RoundAction extends StatelessWidget {
   const _RoundAction({
     required this.icon,
@@ -854,9 +951,13 @@ class _RoundAction extends StatelessWidget {
                   shape: BoxShape.circle,
                   boxShadow: primary ? null : CardsShadows.raised,
                 ),
-                child: Icon(
-                  icon,
-                  color: primary ? Colors.white : theme.colorScheme.onSurface,
+                // A mark that changes (copied, used) lands in place.
+                child: MarkSwitcher(
+                  child: Icon(
+                    icon,
+                    key: ValueKey(icon),
+                    color: primary ? Colors.white : theme.colorScheme.onSurface,
+                  ),
                 ),
               ),
             ),

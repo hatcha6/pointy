@@ -18,6 +18,13 @@ struct CategoryChip: Equatable {
 final class CategoryChipsModel: ObservableObject {
   @Published var chips: [CategoryChip] = []
   @Published var selected = ""
+  /// More than one chip can be on (a row of filters), and a chip can open a
+  /// list rather than switch: it wears a small arrow.
+  @Published var selectedKeys: Set<String> = []
+  @Published var menus: Set<String> = []
+  /// Standing between other controls: the chips melt away at either end
+  /// rather than being cut off.
+  @Published var fade = false
   @Published var tint = Color.accentColor
   @Published var dark = false
   @Published var rtl = true
@@ -39,6 +46,9 @@ final class CategoryChipsModel: ObservableObject {
       }
     }
     if let key = args["selected"] as? String { selected = key }
+    if let keys = args["selectedKeys"] as? [String] { selectedKeys = Set(keys) }
+    if let keys = args["menus"] as? [String] { menus = Set(keys) }
+    if let clip = args["clip"] as? Bool { fade = clip }
     if let argb = args["tint"] as? Int { tint = Color(uiColor: UIColor(argb: argb)) }
     if let isDark = args["dark"] as? Bool { dark = isDark }
     if let isRtl = args["rtl"] as? Bool { rtl = isRtl }
@@ -51,6 +61,9 @@ final class CategoryChipsModel: ObservableObject {
 @available(iOS 26.0, *)
 struct CategoryChipsView: View {
   @ObservedObject var model: CategoryChipsModel
+  /// Whether chips run on past either end of the row: only that end fades.
+  @State private var moreBefore = false
+  @State private var moreAfter = false
   var body: some View {
     ScrollViewReader { reader in
       ScrollView(.horizontal, showsIndicators: false) {
@@ -68,12 +81,40 @@ struct CategoryChipsView: View {
         }
       }
       .scrollClipDisabled()
+      .onScrollGeometryChange(for: [Bool].self) { geometry in
+        [
+          geometry.visibleRect.minX > 1,
+          geometry.visibleRect.maxX < geometry.contentSize.width - 1,
+        ]
+      } action: { _, more in
+        withAnimation(.easeInOut(duration: 0.15)) {
+          moreBefore = more[0]
+          moreAfter = more[1]
+        }
+      }
       // Made afresh when a page above closes: open on the chosen chip.
       .onAppear { reader.scrollTo(model.selected, anchor: .center) }
       .onChange(of: model.selected) { _, key in
         withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
           reader.scrollTo(key, anchor: .center)
         }
+      }
+    }
+    .mask {
+      if model.fade {
+        GeometryReader { box in
+          let edge = min(0.5, 30 / max(box.size.width, 1))
+          LinearGradient(
+            stops: [
+              .init(color: moreBefore ? .clear : .black, location: 0),
+              .init(color: .black, location: edge),
+              .init(color: .black, location: 1 - edge),
+              .init(color: moreAfter ? .clear : .black, location: 1),
+            ],
+            startPoint: .leading, endPoint: .trailing)
+        }
+      } else {
+        Rectangle()
       }
     }
     .environment(\.layoutDirection, model.rtl ? .rightToLeft : .leftToRight)
@@ -86,11 +127,16 @@ struct CategoryChipsView: View {
   // weight made the chip re-lay itself out and drop its icon mid-change.)
   @ViewBuilder
   private func chipButton(_ chip: CategoryChip) -> some View {
-    let chosen = chip.key == model.selected
+    let chosen = chip.key == model.selected || model.selectedKeys.contains(chip.key)
     Button {
       model.onSelect(chip.key)
     } label: {
-      Label(chip.label, systemImage: chip.symbol)
+      HStack(spacing: 6) {
+        Label(chip.label, systemImage: chip.symbol)
+        if model.menus.contains(chip.key) {
+          Image(systemName: "chevron.down").font(.system(size: 11, weight: .bold))
+        }
+      }
         .font(.system(size: 15, weight: .semibold))
         .foregroundStyle(chosen ? model.tint : Color.primary)
         .padding(.horizontal, 14)
@@ -123,6 +169,7 @@ final class CategoryChipsPlatformView: NSObject, FlutterPlatformView {
     container.backgroundColor = .clear
     if let params = args as? [String: Any] {
       model.apply(params)
+      container.clipsToBounds = params["clip"] as? Bool ?? false
     }
     model.onSelect = { [weak self] key in
       self?.channel.invokeMethod("select", arguments: key)
@@ -130,6 +177,7 @@ final class CategoryChipsPlatformView: NSObject, FlutterPlatformView {
     channel.setMethodCallHandler { [weak self] call, result in
       if call.method == "update", let params = call.arguments as? [String: Any], let self {
         self.model.apply(params)
+        self.container.clipsToBounds = params["clip"] as? Bool ?? false
         self.host?.overrideUserInterfaceStyle = self.model.dark ? .dark : .light
       }
       result(nil)

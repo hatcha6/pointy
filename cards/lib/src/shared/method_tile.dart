@@ -4,6 +4,7 @@ import 'package:pointy_brand/pointy_brand.dart';
 import '../../l10n/generated/app_localizations.dart';
 import '../data/models/order.dart';
 import '../design/cards_tokens.dart';
+import 'micro.dart';
 
 /// A payment method's mark: its logo on a white chip (Moamalat's for bank
 /// cards; a card icon for a method with no mark).
@@ -75,8 +76,7 @@ class MethodRow extends StatelessWidget {
           methodName(context, method),
           style: theme.textTheme.titleMedium,
         ),
-        trailing: AnimatedSwitcher(
-          duration: CardsMotion.fast,
+        trailing: MarkSwitcher(
           child: Icon(
             selected ? Icons.check_circle_rounded : Icons.circle_outlined,
             key: ValueKey(selected),

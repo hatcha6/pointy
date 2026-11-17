@@ -19,6 +19,10 @@ class NativeGlassChips extends StatefulWidget {
     required this.chips,
     required this.selected,
     required this.onSelect,
+    this.selectedKeys = const {},
+    this.menus = const {},
+    this.holdOpen = false,
+    this.clip = false,
     this.column = EdgeInsets.zero,
     this.gutter = 20,
   });
@@ -26,6 +30,20 @@ class NativeGlassChips extends StatefulWidget {
   final List<GlassChip> chips;
   final String selected;
   final ValueChanged<String> onSelect;
+
+  /// Chips that are on besides [selected]: a row of filters has several.
+  final Set<String> selectedKeys;
+
+  /// Chips that open a list rather than switch: they wear a small arrow.
+  final Set<String> menus;
+
+  /// Keeps the row up while a list the page opened (a popup, which is a route
+  /// above the page) is over it.
+  final bool holdOpen;
+
+  /// Cuts the chips off at the row's own edges, for a row that stands
+  /// between other controls; the glass otherwise overflows, shadow and all.
+  final bool clip;
 
   /// The system side column the row runs under: the chips start clear of
   /// it and scroll on beneath it, still taking taps there.
@@ -54,6 +72,9 @@ class _NativeGlassChipsState extends State<NativeGlassChips> {
           {'key': chip.key, 'label': chip.label, 'symbol': chip.symbol},
       ],
       'selected': widget.selected,
+      'selectedKeys': widget.selectedKeys.toList(),
+      'menus': widget.menus.toList(),
+      'clip': widget.clip,
       'tint': CardsTheme.link(theme).toARGB32(),
       'dark': theme.brightness == Brightness.dark,
       'rtl': rtl,
@@ -96,7 +117,8 @@ class _NativeGlassChipsState extends State<NativeGlassChips> {
   Widget build(BuildContext context) {
     // Out while a page covers this one: the system's hosted glass goes stale
     // and out of place under a pushed page, so it is made afresh on return.
-    final covered = !(ModalRoute.isCurrentOf(context) ?? true);
+    final covered =
+        !widget.holdOpen && !(ModalRoute.isCurrentOf(context) ?? true);
     return SizedBox(
       height: NativeGlassChips.height,
       child: covered

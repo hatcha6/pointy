@@ -18,6 +18,7 @@ import '../../shared/pill.dart';
 import '../../shared/pressable.dart';
 import '../../shared/quantity_stepper.dart';
 import '../../shared/side_back.dart';
+import '../../shared/status_tap.dart';
 import '../checkout/checkout_sheet.dart';
 import '../links/cards_link.dart';
 import '../sign_in/sign_in_sheet.dart';
@@ -31,36 +32,45 @@ import '../../shared/shake.dart';
 import '../topup/account_card.dart';
 import '../topup/account_form_model.dart';
 import '../topup/topup_text.dart';
+import '../../shared/glass_bar.dart';
+import '../../shared/glass_button.dart';
+import '../shell/cards_tab_bar.dart';
+import '../../shared/container_route.dart';
 
 /// One brand, presented the way a premium storefront presents a product: its
 /// card floating at the top of the page, what it comes in, and a frosted buy bar
 /// that stays under the thumb.
 class BrandPage extends StatefulWidget {
-  BrandPage({super.key, required this.brand, this.initialItem, String? heroTag})
-    : heroTag = heroTag ?? 'brand-${brand.key}';
+  const BrandPage({super.key, required this.brand, this.initialItem});
 
   final CardBrand brand;
   final CardItem? initialItem;
 
-  /// The tile it opened from: the art flies from there.
-  final String heroTag;
-
+  /// Opens the brand's page: out of the card at [from] (a shelf's tile, a
+  /// search result) where there is one, which the page then closes back into.
   static Future<void> open(
     BuildContext context,
     CardBrand brand, {
     CardItem? item,
-    String? heroTag,
-  }) => Navigator.of(context).push(
-    MaterialPageRoute(
-      // Its address (cards.dftr.ly/brand/…), shown in the web build's bar.
-      settings: RouteSettings(
-        name: BrandLink(brand.key).location,
-        arguments: const ScreenName('brand'),
-      ),
-      builder: (_) =>
-          BrandPage(brand: brand, initialItem: item, heroTag: heroTag),
-    ),
-  );
+    BuildContext? from,
+  }) {
+    // Its address (cards.dftr.ly/brand/…), shown in the web build's bar.
+    final settings = RouteSettings(
+      name: BrandLink(brand.key).location,
+      arguments: const ScreenName('brand'),
+    );
+    Widget page(BuildContext _) => BrandPage(brand: brand, initialItem: item);
+    return from == null
+        ? Navigator.of(context)
+              .push(MaterialPageRoute<void>(settings: settings, builder: page))
+        : openContainer<void>(
+            context,
+            from: from,
+            settings: settings,
+            radius: CardsRadii.art,
+            builder: page,
+          );
+  }
 
   @override
   State<BrandPage> createState() => _BrandPageState();
@@ -68,6 +78,10 @@ class BrandPage extends StatefulWidget {
 
 class _BrandPageState extends State<BrandPage> {
   late String? _country = widget.initialItem?.country ?? _countries.firstOrNull;
+  late String? _currency =
+      widget.brand.currencies.contains(widget.initialItem?.faceCurrency)
+      ? widget.initialItem?.faceCurrency
+      : widget.brand.currencies.firstOrNull;
   late CardItem? _item = widget.initialItem ?? _defaultItem();
   int _quantity = 1;
 
@@ -178,6 +192,7 @@ class _BrandPageState extends State<BrandPage> {
     final everyCountry = _countries.length < 2;
     return widget.brand.items
         .where((item) => everyCountry || item.country == _country)
+        .where((item) => _currency == null || item.faceCurrency == _currency)
         .toList()
       ..sort((a, b) => a.rank.compareTo(b.rank));
   }
@@ -207,7 +222,6 @@ class _BrandPageState extends State<BrandPage> {
         brand: widget.brand,
         item: item,
         quantity: _account == null ? _quantity : 1,
-        heroTag: widget.heroTag,
         account: _account,
         onEditAccount: _editAccount,
       );
@@ -300,6 +314,35 @@ class _BrandPageState extends State<BrandPage> {
           ],
         ),
       ],
+      if (brand.currencies case final currencies
+          when currencies.isNotEmpty) ...[
+        const SizedBox(height: CardsSpace.xl),
+        Text(l10n.chooseCurrency, style: theme.textTheme.titleLarge),
+        const SizedBox(height: CardsSpace.md),
+        Wrap(
+          spacing: CardsSpace.sm,
+          runSpacing: CardsSpace.sm,
+          children: [
+            for (final code in currencies)
+              _ChoiceChip(
+                label: l10n.currencyName(code),
+                selected: _currency == code,
+                onTap: () => setState(() {
+                  _currency = code;
+                  _item = _defaultItem();
+                  _account?.itemKey = _item?.key ?? '';
+                }),
+                leading: (color) => Text(
+                  _currencySigns[code] ?? code,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
       if (_account case final account?) ...[
         const SizedBox(height: CardsSpace.xl),
         _StepTitle(
@@ -366,100 +409,123 @@ class _BrandPageState extends State<BrandPage> {
     if (CardsLayout.sideBySide(MediaQuery.sizeOf(context))) {
       return _sideBySide(context, details: details);
     }
-    return SideBack(
-      edgeToEdge: true,
-      actions: [BrandShareButton.side(context, brand, item)],
-      child: Scaffold(
-        extendBody: true,
-        body: SettledLight(
-          builder: (context, light) => Stack(
-            children: [
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: AmbientLight(
-                  brand: brand,
-                  light: light,
-                  scroll: _scroll,
-                  height: lightHeight,
-                ),
-              ),
-              // Clear of a system column down one side (the iPhone Duo); the
-              // light behind still runs edge to edge.
-              SafeArea(
-                top: false,
-                bottom: false,
-                child: NotificationListener<ScrollNotification>(
-                  onNotification: (note) {
-                    if (note.depth == 0) {
-                      _cardGone.value = note.metrics.pixels > cardHeight * 0.8;
-                    }
-                    return false;
-                  },
-                  child: CustomScrollView(
-                    controller: _scroll,
-                    slivers: [
-                      // A plain bar: the back button, and the brand's name once the
-                      // card has scrolled away.
-                      SliverAppBar(
-                        pinned: true,
-                        // Clear over the light; solid once the card has gone under.
-                        backgroundColor: Colors.transparent,
-                        flexibleSpace: ValueListenableBuilder<bool>(
-                          valueListenable: _cardGone,
-                          builder: (context, gone, _) => AnimatedOpacity(
-                            duration: CardsMotion.fast,
-                            opacity: gone ? 1 : 0,
-                            child: ColoredBox(
-                              color: theme.scaffoldBackgroundColor,
-                            ),
-                          ),
-                        ),
-                        automaticallyImplyLeading: false,
-                        leading: SideBack.active(context)
-                            ? null
-                            : const _CircleBack(),
-                        title: ValueListenableBuilder<bool>(
-                          valueListenable: _cardGone,
-                          builder: (context, gone, child) => AnimatedOpacity(
-                            duration: CardsMotion.fast,
-                            opacity: gone ? 1 : 0,
-                            child: child,
-                          ),
-                          child: NameText(brand.name, maxLines: 1),
-                        ),
-                        actions: [
-                          // In the side column instead, where there is one.
-                          if (!SideBack.active(context))
-                            BrandShareButton(brand: brand, item: item),
-                        ],
-                      ),
-                      SliverToBoxAdapter(
-                        child: BrandCardStage(
-                          brand: brand,
-                          heroTag: widget.heroTag,
-                          width: cardWidth,
-                          light: light,
-                        ),
-                      ),
-                      SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(
-                          CardsSpace.gutter,
-                          CardsSpace.sm,
-                          CardsSpace.gutter,
-                          140,
-                        ),
-                        sliver: SliverList.list(children: details),
-                      ),
-                    ],
+    // A tap on the status bar scrolls the details to their top.
+    return StatusTapScrolls(
+      controller: _scroll,
+      child: SideBack(
+        edgeToEdge: true,
+        actions: [BrandShareButton.side(context, brand, item)],
+        child: Scaffold(
+          extendBody: true,
+          body: SettledLight(
+            builder: (context, light) => Stack(
+              children: [
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: AmbientLight(
+                    brand: brand,
+                    light: light,
+                    scroll: _scroll,
+                    height: lightHeight,
                   ),
                 ),
-              ),
-            ],
+                // Clear of a system column down one side (the iPhone Duo); the
+                // light behind still runs edge to edge.
+                SafeArea(
+                  top: false,
+                  bottom: false,
+                  child: NotificationListener<ScrollNotification>(
+                    onNotification: (note) {
+                      if (note.depth == 0) {
+                        _cardGone.value =
+                            note.metrics.pixels > cardHeight * 0.8;
+                      }
+                      return false;
+                    },
+                    child: CustomScrollView(
+                      controller: _scroll,
+                      slivers: [
+                        // A plain bar: the back button, and the brand's name once the
+                        // card has scrolled away.
+                        if (CardsTabBar.nativeGlass)
+                          GlassBar.sliver(
+                            context,
+                            title: ValueListenableBuilder<bool>(
+                              valueListenable: _cardGone,
+                              builder: (context, gone, child) =>
+                                  AnimatedOpacity(
+                                    duration: CardsMotion.fast,
+                                    opacity: gone ? 1 : 0,
+                                    child: child,
+                                  ),
+                              child: NameText(brand.name, maxLines: 1),
+                            ),
+                            actions: [
+                              BrandShareButton.side(context, brand, item),
+                            ],
+                          )
+                        else
+                          SliverAppBar(
+                            pinned: true,
+                            // Clear over the light; solid once the card has gone under.
+                            backgroundColor: Colors.transparent,
+                            flexibleSpace: ValueListenableBuilder<bool>(
+                              valueListenable: _cardGone,
+                              builder: (context, gone, _) => AnimatedOpacity(
+                                duration: CardsMotion.fast,
+                                opacity: gone ? 1 : 0,
+                                child: ColoredBox(
+                                  color: theme.scaffoldBackgroundColor,
+                                ),
+                              ),
+                            ),
+                            automaticallyImplyLeading: false,
+                            leading: SideBack.active(context)
+                                ? null
+                                : const _CircleBack(),
+                            title: ValueListenableBuilder<bool>(
+                              valueListenable: _cardGone,
+                              builder: (context, gone, child) =>
+                                  AnimatedOpacity(
+                                    duration: CardsMotion.fast,
+                                    opacity: gone ? 1 : 0,
+                                    child: child,
+                                  ),
+                              child: NameText(brand.name, maxLines: 1),
+                            ),
+                            actions: [
+                              // In the side column instead, where there is one.
+                              if (!SideBack.active(context))
+                                BrandShareButton(brand: brand, item: item),
+                            ],
+                          ),
+                        SliverToBoxAdapter(
+                          child: BrandCardStage(
+                            brand: brand,
+                            width: cardWidth,
+                            light: light,
+                          ),
+                        ),
+                        SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(
+                            CardsSpace.gutter,
+                            CardsSpace.sm,
+                            CardsSpace.gutter,
+                            140,
+                          ),
+                          sliver: SliverList.list(children: details),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
+          bottomNavigationBar: buyBar,
         ),
-        bottomNavigationBar: buyBar,
       ),
     );
   }
@@ -521,81 +587,84 @@ class _BrandPageState extends State<BrandPage> {
       pane - CardsSpace.gutter * 2,
     );
     final rtl = Directionality.of(context) == TextDirection.rtl;
-    return SideBack(
-      edgeToEdge: true,
-      actions: [BrandShareButton.side(context, widget.brand, _item)],
-      child: Scaffold(
-        body: SettledLight(
-          builder: (context, light) => Stack(
-            children: [
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: AmbientLight(
-                  brand: widget.brand,
-                  light: light,
-                  scroll: _still,
-                  height: media.size.height,
-                ),
-              ),
-              Padding(
-                padding: EdgeInsets.only(
-                  left: padding.left,
-                  right: padding.right,
-                ),
-                child: MediaQuery.removePadding(
-                  context: context,
-                  removeLeft: true,
-                  removeRight: true,
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Center(
-                          child: BrandCardStage(
-                            brand: widget.brand,
-                            heroTag: widget.heroTag,
-                            width: cardWidth,
-                            light: light,
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        child: Column(
-                          children: [
-                            Expanded(
-                              child: ListView(
-                                controller: _scroll,
-                                padding: EdgeInsets.fromLTRB(
-                                  CardsSpace.gutter,
-                                  padding.top + CardsSpace.xl,
-                                  CardsSpace.gutter,
-                                  CardsSpace.xl,
-                                ),
-                                children: details,
-                              ),
-                            ),
-                            ?_buyBar(floating: true),
-                          ],
-                        ),
-                      ),
-                    ],
+    // A tap on the status bar scrolls the details to their top.
+    return StatusTapScrolls(
+      controller: _scroll,
+      child: SideBack(
+        edgeToEdge: true,
+        actions: [BrandShareButton.side(context, widget.brand, _item)],
+        child: Scaffold(
+          body: SettledLight(
+            builder: (context, light) => Stack(
+              children: [
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: AmbientLight(
+                    brand: widget.brand,
+                    light: light,
+                    scroll: _still,
+                    height: media.size.height,
                   ),
                 ),
-              ),
-              if (!SideBack.active(context))
-                PositionedDirectional(
-                  top: padding.top,
-                  start: rtl ? padding.right : padding.left,
-                  child: const _CircleBack(),
+                Padding(
+                  padding: EdgeInsets.only(
+                    left: padding.left,
+                    right: padding.right,
+                  ),
+                  child: MediaQuery.removePadding(
+                    context: context,
+                    removeLeft: true,
+                    removeRight: true,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Center(
+                            child: BrandCardStage(
+                              brand: widget.brand,
+                              width: cardWidth,
+                              light: light,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Column(
+                            children: [
+                              Expanded(
+                                child: ListView(
+                                  controller: _scroll,
+                                  padding: EdgeInsets.fromLTRB(
+                                    CardsSpace.gutter,
+                                    padding.top + CardsSpace.xl,
+                                    CardsSpace.gutter,
+                                    CardsSpace.xl,
+                                  ),
+                                  children: details,
+                                ),
+                              ),
+                              ?_buyBar(floating: true),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              if (!SideBack.active(context))
-                PositionedDirectional(
-                  top: padding.top,
-                  end: rtl ? padding.left : padding.right,
-                  child: BrandShareButton(brand: widget.brand, item: _item),
-                ),
-            ],
+                if (!SideBack.active(context))
+                  PositionedDirectional(
+                    top: padding.top,
+                    start: rtl ? padding.right : padding.left,
+                    child: const _CircleBack(),
+                  ),
+                if (!SideBack.active(context))
+                  PositionedDirectional(
+                    top: padding.top,
+                    end: rtl ? padding.left : padding.right,
+                    child: BrandShareButton(brand: widget.brand, item: _item),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
@@ -648,6 +717,19 @@ class _CircleBack extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (CardsTabBar.nativeGlass) {
+      return Padding(
+        padding: const EdgeInsets.all(CardsSpace.sm),
+        child: GlassButton(
+          symbol: Directionality.of(context) == TextDirection.rtl
+              ? 'chevron.right'
+              : 'chevron.left',
+          icon: const BackButtonIcon(),
+          tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+          onPressed: (_) => Navigator.of(context).maybePop(),
+        ),
+      );
+    }
     return Padding(
       padding: const EdgeInsets.all(CardsSpace.sm),
       child: Material(
@@ -677,12 +759,58 @@ class _CountryChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final catalog = CardsScope.of(context).catalog;
     final flag = catalog.countryFlag(code);
+    return _ChoiceChip(
+      label: catalog.countryName(code),
+      selected: selected,
+      onTap: onTap,
+      leading: (color) => ClipRRect(
+        borderRadius: BorderRadius.circular(3),
+        child: flag.isEmpty
+            ? Icon(Icons.public_rounded, size: 18, color: color)
+            : SizedBox(
+                width: 22,
+                height: 16,
+                child: ArtImage(
+                  url: catalog.imageUrl(flag).toString(),
+                  fallback: const Icon(Icons.public_rounded, size: 18),
+                ),
+              ),
+      ),
+    );
+  }
+}
+
+/// The signs the currency chips show; a currency with none shows its code.
+const _currencySigns = {'USD': r'$', 'EUR': '€', 'GBP': '£'};
+
+/// One of a few to choose among (a country, a currency): the one chosen is
+/// filled.
+class _ChoiceChip extends StatelessWidget {
+  const _ChoiceChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    required this.leading,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  /// What stands before the label, in the colour the chip writes in.
+  final Widget Function(Color color) leading;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final ink = selected
+        ? theme.colorScheme.surface
+        : theme.colorScheme.onSurface;
     return Pressable(
       onTap: onTap,
-      semanticLabel: catalog.countryName(code),
+      semanticLabel: label,
       child: AnimatedContainer(
         duration: CardsMotion.fast,
         padding: const EdgeInsets.symmetric(
@@ -703,31 +831,11 @@ class _CountryChip extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(3),
-              child: flag.isEmpty
-                  ? Icon(
-                      Icons.public_rounded,
-                      size: 18,
-                      color: selected ? theme.colorScheme.surface : null,
-                    )
-                  : SizedBox(
-                      width: 22,
-                      height: 16,
-                      child: ArtImage(
-                        url: catalog.imageUrl(flag).toString(),
-                        fallback: const Icon(Icons.public_rounded, size: 18),
-                      ),
-                    ),
-            ),
+            leading(ink),
             const SizedBox(width: CardsSpace.sm),
             Text(
-              catalog.countryName(code),
-              style: theme.textTheme.labelLarge?.copyWith(
-                color: selected
-                    ? theme.colorScheme.surface
-                    : theme.colorScheme.onSurface,
-              ),
+              label,
+              style: theme.textTheme.labelLarge?.copyWith(color: ink),
             ),
           ],
         ),
