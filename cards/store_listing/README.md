@@ -42,22 +42,42 @@ poster frame to about 0:14 (the code on the card).
 The Play set shows games and gift cards. The App Store set leads with
 telecom, internet and credit (guideline 3.1.1).
 
+## The eSIM frame (`07_esim.png`, `06_esim.png` in the Duo sets)
+
+In all five sets. On the Duo's outer display the clock and camera of the side
+column come from `01_hero.png`; the inner frame borrows the same clock and
+signal ring. It was made differently from the others
+(2026-11-16): the eSIM shop page was rendered by a widget test at each phone's
+size, not captured on a device, with destinations and prices as the live relay
+answered that day and «شرائحي» from the fixtures. The background, bezel and
+status bar are taken from the finished frames of the same set. eSIM prices
+follow the dollar, so render it again before a release if they have moved.
+Place it second or third in the store's order rather than last.
+
 ## Store text (Arabic, draft)
 
 **Name** (30): دفتر كروت: كروت شحن فورية
 
 **Subtitle, App Store** (30): كروت ليبيانا والمدار والإنترنت
 
-**Short description, Play** (80): كروت ليبيانا والمدار والإنترنت والألعاب، والرقم السري يصلك فوراً.
+**Short description, Play** (80): كروت ليبيانا والمدار والإنترنت والألعاب، وشرائح eSIM للسفر، والرقم السري فوراً.
 
 **Keywords, App Store** (100):
-ليبيانا,المدار,كرت,كروت,شحن,رصيد,انترنت,ليبيا,سداد,ادفع لي,موبي كاش,جيجا,ليبيا للاتصالات,فودافون
+ليبيانا,المدار,كرت,كروت,شحن,رصيد,انترنت,ليبيا,سداد,ادفع لي,موبي كاش,eSIM,شريحة,سفر,تجوال,جيجا
 
-**Promotional text** (170): اشترِ كرتك في ثوانٍ وادفع بوسائل الدفع الليبية، والرقم السري أمامك فوراً. وإن تعذّر الكرت يعود المبلغ إلى رصيدك.
+**Promotional text** (170): اشترِ كرتك في ثوانٍ بوسائل الدفع الليبية، والرقم السري أمامك فوراً، وإن تعذّر الكرت عاد المبلغ إلى رصيدك. جديد: شرائح eSIM لأكثر من 200 وجهة.
 
 **Description:**
 
-دفتر كروت أسرع طريقة لشراء كروت الاتصالات والإنترنت في ليبيا.
+دفتر كروت أسرع طريقة لشراء كروت الاتصالات والإنترنت في ليبيا، وشرائح eSIM لسفرك.
+
+شرائح eSIM للسفر:
+• إنترنت في أكثر من 200 وجهة، لدولة واحدة أو لمنطقة كاملة.
+• تثبّتها بلمسة واحدة قبل السفر، وتبدأ صلاحيتها عند أول اتصال بالشبكة في وجهتك.
+• اشترِها لهاتفك، أو أرسلها برابط لمن يسافر.
+• ننبّهك قبل أن تنتهي بياناتك.
+
+الكروت:
 
 • اختر الكرت والفئة، وترى السعر والإجمالي قبل أن تدفع.
 • ادفع بطريقتك: سداد، وإدفع لي، وموبي كاش، ويسر باي، ومصرفي باي، والبطاقات المصرفية.

@@ -135,6 +135,52 @@
       <img class="center" aria-hidden="true" src="splash/img/light-1x.png" alt="">
   </picture>
   
+  <!-- The height Flutter draws at on an iPhone. Flutter asks the page for
+       documentElement.clientHeight, and Safari answers with the "small
+       viewport": the screen with room kept for its "open in the app" banner,
+       whether or not the banner is drawn. Measured on iOS 27 with the banner
+       absent: clientHeight 657, while the window, 100dvh and a fixed box all
+       say 714. So the app came out 57 points short, pushed up, with an empty
+       band above Safari's toolbar.
+
+       A fixed box from top to bottom is the space the page really has, with
+       the banner and without it, so the page answers Flutter with that box's
+       height. Flutter measures again only when the visual viewport says it
+       resized, and not at all while a field is being typed in, so the height
+       Flutter last applied (it writes it on flutter-view) is compared with the
+       box until the two agree. Must stay above flutter_bootstrap.js. -->
+  <script>
+    (function () {
+      var viewport = window.visualViewport;
+      var root = document.documentElement;
+      var own = Object.getOwnPropertyDescriptor(Element.prototype, "clientHeight");
+      if (!viewport || !own || !own.get || typeof Event !== "function") return;
+      var box = document.createElement("div");
+      box.style.cssText =
+        "position:fixed;top:0;bottom:0;left:0;width:0;visibility:hidden;pointer-events:none";
+      document.body.appendChild(box);
+      function height() {
+        var h = box.isConnected ? box.getBoundingClientRect().height : 0;
+        return h > 0 ? h : own.get.call(root);
+      }
+      Object.defineProperty(root, "clientHeight", { configurable: true, get: height });
+      var seen = height();
+      function check() {
+        if (document.hidden) return;
+        var now = height();
+        var view = document.querySelector("flutter-view");
+        var drawn = view ? parseFloat(view.style.height) : NaN;
+        if (now === seen && !(Math.abs(drawn - now) > 0.5)) return;
+        seen = now;
+        viewport.dispatchEvent(new Event("resize"));
+      }
+      if (typeof ResizeObserver === "function") new ResizeObserver(check).observe(box);
+      window.addEventListener("resize", check);
+      window.addEventListener("pageshow", check);
+      document.addEventListener("visibilitychange", check);
+      setInterval(check, 1000);
+    })();
+  </script>
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader
