@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -612,6 +613,28 @@ func (p esimPricing) fingerprint() string {
 
 // --- public routes ---------------------------------------------------------
 
+// esimNotModified tags an answer built from the catalog and its pricing, and
+// answers 304 by itself when the caller already holds that very answer: the
+// tag moves with a catalog sync, a rate, a margin or a promotion, and with
+// whether the shelf is marked a test. what tells one route's answers from
+// another's.
+func (s HTTPServer) esimNotModified(w http.ResponseWriter, r *http.Request, pricing esimPricing, what string) bool {
+	state := s.ESIM.state
+	state.mu.Lock()
+	version := state.version
+	state.mu.Unlock()
+	test := s.ESIM.reviewOnly() || s.Vouchers.MarksTest()
+	digest := sha256.Sum256([]byte(version + "|" + pricing.fingerprint() + "|" + strconv.FormatBool(test) + "|" + what))
+	etag := `"` + hex.EncodeToString(digest[:10]) + `"`
+	w.Header().Set("ETag", etag)
+	w.Header().Set("Cache-Control", "no-cache")
+	if etagMatches(r.Header.Get("If-None-Match"), etag) {
+		w.WriteHeader(http.StatusNotModified)
+		return true
+	}
+	return false
+}
+
 // handleESIMDestinations serves the shelf's front page.
 func (s HTTPServer) handleESIMDestinations(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -621,16 +644,7 @@ func (s HTTPServer) handleESIMDestinations(w http.ResponseWriter, r *http.Reques
 		writeJSON(w, http.StatusOK, map[string]any{"available": false, "destinations": []any{}})
 		return
 	}
-	state := s.ESIM.state
-	state.mu.Lock()
-	version := state.version
-	state.mu.Unlock()
-	digest := sha256.Sum256([]byte(version + "|" + pricing.fingerprint()))
-	etag := `"` + hex.EncodeToString(digest[:10]) + `"`
-	w.Header().Set("ETag", etag)
-	w.Header().Set("Cache-Control", "no-cache")
-	if r.Header.Get("If-None-Match") == etag {
-		w.WriteHeader(http.StatusNotModified)
+	if s.esimNotModified(w, r, pricing, "shelf") {
 		return
 	}
 	rows := make([]map[string]any, 0, len(catalog.Destinations))
@@ -733,6 +747,9 @@ func (s HTTPServer) handleESIMDestination(w http.ResponseWriter, r *http.Request
 	destination, found := catalog.destination(key)
 	if !found {
 		writeCustomerError(w, http.StatusNotFound, "unknown_destination", "no such destination", nil)
+		return
+	}
+	if s.esimNotModified(w, r, pricing, "destination:"+destination.Key) {
 		return
 	}
 	plans := make([]map[string]any, 0, len(destination.Plans))
