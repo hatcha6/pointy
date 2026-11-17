@@ -135,7 +135,7 @@ class PurchaseUnitCostPrecisionTests(TestCase):
         self.assertEqual(line["effective_unit_cost"], "12.50")
 
     def test_a_two_place_client_is_still_accepted(self):
-        """Tills on the frozen build send two places; nothing changes for them."""
+        """Older tills send two places; nothing changes for them."""
         variant = self._variant()
 
         response = self._create(

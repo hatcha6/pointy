@@ -731,8 +731,8 @@ class DefaultProductVariantInputSerializer(serializers.Serializer):
     )
     # Shop-wide on-hand count, in base units, at or below which the variant is
     # low. Null clears it — the variant stops being watched. Omitted keeps
-    # whatever is stored, so a client that predates the field (the compat till
-    # build) never wipes a threshold by saving a product.
+    # whatever is stored, so a client that predates the field never wipes a
+    # threshold by saving a product.
     low_stock_threshold = serializers.DecimalField(
         max_digits=12,
         decimal_places=3,
@@ -1168,8 +1168,8 @@ class ProductVariantInputSerializer(serializers.Serializer):
     )
     # Shop-wide on-hand count, in base units, at or below which the variant is
     # low. Null clears it — the variant stops being watched. Omitted keeps
-    # whatever is stored, so a client that predates the field (the compat till
-    # build) never wipes a threshold by saving a product.
+    # whatever is stored, so a client that predates the field never wipes a
+    # threshold by saving a product.
     low_stock_threshold = serializers.DecimalField(
         max_digits=12,
         decimal_places=3,

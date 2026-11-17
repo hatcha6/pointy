@@ -432,30 +432,6 @@ class TillTests(Shop):
         self.assertEqual([row["id"] for row in rows], [self.survivor.pk])
         self.assertIn("A1", rows[0]["extra_barcodes"])
 
-    def test_a_frozen_win8_till_can_ring_the_old_code(self):
-        """It keeps only a row whose ``barcode`` is the scan (v0.6.1-compat)."""
-        from django.contrib.auth import get_user_model
-
-        flatten.run(apply=True)
-        user = get_user_model().objects.create_superuser("owner", password="x")
-        client = APIClient()
-        client.force_authenticate(user)
-        frozen = client.get(
-            "/api/product-variants/",
-            {"barcode": "A1"},
-            headers={"X-Pointy-App-Version": "0.6.1-compat"},
-        ).json()["results"]
-        self.assertEqual(
-            [row["id"] for row in frozen if row["barcode"].strip() == "A1"],
-            [self.survivor.pk],
-        )
-        current = client.get(
-            "/api/product-variants/",
-            {"barcode": "A1"},
-            headers={"X-Pointy-App-Version": "0.9.9"},
-        ).json()["results"]
-        self.assertEqual(current[0]["barcode"], "P1")
-
     def test_the_product_reads_as_one_variant(self):
         from django.contrib.auth import get_user_model
 

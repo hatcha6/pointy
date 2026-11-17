@@ -245,28 +245,6 @@ class ConditionalListMixin:
         return response
 
 
-def _answer_frozen_till_scan(request, response) -> None:
-    """Let a frozen Windows 7/8 till ring an extra barcode.
-
-    Those builds (``*-compat``) look a scan up through ``?barcode=`` and then
-    accept only a row whose ``barcode`` equals the code, because they predate
-    extra barcodes: a code folded into its product's single variant would come
-    back as "not found" at the counter. They only ever use the row to ring it,
-    so for them the row states the code they asked about. Every other client
-    reads ``extra_barcodes`` and sees the row as it is.
-    """
-    code = (request.query_params.get("barcode") or "").strip()
-    if not code or "compat" not in request.headers.get("X-Pointy-App-Version", ""):
-        return
-    if response.status_code != status.HTTP_200_OK:
-        return
-    data = response.data
-    rows = data.get("results") if isinstance(data, dict) else data
-    for row in rows or []:
-        if code in (row.get("extra_barcodes") or ()):
-            row["barcode"] = code
-
-
 def _asks_for_quick_access(request) -> bool:
     value = request.query_params.get("is_quick_access", "")
     return value.strip().lower() in ("true", "1")
@@ -1267,7 +1245,6 @@ class ProductVariantViewSet(ConditionalListMixin, viewsets.ModelViewSet):
 
     def list(self, request, *args, **kwargs):
         response = super().list(request, *args, **kwargs)
-        _answer_frozen_till_scan(request, response)
         return _with_search_outcome(request, response)
 
     def get_queryset(self):

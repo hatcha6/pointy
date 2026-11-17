@@ -66,8 +66,7 @@ dependencies:
   # api types) are already in the tree via flutter_cache_manager; declared here
   # because the storage layer imports them directly. `sqflite_common_ffi` is the
   # desktop `databaseFactoryFfi` and `sqlite3_flutter_libs` bundles the native
-  # sqlite3 for Windows/Linux/macOS. compat/win8 pins these to their last
-  # Dart-3.3-safe lines — keep the storage sources in sync (see the plan).
+  # sqlite3 for Windows/Linux/macOS.
   sqflite: ^2.4.2
   sqflite_common: ^2.5.8
   sqflite_common_ffi: ^2.3.3

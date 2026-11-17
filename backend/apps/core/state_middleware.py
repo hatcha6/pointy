@@ -7,7 +7,7 @@ poll endpoint (``/api/state/``) exists only for the case this cannot cover: a
 till sitting idle, sending nothing at all.
 
 The two legacy single-value headers are stamped from the same read. Older
-clients (and the frozen compat/win8 branch) know only those; they keep working
+clients know only those; they keep working
 untouched, and this costs no extra Redis calls because the values come out of
 the vector that was already fetched.
 """

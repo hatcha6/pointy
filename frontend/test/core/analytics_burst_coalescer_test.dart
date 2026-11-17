@@ -1,7 +1,5 @@
-// The `(_, __)` callbacks below read as redundant to a modern analyzer, and are
-// not: the Win7/8 compat build pins Dart 3.3, where two `_` parameters in one
-// signature is a compile error (wildcard variables landed later). This file is
-// kept byte-identical across both branches so syncing it stays a copy.
+// The `(_, __)` callbacks below read as redundant to a modern analyzer; they
+// are kept as written.
 // ignore_for_file: unnecessary_underscores
 
 import 'dart:async';

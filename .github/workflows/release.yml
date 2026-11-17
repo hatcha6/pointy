@@ -25,10 +25,6 @@ on:
         description: "Version for a manual test build (artifacts only, no release upload), e.g. 1.2.3"
         required: false
         default: "0.0.0-dev"
-      compat_tag:
-        description: "Windows 8 build to bundle, e.g. v0.4.6-compat (blank = the newest published -compat release)"
-        required: false
-        default: ""
 
 # Required so the build jobs can attach assets to the triggering GitHub Release.
 permissions:
@@ -62,8 +58,8 @@ jobs:
   # ---------------------------------------------------------------------------
   version:
     name: Resolve version
-    # Ignore "-compat" releases (e.g. v0.2-compat): those are the Windows-8
-    # legacy builds handled by release-compat.yml. Skipping this shared job
+    # Ignore the old "-compat" releases (e.g. v0.2-compat): republishing one
+    # must not rebuild everything under its tag. Skipping this shared job
     # short-circuits every build job below (they all `needs: version`).
     # workflow_dispatch (manual test builds) is never affected.
     if: ${{ github.event_name != 'release' || !endsWith(github.event.release.tag_name, '-compat') }}
@@ -790,7 +786,7 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # On-prem server, part 2 — take the server half, add every client installer a
-  # site could need (Android, Windows, the Windows 7/8/8.1 compat build, Linux
+  # site could need (Android, Windows, Linux
   # .deb and .tar.gz) plus the manifest the apps self-update from, then sign and
   # publish. One zip, one deployment, no second download at the shop.
   # ---------------------------------------------------------------------------
@@ -831,30 +827,6 @@ jobs:
           name: pointy-onprem-partial
           path: dist
 
-      # The Windows 7/8/8.1 till build. It lives on a frozen branch with its own
-      # toolchain and its own release (release-compat.yml), so it cannot be built
-      # here — it is fetched from the newest published "-compat" release, or from
-      # the tag a manual run names. Best-effort, like the WSL MSI: a bundle
-      # without it is still a complete bundle for Windows 10+ tills.
-      - name: Fetch the Windows 8 (compat) installer
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-          COMPAT_TAG: ${{ github.event.inputs.compat_tag }}
-        run: |
-          set -euo pipefail
-          mkdir -p compat-client
-          tag="${COMPAT_TAG:-}"
-          if [ -z "${tag}" ]; then
-            tag="$(gh release list --limit 100 --json tagName,isDraft \
-                     --jq '[.[] | select(.isDraft | not) | .tagName | select(endswith("-compat"))] | first')"
-          fi
-          [ -n "${tag}" ] && [ "${tag}" != "null" ] || {
-            echo "no published -compat release to bundle" >&2; exit 1; }
-          echo "==> Bundling the Windows 8 client from ${tag}"
-          gh release download "${tag}" --pattern '*-windows-x64-setup.exe' --dir compat-client
-          ls -lh compat-client
-
       - name: Add the client installers and the manifest
         shell: bash
         env:
@@ -870,8 +842,7 @@ jobs:
           # self-update (android/windows/linux, keyed by ClientPlatform enum
           # name) and, under "downloads", the installers a person picks off the
           # LAN page. A download is not an update target — the Linux .deb cannot
-          # replace a running app, and the compat build is for machines the
-          # modern installer refuses.
+          # replace a running app.
           manifest="$(jq -n --arg v "${VERSION}" '{version:$v, downloads:{}}')"
 
           add() { # add <update|download> <key> <path> [version]
@@ -904,19 +875,6 @@ jobs:
           add update   windows        "$(first 'client-artifacts/pointy-*-windows-x64-setup.exe')"
           add update   linux          "$(first 'client-artifacts/pointy-*-linux-x64.tar.gz')"
           add download linux_deb      "$(first 'client-artifacts/pointy-*-linux-x64.deb')"
-
-          # Its version is its own — the compat branch releases on its own tags —
-          # so it is carried on the entry rather than inherited from the bundle.
-          compat="$(first 'compat-client/pointy-*-windows-x64-setup.exe')"
-          compat_version=""
-          if [ -n "${compat}" ]; then
-            compat_version="$(basename "${compat}")"
-            compat_version="${compat_version#pointy-}"
-            compat_version="${compat_version%-windows-x64-setup.exe}"
-          else
-            echo "::warning title=No Windows 8 client::This bundle carries no compat installer. A Windows 7/8/8.1 till will have to be installed from its own -compat release."
-          fi
-          add download windows_compat "${compat}" "${compat_version}"
 
           printf '%s\n' "${manifest}" > "${BUNDLE}/clients/manifest.json"
           echo "==> Client manifest:"; cat "${BUNDLE}/clients/manifest.json"

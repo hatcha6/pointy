@@ -318,7 +318,7 @@ class CounterPartsAndCustomersTests(OperationsTestCase):
 
     def test_a_counter_granted_add_customers_registers_a_walk_in(self):
         # A per-user grant, as the shop owner gives it: the role itself leaves
-        # it out while the compat/win8 till still reads it as a dashboard.
+        # it out.
         client = authenticated_client(self.grant(self.cashier, "customers.add_customer"))
 
         response = client.post(

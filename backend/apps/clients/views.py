@@ -13,10 +13,8 @@ The bundle carries two kinds of installer and the difference matters:
   the apps use. These are self-update targets: an app polls the manifest, finds a
   newer version for its own platform, and installs it.
 * **downloads** — installers a *person* picks off the landing page and installs by
-  hand. The Linux ``.deb`` is one (a package cannot replace a running app that
-  lives under ``/opt``), and the Windows 7/8/8.1 compat build is another (it comes
-  from its own frozen release, at its own version, for machines the modern
-  installer refuses to run on). Keeping them out of ``clients`` is what stops a
+  hand. The Linux ``.deb`` is the one today (a package cannot replace a running
+  app that lives under ``/opt``). Keeping it out of ``clients`` is what stops a
   till offering itself an update it cannot apply.
 """
 
@@ -39,7 +37,7 @@ from apps.core.streaming import aiter_file
 #: Keys the apps self-update from. Enum names in ``ClientPlatform`` (Dart).
 _PLATFORMS = ("android", "windows", "linux")
 #: Keys served and listed, but never offered to an app as an update.
-_DOWNLOADS = ("linux_deb", "windows_compat")
+_DOWNLOADS = ("linux_deb",)
 _CONTENT_TYPES = {
     ".apk": "application/vnd.android.package-archive",
     ".exe": "application/octet-stream",
@@ -54,7 +52,6 @@ _CONTENT_TYPES = {
 _LANDING_ORDER = (
     ("android", "أندرويد", "هاتف أو جهاز لوحي"),
     ("windows", "ويندوز", "ويندوز 10 أو 11"),
-    ("windows_compat", "ويندوز القديم", "ويندوز 7 أو 8 أو 8.1"),
     ("linux_deb", "لينكس", "أوبونتو أو منت — ملف تثبيت"),
     ("linux", "لينكس — نسخة محمولة", "توزيعات أخرى"),
 )
@@ -97,8 +94,8 @@ def public_manifest():
         if not filename:
             continue
         manifest[section][key] = {
-            # An entry may carry its own version — the compat build releases on
-            # its own tags and is not the bundle's version.
+            # An entry may carry its own version; without one it is the
+            # bundle's.
             "version": str(entry.get("version") or version),
             "file": filename,
             "sha256": str(entry.get("sha256") or ""),
@@ -187,8 +184,8 @@ def _landing_buttons(manifest):
             continue
         # Each Latin fragment gets its OWN <bdi>. Isolating the whole line
         # instead auto-detects it as Arabic and then reorders the Latin pieces
-        # inside it: "85 MB" comes out "MB 85", and "0.4.6-compat" splits in
-        # half with the size wedged into the gap.
+        # inside it: "85 MB" comes out "MB 85", and a version such as
+        # "1.4.0-2" splits in half with the size wedged into the gap.
         meta = [escape(machine)]
         if entry["version"] and entry["version"] != manifest["version"]:
             meta.append(f"<bdi>{escape(entry['version'])}</bdi>")

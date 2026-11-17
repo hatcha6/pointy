@@ -21,8 +21,7 @@ tunnel when the owner is at home.
 **The wire format to the client is MJPEG (`multipart/x-mixed-replace`), for both
 live and playback.** One format, one client widget, one code path. It needs no
 video codec on the client — decisive, because the tills are Windows machines
-(some of them Windows 7 on the `compat/win8` branch) where every Flutter video
-plugin is a liability, and because a dropped frame in MJPEG costs one frame
+where every Flutter video plugin is a liability, and because a dropped frame in MJPEG costs one frame
 rather than resynchronising a stream.
 
 **Nothing here decides the frame rate except the hardware.**

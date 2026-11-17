@@ -20,7 +20,6 @@ is "maybe".
 | Trust | Bundles are **Ed25519-signed, fail-closed** (same as release bundles). Pointy's key is trusted by default; the **shop owner may add a third-party developer key**. Plugins are not sandboxed — the signature is the boundary, and the install dialog says so. |
 | Out-of-process apps / webhooks | Not v1. They fall out of the event bus later (an event → signed webhook is one subscriber). |
 | Marketplace | Not v1. Sideload a file or install from the relay registry. |
-| `compat/win8` | Plugin **behaviour** applies to Win8 tills (they talk to a `main` backend). Plugin **UI** does not appear there — the frozen branch has no slot renderer. Documented, not fixed. |
 
 ---
 

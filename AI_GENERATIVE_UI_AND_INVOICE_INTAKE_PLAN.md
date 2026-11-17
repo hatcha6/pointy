@@ -43,7 +43,7 @@ The engine sits behind `ai_surface_host.dart`; the fallback native renderer was 
 
 What we learned about `genui` (pub.dev 0.10.2, 2026-08-12):
 
-- Requires Flutter ≥ 3.35.7 and Dart ≥ 3.10. We ship Flutter 3.38.6 / Dart ^3.10.7 on `main`. Compatible. (`compat/win8` is frozen on 3.19 and excluded, per its own rule.)
+- Requires Flutter ≥ 3.35.7 and Dart ≥ 3.10. We ship Flutter 3.38.6 / Dart ^3.10.7 on `main`. Compatible.
 - Backend-agnostic: `SurfaceController.handleMessage(A2uiMessage)` accepts structured messages directly. We do not need `Conversation` or `A2uiTransportAdapter`; Django keeps owning the loop.
 - Catalog = `CatalogItem(name, dataSchema, widgetBuilder, exampleData)`; the catalog can be rendered from example data with `DebugCatalogView` (free golden-test fixture).
 - Protocol (A2UI v0.9.1): four envelopes `createSurface` / `updateComponents` / `updateDataModel` / `deleteSurface`; components are a flat adjacency list with a `root`; properties accept literals or `{path}` bindings into a per-surface data model; actions carry `{event: {name, context}}`.
@@ -255,8 +255,6 @@ A and B can run in parallel from the start; the only cross-dependency is B-P3 on
 **Security.** `render_ui` is read-only and renders nothing that is not a catalog item; entity cards fetch by id through the user's own permissions (same repositories the screens use). `submit:` interactions are user turns, so they cannot trigger a write without the model calling a write tool, which keeps the existing confirm-before-irreversible rule, idempotency keys and the per-turn write cap intact. `apply_intake` runs under the user's permissions and is a normal authenticated endpoint. Invoice pages live on-prem only; they are sent to the relay for extraction exactly as chat attachments are today.
 
 **Telemetry.** New events: `ai.ui_rendered` (component counts, validity on first try), `ai.ui_interaction`, `intake.stage` (durations per stage), `intake.completed` (lines matched/auto/new/review, apply options). All ride the existing analytics pipeline with its burst guards.
-
-**Compat branch.** None of this targets `compat/win8`.
 
 **Docs/memory.** Record the GenUI go/no-go outcome and the catalog drift rules in `AGENTS.md` (UI Preview Harness section) and in the project memory once A-P1 concludes.
 

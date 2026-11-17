@@ -6,8 +6,8 @@ what they sell, and the invoice behind the row itemised each line's cost. Cost
 and profit now leave the order payload for everyone outside the reporting roles
 on every surface that serializes an order — the list, the invoice, a drawer
 session's strip, the returns-desk lookup and the checkout response. The clients
-render profit only when it is present, the frozen Windows 7/8 till build
-included, so taking it out of the payload is what hides it.
+render profit only when it is present, so taking it out of the payload is what
+hides it.
 """
 
 from decimal import Decimal

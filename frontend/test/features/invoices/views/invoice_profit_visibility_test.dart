@@ -10,9 +10,8 @@ import 'package:pointy_frontend/src/shared/order/sale_order_details_content.dart
 /// Profit on an invoice is the owner's number, and the server decides who
 /// reads it: it leaves `total_profit`, the lines' cost and profit, and a
 /// top-up's provider cost out of the payload for everyone outside the
-/// reporting roles. These screens draw a figure only when it arrives — the
-/// frozen Windows 7/8 till build too — so the payload a cashier gets is what
-/// keeps the profit off their screen.
+/// reporting roles. These screens draw a figure only when it arrives, so the
+/// payload a cashier gets is what keeps the profit off their screen.
 void main() {
   Map<String, Object?> invoice({required bool withMargins}) => {
     'id': 21,

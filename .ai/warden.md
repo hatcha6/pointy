@@ -1450,7 +1450,7 @@ is one API call and a shell loop. Local branches remain the right list for
 *pruning*; they have not been the right list for *detection* since the fleet
 started deleting them.
 
-## 2026-08-21 - Three NO-PR branches, three different reasons none of them was stranded
+## 2026-08-21 - NO-PR branches, different reasons none of them was stranded
 
 **Learning:** Every hit in this run's sweep was a false positive, and no two for
 the same reason — so a single "is this real?" heuristic would have passed one of
@@ -1458,15 +1458,10 @@ them through. `claude/sweet-wiles-1ef591` is journal-only, and its 🔐 Sentinel
 entries are already on `main` under other commits (`git cherry` still marks it
 `+`, because it landed via a different commit object — cherry proves nothing
 here). `claude/oracle-api-checkout-coverage` is the superseded one the previous
-entry describes, still sitting there. The new shape is
-`copilot/debug-frontend-server-connection`: 47 unique commits, a real production
-diff, no PR — and every commit subject is `compat(win8): …`. It is the frozen
-Windows 8 lineage under a `copilot/` branch name, and merging it to `main` is
-the one thing `compat/win8` is explicitly forbidden to do.
+entry describes, still sitting there.
 
 **Action:** Read the commit *subjects* before calling a NO-PR branch stranded,
-not just the count and the diffstat. `compat(win8):` anywhere in the log means
-leave it alone whatever the branch is called — the prefix is not the identity.
+not just the count and the diffstat — the prefix is not the identity.
 For a journal-only branch, compare entry titles directionally
 (`diff <(git show origin/main:.ai/<r>.md | grep '^## ') <(git show
 origin/<b>:.ai/<r>.md | grep '^## ')`) and read which side the `<`/`>` markers

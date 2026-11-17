@@ -574,7 +574,6 @@ Presto wants a public `image_url`, and on-prem images are not public. On publish
 - **Product form:** a «بريستو» section: listed?, channel price, owned fields, last sync state.
 - **Settlement sheet:** a twin of the card-settlement sheet.
 - Every screen gets a preview harness (`make frontend-presto-preview`, `?screen=board|new-order|matching|settlement|health|…`) per AGENTS.md.
-- compat/win8: the board, alerts and filter are a later **frontend-only** port. That branch's backend is never touched.
 
 ## 10. Permissions
 New, in the permission catalog (every checked permission listed):

@@ -209,8 +209,8 @@ class LowStockThresholdApiTests(TestCase):
         self.assertIn("low_stock_threshold", response.data)
 
     def test_a_product_save_without_the_field_keeps_the_threshold(self):
-        """The compat till build predates the field: saving a product from it
-        must not wipe a threshold the owner set elsewhere."""
+        """A client that predates the field must not wipe a threshold the
+        owner set elsewhere by saving a product."""
         variant = _variant("API-KEEP", threshold="6")
 
         response = self.client.patch(

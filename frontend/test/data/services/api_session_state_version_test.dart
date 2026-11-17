@@ -32,7 +32,7 @@ void main() {
   test(
     'an older backend sending only the legacy headers still works',
     () async {
-      // compat/win8 and any client-side upgrade that outruns the backend.
+      // Any client-side upgrade that outruns the backend.
       final session = _sessionStamping({
         'x-pointy-catalog-version': '5',
         'x-pointy-discounts-version': '2',

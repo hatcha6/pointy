@@ -43,12 +43,9 @@ class ExpenseViewSet(
     #
     # ``DELETE`` used to survive here as a deprecated alias, so tills still on
     # the build before ``cancel`` kept a working delete button. It was retired
-    # in 0.5.2: every till on ``main`` has called ``cancel`` since 0.5.0, and
-    # the Windows 7/8 compat build — which does still send ``DELETE``, and whose
-    # expenses screen is gated on ``expenses.delete_expense`` rather than
-    # stripped at build time — is only signed into for POS work, by staff who do
-    # not hold it. The verb is simply unmapped now, which the permission
-    # layer refuses by default; retraction happens one way.
+    # in 0.5.2: every till has called ``cancel`` since 0.5.0. The verb is
+    # simply unmapped now, which the permission layer refuses by default;
+    # retraction happens one way.
     serializer_class = ExpenseSerializer
     permission_classes = [IsAuthenticated, HasPointyPermission]
     permission_map = {

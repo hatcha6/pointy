@@ -612,9 +612,9 @@ class _ProductSearch(_Search):
         category chip still on from browsing, and the product was one tap away
         in another category. So on the till a search looks in the chip's
         category first and then everywhere. ``?category_fallback=0|1`` says so
-        explicitly; a till that predates the parameter — the frozen Windows 7/8
-        build among them — is recognised by the ``?system=sellable`` it sends,
-        so the fix reaches it with a server update alone.
+        explicitly; a till that predates the parameter is recognised by the
+        ``?system=sellable`` it sends, so the fix reaches it with a server
+        update alone.
         """
         value = (self.request.query_params.get(CATEGORY_FALLBACK_PARAM) or "").lower()
         if value in ("1", "true"):

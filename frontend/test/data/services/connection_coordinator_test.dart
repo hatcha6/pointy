@@ -1597,7 +1597,7 @@ Map<String, Object?> _backendPayload({
 http.Response _jsonResponse(Map<String, Object?> body, {int statusCode = 200}) {
   // Declare charset so http encodes the (Arabic) body as UTF-8. Without it the
   // http package defaults to latin1, which throws on non-latin1 shop names
-  // under older http (compat/win8 pins http 1.2.2).
+  // under older http (1.2.2).
   return http.Response(
     jsonEncode(body),
     statusCode,

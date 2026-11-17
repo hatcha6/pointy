@@ -121,8 +121,7 @@ class _IntegrationProfileFormState extends State<IntegrationProfileForm> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // groupValue/onChanged on the tile rather than a RadioGroup: the
-          // same shape the rest of the app uses, and one the Flutter 3.19
-          // compat build can take unchanged.
+          // same shape the rest of the app uses.
           for (final profile in list.profiles)
             RadioListTile<String>(
               value: profile.profileId,

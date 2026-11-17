@@ -14,12 +14,13 @@ void main() {
       'yussor-pay',
       'masrafi-pay',
       'sahara-pay',
+      'moamalat',
     ]) {
       final mark = PaymentMethodMarks.of(provider)!;
       final bytes = await rootBundle.load(mark.keyName);
       expect(bytes.lengthInBytes, greaterThan(0), reason: provider);
     }
-    expect(PaymentMethodMarks.of('moamalat'), isNull);
+    expect(PaymentMethodMarks.of('no-such-provider'), isNull);
   });
 
   test('the type ramp names the packaged face and drops letter spacing', () {

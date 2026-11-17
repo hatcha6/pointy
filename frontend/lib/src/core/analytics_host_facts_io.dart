@@ -15,13 +15,11 @@ typedef AnalyticsHostFacts = ({
 /// two-core box with 2 GB of RAM" are the same finding, and the export could
 /// not tell them apart: every device in the fleet was described by a random
 /// installation id and nothing else, so a slow shop and slow software looked
-/// identical. There is a whole branch of this app (`compat/win8`) that exists
-/// because some of these machines are a decade old, and no telemetry said which
-/// ones they were.
+/// identical. Some of these machines are a decade old, and no telemetry said
+/// which ones they were.
 ///
 /// Deliberately built out of the SDK and one small `kernel32` call rather than
-/// a device-info plugin: nothing here changes a native build, so it ships
-/// unchanged on the frozen compat branch, where adding a plugin would not.
+/// a device-info plugin: nothing here changes a native build.
 ///
 /// Every block is guarded on its own. A launch must not be held up, and must
 /// certainly not fail, because the app was curious about its host — so a lookup
@@ -37,8 +35,7 @@ Future<AnalyticsHostFacts> readHostFacts() async {
     // Which physical machine this is. The installation id is a random UUID by
     // design, so without this nobody can walk to the till a finding is about.
     attributes['host_name'] = _truncate(Platform.localHostname, 80);
-    // Separates a compat build from a mainline one outright: the two branches
-    // are frozen at different SDKs, and that is otherwise invisible.
+    // Which SDK the build came from, which is otherwise invisible.
     attributes['dart_runtime'] = Platform.version.split(' ').first;
     metrics['cpu_cores'] = Platform.numberOfProcessors;
   });

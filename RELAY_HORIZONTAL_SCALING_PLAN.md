@@ -159,8 +159,7 @@ no per-node setup. It also keeps mTLS end to end.
 - Field shops move over without anyone editing their `.env`.
 - Old connectors keep working throughout.
 
-Out of scope: the compat/win8 branch (till app only; the connector ships in the
-on-prem bundle built from main), multi-region relays.
+Out of scope: multi-region relays.
 
 ## Where we are today
 

@@ -127,7 +127,7 @@ class _SessionTile extends StatelessWidget {
     ];
 
     // groupValue/onChanged on the tile rather than a RadioGroup: the shape
-    // the rest of the app uses, and one the Flutter 3.19 compat build takes.
+    // the rest of the app uses.
     return RadioListTile<int>(
       key: ValueKey('portal_payment_session_${session.id}'),
       value: session.id,

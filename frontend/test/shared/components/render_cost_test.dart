@@ -285,9 +285,7 @@ void main() {
 const double _surfaceWidth = 360;
 
 /// Deliberately themeless: what is asserted here is structural (layers, sizes,
-/// the absence of a mask), and the palette falls back on its own. It also keeps
-/// this file runnable on the compat branch, whose PointyTheme does not compile
-/// against a current Flutter SDK.
+/// the absence of a mask), and the palette falls back on its own.
 Future<void> _pump(WidgetTester tester, Widget child) {
   return tester.pumpWidget(
     MaterialApp(

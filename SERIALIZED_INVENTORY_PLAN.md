@@ -2109,7 +2109,7 @@ Everything else is fallback and guard rails:
   `/api/orders/` keeps `stock_units` / `stock_unit_codes` / `stock_batches`
   until the payment issues the stock, and the order serializer refuses a serial
   line that names none, or the wrong count, when it is written. The refusal is
-  universal by decision — the compat/win8 till has no picker and gets it too;
+  universal by decision — a till with no picker gets it too;
   serialized goods are sold from a current till. Tests:
   `apps/sales/test_serialized_sale_naming.py`. What it replaced:
   **DEFERRED 2026-09-18 — not implemented.** `_plan_unit_issue` silently takes
@@ -3836,8 +3836,8 @@ client-version gate needs a device registry the shop does not have — only
 telemetry carries `app_version` — and its purpose was to stop an old till hitting
 a hard 400 it cannot recover from, which is mostly moot while §6.3's refusal is
 deferred and the settings flags now gate the surfaces. *(2026-10-05: the refusal
-now ships, and the decision was to apply it to every client — the compat/win8
-till included, which cannot pick a unit and so cannot sell serialized goods. The
+now ships, and the decision was to apply it to every client — an old till
+included, which cannot pick a unit and so cannot sell serialized goods. The
 gate stays unbuilt; the Arabic refusal is the old till's answer.)* And `tracks_expiry` still
 coexists with `tracking_mode` rather than becoming the derived property of §18.4;
 folding it in would move every expiry-tracking shop onto the lot path, changing

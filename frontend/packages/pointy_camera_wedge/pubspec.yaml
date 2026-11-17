@@ -5,9 +5,8 @@ description: >-
 version: 1.0.0
 publish_to: 'none'
 
-# The floor is deliberately the oldest Dart the tills run (3.3, the frozen
-# compat/win8 build): the analyzer then refuses newer syntax here, so this
-# package can be ported to that branch as it is.
+# The floor is deliberately low (Dart 3.3): the analyzer then refuses newer
+# syntax here, which keeps this package portable.
 environment:
   sdk: '>=3.3.0 <4.0.0'
   flutter: '>=3.19.0'

@@ -345,7 +345,7 @@ class HeaderTests(CommitsMixin, TestCase):
 
     @override_settings(POINTY_CATALOG_CACHE_ENABLED=True)
     def test_legacy_single_value_headers_are_still_stamped(self):
-        # Older clients and the frozen compat branch know only these. They
+        # Older clients know only these. They
         # follow the catalog cache's own switch, not this feature's, so
         # turning state versions off leaves that push exactly as it was.
         response = self.client.get(reverse("shop-settings"))
