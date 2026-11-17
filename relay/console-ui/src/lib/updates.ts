@@ -15,7 +15,57 @@ export function agentQuiet(f: Pick<FleetInstallation, "agent_last_seen_at">, now
   return now - new Date(f.agent_last_seen_at).getTime() > AGENT_QUIET_MS;
 }
 
-export type UpdateState = "updated" | "downloading" | "applying" | "failed" | "rolled_back" | "waiting" | "holding" | "unknown";
+export type UpdateState = "updated" | "downloading" | "applying" | "failed" | "rolled_back" | "waiting" | "scheduled" | "holding" | "unknown";
+
+/** How long the daily install window stays open from its hour (the relay's InstallWindowHours). */
+export const INSTALL_WINDOW_HOURS = 3;
+
+export type Strategy = "" | "live" | "restart";
+
+export const strategyLabels: Record<Strategy, string> = {
+  "": "تلقائي",
+  live: "مباشر بلا توقف",
+  restart: "إعادة تشغيل",
+};
+
+/** How and when a version installs; the relay leaves every field out for "at once, the agent's way". */
+export type InstallPlan = { strategy: Strategy; hour: number | null; date: string };
+
+export function installPlan(target?: Pick<ChannelTarget, "strategy" | "install_hour" | "install_date">): InstallPlan {
+  const strategy = target?.strategy === "live" || target?.strategy === "restart" ? target.strategy : "";
+  return { strategy, hour: typeof target?.install_hour === "number" ? target.install_hour : null, date: target?.install_date ?? "" };
+}
+
+/** The plan as the relay's request fields. Empty values are sent, so an edit can clear them. */
+export function installPlanBody(plan: InstallPlan) {
+  return { strategy: plan.strategy || "auto", install_hour: plan.hour, install_date: plan.date };
+}
+
+export const hourText = (hour: number) => `${String(((hour % 24) + 24) % 24).padStart(2, "0")}:00`;
+
+const libyaDayFormat = new Intl.DateTimeFormat("ar-LY-u-nu-latn", { weekday: "long", day: "numeric", month: "long", timeZone: "Africa/Tripoli" });
+const libyaMomentFormat = new Intl.DateTimeFormat("ar-LY-u-nu-latn", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Africa/Tripoli" });
+
+/** A YYYY-MM-DD install date, as a day: "الجمعة، 20 نوفمبر". */
+export function installDayText(day: string): string {
+  const d = new Date(`${day}T12:00:00+02:00`);
+  return Number.isNaN(d.getTime()) ? day : libyaDayFormat.format(d);
+}
+
+/** A moment on Libya's clock, whatever the operator's own: shops install on theirs. */
+export function libyaMoment(value: string | null | undefined): string {
+  if (!value) return "";
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? "" : libyaMomentFormat.format(d);
+}
+
+/** When installs may start, in words; empty when they start at once. */
+export function installWindowText(plan: Pick<InstallPlan, "hour" | "date">): string {
+  const day = plan.date ? `ابتداءً من ${installDayText(plan.date)}` : "";
+  if (plan.hour === null) return day;
+  const hours = `بين ${hourText(plan.hour)} و${hourText(plan.hour + INSTALL_WINDOW_HOURS)}`;
+  return day ? `${hours} كل يوم، ${day}` : `${hours} كل يوم`;
+}
 
 export type StatusInfo = { state: UpdateState; label: string; tone: Tone; progress?: number };
 
@@ -26,7 +76,7 @@ export type StatusInfo = { state: UpdateState; label: string; tone: Tone; progre
  * waiting for its next run.
  */
 export function updateStatus(
-  f: Pick<FleetInstallation, "update_status" | "current_version" | "assigned_version" | "directive"> & Partial<Pick<FleetInstallation, "agent_last_seen_at">>,
+  f: Pick<FleetInstallation, "update_status" | "current_version" | "assigned_version" | "directive"> & Partial<Pick<FleetInstallation, "agent_last_seen_at" | "scheduled_for">>,
 ): StatusInfo {
   const raw = (f.update_status || "").trim().toLowerCase();
   // A shop whose agent never called has no state to speak of yet.
@@ -37,7 +87,15 @@ export function updateStatus(
     const mb = /([\d.]+)\s*mb/.exec(raw);
     return { state: "downloading", label: mb ? `يُنزّل ${mb[1]} ميغابايت` : "يُنزّل", tone: "info" };
   }
+  // Waiting for its install window: the bundle may already be on the shop's disk.
+  const behind = !!f.assigned_version && f.current_version !== f.assigned_version;
+  if (behind && f.scheduled_for && raw !== "failed" && raw !== "rolled_back") {
+    const at = libyaMoment(f.scheduled_for);
+    return { state: "scheduled", label: raw === "downloaded" ? `نُزّل · يُثبَّت ${at}` : `مجدول ${at}`, tone: "neutral" };
+  }
   switch (raw) {
+    case "downloaded":
+      return behind ? { state: "waiting", label: "نُزّل، بانتظار التثبيت", tone: "neutral" } : { state: "updated", label: "محدَّث", tone: "success" };
     case "applying":
     case "installing":
     case "updating":
@@ -100,24 +158,32 @@ export type RolloutProgress = {
   inProgress: number;
   failed: number;
   waiting: number;
+  /** Reached, and waiting for the install window to open. */
+  scheduled: number;
+  /** Of the reached and not yet updated, agents too old to download ahead or take a strategy. */
+  legacy: number;
   quiet: number;
 };
 
 /** How far a channel's version has got across the shops that follow it. */
 export function rolloutProgress(target: ChannelTarget, fleet: FleetInstallation[]): RolloutProgress {
   const following = fleet.filter((f) => (f.channel || "stable") === target.channel && !f.pinned_version);
-  const p: RolloutProgress = { following: following.length, reached: 0, updated: 0, inProgress: 0, failed: 0, waiting: 0, quiet: 0 };
+  const p: RolloutProgress = { following: following.length, reached: 0, updated: 0, inProgress: 0, failed: 0, waiting: 0, scheduled: 0, legacy: 0, quiet: 0 };
   for (const f of following) {
     if (target.target_version && f.current_version === target.target_version) {
       p.reached++;
       p.updated++;
       continue;
     }
-    if (f.assigned_version !== target.target_version || f.directive !== "apply") continue;
+    // A shop waiting for its window is held (or told to download) by the relay,
+    // but the rollout has reached it all the same.
+    if (f.assigned_version !== target.target_version || (f.directive !== "apply" && !f.scheduled_for)) continue;
     p.reached++;
+    if (f.legacy_agent) p.legacy++;
     const s = updateStatus(f).state;
     if (s === "failed" || s === "rolled_back") p.failed++;
     else if (s === "downloading" || s === "applying") p.inProgress++;
+    else if (s === "scheduled") p.scheduled++;
     else p.waiting++;
     if (agentQuiet(f)) p.quiet++;
   }

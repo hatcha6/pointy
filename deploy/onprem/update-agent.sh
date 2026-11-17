@@ -16,6 +16,12 @@
 # hours". Releases that cannot be applied that way say so in the bundle and get
 # a full restart instead.
 #
+# The operator can also decide HOW and WHEN from the console, per rollout: a
+# strategy (live or restart) and an install window (an hour of the day, a first
+# date). The relay keeps that clock, not this machine: until the window opens it
+# answers "download" — fetch and verify the bundle, install nothing — and then
+# "apply" with the strategy. So the bundle is already here when the hour comes.
+#
 # It runs as a host timer next to watchdog.sh and is deliberately independent of
 # the backend it updates: even an update that breaks the backend leaves this
 # agent able to fetch a rollback target from the relay and re-apply.
@@ -42,14 +48,19 @@ POINTY_LOG_TAG="pointy-update-agent"
 # shellcheck source=update-lib.sh
 . ./update-lib.sh
 
-AGENT_VERSION="pointy-update-agent/3"
+AGENT_VERSION="pointy-update-agent/4"
+# Which manifest this agent understands, said on every manifest request. 2: the
+# "download" directive and the manifest's strategy. A relay from before it
+# ignores the header and never sends either.
+AGENT_PROTOCOL=2
 DRY_RUN=0
 MODE=auto
+MODE_FORCED=0  # a strategy given on the command line outranks the operator's
 for arg in "$@"; do
   case "$arg" in
     --check) DRY_RUN=1 ;;
-    --restart) MODE=restart ;;
-    --live) MODE=live ;;
+    --restart) MODE=restart; MODE_FORCED=1 ;;
+    --live) MODE=live; MODE_FORCED=1 ;;
   esac
 done
 
@@ -341,6 +352,7 @@ download_bundle() {
     ACTUAL_SHA="$(sha256_of "$BUNDLE_FILE")"
     if [ -z "$BUNDLE_SHA" ] || [ "$ACTUAL_SHA" = "$BUNDLE_SHA" ]; then
       pu_log "bundle already downloaded; not downloading it again"
+      BUNDLE_WAS_READY=1
       return 0
     fi
     pu_warn "the kept download no longer matches its checksum; downloading it again"
@@ -415,23 +427,49 @@ download_bundle() {
   done
 }
 
+# fetch_manifest — ask the relay what this shop should run, and what to do about
+# it right now. Returns 1 when the relay could not be asked.
+fetch_manifest() {
+  local file; file="$(mktemp)"
+  if ! curl -fsS -H "$auth_header" -H "X-Pointy-Agent-Protocol: ${AGENT_PROTOCOL}" \
+      "${RELAY_URL}/v1/agent/manifest" -o "$file"; then
+    rm -f "$file"
+    return 1
+  fi
+  DIRECTIVE="$(jget "$file" .directive)"
+  ASSIGNED="$(jget "$file" .assigned_version)"
+  BUNDLE_PATH="$(jget "$file" .bundle.path)"
+  BUNDLE_SHA="$(jget "$file" .bundle.sha256)"
+  BUNDLE_SIG="$(jget "$file" .bundle.signature)"
+  BUNDLE_SIZE="$(jget "$file" .bundle.size)"
+  # Absent from a relay that predates them, and whenever the operator left the
+  # choice to the release.
+  MANIFEST_STRATEGY="$(jget "$file" .strategy)"
+  SCHEDULED_FOR="$(jget "$file" .scheduled_for)"
+  rm -f "$file"
+  case "$BUNDLE_SIZE" in ''|*[!0-9]*) BUNDLE_SIZE=0 ;; esac
+  return 0
+}
+
+# waiting_for_window — the bundle is here and verified; the install is not due.
+waiting_for_window() {
+  pu_log "bundle for ${ASSIGNED} is downloaded and verified; it installs when its window opens${SCHEDULED_FOR:+ (${SCHEDULED_FOR})}"
+  report_status "$CURRENT_VERSION" "downloaded" ""
+  ship_runs
+  exit 0
+}
+
 # 1. Ask the relay what to run.
-MANIFEST_FILE="$(mktemp)"
-if ! curl -fsS -H "$auth_header" "${RELAY_URL}/v1/agent/manifest" -o "$MANIFEST_FILE"; then
-  rm -f "$MANIFEST_FILE"
+if ! fetch_manifest; then
   pu_log "manifest fetch failed; retrying next run"
   exit 0
 fi
-DIRECTIVE="$(jget "$MANIFEST_FILE" .directive)"
-ASSIGNED="$(jget "$MANIFEST_FILE" .assigned_version)"
-BUNDLE_PATH="$(jget "$MANIFEST_FILE" .bundle.path)"
-BUNDLE_SHA="$(jget "$MANIFEST_FILE" .bundle.sha256)"
-BUNDLE_SIG="$(jget "$MANIFEST_FILE" .bundle.signature)"
-BUNDLE_SIZE="$(jget "$MANIFEST_FILE" .bundle.size)"
-rm -f "$MANIFEST_FILE"
-case "$BUNDLE_SIZE" in ''|*[!0-9]*) BUNDLE_SIZE=0 ;; esac
 
-if [ "$DIRECTIVE" != "apply" ] || [ -z "$ASSIGNED" ] || [ "$ASSIGNED" = "$CURRENT_VERSION" ]; then
+# "download" is the install's first half, asked for ahead of its window. Any
+# other word — "hold", or one a newer relay invents — means leave things be.
+case "$DIRECTIVE" in apply|download) WANTED=1 ;; *) WANTED=0 ;; esac
+
+if [ "$WANTED" = 0 ] || [ -z "$ASSIGNED" ] || [ "$ASSIGNED" = "$CURRENT_VERSION" ]; then
   pu_log "up to date (current=${CURRENT_VERSION}, directive=${DIRECTIVE}, assigned=${ASSIGNED:-none})"
   # A paused rollout (hold) keeps a half-finished download: resuming the
   # rollout must not cost the shop those hours again. Only once the shop RUNS
@@ -459,7 +497,9 @@ if [ "$DRY_RUN" = 1 ]; then
   elif [ -f "${BUNDLE_FILE}.part" ]; then
     already=", $(progress_text "$(file_bytes "${BUNDLE_FILE}.part")") already downloaded"
   fi
-  pu_log "--check: would download ${RELAY_URL}${BUNDLE_PATH} (sha256=${BUNDLE_SHA}${already}) and apply ${ASSIGNED}"
+  next_step="and apply ${ASSIGNED}${MANIFEST_STRATEGY:+ (${MANIFEST_STRATEGY})}"
+  [ "$DIRECTIVE" = download ] && next_step="and install ${ASSIGNED} when its window opens${SCHEDULED_FOR:+ (${SCHEDULED_FOR})}"
+  pu_log "--check: would download ${RELAY_URL}${BUNDLE_PATH} (sha256=${BUNDLE_SHA}${already}) ${next_step}"
   exit 0
 fi
 [ -n "$BUNDLE_PATH" ] || fail "manifest is missing the bundle path"
@@ -470,6 +510,7 @@ acquire_download_lock || exit 0
 DOWNLOAD_LOCK_HELD=1
 prune_downloads "$BUNDLE_FILE"
 
+BUNDLE_WAS_READY=0
 download_bundle
 case $? in
   0) ;;
@@ -482,6 +523,37 @@ if ! verify_bundle_signature "$ACTUAL_SHA" "$BUNDLE_SIG"; then
   report_status "$CURRENT_VERSION" "failed" "release signature invalid"
   pu_shred_file "$BUNDLE_FILE"
   fail "release signature INVALID for ${ASSIGNED} — refusing to apply"
+fi
+
+# A download can take hours, and what the relay said before it may no longer
+# hold: the rollout was paused, another version was assigned, or the install
+# window that was open has closed. Ask again before touching the stack — only
+# when this run did the downloading, so a shop with the bundle in hand applies
+# on one answer as it always did.
+if [ "$BUNDLE_WAS_READY" = 0 ]; then
+  downloaded_version="$ASSIGNED" downloaded_sha="$BUNDLE_SHA"
+  if ! fetch_manifest; then
+    pu_log "could not confirm the update with the relay after the download; retrying next run"
+    exit 0
+  fi
+  case "$DIRECTIVE" in
+    apply|download) ;;
+    *)
+      pu_log "the rollout was put on hold while ${downloaded_version} was downloading; keeping the download"
+      report_status "$CURRENT_VERSION" "idle" ""
+      exit 0 ;;
+  esac
+  if [ "$ASSIGNED" != "$downloaded_version" ] || [ "$BUNDLE_SHA" != "$downloaded_sha" ]; then
+    pu_log "the relay assigned something else while ${downloaded_version} was downloading; the next run follows it"
+    exit 0
+  fi
+fi
+[ "$DIRECTIVE" = download ] && waiting_for_window
+
+# The operator's strategy, unless whoever ran this by hand asked for one. The
+# engine still falls back to a restart where a live update is not possible.
+if [ "$MODE_FORCED" = 0 ]; then
+  case "$MANIFEST_STRATEGY" in live|restart) MODE="$MANIFEST_STRATEGY" ;; esac
 fi
 
 # 3. Only the apply takes the update lock: it tells the watchdog to keep its

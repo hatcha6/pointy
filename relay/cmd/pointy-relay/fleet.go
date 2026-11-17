@@ -290,6 +290,41 @@ type channelTargetRow struct {
 	TargetVersion  string `json:"target_version"`
 	RolloutPhase   string `json:"rollout_phase"`
 	RolloutPercent int    `json:"rollout_percent"`
+	// Read back and re-sent by rollout/pause, so moving a phase keeps how and
+	// when the version installs.
+	CanaryIDs   []string `json:"canary_ids,omitempty"`
+	Strategy    string   `json:"strategy,omitempty"`
+	InstallHour *int     `json:"install_hour,omitempty"`
+	InstallDate string   `json:"install_date,omitempty"`
+}
+
+// scheduleInto copies a target's strategy and install window into a request.
+func (row channelTargetRow) scheduleInto(body map[string]any) {
+	if row.Strategy != "" {
+		body["strategy"] = row.Strategy
+	}
+	if row.InstallHour != nil {
+		body["install_hour"] = *row.InstallHour
+	}
+	if row.InstallDate != "" {
+		body["install_date"] = row.InstallDate
+	}
+}
+
+// formatSchedule says how and when a target installs: "restart, from 23:00,
+// not before 2026-11-20" — or nothing for the defaults.
+func formatSchedule(row channelTargetRow) string {
+	parts := []string{}
+	if row.Strategy != "" {
+		parts = append(parts, row.Strategy)
+	}
+	if row.InstallHour != nil {
+		parts = append(parts, fmt.Sprintf("from %02d:00", *row.InstallHour))
+	}
+	if row.InstallDate != "" {
+		parts = append(parts, "not before "+row.InstallDate)
+	}
+	return strings.Join(parts, ", ")
 }
 
 type fleetInstallationRow struct {
@@ -341,14 +376,19 @@ func renderFleetStatus(response fleetStatusResponse) error {
 	if len(response.Channels) > 0 {
 		fmt.Println("Channels:")
 		writer := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
-		fmt.Fprintln(writer, "  CHANNEL\tTARGET\tROLLOUT")
+		fmt.Fprintln(writer, "  CHANNEL\tTARGET\tROLLOUT\tINSTALLS")
 		for _, channel := range response.Channels {
+			installs := formatSchedule(channel)
+			if installs == "" {
+				installs = "at once"
+			}
 			fmt.Fprintf(
 				writer,
-				"  %s\t%s\t%s\n",
+				"  %s\t%s\t%s\t%s\n",
 				channel.Channel,
 				dashIfEmpty(channel.TargetVersion),
 				formatRollout(channel.RolloutPhase, channel.RolloutPercent),
+				installs,
 			)
 		}
 		if err := writer.Flush(); err != nil {
@@ -408,6 +448,9 @@ func runFleetSetVersion(args []string) error {
 	channel := flags.String("channel", "stable", "update channel to target")
 	rollout := flags.String("rollout", "canary", "rollout phase: all, paused, canary, or N%")
 	canary := flags.String("canary", "", "comma-separated installation ids (with --rollout canary)")
+	strategy := flags.String("strategy", "auto", "how shops install it: auto, live, or restart")
+	atHour := flags.Int("at-hour", -1, "install only in the 3 hours from this hour of the day, 0-23 Libya time (default: any hour)")
+	onDate := flags.String("on-date", "", "do not install before this date, YYYY-MM-DD (default: at once)")
 	asJSON := flags.Bool("json", false, "print the raw JSON response")
 	version, err := idAndFlags(args, flags)
 	if err != nil {
@@ -417,11 +460,19 @@ func runFleetSetVersion(args []string) error {
 	if err != nil {
 		return err
 	}
+	if *atHour < -1 || *atHour > 23 {
+		return usageError("--at-hour must be 0-23")
+	}
 	body := map[string]any{
 		"target_version":  version,
 		"rollout_phase":   phase,
 		"rollout_percent": percent,
 		"canary_ids":      canaryIDs,
+		"strategy":        strings.TrimSpace(*strategy),
+		"install_date":    strings.TrimSpace(*onDate),
+	}
+	if *atHour >= 0 {
+		body["install_hour"] = *atHour
 	}
 	return putChannelTarget(admin, strings.TrimSpace(*channel), body, *asJSON)
 }
@@ -440,19 +491,20 @@ func runFleetRollout(args []string) error {
 	if err != nil {
 		return err
 	}
-	version, err := currentChannelTargetVersion(admin, strings.TrimSpace(*channel))
+	current, err := currentChannelTarget(admin, strings.TrimSpace(*channel))
 	if err != nil {
 		return err
 	}
-	if version == "" {
+	if current.TargetVersion == "" {
 		return usageError("channel %q has no target version yet; use fleet set-version first", strings.TrimSpace(*channel))
 	}
 	body := map[string]any{
-		"target_version":  version,
+		"target_version":  current.TargetVersion,
 		"rollout_phase":   phase,
 		"rollout_percent": percent,
 		"canary_ids":      canaryIDs,
 	}
+	current.scheduleInto(body)
 	return putChannelTarget(admin, strings.TrimSpace(*channel), body, *asJSON)
 }
 
@@ -464,14 +516,19 @@ func runFleetPause(args []string) error {
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
-	version, err := currentChannelTargetVersion(admin, strings.TrimSpace(*channel))
+	current, err := currentChannelTarget(admin, strings.TrimSpace(*channel))
 	if err != nil {
 		return err
 	}
+	// The whole target goes back, not just the phase: resuming must find the
+	// same canary shops, strategy and install window it was paused with.
 	body := map[string]any{
-		"target_version": version,
-		"rollout_phase":  "paused",
+		"target_version":  current.TargetVersion,
+		"rollout_phase":   "paused",
+		"rollout_percent": current.RolloutPercent,
+		"canary_ids":      current.CanaryIDs,
 	}
+	current.scheduleInto(body)
 	return putChannelTarget(admin, strings.TrimSpace(*channel), body, *asJSON)
 }
 
@@ -528,11 +585,16 @@ func putChannelTarget(admin *adminControlFlags, channel string, body map[string]
 	if err := json.Unmarshal(raw, &target); err != nil {
 		return err
 	}
+	schedule := formatSchedule(target)
+	if schedule != "" {
+		schedule = "; " + schedule
+	}
 	fmt.Printf(
-		"Channel %s → %s (%s).\n",
+		"Channel %s → %s (%s%s).\n",
 		target.Channel,
 		dashIfEmpty(target.TargetVersion),
 		formatRollout(target.RolloutPhase, target.RolloutPercent),
+		schedule,
 	)
 	return nil
 }
@@ -554,16 +616,16 @@ func patchInstallationUpdate(admin *adminControlFlags, id string, body map[strin
 	return printRawJSON(raw)
 }
 
-// currentChannelTargetVersion reads the channel's current target version so a
-// rollout/pause change can keep the version while only moving the phase.
-func currentChannelTargetVersion(admin *adminControlFlags, channel string) (string, error) {
+// currentChannelTarget reads the channel's current target so a rollout/pause
+// change can keep everything else while only moving the phase.
+func currentChannelTarget(admin *adminControlFlags, channel string) (channelTargetRow, error) {
 	raw, err := admin.requestJSON(http.MethodGet, "/v1/fleet", nil, nil)
 	if err != nil {
-		return "", err
+		return channelTargetRow{}, err
 	}
 	var response fleetStatusResponse
 	if err := json.Unmarshal(raw, &response); err != nil {
-		return "", err
+		return channelTargetRow{}, err
 	}
 	want := channel
 	if want == "" {
@@ -571,10 +633,10 @@ func currentChannelTargetVersion(admin *adminControlFlags, channel string) (stri
 	}
 	for _, target := range response.Channels {
 		if target.Channel == want {
-			return target.TargetVersion, nil
+			return target, nil
 		}
 	}
-	return "", nil
+	return channelTargetRow{}, nil
 }
 
 func parseRollout(rollout, canary string) (phase string, percent int, canaryIDs []string, err error) {

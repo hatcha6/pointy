@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Unavailable } from "../components/Unavailable";
 import { useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, CloudDownload, Expand, History, Pause, Play, Plus, Rocket, Search, ShieldAlert, Undo2, Upload, WifiOff, X } from "lucide-react";
+import { AlertTriangle, CalendarClock, CloudDownload, Expand, History, Pause, Play, Plus, Rocket, Search, ShieldAlert, Undo2, Upload, WifiOff, X } from "lucide-react";
 import { keys, useFleet } from "../lib/queries";
 import { useRouter, useSearchParam, useSearchText } from "../lib/router";
 import { matches } from "../lib/search";
@@ -11,7 +11,8 @@ import { describeError } from "../lib/errors";
 import { hashFile } from "../lib/sha256";
 import { uploadWithPasskey } from "../lib/stepup";
 import { channelLabel } from "../lib/labels";
-import { agentQuiet, fetchState, updateErrorText, previousBundle, rolloutProgress, updateStatus, useArtifacts, type RolloutProgress } from "../lib/updates";
+import { agentQuiet, fetchState, hourText, installPlan, installPlanBody, installWindowText, strategyLabels, updateErrorText, previousBundle, rolloutProgress, updateStatus, useArtifacts, type InstallPlan, type RolloutProgress, type Strategy } from "../lib/updates";
+import { libyaDay } from "../lib/finance";
 import type { ArtifactMeta, ChannelTarget, FleetInstallation } from "../lib/types";
 import { Badge, Button, Card, CopyText, Empty, Field, Notice, Segmented, TimeAgo } from "../components/ui";
 import { DataTable, Stacked, type Column } from "../components/DataTable";
@@ -48,8 +49,16 @@ function channelBody(target: ChannelTarget, patch: Partial<{ target_version: str
     rollout_phase: patch.rollout_phase ?? target.rollout_phase,
     rollout_percent: target.rollout_percent ?? 0,
     canary_ids: target.canary_ids ?? [],
+    // Pausing or widening moves the phase only: how and when it installs stays.
+    ...installPlanBody(installPlan(target)),
   };
 }
+
+const strategyHelp: Record<Strategy, string> = {
+  "": "الوكيل يختار: مباشر بلا توقف إن أمكن، وإعادة تشغيل إن طلبها الإصدار نفسه.",
+  live: "يُشغَّل الإصدار الجديد بجانب القديم ثم تُحوَّل إليه الأجهزة، فلا يتوقف البيع. إن كان الإصدار لا يقبل ذلك يُعاد التشغيل.",
+  restart: "يتوقف خادم المتجر دقائق ثم يعود على الإصدار الجديد. اختر له ساعة خارج الدوام.",
+};
 
 export function Fleet() {
   const { navigate } = useRouter();
@@ -302,6 +311,8 @@ function ChannelCard({ target, progress, previous, onEdit, onRollback, onShowFai
   const share = (n: number) => (progress.following ? `${(n / progress.following) * 100}%` : "0%");
   const notReached = progress.following - progress.reached;
   const canaryDone = !paused && target.rollout_phase !== "all" && progress.reached > 0 && progress.updated === progress.reached && progress.failed === 0;
+  const plan = installPlan(target);
+  const windowText = installWindowText(plan);
 
   return (
     <section className={`card channel-card ${progress.failed && !paused ? "alarm" : ""}`}>
@@ -314,6 +325,17 @@ function ChannelCard({ target, progress, previous, onEdit, onRollback, onShowFai
           {rolloutLabel(target)}
         </Badge>
       </header>
+
+      {(plan.strategy || windowText) && (
+        <div className="cc-plan">
+          <CalendarClock width={14} />
+          <span>
+            {plan.strategy && <strong>{strategyLabels[plan.strategy]}</strong>}
+            {plan.strategy && windowText ? " · " : ""}
+            {windowText ? `يُثبَّت ${windowText}` : ""}
+          </span>
+        </div>
+      )}
 
       <div className="cc-progress" aria-label="تقدّم النشر">
         <span className="seg updated" style={{ width: share(progress.updated) }} />
@@ -331,6 +353,7 @@ function ChannelCard({ target, progress, previous, onEdit, onRollback, onShowFai
             {progress.failed} فشل
           </button>
         )}
+        {progress.scheduled > 0 && <span className="c waiting">{progress.scheduled} بانتظار الموعد</span>}
         {progress.waiting > 0 && <span className="c waiting">{progress.waiting} بانتظار</span>}
         {notReached > 0 && !paused && <span className="c">{notReached} لم يصلهم النشر</span>}
         {progress.quiet > 0 && (
@@ -444,6 +467,7 @@ function ChannelDialog({ state, installations, bundles, channels, bundlesLoading
   const [percent, setPercent] = useState(10);
   const [canary, setCanary] = useState<string[]>([]);
   const [filter, setFilter] = useState("");
+  const [plan, setPlan] = useState<InstallPlan>(installPlan());
   const run = useAction({ passkey: true, invalidate: [keys.fleet], success: "حُفظ النشر." });
 
   useEffect(() => {
@@ -457,6 +481,9 @@ function ChannelDialog({ state, installations, bundles, channels, bundlesLoading
     setPercent(target?.rollout_percent || 10);
     setCanary(target?.canary_ids ?? []);
     setFilter("");
+    // Another version is another launch: it starts with no schedule, so last
+    // month's "Friday at 23:00" never delays it by accident.
+    setPlan(installPlan(keep ? target : undefined));
   }, [state]);
 
   // Switching channel shows where that channel is.
@@ -468,6 +495,7 @@ function ChannelDialog({ state, installations, bundles, channels, bundlesLoading
       setPercent(target.rollout_percent || 10);
       setCanary(target.canary_ids ?? []);
     }
+    setPlan(installPlan(target && target.target_version === version ? target : undefined));
   }
 
   const onChannel = useMemo(() => installations.filter((f) => (f.channel || "stable") === channel && !f.pinned_version), [installations, channel]);
@@ -480,6 +508,14 @@ function ChannelDialog({ state, installations, bundles, channels, bundlesLoading
   const valid = channel.trim() && version && (phase !== "canary" || canary.length > 0);
   const reach = phase === "all" ? onChannel.length : phase === "percent" ? Math.round((onChannel.length * percent) / 100) : phase === "canary" ? canary.length : 0;
   const nameOf = (id: string) => installations.find((f) => f.id === id)?.shop_name || id.slice(0, 8);
+  const windowText = installWindowText(plan);
+  const planned = !!plan.strategy || !!windowText;
+  // Agents from before strategies and windows, among the shops this reaches.
+  // With a percentage the relay picks the shops, so every one may be among them.
+  const legacy = (phase === "canary" ? onChannel.filter((f) => canary.includes(f.id)) : phase === "paused" ? [] : onChannel).filter(
+    (f) => f.legacy_agent && f.current_version !== version,
+  );
+  const legacyNames = legacy.slice(0, 3).map((f) => f.shop_name || f.id.slice(0, 8)).join("، ") + (legacy.length > 3 ? "…" : "");
 
   return (
     <Dialog
@@ -503,11 +539,12 @@ function ChannelDialog({ state, installations, bundles, channels, bundlesLoading
                 rollout_phase: phase,
                 rollout_percent: phase === "percent" ? percent : 0,
                 canary_ids: phase === "canary" ? canary : [],
+                ...installPlanBody(plan),
               };
               if (await run.run("PUT", `/v1/fleet/channels/${encodeURIComponent(channel.trim())}`, body)) onClose();
             }}
           >
-            {phase === "paused" ? "احفظ متوقفاً" : `انشر ${version || ""} على ${reach} ${reach === 1 ? "متجر" : "متاجر"}`}
+            {phase === "paused" ? "احفظ متوقفاً" : `${windowText ? "جدوِل" : "انشر"} ${version || ""} على ${reach} ${reach === 1 ? "متجر" : "متاجر"}`}
           </Button>
           <Button size="lg" onClick={onClose} disabled={run.busy}>
             إلغاء
@@ -578,6 +615,67 @@ function ChannelDialog({ state, installations, bundles, channels, bundlesLoading
         {phase === "all" && (
           <Notice tone="warning" icon={<Rocket />}>
             كل متجر على القناة سيُحدَّث. إن لم تجرّب هذا الإصدار على متاجر قليلة أولاً، فابدأ بـ«متاجر تجربة».
+          </Notice>
+        )}
+        <Field label="طريقة التثبيت" help={strategyHelp[plan.strategy]}>
+          <Segmented<Strategy>
+            value={plan.strategy}
+            onChange={(strategy) => setPlan((p) => ({ ...p, strategy }))}
+            options={[
+              { id: "", label: strategyLabels[""] },
+              { id: "live", label: strategyLabels.live },
+              { id: "restart", label: strategyLabels.restart },
+            ]}
+          />
+        </Field>
+        <div className="form-pair">
+          <Field label="ساعة التثبيت" htmlFor="install-hour" help="بتوقيت ليبيا.">
+            <select
+              id="install-hour"
+              className="select num"
+              value={plan.hour === null ? "" : String(plan.hour)}
+              onChange={(e) => setPlan((p) => ({ ...p, hour: e.target.value === "" ? null : Number(e.target.value) }))}
+            >
+              <option value="">أي ساعة</option>
+              {Array.from({ length: 24 }, (_, h) => (
+                <option key={h} value={h}>
+                  {hourText(h)}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="تاريخ التثبيت" htmlFor="install-date" help="اتركه فارغاً ليبدأ من اليوم.">
+            <div className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
+              <input
+                id="install-date"
+                type="date"
+                className="input"
+                style={{ flex: 1, minWidth: 0 }}
+                value={plan.date}
+                min={libyaDay()}
+                onChange={(e) => setPlan((p) => ({ ...p, date: e.target.value }))}
+              />
+              {plan.date && (
+                <Button size="sm" variant="ghost" icon={<X />} aria-label="بلا تاريخ" title="بلا تاريخ" onClick={() => setPlan((p) => ({ ...p, date: "" }))} />
+              )}
+            </div>
+          </Field>
+        </div>
+        {phase !== "paused" && (
+          <Notice tone="info" icon={<CalendarClock />}>
+            {windowText ? (
+              <>
+                يُثبَّت {windowText}. المتجر ينزّل الحزمة قبل الموعد، والمتجر المطفأ وقتها يُثبَّت في موعد اليوم التالي.
+              </>
+            ) : (
+              "بلا موعد: كل متجر يثبّته فور تنزيله، في تشغيل وكيله التالي."
+            )}
+          </Notice>
+        )}
+        {planned && legacy.length > 0 && (
+          <Notice tone="warning" icon={<AlertTriangle />}>
+            {phase === "percent" ? "على القناة " : ""}
+            {legacy.length} {legacy.length === 1 ? "متجر" : "متاجر"} بوكيل تحديث قديم ({legacyNames}): لا يبدأ تنزيل الحزمة إلا عند الموعد، ويختار طريقة التثبيت بنفسه. يتحدّث وكيله مع هذا الإصدار.
           </Notice>
         )}
         <PasskeyHint />

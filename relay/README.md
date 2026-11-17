@@ -665,6 +665,35 @@ pointy-relay fleet pin <id> 1.3.0        # pin/roll back one shop; unpin with fl
 pointy-relay fleet channel <id> beta     # move a shop to another channel
 ```
 
+**How and when it installs.** A rollout can carry a strategy and an install
+window, set in the console's «نشر إصدار» dialog or on `fleet set-version`:
+
+```sh
+pointy-relay fleet set-version 1.4.0 --rollout all \
+  --strategy restart --at-hour 23 --on-date 2026-11-20
+```
+
+- `--strategy auto|live|restart` — `auto` (the default) is live where the
+  release and the shop allow it. `live` still restarts when the release ships
+  `UPDATE_STRATEGY.txt = restart` or the shop has no front door.
+- `--at-hour H` — installs start only in the 3 hours from `H:00`, every day.
+- `--on-date YYYY-MM-DD` — no install starts before that day. It is the first
+  day, not the only one: a shop switched off that night installs in the next
+  day's window.
+
+The window is read on **Libya's clock by the relay**, never the shop PC's. Until
+it opens the manifest answers `download` (fetch and verify the bundle, install
+nothing) and then `apply` with the strategy, so the bundle is already on the
+shop's disk when the hour comes. `fleet rollout` and `fleet pause` keep the
+schedule; a new `set-version` without the flags clears it; a pinned shop
+ignores it and applies at once.
+
+Older pieces keep working: an agent from before this (`pointy-update-agent/3`
+and earlier, which sends no `X-Pointy-Agent-Protocol` header) is answered
+`hold` until the window opens and `apply` after — it never installs early, but
+it starts its download only then and picks its own strategy. A console or CLI
+from before it sends no schedule, which means "at once, the agent's way".
+
 On a slow line, don't push the bundle through it: give the relay a URL and it
 downloads the zip on its own connection, then publishes it exactly as an upload
 would (`fleet set-version` accepts it the moment it lands). The command waits and

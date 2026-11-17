@@ -21,7 +21,7 @@ This runs the real thing::
      and prove the reconciliation puts the row right afterwards.
 
 Needs a running Postgres (``make postgres``) and the backend venv. With no
-arguments it rehearses the newest non-compat tag to the working tree.
+arguments it rehearses the newest release tag to the working tree.
 """
 
 from __future__ import annotations

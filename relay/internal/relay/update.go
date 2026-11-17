@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -76,12 +77,29 @@ type bundleDescriptor struct {
 }
 
 type agentManifestResponse struct {
-	InstallationID  string            `json:"installation_id"`
-	Channel         string            `json:"channel"`
-	CurrentVersion  string            `json:"current_version"`
-	AssignedVersion string            `json:"assigned_version"`
-	Directive       string            `json:"directive"` // apply | hold
-	Bundle          *bundleDescriptor `json:"bundle,omitempty"`
+	InstallationID  string `json:"installation_id"`
+	Channel         string `json:"channel"`
+	CurrentVersion  string `json:"current_version"`
+	AssignedVersion string `json:"assigned_version"`
+	// apply | hold, and download (fetch and verify the bundle, install nothing
+	// yet) for an agent that announced it understands it.
+	Directive string            `json:"directive"`
+	Bundle    *bundleDescriptor `json:"bundle,omitempty"`
+	// Strategy is the operator's choice of live or restart; omitted when it is
+	// left to the agent, which is also all an older agent can do.
+	Strategy string `json:"strategy,omitempty"`
+	// ScheduledFor is when the install window opens, while the install waits.
+	ScheduledFor *time.Time `json:"scheduled_for,omitempty"`
+}
+
+// agentProtocolHeaderName is how an update agent says which manifest it
+// understands. Agents from before the header send nothing and get the
+// two-word protocol they were written for.
+const agentProtocolHeaderName = "X-Pointy-Agent-Protocol"
+
+func agentSchedules(r *http.Request) bool {
+	protocol, err := strconv.Atoi(strings.TrimSpace(r.Header.Get(agentProtocolHeaderName)))
+	return err == nil && protocol >= control.AgentProtocolScheduled
 }
 
 // handleAgentManifest tells an installation which version it should run. The
@@ -107,16 +125,19 @@ func (s HTTPServer) handleAgentManifest(
 			target = found
 		}
 	}
-	version, directive := control.AssignedUpdate(installation, target, s.artifactPresent)
+	plan := control.PlanUpdate(installation, target, s.artifactPresent, s.clock().Now(), agentSchedules(r))
+	version := plan.Version
 
 	resp := agentManifestResponse{
 		InstallationID:  installation.ID,
 		Channel:         control.NormalizeChannel(installation.UpdateChannel),
 		CurrentVersion:  installation.CurrentVersion,
 		AssignedVersion: version,
-		Directive:       directive,
+		Directive:       plan.Directive,
+		Strategy:        plan.Strategy,
+		ScheduledFor:    plan.ScheduledFor,
 	}
-	if directive == "apply" && s.Artifacts != nil {
+	if plan.Directive != control.DirectiveHold && s.Artifacts != nil {
 		if meta, found, err := s.Artifacts.Get(version); err == nil && found {
 			resp.Bundle = &bundleDescriptor{
 				Version:   meta.Version,
@@ -213,6 +234,11 @@ type fleetInstallationView struct {
 	AgentVersion    string     `json:"agent_version,omitempty"`
 	AgentLastSeenAt *time.Time `json:"agent_last_seen_at,omitempty"`
 	LastUpdateAt    *time.Time `json:"last_update_at,omitempty"`
+	// ScheduledFor is set while the shop's install waits for its window.
+	ScheduledFor *time.Time `json:"scheduled_for,omitempty"`
+	// LegacyAgent marks an agent from before strategies and install windows:
+	// it is held until the window opens and applies with its own strategy.
+	LegacyAgent bool `json:"legacy_agent,omitempty"`
 }
 
 func (s HTTPServer) handleFleetStatus(w http.ResponseWriter, r *http.Request) {
@@ -242,11 +268,16 @@ func (s HTTPServer) handleFleetStatus(w http.ResponseWriter, r *http.Request) {
 		targets[target.Channel] = target
 	}
 
+	now := s.clock().Now()
 	views := make([]fleetInstallationView, 0, len(installations))
 	for _, installation := range installations {
 		channel := control.NormalizeChannel(installation.UpdateChannel)
-		version, directive := control.AssignedUpdate(installation, targets[channel], s.artifactPresent)
+		schedules := control.AgentSchedules(installation.AgentVersion)
+		plan := control.PlanUpdate(installation, targets[channel], s.artifactPresent, now, schedules)
+		version, directive := plan.Version, plan.Directive
 		views = append(views, fleetInstallationView{
+			ScheduledFor:    plan.ScheduledFor,
+			LegacyAgent:     !schedules,
 			ID:              installation.ID,
 			ShopName:        installation.ShopName,
 			Channel:         channel,
@@ -283,6 +314,11 @@ type setChannelTargetRequest struct {
 	RolloutPhase   string   `json:"rollout_phase"`
 	RolloutPercent int      `json:"rollout_percent"`
 	CanaryIDs      []string `json:"canary_ids"`
+	// Optional, and absent from a console or CLI from before them: left out,
+	// the version installs as soon as a shop sees it, the agent's own way.
+	Strategy    string `json:"strategy"`
+	InstallHour *int   `json:"install_hour"`
+	InstallDate string `json:"install_date"`
 }
 
 func (s HTTPServer) handleSetChannelTarget(w http.ResponseWriter, r *http.Request) {
@@ -313,6 +349,21 @@ func (s HTTPServer) handleSetChannelTarget(w http.ResponseWriter, r *http.Reques
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "rollout_percent must be 0-100"})
 		return
 	}
+	strategy, err := control.NormalizeUpdateStrategy(req.Strategy)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "strategy must be auto, live or restart"})
+		return
+	}
+	installHour, err := control.NormalizeInstallHour(req.InstallHour)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "install_hour must be 0-23"})
+		return
+	}
+	installDate, err := control.NormalizeInstallDate(req.InstallDate)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "install_date must be YYYY-MM-DD"})
+		return
+	}
 	targetVersion := strings.TrimSpace(req.TargetVersion)
 	if targetVersion != "" && !s.artifactPresent(targetVersion) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "no artifact uploaded for that version"})
@@ -324,6 +375,9 @@ func (s HTTPServer) handleSetChannelTarget(w http.ResponseWriter, r *http.Reques
 		RolloutPhase:   phase,
 		RolloutPercent: req.RolloutPercent,
 		CanaryIDs:      req.CanaryIDs,
+		Strategy:       strategy,
+		InstallHour:    installHour,
+		InstallDate:    installDate,
 	}); err != nil {
 		writeStoreError(w, err)
 		return

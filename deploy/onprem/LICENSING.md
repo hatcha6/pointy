@@ -54,7 +54,7 @@ Added by the review, for the owner to confirm:
 |---|---|
 | Trial identity | One trial per **owner phone number**, verified by SMS code (Resala). Hardware is a hint only. |
 | Transfers and reinstalls | Retiring an existing license needs **proof**: the old device key, or an SMS code to the owner phone on file. Operator approval alone no longer retires a license. |
-| Old till builds | The enforcing backend **refuses every client older than the first licensing-aware version**, on main and compat/win8. |
+| Old till builds | The enforcing backend **refuses every client older than the first licensing-aware version**. |
 
 ## Pieces
 
@@ -489,9 +489,7 @@ we provide online.
   `issued_at` is not older than the newest it has seen. It shows the Arabic
   lock screen instead of working against an unlicensed backend.
 - **Old tills are refused.** The enforcing backend rejects every client whose
-  `X-Pointy-App-Version` is below the first licensing-aware version, on main
-  and on compat/win8. compat/win8 gets the till checks too, ported
-  frontend-only.
+  `X-Pointy-App-Version` is below the first licensing-aware version.
 
 ## Relay side
 

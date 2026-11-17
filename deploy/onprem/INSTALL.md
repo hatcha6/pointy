@@ -45,8 +45,6 @@ clients/                Every till app this server hands out on the LAN. The
                         themselves from the same place. No second download.
   pointy-<ver>-android-universal.apk        Android tablets and phones
   pointy-<ver>-windows-x64-setup.exe        Windows 10/11 tills
-  pointy-<ver>-compat-windows-x64-setup.exe Windows 7/8/8.1 tills (its own
-                        version: this build ships from its own frozen release)
   pointy-<ver>-linux-x64.deb                Ubuntu/Mint tills (menu entry + icon)
   pointy-<ver>-linux-x64.tar.gz             Other Linux distros; also what the
                         Linux app's own self-update installs

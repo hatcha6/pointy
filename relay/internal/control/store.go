@@ -343,12 +343,18 @@ const (
 // staged-rollout state. There is one row per channel; setting a new target
 // replaces it.
 type ChannelTarget struct {
-	Channel        string    `json:"channel"`
-	TargetVersion  string    `json:"target_version"`
-	RolloutPhase   string    `json:"rollout_phase"`
-	RolloutPercent int       `json:"rollout_percent,omitempty"`
-	CanaryIDs      []string  `json:"canary_ids,omitempty"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	Channel        string   `json:"channel"`
+	TargetVersion  string   `json:"target_version"`
+	RolloutPhase   string   `json:"rollout_phase"`
+	RolloutPercent int      `json:"rollout_percent,omitempty"`
+	CanaryIDs      []string `json:"canary_ids,omitempty"`
+	// How and when the version is installed (update_schedule.go). All three
+	// are optional and their zero values are what an update did before they
+	// existed: strategy left to the agent, installed as soon as it is seen.
+	Strategy    string    `json:"strategy,omitempty"`
+	InstallHour *int      `json:"install_hour,omitempty"`
+	InstallDate string    `json:"install_date,omitempty"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 // AgentStatus is what the on-prem update agent reports after each run.

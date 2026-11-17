@@ -75,6 +75,9 @@ case "$_url" in
   */v1/agent/manifest)
     [ "${AGENT_MANIFEST_RC:-0}" = 0 ] || exit "${AGENT_MANIFEST_RC}"
     cat "${PU_TEST_DIR}/manifest.json" >"$_out"
+    # What the relay says can change between two asks in one run (_manifest_then).
+    [ -f "${PU_TEST_DIR}/manifest.next.json" ] \
+      && mv -f "${PU_TEST_DIR}/manifest.next.json" "${PU_TEST_DIR}/manifest.json"
     exit 0 ;;
 esac
 [ "${AGENT_DOWNLOAD_RC:-0}" = 0 ] || exit "${AGENT_DOWNLOAD_RC}"
@@ -939,6 +942,132 @@ test_a_dry_run_ships_nothing() {
   printf '{"id":"run-1"}\n' >update-history.jsonl
   _run_agent --check >/dev/null 2>&1
   assert_eq '' "$(_run_posts)"
+}
+
+# ---------------------------------------------------------------------------
+# The operator's strategy and install window. The relay keeps the clock: it
+# says "download" until the window opens, then "apply" with the strategy.
+# ---------------------------------------------------------------------------
+
+# _manifest_plus <directive> <version> <extra-fields> — a manifest with the
+# fields a relay that knows about schedules adds, e.g. '"strategy":"restart"'.
+_manifest_plus() {
+  _manifest "$1" "$2"
+  sed -i.bak "s|^{|{$3,|" "${PU_TEST_DIR}/manifest.json" && rm -f "${PU_TEST_DIR}/manifest.json.bak"
+}
+
+# _manifest_then <directive> <version> [extra] — what the relay answers from its
+# SECOND ask on, as when an operator changes the rollout mid-download.
+_manifest_then() {
+  cp "${PU_TEST_DIR}/manifest.json" "${PU_TEST_DIR}/manifest.first.json"
+  if [ -n "${3:-}" ]; then _manifest_plus "$1" "$2" "$3"; else _manifest "$1" "$2"; fi
+  mv "${PU_TEST_DIR}/manifest.json" "${PU_TEST_DIR}/manifest.next.json"
+  mv "${PU_TEST_DIR}/manifest.first.json" "${PU_TEST_DIR}/manifest.json"
+}
+
+test_the_agent_tells_the_relay_which_manifest_it_understands() {
+  # Without this the relay treats the shop as an old agent and holds it until
+  # the window opens, so nothing is downloaded ahead.
+  _install_agent 1.0.0 1.1.0
+  _manifest apply 1.1.0
+  _run_agent >/dev/null 2>&1
+  assert_called curl '*X-Pointy-Agent-Protocol: 2*v1/agent/manifest*'
+}
+
+test_a_download_directive_fetches_the_bundle_and_installs_nothing() {
+  _install_agent 1.0.0 1.1.0
+  _manifest_plus download 1.1.0 '"scheduled_for":"2026-11-17T21:00:00Z"'
+  local out; out="$(_run_agent 2>&1)"; local rc=$?
+  assert_eq '0' "$rc"
+  assert_contains "$out" 'installs when its window opens (2026-11-17T21:00:00Z)'
+  assert_eq '' "$(_order)"
+  assert_eq '1.0.0' "$(cat VERSION.txt)"
+  [ -n "$(ls downloads/bundle-*.zip 2>/dev/null)" ] || _fail 'the verified bundle should be kept for the window' "$(ls downloads)"
+  assert_contains "$(_status_posts | tail -1)" '"update_status":"downloaded"'
+  [ ! -f .update.lock ] || _fail 'waiting for a window must not hold the update lock' ''
+}
+
+test_waiting_for_the_window_does_not_download_twice() {
+  _install_agent 1.0.0 1.1.0
+  _manifest_plus download 1.1.0 '"scheduled_for":"2026-11-17T21:00:00Z"'
+  _run_agent >/dev/null 2>&1
+  _run_agent >/dev/null 2>&1
+  assert_eq '1' "$(cat "${PU_TEST_DIR}/download-attempts")"
+  assert_eq '' "$(_order)"
+}
+
+test_the_bundle_downloaded_ahead_is_installed_when_the_window_opens() {
+  _install_agent 1.0.0 1.1.0
+  _manifest_plus download 1.1.0 '"scheduled_for":"2026-11-17T21:00:00Z"'
+  _run_agent >/dev/null 2>&1
+  _manifest_plus apply 1.1.0 '"strategy":"restart"'
+  assert_status 0 _run_agent >/dev/null 2>&1
+  assert_contains "$(_order)" 'apply:1.0.0->1.1.0 mode=restart'
+  assert_eq '1' "$(cat "${PU_TEST_DIR}/download-attempts")"
+}
+
+test_the_operators_strategy_is_passed_to_the_engine() {
+  _install_agent 1.0.0 1.1.0
+  _manifest_plus apply 1.1.0 '"strategy":"live"'
+  _run_agent >/dev/null 2>&1
+  assert_contains "$(_order)" 'mode=live'
+}
+
+test_a_strategy_on_the_command_line_outranks_the_operators() {
+  # Someone at the shop's keyboard, running the agent by hand, knows something
+  # the console does not.
+  _install_agent 1.0.0 1.1.0
+  _manifest_plus apply 1.1.0 '"strategy":"live"'
+  _run_agent --restart >/dev/null 2>&1
+  assert_contains "$(_order)" 'mode=restart'
+}
+
+test_a_strategy_this_agent_does_not_know_is_left_to_the_release() {
+  _install_agent 1.0.0 1.1.0
+  _manifest_plus apply 1.1.0 '"strategy":"blue-green"'
+  _run_agent >/dev/null 2>&1
+  assert_contains "$(_order)" 'mode=auto'
+}
+
+test_a_directive_this_agent_does_not_know_is_treated_as_hold() {
+  _install_agent 1.0.0 1.1.0
+  _manifest stage 1.1.0
+  local out; out="$(_run_agent 2>&1)"
+  assert_contains "$out" 'up to date'
+  assert_eq '' "$(_order)"
+  assert_eq '' "$(cat "${PU_TEST_DIR}/download-attempts" 2>/dev/null)"
+}
+
+test_a_window_that_closed_during_the_download_is_not_installed_into() {
+  # A slow line: "apply" at the start of the download, "download" (window
+  # closed) by the end of it. Installing then is exactly what the operator
+  # scheduled around.
+  _install_agent 1.0.0 1.1.0
+  _manifest apply 1.1.0
+  _manifest_then download 1.1.0 '"scheduled_for":"2026-11-18T21:00:00Z"'
+  local out; out="$(_run_agent 2>&1)"; local rc=$?
+  assert_eq '0' "$rc"
+  assert_eq '' "$(_order)"
+  assert_contains "$out" 'installs when its window opens'
+  assert_contains "$(_status_posts | tail -1)" '"update_status":"downloaded"'
+}
+
+test_a_rollout_paused_during_the_download_is_not_installed() {
+  _install_agent 1.0.0 1.1.0
+  _manifest apply 1.1.0
+  _manifest_then hold ''
+  local out; out="$(_run_agent 2>&1)"
+  assert_eq '' "$(_order)"
+  assert_contains "$out" 'put on hold while 1.1.0 was downloading'
+  [ -n "$(ls downloads/bundle-*.zip 2>/dev/null)" ] || _fail 'a paused rollout keeps the download' "$(ls downloads)"
+}
+
+test_a_dry_run_says_when_a_scheduled_update_would_install() {
+  _install_agent 1.0.0 1.1.0
+  _manifest_plus download 1.1.0 '"scheduled_for":"2026-11-17T21:00:00Z"'
+  local out; out="$(_run_agent --check 2>&1)"
+  assert_contains "$out" 'install 1.1.0 when its window opens (2026-11-17T21:00:00Z)'
+  assert_eq '' "$(cat "${PU_TEST_DIR}/download-attempts" 2>/dev/null)"
 }
 
 pu_run_tests "$@"

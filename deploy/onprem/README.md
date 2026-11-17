@@ -135,6 +135,8 @@ pointy-relay fleet rollout 50%        # widen once the canaries look healthy
 pointy-relay fleet rollout all
 pointy-relay fleet pause              # kill switch: stop the rollout immediately
 pointy-relay fleet pin <id> 1.3.0    # roll one shop back / hold it on a version
+# choose how and when shops install it (Libya time; see relay/README.md):
+pointy-relay fleet set-version 1.4.0 --rollout all --strategy restart --at-hour 23 --on-date 2026-11-20
 ```
 
 **What a shop downloads.** The update bundle is the full bundle minus what a
@@ -259,7 +261,7 @@ the stock-value line's exact change, and any product whose cost would pass its
 price. Then `--apply`. It is safe while the shop trades and safe to run twice;
 `--include price_differs` also takes aliases whose price had drifted from their
 product's, which then ring at the product's price. Sales, profit and shrinkage do
-not move. Frozen Windows 7/8 tills keep scanning the old codes without an update.
+not move.
 
 ### What An Update Cost
 

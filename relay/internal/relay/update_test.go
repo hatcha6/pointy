@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"pointy/relay/internal/artifacts"
 	"pointy/relay/internal/control"
@@ -301,5 +302,147 @@ func TestInstallationListPresenceIsOptIn(t *testing.T) {
 	shop := list("?presence=1")
 	if shop["id"] != provisioned.Installation.ID || shop["connector_online"] != false {
 		t.Fatalf("presence %v", shop)
+	}
+}
+
+// frozenClock pins the relay's clock: an install window is a function of it.
+type frozenClock struct{ at time.Time }
+
+func (c frozenClock) Now() time.Time { return c.at }
+
+func TestAgentManifestInstallWindowAndStrategy(t *testing.T) {
+	server, provisioned, art := newUpdateTestServer(t)
+	if _, err := art.Put("1.4.0", strings.NewReader("bundle-bytes")); err != nil {
+		t.Fatal(err)
+	}
+	noon := time.Date(2026, 11, 16, 12, 0, 0, 0, control.FleetLocation)
+	server.Clock = frozenClock{at: noon}
+
+	// Launched the way the console does it: restart, from 23:00, not before the 17th.
+	put := httptest.NewRequest(http.MethodPut, "http://relay/v1/fleet/channels/stable", strings.NewReader(
+		`{"target_version":"1.4.0","rollout_phase":"all","strategy":"restart","install_hour":23,"install_date":"2026-11-17"}`))
+	put.Header.Set("Authorization", "Bearer admin-token")
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, put)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("set target: %d %s", rec.Code, rec.Body.String())
+	}
+	var stored control.ChannelTarget
+	if err := json.Unmarshal(rec.Body.Bytes(), &stored); err != nil {
+		t.Fatal(err)
+	}
+	if stored.Strategy != "restart" || stored.InstallHour == nil || *stored.InstallHour != 23 || stored.InstallDate != "2026-11-17" {
+		t.Fatalf("the schedule was not stored: %+v", stored)
+	}
+
+	type manifest struct {
+		Directive       string     `json:"directive"`
+		AssignedVersion string     `json:"assigned_version"`
+		Strategy        string     `json:"strategy"`
+		ScheduledFor    *time.Time `json:"scheduled_for"`
+		Bundle          *struct {
+			Path string `json:"path"`
+		} `json:"bundle"`
+	}
+	ask := func(protocol string) manifest {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, "http://relay/v1/agent/manifest", nil)
+		req.Header.Set("X-Pointy-Connector-Token", provisioned.ConnectorToken)
+		if protocol != "" {
+			req.Header.Set("X-Pointy-Agent-Protocol", protocol)
+		}
+		rec := httptest.NewRecorder()
+		server.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("manifest status %d: %s", rec.Code, rec.Body.String())
+		}
+		var resp manifest
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatal(err)
+		}
+		return resp
+	}
+
+	opens := time.Date(2026, 11, 17, 23, 0, 0, 0, control.FleetLocation)
+	// An agent from before schedules must see nothing it could act on early.
+	if old := ask(""); old.Directive != "hold" || old.Bundle != nil {
+		t.Fatalf("an older agent must be held with no bundle: %+v", old)
+	}
+	current := ask("2")
+	if current.Directive != "download" || current.Bundle == nil || current.ScheduledFor == nil || !current.ScheduledFor.Equal(opens) {
+		t.Fatalf("a scheduling agent should download and wait until %s: %+v", opens, current)
+	}
+
+	// The first night's hour is before the date: still closed.
+	server.Clock = frozenClock{at: time.Date(2026, 11, 16, 23, 30, 0, 0, control.FleetLocation)}
+	if got := ask("2"); got.Directive != "download" {
+		t.Fatalf("the hour before the date must not open the window: %+v", got)
+	}
+
+	server.Clock = frozenClock{at: opens.Add(20 * time.Minute)}
+	for _, protocol := range []string{"", "2"} {
+		got := ask(protocol)
+		if got.Directive != "apply" || got.Strategy != "restart" || got.Bundle == nil || got.ScheduledFor != nil {
+			t.Fatalf("inside the window (protocol %q) the agent applies: %+v", protocol, got)
+		}
+	}
+
+	// The fleet view says who is waiting, and for when.
+	server.Clock = frozenClock{at: noon}
+	fleetReq := httptest.NewRequest(http.MethodGet, "http://relay/v1/fleet", nil)
+	fleetReq.Header.Set("Authorization", "Bearer admin-token")
+	rec = httptest.NewRecorder()
+	server.ServeHTTP(rec, fleetReq)
+	var fleet struct {
+		Installations []struct {
+			AssignedVersion string     `json:"assigned_version"`
+			Directive       string     `json:"directive"`
+			ScheduledFor    *time.Time `json:"scheduled_for"`
+			LegacyAgent     bool       `json:"legacy_agent"`
+		} `json:"installations"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &fleet); err != nil {
+		t.Fatal(err)
+	}
+	if len(fleet.Installations) != 1 {
+		t.Fatalf("fleet: %s", rec.Body.String())
+	}
+	row := fleet.Installations[0]
+	if row.AssignedVersion != "1.4.0" || row.Directive != "hold" || !row.LegacyAgent || row.ScheduledFor == nil || !row.ScheduledFor.Equal(opens) {
+		t.Fatalf("fleet row: %+v", row)
+	}
+}
+
+func TestAdminSetChannelTargetWithoutScheduleInstallsAtOnce(t *testing.T) {
+	server, provisioned, art := newUpdateTestServer(t)
+	if _, err := art.Put("1.4.0", strings.NewReader("bundle-bytes")); err != nil {
+		t.Fatal(err)
+	}
+	send := func(body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPut, "http://relay/v1/fleet/channels/stable", strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer admin-token")
+		rec := httptest.NewRecorder()
+		server.ServeHTTP(rec, req)
+		return rec
+	}
+	for _, bad := range []string{
+		`{"target_version":"1.4.0","rollout_phase":"all","strategy":"rolling"}`,
+		`{"target_version":"1.4.0","rollout_phase":"all","install_hour":24}`,
+		`{"target_version":"1.4.0","rollout_phase":"all","install_date":"tomorrow"}`,
+	} {
+		if rec := send(bad); rec.Code != http.StatusBadRequest {
+			t.Fatalf("%s: got %d", bad, rec.Code)
+		}
+	}
+	// The body a console or CLI from before the schedule sends.
+	if rec := send(`{"target_version":"1.4.0","rollout_phase":"all","rollout_percent":0,"canary_ids":[]}`); rec.Code != http.StatusOK {
+		t.Fatalf("legacy body: %d %s", rec.Code, rec.Body.String())
+	}
+	req := httptest.NewRequest(http.MethodGet, "http://relay/v1/agent/manifest", nil)
+	req.Header.Set("X-Pointy-Connector-Token", provisioned.ConnectorToken)
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, req)
+	if !strings.Contains(rec.Body.String(), `"directive":"apply"`) || strings.Contains(rec.Body.String(), "strategy") {
+		t.Fatalf("an unscheduled target must read exactly as before: %s", rec.Body.String())
 	}
 }

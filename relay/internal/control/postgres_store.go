@@ -817,20 +817,27 @@ func (s *PostgresStore) UpsertChannelTarget(ctx context.Context, target ChannelT
 	_, err = s.pool.Exec(
 		ctx,
 		`INSERT INTO relay_channel_targets
-			(channel, target_version, rollout_phase, rollout_percent, canary_ids, updated_at)
-		VALUES ($1, $2, $3, $4, $5::jsonb, $6::timestamptz)
+			(channel, target_version, rollout_phase, rollout_percent, canary_ids, updated_at,
+			 update_strategy, install_hour, install_date)
+		VALUES ($1, $2, $3, $4, $5::jsonb, $6::timestamptz, $7, $8, $9)
 		ON CONFLICT (channel) DO UPDATE SET
 			target_version = EXCLUDED.target_version,
 			rollout_phase = EXCLUDED.rollout_phase,
 			rollout_percent = EXCLUDED.rollout_percent,
 			canary_ids = EXCLUDED.canary_ids,
-			updated_at = EXCLUDED.updated_at`,
+			updated_at = EXCLUDED.updated_at,
+			update_strategy = EXCLUDED.update_strategy,
+			install_hour = EXCLUDED.install_hour,
+			install_date = EXCLUDED.install_date`,
 		NormalizeChannel(target.Channel),
 		strings.TrimSpace(target.TargetVersion),
 		target.RolloutPhase,
 		target.RolloutPercent,
 		canaryIDs,
 		s.clock.Now(),
+		target.Strategy,
+		target.InstallHour,
+		target.InstallDate,
 	)
 	return err
 }
@@ -858,13 +865,17 @@ const selectChannelTargetSQL = `SELECT
 	rollout_phase,
 	rollout_percent,
 	canary_ids,
-	updated_at
+	updated_at,
+	update_strategy,
+	install_hour,
+	install_date
 FROM relay_channel_targets`
 
 func scanChannelTarget(row pgx.Row) (ChannelTarget, error) {
 	var target ChannelTarget
 	var canaryIDs []byte
 	var updatedAt pgtype.Timestamptz
+	var installHour pgtype.Int4
 	if err := row.Scan(
 		&target.Channel,
 		&target.TargetVersion,
@@ -872,8 +883,15 @@ func scanChannelTarget(row pgx.Row) (ChannelTarget, error) {
 		&target.RolloutPercent,
 		&canaryIDs,
 		&updatedAt,
+		&target.Strategy,
+		&installHour,
+		&target.InstallDate,
 	); err != nil {
 		return ChannelTarget{}, err
+	}
+	if installHour.Valid {
+		hour := int(installHour.Int32)
+		target.InstallHour = &hour
 	}
 	if len(canaryIDs) > 0 {
 		if err := json.Unmarshal(canaryIDs, &target.CanaryIDs); err != nil {

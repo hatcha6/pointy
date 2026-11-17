@@ -1432,6 +1432,18 @@ CREATE TABLE IF NOT EXISTS relay_esim_promos (
 );
 `,
 	},
+	{
+		version: 46,
+		name:    "update strategy and install window per channel",
+		sql: `
+-- How and when a channel's version is installed. New columns with defaults
+-- only: a relay node from before them writes a target that installs at once
+-- with the agent's own strategy, and its upsert leaves these untouched.
+ALTER TABLE relay_channel_targets ADD COLUMN IF NOT EXISTS update_strategy text NOT NULL DEFAULT '';
+ALTER TABLE relay_channel_targets ADD COLUMN IF NOT EXISTS install_hour integer;
+ALTER TABLE relay_channel_targets ADD COLUMN IF NOT EXISTS install_date text NOT NULL DEFAULT '';
+`,
+	},
 }
 
 // migrationsAdvisoryLockKey serializes concurrent migrators (e.g. autoscaled

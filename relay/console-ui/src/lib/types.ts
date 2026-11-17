@@ -204,6 +204,12 @@ export type ChannelTarget = {
   rollout_phase: string;
   rollout_percent?: number;
   canary_ids?: string[];
+  /** "live" or "restart"; absent when the choice is left to the agent. */
+  strategy?: string;
+  /** 0-23 on Libya's clock: installs start only in the hours from it. */
+  install_hour?: number | null;
+  /** YYYY-MM-DD: no install starts before this day. */
+  install_date?: string;
   updated_at?: string;
 };
 
@@ -236,4 +242,8 @@ export type FleetInstallation = {
   agent_version: string;
   agent_last_seen_at: string | null;
   last_update_at: string | null;
+  /** When the shop's install window opens, while its install waits for it. */
+  scheduled_for?: string | null;
+  /** An agent from before strategies and install windows. */
+  legacy_agent?: boolean;
 };
