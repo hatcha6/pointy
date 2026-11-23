@@ -349,9 +349,13 @@ func (s HTTPServer) orderViews(r *http.Request, store customerAdminStore, orders
 	if len(purchases) == 0 {
 		return views
 	}
-	usdRate, _ := s.financeUSDRate(r)
+	list := make([]control.VoucherPurchase, 0, len(purchases))
+	for _, purchase := range purchases {
+		list = append(list, purchase)
+	}
+	rates, _ := s.financeRatesFor(r, earliestPurchase(list, s.clock().Now()))
 	for i := range views {
-		views[i].saleProfit = orderProfit(views[i].CustomerOrder, purchases, usdRate)
+		views[i].saleProfit = orderProfit(views[i].CustomerOrder, purchases, rates)
 	}
 	return views
 }

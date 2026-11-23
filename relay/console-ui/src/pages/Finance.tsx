@@ -10,7 +10,7 @@ import { useWallets } from "../lib/queries";
 import { Link, useSearchParam, useSetSearch } from "../lib/router";
 import { money } from "../lib/format";
 import { label, method as methodLabels } from "../lib/labels";
-import { change, periodPhrase, periodRange, periods, shortDay, useFinanceSummary, type Direction, type PeriodId } from "../lib/finance";
+import { change, periodPhrase, periodRange, periods, shortDay, useFinanceSummary, usdRateNote, type Direction, type PeriodId } from "../lib/finance";
 
 /** The period a finance page reads, kept in the address so a link shares it. */
 export function usePeriod() {
@@ -296,9 +296,7 @@ export function Finance() {
             </li>
             <li>
               <strong>الدولار:</strong>{" "}
-              {data?.usd_rate.rate
-                ? `تكاليف الموردين بالدولار محوّلة بسعر ${money(Number(data.usd_rate.rate).toFixed(3))} (${data.usd_rate.source === "manual" ? "السعر اليدوي" : "سعر السوق من fulus.ly"}) — تقدير بسعر اليوم.`
-                : "لا يوجد سعر دولار في التسعير؛ تكاليف الدولار تظهر منفصلة ولا تدخل الحساب."}
+              {usdRateNote(data?.usd_rate) ?? "لا يوجد سعر دولار في التسعير؛ تكاليف الدولار تظهر منفصلة ولا تدخل الحساب."}
             </li>
             <li>
               <strong>الأشهر</strong> بتوقيت ليبيا. المقارنة مع فترة سابقة بنفس الطول.

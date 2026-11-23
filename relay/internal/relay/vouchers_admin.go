@@ -483,8 +483,8 @@ func (s HTTPServer) handleVoucherAdminPurchases(w http.ResponseWriter, r *http.R
 		s.writeVoucherInternalError(w, "", "voucher purchase listing failed", err)
 		return
 	}
-	usdRate, _ := s.financeUSDRate(r)
-	writeJSON(w, http.StatusOK, map[string]any{"purchases": withPurchaseProfit(purchases, usdRate)})
+	rates, _ := s.financeRatesFor(r, earliestPurchase(purchases, s.clock().Now()))
+	writeJSON(w, http.StatusOK, map[string]any{"purchases": withPurchaseProfit(purchases, rates)})
 }
 
 func (s HTTPServer) handleVoucherAdminCheck(w http.ResponseWriter, r *http.Request, store control.VoucherStore, id string) {

@@ -52,10 +52,10 @@ func (s HTTPServer) handleFinancePosition(w http.ResponseWriter, r *http.Request
 		return
 	}
 	s.postDueFinanceRecurring(r.Context(), store)
-	usdRate, rateInfo := s.financeUSDRate(r)
 	now := s.clock().Now()
-	tracked, err := store.FinanceTracked(r.Context(),
-		time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC), now.Add(24*time.Hour))
+	since := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+	rates, rateInfo := s.financeRatesFor(r, since)
+	tracked, err := store.FinanceTracked(r.Context(), since, now.Add(24*time.Hour))
 	if err != nil {
 		s.writeFinanceStoreError(w, "finance position failed", err)
 		return
@@ -66,7 +66,7 @@ func (s HTTPServer) handleFinancePosition(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	book := newFinanceBook(usdRate)
+	book := newFinanceBook(rates)
 	book.addTracked(tracked)
 
 	// Sales, cost and profit by service.
