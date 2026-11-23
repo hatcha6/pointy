@@ -290,7 +290,15 @@ class ContainerPageRoute<T> extends MaterialPageRoute<T> {
   /// The thing tapped, and its [ContainerSource] where it has one.
   final BuildContext _tapped;
   final ContainerSourceState? _source;
-  BuildContext get _from => _source?.context ?? _tapped;
+
+  /// The source while it is still in the tree, else what was tapped. A
+  /// source can leave while its page is up (the list under it rebuilt), and
+  /// a disposed [State] has no context to ask.
+  BuildContext get _from {
+    final source = _source;
+    return source != null && source.mounted ? source.context : _tapped;
+  }
+
   Widget? _closed;
   Rect? _rect;
 

@@ -433,6 +433,47 @@ void main() {
     await tester.pumpAndSettle();
   });
 
+  testWidgets('a page whose source left the tree while it was up still goes '
+      'back (a null check threw from the gone source)', (tester) async {
+    final shown = ValueNotifier(true);
+    addTearDown(shown.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ValueListenableBuilder<bool>(
+            valueListenable: shown,
+            builder: (_, shown, _) => Column(
+              children: [
+                if (shown)
+                  Builder(
+                    builder: (tile) => GestureDetector(
+                      onTap: () => openContainer<void>(
+                        tile,
+                        from: tile,
+                        builder: (_) => const Scaffold(key: _page),
+                      ),
+                      child: const ContainerSource(
+                        child: SizedBox(height: 80, child: Text('tile')),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('tile'));
+    await tester.pumpAndSettle();
+    shown.value = false;
+    await tester.pump();
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.byKey(_page), findsNothing);
+  });
+
   testWidgets('a context shared by several tiles is refused, never guessed '
       'from', (tester) async {
     await tester.pumpWidget(
