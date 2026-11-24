@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:pointy_brand/pointy_brand.dart';
 
-import '../offers/offer_pill.dart';
+import 'brand_tile.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../data/models/catalog.dart';
 import '../../design/cards_layout.dart';
@@ -360,7 +360,7 @@ class _HomePageState extends State<HomePage>
                 itemBuilder: (context, index) => ShelfRise(
                   reveal: _reveal,
                   order: index,
-                  child: _BrandTile(brand: brands[index]),
+                  child: BrandTile(brand: brands[index]),
                 ),
               );
             },
@@ -726,27 +726,6 @@ class _CategoryBarState extends State<_CategoryBar> {
   }
 }
 
-/// The badge a brand wears: unavailable, bought on the website, its own, or
-/// a running promotion's. None when it would only repeat [section], the title
-/// the tile already sits under («الأكثر طلباً» on «الأكثر طلباً»).
-Widget? _badge(BuildContext context, CardBrand brand, {String? section}) {
-  if (!brand.anyAvailable) {
-    return Pill(
-      text: AppLocalizations.of(context).unavailableNow,
-      tone: PillTone.muted,
-    );
-  }
-  if (brand.webOnly) {
-    return const WebOnlyPill();
-  }
-  final text = brand.badge.isNotEmpty
-      ? brand.badge
-      : brand.items.where((i) => i.onPromo).firstOrNull?.promoBadge ?? '';
-  return text.isEmpty || text.trim() == section?.trim()
-      ? null
-      : Pill(text: text, tone: PillTone.promo);
-}
-
 class _FeaturedCarousel extends StatefulWidget {
   const _FeaturedCarousel({required this.brands});
 
@@ -774,7 +753,7 @@ class _FeaturedCarouselState extends State<_FeaturedCarousel> {
         columns: 3,
         children: [
           for (final brand in widget.brands)
-            _BrandTile(brand: brand, large: true),
+            BrandTile(brand: brand, large: true),
         ],
       );
     }
@@ -806,7 +785,7 @@ class _FeaturedCarouselState extends State<_FeaturedCarousel> {
             padding: EdgeInsetsDirectional.only(
               start: index == 0 ? CardsSpace.gutter : CardsSpace.md,
             ),
-            child: _BrandTile(brand: brand, large: true),
+            child: BrandTile(brand: brand, large: true),
           );
         },
       ),
@@ -839,8 +818,7 @@ class _BrandShelf extends StatelessWidget {
           return _TileRows(
             columns: columns,
             children: [
-              for (final brand in brands.take(columns))
-                _BrandTile(brand: brand),
+              for (final brand in brands.take(columns)) BrandTile(brand: brand),
             ],
           );
         },
@@ -860,7 +838,7 @@ class _BrandShelf extends StatelessWidget {
           separatorBuilder: (_, _) => const SizedBox(width: CardsSpace.md),
           itemBuilder: (context, index) => SizedBox(
             width: tileWidth,
-            child: _BrandTile(brand: brands[index]),
+            child: BrandTile(brand: brands[index]),
           ),
         ),
       ),
@@ -874,83 +852,6 @@ double _tileTextGrowth(BuildContext context) {
   final scaler = MediaQuery.textScalerOf(context);
   double grown(double fontSize) => (scaler.scale(fontSize) - fontSize) * 1.5;
   return grown(16) + grown(12);
-}
-
-class _BrandTile extends StatelessWidget {
-  const _BrandTile({required this.brand, this.large = false});
-
-  final CardBrand brand;
-  final bool large;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
-    final from = brand.fromPrice;
-    // A large tile sits on the featured carousel.
-    final badge = _badge(
-      context,
-      brand,
-      section: large ? l10n.featuredTitle : null,
-    );
-    return Pressable(
-      semanticLabel: brand.name,
-      // The page opens out of the card's art, and closes back into it.
-      onTap: () => BrandPage.open(context, brand, from: context),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Stack(
-            children: [
-              ContainerSource(
-                child: CardArt(
-                  brand: brand,
-                  muted: !brand.anyAvailable,
-                  radius: large ? CardsRadii.tile : CardsRadii.art,
-                ),
-              ),
-              // An offer for this customer first: it is theirs, and now.
-              PositionedDirectional(
-                top: CardsSpace.sm,
-                start: CardsSpace.sm,
-                child: BrandOfferBadge(
-                  brand: brand,
-                  surface: 'home',
-                  orElse: badge,
-                ),
-              ),
-              // Across from the badge: a game's name alone does not say
-              // where it is played. Beside another badge, only its logo:
-              // two names do not fit side by side on a phone's tile.
-              if (brand.gamePlatform case final platform?)
-                PositionedDirectional(
-                  top: CardsSpace.sm,
-                  end: CardsSpace.sm,
-                  child: PlatformPill(platform, compact: badge != null),
-                ),
-            ],
-          ),
-          SizedBox(height: large ? CardsSpace.md : CardsSpace.sm),
-          NameText(
-            brand.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: large
-                ? theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  )
-                : theme.textTheme.titleSmall,
-          ),
-          if (from != null)
-            Text(
-              l10n.fromPrice(formatMoney(l10n, from)),
-              style: PointyTypography.numeric(theme.textTheme.bodySmall!)
-                  .copyWith(color: theme.colorScheme.onSurfaceVariant),
-            ),
-        ],
-      ),
-    );
-  }
 }
 
 class _BuyAgainShelf extends StatelessWidget {

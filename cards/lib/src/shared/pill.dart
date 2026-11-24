@@ -62,10 +62,16 @@ class Pill extends StatelessWidget {
             SizedBox.square(dimension: 13, child: leading),
             const SizedBox(width: 4),
           ],
-          Text(
-            text,
-            style: Theme.of(context).textTheme.labelSmall
-                ?.copyWith(color: foreground, fontWeight: FontWeight.w700),
+          // Within a narrow corner the words end in an ellipsis rather than
+          // spilling into the other corner's badge.
+          Flexible(
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall
+                  ?.copyWith(color: foreground, fontWeight: FontWeight.w700),
+            ),
           ),
         ],
       ),

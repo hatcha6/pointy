@@ -36,6 +36,7 @@ import '../src/data/models/order.dart';
 import '../src/design/cards_theme.dart';
 import '../src/features/card_payment/payment_page_view.dart';
 import '../src/features/brand/brand_page.dart';
+import '../src/features/home/brand_tile.dart';
 import '../src/features/card_payment/card_payment_page.dart';
 import '../src/features/checkout/checkout_model.dart';
 import '../src/features/checkout/checkout_sheet.dart';
@@ -247,6 +248,9 @@ class PreviewSurface extends StatelessWidget {
     return switch (screen) {
       'home' || 'signed-out' => const CardsShell(),
       'esim' => const EsimStorePage(),
+      // Every pairing of badges a shelf tile can wear, at a phone's and a
+      // desktop's tile width.
+      'badges' => const _BadgeBoard(),
       // An offer's brand page: ?brand=lnet|pubg|apple|almadar|netflix.
       'offer-brand' => BrandPage(brand: _fixtureBrand(_param('brand', 'lnet'))),
       // An offer at checkout: ?brand=…&item=index&qty=n.
@@ -747,4 +751,134 @@ class _PreviewPhone extends EsimDevice {
 
   @override
   Future<bool> install(String url) async => true;
+}
+
+/// A brand of the shelf for the badge board: [key] picks which preview offer
+/// covers it, the rest what it wears of its own.
+CardBrand _boardBrand(
+  String key,
+  String name,
+  String category, {
+  String platform = '',
+  bool webOnly = false,
+  String badge = '',
+  bool available = true,
+  bool promo = false,
+}) => CardBrand.fromJson({
+  'key': key,
+  'name': name,
+  'category': category,
+  'platform': platform,
+  'web_only': webOnly,
+  'badge': badge,
+  'logo': '',
+  'items': [
+    {
+      'key': '$key-x',
+      'label': '10',
+      'face_value': '10',
+      'face_currency': 'USD',
+      'price': '30.00',
+      'retail_price': '30.00',
+      if (promo) 'regular_price': '33.00',
+      if (promo) 'promo': {'badge': 'عرض'},
+      'available': available,
+    },
+  ],
+});
+
+/// What a shelf tile shows for every pairing of its badges: an offer (each
+/// kind), the platform a game is played on, «على الموقع», the brand's own
+/// badge or a promotion, and «غير متوفر».
+class _BadgeBoard extends StatelessWidget {
+  const _BadgeBoard();
+
+  static final _cases = <(String, CardBrand)>[
+    ('عرض نسبة', _boardBrand('lnet', 'ليبيا للاتصالات', 'internet')),
+    ('عرض + منصة', _boardBrand('pubg', 'ببجي', 'gaming', platform: 'steam')),
+    (
+      'عرض طويل + منصة',
+      _boardBrand('almadar', 'المدار', 'telecom', platform: 'xbox'),
+    ),
+    (
+      'عرض متدرج + منصة',
+      _boardBrand('apple', 'آيتونز', 'gift_cards', platform: 'ea'),
+    ),
+    (
+      'عرض + شارة العلامة',
+      _boardBrand('libyana', 'ليبيانا', 'telecom', badge: 'الأكثر طلباً'),
+    ),
+    (
+      'على الموقع + منصة',
+      _boardBrand(
+        'wo-steam',
+        'ستيم',
+        'game_keys',
+        platform: 'steam',
+        webOnly: true,
+      ),
+    ),
+    (
+      'على الموقع + عرض',
+      _boardBrand('lnet', 'ليبيا للاتصالات', 'internet', webOnly: true),
+    ),
+    (
+      'ترويج + منصة',
+      _boardBrand(
+        'promo-x',
+        'فورزا',
+        'game_keys',
+        platform: 'xbox',
+        promo: true,
+      ),
+    ),
+    (
+      'منصة فقط',
+      _boardBrand('plain', 'GTA V', 'game_keys', platform: 'rockstar'),
+    ),
+    (
+      'غير متوفر + عرض',
+      _boardBrand('lnet', 'ليبيا للاتصالات', 'internet', available: false),
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    Widget grid(double tile) => Wrap(
+      spacing: 16,
+      runSpacing: 20,
+      children: [
+        for (final (label, brand) in _cases)
+          SizedBox(
+            width: tile,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: theme.textTheme.labelMedium),
+                const SizedBox(height: 6),
+                BrandTile(brand: brand),
+              ],
+            ),
+          ),
+      ],
+    );
+    return Scaffold(
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('بلاطة الهاتف (164)', style: theme.textTheme.titleMedium),
+            const SizedBox(height: 12),
+            grid(164),
+            const SizedBox(height: 32),
+            Text('بلاطة سطح المكتب (200)', style: theme.textTheme.titleMedium),
+            const SizedBox(height: 12),
+            grid(200),
+          ],
+        ),
+      ),
+    );
+  }
 }
