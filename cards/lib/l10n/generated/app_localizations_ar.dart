@@ -2067,4 +2067,21 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get esimShareDestination => 'مشاركة';
+
+  @override
+  String get lineDiscount => 'الخصم';
+
+  @override
+  String offerSaves(String amount) {
+    return 'وفّر $amount مع هذا العرض';
+  }
+
+  @override
+  String offerMinOrder(String amount) {
+    return 'على الطلبات من $amount فأكثر';
+  }
+
+  @override
+  String get errOfferUnavailable =>
+      'لم يعد هذا العرض متاحاً لهذا الطلب. أكمل بالسعر الكامل أو حاول لاحقاً.';
 }

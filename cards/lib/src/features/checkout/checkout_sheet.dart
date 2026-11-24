@@ -353,6 +353,38 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
                         ),
                       ),
               ),
+            if (model.availableOffer case final offer?)
+              SwitchListTile(
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: CardsSpace.lg,
+                ),
+                secondary: const Icon(Icons.local_offer_rounded),
+                value: model.useOffer,
+                onChanged: (value) {
+                  Haptics.select();
+                  model.setUseOffer(value);
+                },
+                title: Text(offer.title, style: theme.textTheme.titleSmall),
+                subtitle: Text(
+                  l10n.offerSaves(
+                    formatMoney(l10n, offer.discountOn(model.subtotal)),
+                  ),
+                ),
+              )
+            else if (model.offerOutOfReach case final offer?)
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: CardsSpace.lg,
+                ),
+                leading: Icon(
+                  Icons.local_offer_outlined,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                title: Text(offer.title, style: theme.textTheme.titleSmall),
+                subtitle: Text(
+                  l10n.offerMinOrder(formatMoney(l10n, offer.minOrder)),
+                ),
+              ),
             if (model.credit.isPositive)
               SwitchListTile(
                 contentPadding: const EdgeInsets.symmetric(
@@ -727,7 +759,9 @@ class _Totals extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: CardsSpace.xs),
       child: Column(
         children: [
-          line(l10n.lineSubtotal, model.total),
+          line(l10n.lineSubtotal, model.subtotal),
+          if (model.discount.isPositive)
+            line(l10n.lineDiscount, model.discount, negative: true),
           if (model.creditApplied.isPositive)
             line(l10n.lineCredit, model.creditApplied, negative: true),
           if (model.fee.isPositive) line(l10n.lineFee, model.fee),

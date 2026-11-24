@@ -2064,5 +2064,31 @@
   "esimFilterNone": "لا توجد وجهة بهذه المواصفات. جرّب مدة أقصر أو بيانات أقل.",
   "@esimFilterNone": {"description": "eSIM shelf: promotions and filters."},
   "esimShareDestination": "مشاركة",
-  "@esimShareDestination": {"description": "eSIM shelf: promotions and filters."}
+  "@esimShareDestination": {"description": "eSIM shelf: promotions and filters."},
+  "lineDiscount": "الخصم",
+  "@lineDiscount": {
+    "description": "Checkout line: what a segment offer takes off."
+  },
+  "offerSaves": "وفّر {amount} مع هذا العرض",
+  "@offerSaves": {
+    "description": "Under an offer's title at checkout: what it saves on this order.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "offerMinOrder": "على الطلبات من {amount} فأكثر",
+  "@offerMinOrder": {
+    "description": "Under an offer's title at checkout: the order is below its minimum.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "errOfferUnavailable": "لم يعد هذا العرض متاحاً لهذا الطلب. أكمل بالسعر الكامل أو حاول لاحقاً.",
+  "@errOfferUnavailable": {
+    "description": "The offer was used up or ended before the order was placed."
+  }
 }

@@ -3326,6 +3326,30 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'مشاركة'**
   String get esimShareDestination;
+
+  /// Checkout line: what a segment offer takes off.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخصم'**
+  String get lineDiscount;
+
+  /// Under an offer's title at checkout: what it saves on this order.
+  ///
+  /// In ar, this message translates to:
+  /// **'وفّر {amount} مع هذا العرض'**
+  String offerSaves(String amount);
+
+  /// Under an offer's title at checkout: the order is below its minimum.
+  ///
+  /// In ar, this message translates to:
+  /// **'على الطلبات من {amount} فأكثر'**
+  String offerMinOrder(String amount);
+
+  /// The offer was used up or ended before the order was placed.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يعد هذا العرض متاحاً لهذا الطلب. أكمل بالسعر الكامل أو حاول لاحقاً.'**
+  String get errOfferUnavailable;
 }
 
 class _AppLocalizationsDelegate

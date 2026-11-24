@@ -6,7 +6,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/analytics/events.dart';
 import '../../core/money.dart';
 import '../../core/result.dart';
+import '../../data/api/relay_api.dart';
 import '../../data/models/catalog.dart';
+import '../../data/models/offer.dart';
 import '../../data/models/order.dart';
 import '../../data/repositories/orders_repository.dart';
 import '../topup/account_form_model.dart';
@@ -42,6 +44,11 @@ class CheckoutModel extends ChangeNotifier {
   CheckoutOptions? options;
   Money credit = Money.zero;
   bool useCredit = true;
+
+  /// The offers this customer can use; the best one for the order is taken
+  /// unless they turn it off ([setUseOffer]).
+  List<CardOffer> offers = const [];
+  bool useOffer = true;
   PaymentMethod? method;
   bool busy = false;
   Object? error;
@@ -84,6 +91,7 @@ class CheckoutModel extends ChangeNotifier {
     final results = await Future.wait([
       orders.checkoutOptions(),
       orders.credit(),
+      orders.offers(),
     ]);
     if (results[0] case Ok(:final value)) {
       options = value as CheckoutOptions;
@@ -101,6 +109,10 @@ class CheckoutModel extends ChangeNotifier {
     }
     if (results[1] case Ok(:final value)) {
       credit = (value as CreditStatement).balance;
+    }
+    // Without them the order is simply paid in full.
+    if (results[2] case Ok(:final value)) {
+      offers = value as List<CardOffer>;
     }
     loading = false;
     _notify();
@@ -123,7 +135,35 @@ class CheckoutModel extends ChangeNotifier {
   /// its order on all the same.
   Future<CardOrder?>? placing;
 
-  Money get total => item.price * quantity;
+  /// The order before any offer.
+  Money get subtotal => item.price * quantity;
+
+  /// The offer taken off this order, if any.
+  CardOffer? get offer => useOffer ? CardOffer.bestFor(offers, subtotal) : null;
+
+  /// The offer that would apply, whether or not it is taken: what the
+  /// switch offers.
+  CardOffer? get availableOffer => CardOffer.bestFor(offers, subtotal);
+  Money get discount => offer?.discountOn(subtotal) ?? Money.zero;
+
+  /// An offer this order is too small for, the nearest one: a few dinars
+  /// more and it applies. Null when one already applies, or none is near.
+  CardOffer? get offerOutOfReach {
+    if (availableOffer != null) {
+      return null;
+    }
+    CardOffer? nearest;
+    for (final offer in offers) {
+      if (offer.minOrder.compareTo(subtotal) > 0 &&
+          (nearest == null || offer.minOrder.compareTo(nearest.minOrder) < 0)) {
+        nearest = offer;
+      }
+    }
+    return nearest;
+  }
+
+  /// What the order costs: the subtotal less the offer.
+  Money get total => subtotal - discount;
   Money get creditApplied {
     if (!useCredit || !credit.isPositive) {
       return Money.zero;
@@ -144,6 +184,11 @@ class CheckoutModel extends ChangeNotifier {
 
   void setUseCredit(bool value) {
     useCredit = value;
+    notifyListeners();
+  }
+
+  void setUseOffer(bool value) {
+    useOffer = value;
     notifyListeners();
   }
 
@@ -186,6 +231,7 @@ class CheckoutModel extends ChangeNotifier {
         payerIdentifier: payer,
         birthYear: birthYear,
         account: account?.values ?? orderAccount,
+        offerId: offer?.id ?? '',
       ),
     );
     busy = false;
@@ -207,6 +253,14 @@ class CheckoutModel extends ChangeNotifier {
       case Error(:final exception):
         error = exception;
         _key = _newKey();
+        if (exception is RelayApiException &&
+            exception.code == 'offer_unavailable') {
+          // Used up or ended since it was read: read them again, so the
+          // next tap is priced without it.
+          if (await orders.offers() case Ok(:final value)) {
+            offers = value;
+          }
+        }
         orders.analytics.orderPlaceFailed(
           exception,
           method: creditCovers ? 'credit' : method?.key ?? '',

@@ -394,5 +394,9 @@
   "esimFilterClear": "Clear",
   "esimResultsCount": "{count, plural, =1{1 destination} other{{count} destinations}}",
   "esimFilterNone": "No destination fits. Try a shorter trip or less data.",
-  "esimShareDestination": "Share"
+  "esimShareDestination": "Share",
+  "lineDiscount": "Discount",
+  "offerSaves": "Save {amount} with this offer",
+  "offerMinOrder": "On orders of {amount} or more",
+  "errOfferUnavailable": "This offer is no longer available for this order. Continue at the full price or try later."
 }

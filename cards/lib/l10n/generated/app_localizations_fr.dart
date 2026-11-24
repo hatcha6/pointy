@@ -2092,4 +2092,21 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get esimShareDestination => 'Partager';
+
+  @override
+  String get lineDiscount => 'Remise';
+
+  @override
+  String offerSaves(String amount) {
+    return 'Économisez $amount avec cette offre';
+  }
+
+  @override
+  String offerMinOrder(String amount) {
+    return 'Pour les commandes de $amount ou plus';
+  }
+
+  @override
+  String get errOfferUnavailable =>
+      'Cette offre n\'est plus disponible pour cette commande. Continuez au prix plein ou réessayez plus tard.';
 }

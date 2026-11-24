@@ -108,6 +108,8 @@ Future<void> main() async {
         !screen.startsWith('sign-in') &&
         !screen.startsWith('heard-from'),
     shelfRelay: shelfRelay.isEmpty ? null : Uri.parse(shelfRelay),
+    // The customer holds a segment offer: checkout shows it taken off.
+    offers: const [fixtureOffer],
     // A late card stays late however often the page asks.
     client: switch (screen) {
       'preparing-slow' => fixtureRelay(orderStatus: 'fulfilling'),

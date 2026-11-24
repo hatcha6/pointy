@@ -505,6 +505,7 @@ http.Client fixtureRelay({
   ScriptedOrders? scripted,
   bool topUps = false,
   Duration lookUpTakes = Duration.zero,
+  List<Map<String, dynamic>> offers = const [],
 }) {
   final catalog = topUps ? fixtureCatalogWithTopUps : fixtureCatalog;
   scripted?.learnShelf(jsonEncode(catalog));
@@ -663,6 +664,8 @@ http.Client fixtureRelay({
             },
           ],
         });
+      case ('GET', '/v1/customers/me/offers'):
+        return json({'offers': offers});
       case ('POST', '/v1/customers/orders'):
         final body = jsonDecode(request.body) as Map<String, dynamic>;
         final hosted = body['method'] == 'dafa_moamalat';
@@ -1143,6 +1146,7 @@ CardsDependencies fixtureDependencies({
   EsimVault? esimVault,
   OrdersVault? ordersVault,
   CodeVault? codeVault,
+  List<Map<String, dynamic>> offers = const [],
 }) {
   final sessions = MemorySessionStore(signedIn ? fixtureSession : null);
   final base = shelfRelay ?? Uri.parse('https://relay.preview');
@@ -1157,6 +1161,7 @@ CardsDependencies fixtureDependencies({
           scripted: scenarios == null ? null : ScriptedOrders(scenarios),
           topUps: topUps,
           lookUpTakes: lookUpTakes,
+          offers: offers,
         ),
   );
   final auth = AuthRepository(
@@ -1215,3 +1220,16 @@ class FixturePush extends Push {
     return true;
   }
 }
+
+/// An offer the operator gave the preview's customer: 20% off orders of 15
+/// dinars or more, at most 5 dinars.
+const Map<String, dynamic> fixtureOffer = {
+  'id': 'offer-1',
+  'title': 'خصم 20٪ على طلبك القادم',
+  'description': 'هدية لأنك من عملائنا',
+  'kind': 'percent',
+  'value': '20.000',
+  'max_discount': '5.000',
+  'min_order': '15.000',
+  'uses_left': 1,
+};
