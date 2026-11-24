@@ -373,7 +373,7 @@ class OrdersRepository {
     final answer = await api.get('/v1/customers/me/offers', signedIn: true);
     return [
       for (final raw in readList(answer, 'offers'))
-        if (CardOffer.fromJson(raw) case final offer?) offer,
+        ?CardOffer.fromJson(raw),
     ];
   });
 

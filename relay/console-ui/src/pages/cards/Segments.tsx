@@ -1,11 +1,11 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { BellRing, ChartPie, Lightbulb, TicketPercent, Users } from "lucide-react";
 import { useRouter } from "../../lib/router";
 import { count, money } from "../../lib/format";
 import { Badge, Button, Card, Empty, Money, Skeleton } from "../../components/ui";
 import { DataTable, Stacked, type Column } from "../../components/DataTable";
 import { Unavailable } from "../../components/Unavailable";
-import { OfferDialog } from "../../components/cards/OfferDialog";
+import { openOfferBuilder } from "./OfferBuilder";
 import {
   dayCount,
   insightText,
@@ -28,7 +28,6 @@ export function Segments() {
   const { navigate } = useRouter();
   const answer = useSegments();
   const data = answer.data;
-  const [offering, setOffering] = useState<Partial<OfferDraft> | null>(null);
   const stats = data?.segments ?? [];
   const o = data?.overview;
 
@@ -74,7 +73,7 @@ export function Segments() {
         mobile: "actions",
         cell: (s) => (
           <span className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
-            <Button size="sm" icon={<TicketPercent />} disabled={!s.customers} onClick={(e) => { e.stopPropagation(); setOffering({ segments: [s.key] }); }}>
+            <Button size="sm" icon={<TicketPercent />} disabled={!s.customers} onClick={(e) => { e.stopPropagation(); openOfferBuilder(navigate, { segments: [s.key] }); }}>
               عرض
             </Button>
             <Button size="sm" variant="ghost" icon={<BellRing />} disabled={!s.reachable} onClick={(e) => { e.stopPropagation(); notify([s.key]); }}>
@@ -96,7 +95,7 @@ export function Segments() {
           <p>زبائن دفتر كروت حسب طريقة شرائهم: كم يجلب كل صنف، وما الذي يستحق أن تفعله معه.</p>
         </div>
         <div className="actions">
-          <Button variant="primary" icon={<TicketPercent />} onClick={() => setOffering({})} disabled={!data}>
+          <Button variant="primary" icon={<TicketPercent />} onClick={() => openOfferBuilder(navigate)} disabled={!data}>
             عرض جديد
           </Button>
           <Button icon={<TicketPercent />} onClick={() => navigate("/cards/offers")}>
@@ -131,7 +130,7 @@ export function Segments() {
                   <InsightRow
                     key={`${insight.code}-${i}`}
                     insight={insight}
-                    onOffer={(draft) => setOffering(draft)}
+                    onOffer={(draft) => openOfferBuilder(navigate, draft)}
                     onNotify={() => notify(insight.segments)}
                     onCustomers={() => customersOf(insight.segments)}
                   />
@@ -177,13 +176,6 @@ export function Segments() {
         </div>
       )}
 
-      <OfferDialog
-        open={offering !== null}
-        onClose={() => setOffering(null)}
-        initial={offering ?? undefined}
-        stats={stats}
-        pushConfigured={!!data?.push_configured}
-      />
     </>
   );
 }

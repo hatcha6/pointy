@@ -54,7 +54,7 @@ class OffersModel extends ChangeNotifier {
           : await api.get('/v1/customers/offers');
       return [
         for (final raw in readList(answer, 'offers'))
-          if (CardOffer.fromJson(raw) case final offer?) offer,
+          ?CardOffer.fromJson(raw),
       ];
     });
     // Without them nothing is wrong: the shelf simply shows no offers.

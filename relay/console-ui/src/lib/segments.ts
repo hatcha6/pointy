@@ -90,10 +90,18 @@ export type CustomerOffer = {
   name: string;
   title: string;
   description?: string;
-  kind: "percent" | "amount";
+  kind: "percent" | "amount" | "tiered" | "bundle";
   value: string;
   max_discount: string;
   min_order: string;
+  tiers?: { min_order: string; value: string }[];
+  tier_unit?: "percent" | "amount";
+  buy_quantity?: number;
+  get_quantity?: number;
+  get_percent?: string;
+  scope?: { categories?: string[]; brands?: string[]; items?: string[] };
+  badge?: string;
+  audience: "segments" | "everyone";
   segments: SegmentKey[];
   recipients: number;
   holdout_percent: number;
@@ -343,15 +351,28 @@ export type OfferDraft = {
   name: string;
   title: string;
   description: string;
-  kind: "percent" | "amount";
+  kind: "percent" | "amount" | "tiered" | "bundle";
   value: string;
   maxDiscount: string;
   minOrder: string;
+  /** A tiered offer's steps, and whether they are percentages or dinars. */
+  tiers: { min: string; value: string }[];
+  tierUnit: "percent" | "amount";
+  /** A bundle: buy, get, and the percentage off what is got (100: free). */
+  buy: string;
+  get: string;
+  getPercent: string;
+  /** What it covers; empty lists: everything. */
+  categories: string[];
+  brands: string[];
+  items: string[];
+  audience: "segments" | "everyone";
+  segments: SegmentKey[];
+  holdout: string;
   days: string;
   usesPerCustomer: string;
   maxRedemptions: string;
-  holdout: string;
-  segments: SegmentKey[];
+  badge: string;
   notifyTitle: string;
   notifyBody: string;
 };
@@ -364,11 +385,25 @@ export const emptyOffer: OfferDraft = {
   value: "10",
   maxDiscount: "5",
   minOrder: "",
+  tiers: [
+    { min: "20", value: "5" },
+    { min: "50", value: "10" },
+    { min: "100", value: "15" },
+  ],
+  tierUnit: "percent",
+  buy: "2",
+  get: "1",
+  getPercent: "100",
+  categories: [],
+  brands: [],
+  items: [],
+  audience: "segments",
+  segments: [],
+  holdout: "10",
   days: "7",
   usesPerCustomer: "1",
   maxRedemptions: "",
-  holdout: "10",
-  segments: [],
+  badge: "",
   notifyTitle: "",
   notifyBody: "",
 };

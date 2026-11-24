@@ -1,21 +1,36 @@
 import { useMemo, useState } from "react";
 import { TicketPercent } from "lucide-react";
-import { count, dateTime, money } from "../../lib/format";
+import { count, date, money } from "../../lib/format";
 import { Badge, Button, Card, Empty, Money, Notice } from "../../components/ui";
 import { DataTable, Stacked, type Column } from "../../components/DataTable";
 import { Unavailable } from "../../components/Unavailable";
 import { useAction } from "../../components/guarded";
 import { Dialog } from "../../components/dialog";
-import { OfferDialog } from "../../components/cards/OfferDialog";
+import { openOfferBuilder } from "./OfferBuilder";
+import { badgeText, offerKindInfo, scopeIsEverything } from "../../lib/offers";
+import { useRouter } from "../../lib/router";
 import { pct, segmentKeys, segmentLabel, useOffers, useSegments, type CustomerOffer, type OfferResult } from "../../lib/segments";
 
 type Row = { offer: CustomerOffer; result: OfferResult };
 
+/** What an offer gives and on what, in a line. */
 function offerTerms(o: CustomerOffer): string {
-  const off = o.kind === "percent" ? `${Number(o.value).toLocaleString("ar-LY")}٪` : money(o.value);
-  const cap = o.kind === "percent" && Number(o.max_discount) > 0 ? ` حتى ${money(o.max_discount)}` : "";
-  const min = Number(o.min_order) > 0 ? ` على طلب من ${money(o.min_order)}` : "";
-  return `${off}${cap}${min}`;
+  const kind = offerKindInfo[o.kind]?.label ?? o.kind;
+  const cap = Number(o.max_discount) > 0 && o.kind !== "amount" ? ` · حتى ${money(o.max_discount)}` : "";
+  const min = Number(o.min_order) > 0 && o.kind !== "tiered" ? ` · من ${money(o.min_order)}` : "";
+  return `${kind}${cap}${min} · ${scopeText(o)}`;
+}
+
+/** What an offer covers, in words. */
+function scopeText(o: CustomerOffer): string {
+  const s = o.scope ?? {};
+  if (scopeIsEverything(s)) return "كل ما يُباع";
+  const parts = [
+    s.categories?.length ? `${count(s.categories.length)} فئة` : "",
+    s.brands?.length ? `${count(s.brands.length)} علامة` : "",
+    s.items?.length ? `${count(s.items.length)} كرت` : "",
+  ].filter(Boolean);
+  return parts.join(" و");
 }
 
 function running(o: CustomerOffer): boolean {
@@ -30,7 +45,7 @@ function running(o: CustomerOffer): boolean {
 export function Offers() {
   const answer = useOffers();
   const segments = useSegments();
-  const [making, setMaking] = useState(false);
+  const { navigate } = useRouter();
   const [stopping, setStopping] = useState<CustomerOffer | null>(null);
   const stop = useAction({ invalidate: [segmentKeys.all], success: "أُوقف العرض", passkey: true });
   const rows = answer.data?.offers ?? [];
@@ -42,23 +57,24 @@ export function Offers() {
         header: "العرض",
         mobile: "title",
         cell: ({ offer }) => (
-          <Stacked title={offer.name} sub={`${offerTerms(offer)} · ${offer.segments.map(segmentLabel).join("، ")}`} />
+          <Stacked
+            title={offer.name}
+            sub={`${offerTerms(offer)} · ${offer.audience === "everyone" ? "للجميع" : offer.segments.map(segmentLabel).join("، ")}`}
+          />
         ),
       },
       {
-        key: "status",
+        key: "badge",
         header: "الحالة",
         mobile: "subtitle",
         cell: ({ offer }) => (
-          <span>{running(offer) ? <Badge tone="success" dot>يعمل</Badge> : <Badge>انتهى</Badge>}</span>
-        ),
-      },
-      {
-        key: "who",
-        header: "حصلوا عليه",
-        align: "end",
-        cell: ({ offer }) => (
-          <Stacked title={count(offer.recipients)} sub={offer.holdouts ? `مقارنة ${count(offer.holdouts)}` : "بلا مقارنة"} />
+          <div>
+            <span className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
+              <span className="sale-pill">{badgeText(offer)}</span>
+              {running(offer) ? <Badge tone="success" dot>يعمل</Badge> : <Badge>انتهى</Badge>}
+            </span>
+            <div className="faint" style={{ fontSize: 12, marginTop: 4 }}>{offer.ends_at ? `حتى ${date(offer.ends_at)}` : "بلا نهاية"}</div>
+          </div>
         ),
       },
       {
@@ -67,7 +83,14 @@ export function Offers() {
         align: "end",
         mobile: "trailing",
         cell: ({ offer, result }) => (
-          <Stacked title={count(result.redeemers)} sub={offer.recipients ? pct(result.redeemers / offer.recipients) : "—"} />
+          <Stacked
+            title={offer.audience === "everyone" ? count(result.redeemers) : `${count(result.redeemers)} من ${count(offer.recipients)}`}
+            sub={
+              offer.audience === "everyone"
+                ? "للجميع"
+                : `${offer.recipients ? pct(result.redeemers / offer.recipients) : "—"}${offer.holdouts ? ` · مقارنة ${count(offer.holdouts)}` : ""}`
+            }
+          />
         ),
       },
       {
@@ -83,7 +106,7 @@ export function Offers() {
           offer.holdouts ? (
             <Stacked
               title={
-                <span>
+                <span style={{ display: "inline-flex" }}>
                   <Badge tone={result.lift > 0.02 ? "success" : result.lift < -0.02 ? "danger" : "neutral"}>
                     <bdi>{result.lift >= 0 ? "+" : ""}{pct(result.lift)}</bdi>
                   </Badge>
@@ -94,12 +117,6 @@ export function Offers() {
           ) : (
             <span className="faint">لا يُقاس</span>
           ),
-      },
-      {
-        key: "when",
-        header: "المدة",
-        wideOnly: true,
-        cell: ({ offer }) => <Stacked title={dateTime(offer.starts_at)} sub={offer.ends_at ? `حتى ${dateTime(offer.ends_at)}` : "بلا نهاية"} />,
       },
       {
         key: "actions",
@@ -124,7 +141,7 @@ export function Offers() {
           <p>خصومات لشرائح الزبائن، وما فعله كل عرض: من استخدمه، وما كلّفه، وهل جلب طلبات ما كانت لتأتي بدونه.</p>
         </div>
         <div className="actions">
-          <Button variant="primary" icon={<TicketPercent />} onClick={() => setMaking(true)} disabled={!segments.data}>
+          <Button variant="primary" icon={<TicketPercent />} onClick={() => openOfferBuilder(navigate)} disabled={!segments.data}>
             عرض جديد
           </Button>
         </div>
@@ -149,12 +166,6 @@ export function Offers() {
         </Card>
       </div>
 
-      <OfferDialog
-        open={making}
-        onClose={() => setMaking(false)}
-        stats={segments.data?.segments ?? []}
-        pushConfigured={!!segments.data?.push_configured}
-      />
       <Dialog
         open={stopping !== null}
         onClose={() => setStopping(null)}
