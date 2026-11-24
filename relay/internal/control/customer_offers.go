@@ -97,15 +97,44 @@ type CustomerOffer struct {
 	Holdouts       int `json:"holdouts"`
 	// UsesPerCustomer is how many orders one recipient may take it on;
 	// MaxRedemptions caps all of them together (0: no cap).
-	UsesPerCustomer int        `json:"uses_per_customer"`
-	MaxRedemptions  int        `json:"max_redemptions"`
-	StartsAt        time.Time  `json:"starts_at"`
-	EndsAt          *time.Time `json:"ends_at,omitempty"`
-	Active          bool       `json:"active"`
-	CreatedBy       string     `json:"created_by,omitempty"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
+	UsesPerCustomer int `json:"uses_per_customer"`
+	MaxRedemptions  int `json:"max_redemptions"`
+	// Budget caps what the offer gives away in all ("0.000": no cap): once
+	// its orders' discounts reach it, it is used up, like MaxRedemptions.
+	// Orders are priced one at a time, so the last may pass it by its own
+	// discount, never more.
+	Budget string `json:"budget"`
+	// Notice is what its recipients are told, and when.
+	Notice    CustomerOfferNotice `json:"notice"`
+	StartsAt  time.Time           `json:"starts_at"`
+	EndsAt    *time.Time          `json:"ends_at,omitempty"`
+	Active    bool                `json:"active"`
+	CreatedBy string              `json:"created_by,omitempty"`
+	CreatedAt time.Time           `json:"created_at"`
+	UpdatedAt time.Time           `json:"updated_at"`
 }
+
+// CustomerOfferNotice is the notifications an offer sends its recipients
+// (never its holdout): one when it starts, and a reminder the day before it
+// ends to those who have not used it yet. Each is sent once, by whichever
+// relay node claims it first (ClaimCustomerOfferNotice).
+type CustomerOfferNotice struct {
+	Title string `json:"title,omitempty"`
+	Body  string `json:"body,omitempty"`
+	Link  string `json:"link,omitempty"`
+	// SentAt is when the start was told; nil with a Title, it waits for
+	// StartsAt (and the day: see the relay's offer notices).
+	SentAt *time.Time `json:"sent_at,omitempty"`
+	Remind bool       `json:"remind,omitempty"`
+	// RemindedAt is when the reminder went.
+	RemindedAt *time.Time `json:"reminded_at,omitempty"`
+}
+
+// The notices an offer sends.
+const (
+	CustomerOfferLaunchNotice   = "launch"
+	CustomerOfferReminderNotice = "reminder"
+)
 
 // CustomerOfferRecipient is one customer an offer was made for, and the
 // segment they were in then. A holdout was not given it (see HoldoutPercent).
@@ -124,6 +153,8 @@ type CustomerOfferUpdate struct {
 	Badge       *string
 	EndsAt      **time.Time
 	Active      *bool
+	// Remind turns the reminder before the end on or off.
+	Remind *bool
 }
 
 // LiveAt reports whether the offer runs at now.
@@ -148,14 +179,12 @@ func customerOfferUses(status string) bool {
 }
 
 // customerOfferTerms checks that the offer may be used now by a recipient
-// with used uses of their own, the offer having redeemed uses in all, and
-// prices the order: its total less the discount, and the discount.
-func customerOfferTerms(offer CustomerOffer, recipient bool, used, redeemed int, line CustomerOfferLine, now time.Time) (*big.Rat, *big.Rat, error) {
+// with use of it so far, and prices the order: its total less the discount, and the discount.
+func customerOfferTerms(offer CustomerOffer, recipient bool, use CustomerOfferUse, line CustomerOfferLine, now time.Time) (*big.Rat, *big.Rat, error) {
 	if offer.Audience == CustomerOfferForEveryone {
 		recipient = true
 	}
-	if !recipient || !offer.LiveAt(now) || used >= max(offer.UsesPerCustomer, 1) ||
-		(offer.MaxRedemptions > 0 && redeemed >= offer.MaxRedemptions) {
+	if !recipient || !offer.LiveAt(now) || offerUsesLeft(offer, use) <= 0 {
 		return nil, nil, ErrCustomerOfferUnavailable
 	}
 	discount := CustomerOfferDiscount(offer, line)
@@ -194,13 +223,13 @@ func normalizeCustomerOffer(offer CustomerOffer, now time.Time) (CustomerOffer, 
 		len([]rune(offer.Description)) > maxCustomerOfferNotes {
 		return invalid("an offer's words are too long")
 	}
-	for _, field := range []*string{&offer.MaxDiscount, &offer.MinOrder} {
+	for _, field := range []*string{&offer.MaxDiscount, &offer.MinOrder, &offer.Budget} {
 		if strings.TrimSpace(*field) == "" {
 			*field = "0"
 		}
 		amount, err := ParseWalletAmount(*field)
 		if err != nil || amount.Sign() < 0 {
-			return invalid("max_discount and min_order are amounts")
+			return invalid("max_discount, min_order and budget are amounts")
 		}
 		*field = FormatWalletAmount(amount)
 	}
@@ -250,6 +279,13 @@ func normalizeCustomerOffer(offer CustomerOffer, now time.Time) (CustomerOffer, 
 		}
 		offer.EndsAt = &ends
 	}
+	offer.Notice.Title = strings.TrimSpace(offer.Notice.Title)
+	offer.Notice.Body = strings.TrimSpace(offer.Notice.Body)
+	offer.Notice.Link = strings.TrimSpace(offer.Notice.Link)
+	if (offer.Notice.Title == "") != (offer.Notice.Body == "") ||
+		len([]rune(offer.Notice.Title)) > maxCustomerOfferText || len([]rune(offer.Notice.Body)) > maxCustomerOfferNotes {
+		return invalid("an offer's notification needs a title and words, not too long")
+	}
 	if offer.ID == "" {
 		id, err := NewInstallationID()
 		if err != nil {
@@ -282,13 +318,16 @@ func applyCustomerOfferUpdate(offer CustomerOffer, update CustomerOfferUpdate, n
 	if update.EndsAt != nil {
 		offer.EndsAt = *update.EndsAt
 	}
+	if update.Remind != nil {
+		offer.Notice.Remind = *update.Remind
+	}
 	checked, err := normalizeCustomerOffer(CustomerOffer{
 		ID: offer.ID, Name: offer.Name, Title: offer.Title, Description: offer.Description, Kind: offer.Kind,
 		Value: offer.Value, MaxDiscount: offer.MaxDiscount, MinOrder: offer.MinOrder, Segments: offer.Segments,
 		Tiers: offer.Tiers, TierUnit: offer.TierUnit, BuyQuantity: offer.BuyQuantity, GetQuantity: offer.GetQuantity,
 		GetPercent: offer.GetPercent, Scope: offer.Scope, Badge: offer.Badge, Audience: offer.Audience,
-		UsesPerCustomer: offer.UsesPerCustomer, MaxRedemptions: offer.MaxRedemptions,
-		HoldoutPercent: offer.HoldoutPercent, StartsAt: offer.StartsAt, EndsAt: offer.EndsAt,
+		UsesPerCustomer: offer.UsesPerCustomer, MaxRedemptions: offer.MaxRedemptions, Budget: offer.Budget,
+		HoldoutPercent: offer.HoldoutPercent, StartsAt: offer.StartsAt, EndsAt: offer.EndsAt, Notice: offer.Notice,
 	}, now)
 	if err != nil {
 		return CustomerOffer{}, err
@@ -315,6 +354,19 @@ type CustomerOfferStore interface {
 	// PublicCustomerOffers is the offers for everyone running at now and not
 	// used up: what a visitor who has not signed in is shown.
 	PublicCustomerOffers(ctx context.Context, now time.Time) ([]CustomerOffer, error)
+	// ClaimCustomerOfferNotice marks offer id's notice (launch or reminder)
+	// sent at now; false when it already was, so one node sends it.
+	ClaimCustomerOfferNotice(ctx context.Context, id, notice string, now time.Time) (bool, error)
+	// CustomerOfferUses is offer id's live uses: each customer's, and all.
+	CustomerOfferUses(ctx context.Context, id string) (map[string]int, CustomerOfferUse, error)
+}
+
+// CustomerOfferUse is how much of an offer is taken: by one customer
+// (Used), and by everyone (Redeemed orders, Spent in discounts).
+type CustomerOfferUse struct {
+	Used     int
+	Redeemed int
+	Spent    *big.Rat
 }
 
 // CustomerOfferFor is an offer one customer can use, with their uses left.
@@ -331,17 +383,21 @@ var (
 
 // offerUseCounts counts, among orders, the uses of offerID: the customer's
 // own and everyone's.
-func offerUseCounts(orders map[string]CustomerOrder, offerID, customerID string) (used, redeemed int) {
+func offerUseCounts(orders map[string]CustomerOrder, offerID, customerID string) CustomerOfferUse {
+	use := CustomerOfferUse{Spent: new(big.Rat)}
 	for _, order := range orders {
 		if order.OfferID != offerID || !customerOfferUses(order.Status) {
 			continue
 		}
-		redeemed++
+		use.Redeemed++
+		if discount, err := ParseWalletAmount(order.Discount); err == nil {
+			use.Spent.Add(use.Spent, discount)
+		}
 		if order.CustomerID == customerID {
-			used++
+			use.Used++
 		}
 	}
-	return used, redeemed
+	return use
 }
 
 // --- file store ------------------------------------------------------------
@@ -380,8 +436,8 @@ func (s *FileStore) applyCustomerOfferLocked(order CustomerOrder, _ *big.Rat, no
 	if !ok {
 		return CustomerOrder{}, nil, ErrCustomerOfferUnavailable
 	}
-	used, redeemed := offerUseCounts(s.customerOrdersLocked().Orders, offer.ID, order.CustomerID)
-	total, discount, err := customerOfferTerms(offer, s.isOfferRecipientLocked(offer.ID, order.CustomerID), used, redeemed, orderOfferLine(order), now)
+	use := offerUseCounts(s.customerOrdersLocked().Orders, offer.ID, order.CustomerID)
+	total, discount, err := customerOfferTerms(offer, s.isOfferRecipientLocked(offer.ID, order.CustomerID), use, orderOfferLine(order), now)
 	if err != nil {
 		return CustomerOrder{}, nil, err
 	}
@@ -470,7 +526,7 @@ func (s *FileStore) PublicCustomerOffers(_ context.Context, now time.Time) ([]Cu
 		if offer.Audience != CustomerOfferForEveryone || !offer.LiveAt(now) {
 			continue
 		}
-		if _, redeemed := offerUseCounts(orders, offer.ID, ""); offer.MaxRedemptions == 0 || redeemed < offer.MaxRedemptions {
+		if offerUsesLeft(offer, offerUseCounts(orders, offer.ID, "")) > 0 {
 			out = append(out, offer)
 		}
 	}
@@ -488,8 +544,7 @@ func (s *FileStore) CustomerOffersFor(_ context.Context, customerID string, now 
 		if !offer.LiveAt(now) || (offer.Audience != CustomerOfferForEveryone && !s.isOfferRecipientLocked(offer.ID, customerID)) {
 			continue
 		}
-		used, redeemed := offerUseCounts(orders, offer.ID, customerID)
-		if left := offerUsesLeft(offer, used, redeemed); left > 0 {
+		if left := offerUsesLeft(offer, offerUseCounts(orders, offer.ID, customerID)); left > 0 {
 			out = append(out, CustomerOfferFor{CustomerOffer: offer, UsesLeft: left})
 		}
 	}
@@ -497,14 +552,21 @@ func (s *FileStore) CustomerOffersFor(_ context.Context, customerID string, now 
 	return out, nil
 }
 
-// offerUsesLeft is how many more orders a recipient may take offer on.
-func offerUsesLeft(offer CustomerOffer, used, redeemed int) int {
-	left := max(offer.UsesPerCustomer, 1) - used
+// offerUsesLeft is how many more orders a recipient may take offer on:
+// none once it is used up, by its orders or by its budget.
+func offerUsesLeft(offer CustomerOffer, use CustomerOfferUse) int {
+	left := max(offer.UsesPerCustomer, 1) - use.Used
 	if offer.MaxRedemptions > 0 {
-		left = min(left, offer.MaxRedemptions-redeemed)
+		left = min(left, offer.MaxRedemptions-use.Redeemed)
+	}
+	if budget, err := ParseWalletAmount(offer.Budget); err == nil && budget.Sign() > 0 && use.Spent != nil && use.Spent.Cmp(budget) >= 0 {
+		left = 0
 	}
 	return max(left, 0)
 }
+
+// OfferUsesLeft is offerUsesLeft, for the relay's reminders.
+func OfferUsesLeft(offer CustomerOffer, use CustomerOfferUse) int { return offerUsesLeft(offer, use) }
 
 // countOfferRecipients counts those given an offer and those held out; an
 // offer is given to one customer at least.
@@ -632,4 +694,77 @@ func (s *CachedInstallationStore) CustomerOffersFor(ctx context.Context, custome
 		return nil, err
 	}
 	return store.CustomerOffersFor(ctx, customerID, now)
+}
+
+func (s *CachedInstallationStore) ClaimCustomerOfferNotice(ctx context.Context, id, notice string, now time.Time) (bool, error) {
+	store, err := s.customerOfferStore()
+	if err != nil {
+		return false, err
+	}
+	return store.ClaimCustomerOfferNotice(ctx, id, notice, now)
+}
+
+func (s *CachedInstallationStore) CustomerOfferUses(ctx context.Context, id string) (map[string]int, CustomerOfferUse, error) {
+	store, err := s.customerOfferStore()
+	if err != nil {
+		return nil, CustomerOfferUse{}, err
+	}
+	return store.CustomerOfferUses(ctx, id)
+}
+
+// claimOfferNotice marks notice sent on offer at now; false if it was.
+func claimOfferNotice(offer *CustomerOffer, notice string, now time.Time) (bool, error) {
+	at := now.UTC()
+	switch notice {
+	case CustomerOfferLaunchNotice:
+		if offer.Notice.SentAt != nil {
+			return false, nil
+		}
+		offer.Notice.SentAt = &at
+	case CustomerOfferReminderNotice:
+		if offer.Notice.RemindedAt != nil {
+			return false, nil
+		}
+		offer.Notice.RemindedAt = &at
+	default:
+		return false, errors.Join(ErrCustomerOfferInvalid, errors.New("an offer's notice is launch or reminder"))
+	}
+	return true, nil
+}
+
+func (s *FileStore) ClaimCustomerOfferNotice(_ context.Context, id, notice string, now time.Time) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	data := s.customerOffersLocked()
+	offer, ok := data.Offers[id]
+	if !ok {
+		return false, ErrCustomerOfferNotFound
+	}
+	before := offer
+	claimed, err := claimOfferNotice(&offer, notice, now)
+	if err != nil || !claimed {
+		return false, err
+	}
+	data.Offers[id] = offer
+	if err := s.saveLocked(); err != nil {
+		data.Offers[id] = before
+		return false, err
+	}
+	return true, nil
+}
+
+func (s *FileStore) CustomerOfferUses(_ context.Context, id string) (map[string]int, CustomerOfferUse, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.customerOffersLocked().Offers[id]; !ok {
+		return nil, CustomerOfferUse{}, ErrCustomerOfferNotFound
+	}
+	orders := s.customerOrdersLocked().Orders
+	each := map[string]int{}
+	for _, order := range orders {
+		if order.OfferID == id && customerOfferUses(order.Status) {
+			each[order.CustomerID]++
+		}
+	}
+	return each, offerUseCounts(orders, id, ""), nil
 }

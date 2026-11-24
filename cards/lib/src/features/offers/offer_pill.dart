@@ -170,18 +170,27 @@ class OfferBanner extends StatelessWidget {
         }
         return Padding(
           padding: const EdgeInsets.only(top: CardsSpace.lg),
-          child: _Banner(offer: offer, signedIn: offers.signedIn),
+          child: OfferCard(offer: offer, signedIn: offers.signedIn),
         );
       },
     );
   }
 }
 
-class _Banner extends StatelessWidget {
-  const _Banner({required this.offer, required this.signedIn});
+/// One offer, as its brand's page and the offers page show it: who it is
+/// for, its badge, title and words, when it ends and, on the offers page,
+/// how many times this customer may still use it.
+class OfferCard extends StatelessWidget {
+  const OfferCard({
+    super.key,
+    required this.offer,
+    required this.signedIn,
+    this.showUses = false,
+  });
 
   final CardOffer offer;
   final bool signedIn;
+  final bool showUses;
 
   @override
   Widget build(BuildContext context) {
@@ -192,6 +201,8 @@ class _Banner extends StatelessWidget {
     final lines = [
       if (offer.description.isNotEmpty) offer.description,
       ?ends,
+      if (showUses && signedIn && offer.usesLeft > 1)
+        l10n.offerUsesLeft(offer.usesLeft),
       if (!signedIn) l10n.offerSignInToUse,
     ];
     return Container(

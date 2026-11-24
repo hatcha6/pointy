@@ -1,8 +1,10 @@
 package relay
 
 import (
+	"context"
 	"net/http"
 	"testing"
+	"time"
 
 	"pointy/relay/internal/vouchers"
 )
@@ -205,5 +207,112 @@ func TestAnOfferForEveryoneIsShownToVisitorsAndKeepsToItsScope(t *testing.T) {
 	request["offer_id"] = id
 	if status, _ := h.do(http.MethodPost, "/v1/customers/orders", token, request); status != http.StatusConflict {
 		t.Fatalf("two cards took a buy-2-get-1: %d", status)
+	}
+}
+
+func TestAnOfferThatStartsLaterIsToldThenInTheDayAndRemindsWhoHasNotUsedIt(t *testing.T) {
+	h := newOrderHarness(t)
+	h.server.Wallet.TestMode, h.dafa.testWorkspace = false, false
+	pusher := &fakePusher{}
+	h.server.CustomerPush = pusher
+	phones := []string{"0911111111", "0911111112", "0911111113"}
+	for _, phone := range phones {
+		token := h.customer(phone)
+		h.do(http.MethodPut, "/v1/customers/me/push", token, map[string]any{"token": "phone-" + phone})
+		if status, _ := h.buy(token, "first-"+phone, nil); status != http.StatusOK {
+			t.Fatalf("order for %s: %d", phone, status)
+		}
+	}
+	// Starts tomorrow at 08:00 in Libya, runs three days; one of three held out.
+	starts := h.clock.Now().Add(20 * time.Hour)
+	ends := starts.Add(72 * time.Hour)
+	status, made := h.do(http.MethodPost, "/v1/customers/admin/offers", "admin-token", map[string]any{
+		"name": "later", "title": "خصم 2 دينار", "kind": "amount", "value": "2", "segments": []string{"first_purchase"},
+		"holdout_percent": 34, "starts_at": starts, "ends_at": ends,
+		"notify": map[string]any{"title": "عرض لك", "body": "خصم 2 دينار يبدأ اليوم", "remind": true},
+	})
+	if status != http.StatusCreated || made["notification"] != nil || len(pusher.tokens) != 0 {
+		t.Fatalf("an offer for later was told now: %d %v (pushed %v)", status, made, pusher.tokens)
+	}
+	notices := &CustomerOfferNotices{Server: h.server}
+	if sent := notices.Round(context.Background()); sent != 0 {
+		t.Fatalf("told before it starts: %d", sent)
+	}
+	// Started, but 08:01 in Libya: it waits for the day.
+	h.clock.advance(20*time.Hour + time.Minute)
+	if sent := notices.Round(context.Background()); sent != 0 || len(pusher.tokens) != 0 {
+		t.Fatalf("told at night: %d %v", sent, pusher.tokens)
+	}
+	h.clock.advance(2 * time.Hour)
+	if sent := notices.Round(context.Background()); sent != 1 || len(pusher.tokens) != 2 || pusher.last.Title != "عرض لك" ||
+		pusher.last.Link != offerDefaultLink {
+		t.Fatalf("the launch: %d %v %+v", sent, pusher.tokens, pusher.last)
+	}
+	if sent := notices.Round(context.Background()); sent != 0 || len(pusher.tokens) != 2 {
+		t.Fatalf("told twice: %d %v", sent, pusher.tokens)
+	}
+	id := made["offer"].(map[string]any)["id"].(string)
+
+	// One recipient uses it; the reminder, in the last day, goes to the other.
+	var users, told []string
+	for _, phone := range phones {
+		token := h.customer(phone)
+		if _, mine := h.do(http.MethodGet, "/v1/customers/me/offers", token, nil); len(mine["offers"].([]any)) == 1 {
+			if len(users) == 0 {
+				if status, _ := h.buy(token, "with-offer", map[string]any{"offer_id": id}); status != http.StatusOK {
+					t.Fatalf("using the offer: %d", status)
+				}
+				users = append(users, "phone-"+phone)
+				continue
+			}
+			told = append(told, "phone-"+phone)
+		}
+	}
+	if len(users) != 1 || len(told) != 1 {
+		t.Fatalf("recipients: used %v, not %v", users, told)
+	}
+	h.clock.advance(ends.Sub(h.clock.Now()) - 30*time.Hour)
+	if sent := notices.Round(context.Background()); sent != 0 {
+		t.Fatalf("reminded too early: %d", sent)
+	}
+	h.clock.advance(10 * time.Hour)
+	pusher.tokens = nil
+	if sent := notices.Round(context.Background()); sent != 1 || len(pusher.tokens) != 1 || pusher.tokens[0] != told[0] ||
+		pusher.last.Title != "عرضك ينتهي غداً" {
+		t.Fatalf("the reminder: %d %v %+v", sent, pusher.tokens, pusher.last)
+	}
+	if sent := notices.Round(context.Background()); sent != 0 {
+		t.Fatalf("reminded twice: %d", sent)
+	}
+	_, listed := h.do(http.MethodGet, "/v1/customers/admin/offers", "admin-token", nil)
+	view := listed["offers"].([]any)[0].(map[string]any)
+	notice := view["offer"].(map[string]any)["notice"].(map[string]any)
+	if notice["sent_at"] == nil || notice["reminded_at"] == nil || view["use"].(map[string]any)["spent"] != "2.000" {
+		t.Fatalf("the offer's notices and use: %v", view)
+	}
+}
+
+func TestAnOfferStopsAtItsBudget(t *testing.T) {
+	h := newOrderHarness(t)
+	h.server.Wallet.TestMode, h.dafa.testWorkspace = false, false
+	status, made := h.do(http.MethodPost, "/v1/customers/admin/offers", "admin-token", map[string]any{
+		"name": "budget", "title": "خصم 3", "kind": "amount", "value": "3", "audience": "everyone",
+		"uses_per_customer": 5, "budget": "5",
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("offer: %d %v", status, made)
+	}
+	id := made["offer"].(map[string]any)["id"].(string)
+	token := h.customer("0911111111")
+	for _, key := range []string{"one", "two"} {
+		if status, body := h.buy(token, key, map[string]any{"offer_id": id}); status != http.StatusOK || orderOf(t, body)["discount"] != "3.000" {
+			t.Fatalf("order %s: %d %v", key, status, body)
+		}
+	}
+	if status, _ := h.buy(token, "three", map[string]any{"offer_id": id}); status != http.StatusConflict {
+		t.Fatalf("past its budget: %d", status)
+	}
+	if _, public := h.do(http.MethodGet, "/v1/customers/offers", "", nil); len(public["offers"].([]any)) != 0 {
+		t.Fatalf("an offer past its budget is shown: %v", public)
 	}
 }

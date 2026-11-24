@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:pointy_brand/pointy_brand.dart';
 
+import 'brand_shelf.dart';
 import 'brand_tile.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../data/models/catalog.dart';
@@ -27,6 +28,7 @@ import '../search/search_result_row.dart';
 import '../../data/models/esim.dart';
 import '../../shared/cards_scope.dart';
 import '../esim/esim_entry.dart';
+import '../offers/offers_entry.dart';
 import '../esim/esim_search.dart';
 import '../shelf/shelf_model.dart';
 import '../../shared/haptics.dart';
@@ -381,6 +383,7 @@ class _HomePageState extends State<HomePage>
         piece(SectionHeader(title: l10n.featuredTitle)),
         piece(_FeaturedCarousel(brands: featured)),
       ],
+      piece(OffersEntry(shelf: shelf)),
       piece(const EsimEntry()),
       if (shelf.buyAgain.isNotEmpty) ...[
         piece(SectionHeader(title: l10n.buyAgainTitle)),
@@ -395,7 +398,7 @@ class _HomePageState extends State<HomePage>
               onSeeAll: () => _pickCategory(category.key),
             ),
           ),
-          piece(_BrandShelf(brands: inCategory, scope: category.key)),
+          piece(BrandShelf(brands: inCategory, scope: category.key)),
         ],
     ];
   }
@@ -748,7 +751,7 @@ class _FeaturedCarouselState extends State<_FeaturedCarousel> {
   Widget build(BuildContext context) {
     // A mouse cannot swipe: on a desktop the featured cards stand in rows.
     if (CardsSidebarScope.of(context)) {
-      return _TileRows(
+      return TileRows(
         columns: 3,
         children: [
           for (final brand in widget.brands)
@@ -773,7 +776,7 @@ class _FeaturedCarouselState extends State<_FeaturedCarousel> {
     }
     final cardWidth = width * fraction - CardsSpace.md;
     return SizedBox(
-      height: cardWidth / kCardAspect + 64 + _tileTextGrowth(context),
+      height: cardWidth / kCardAspect + 64 + tileTextGrowth(context),
       child: PageView.builder(
         controller: _pages,
         padEnds: false,
@@ -790,67 +793,6 @@ class _FeaturedCarouselState extends State<_FeaturedCarousel> {
       ),
     );
   }
-}
-
-class _BrandShelf extends StatelessWidget {
-  const _BrandShelf({required this.brands, required this.scope});
-
-  final List<CardBrand> brands;
-  final String scope;
-
-  /// About how wide a desktop's shelf tiles are.
-  static const double _desktopTile = 200;
-
-  @override
-  Widget build(BuildContext context) {
-    // A mouse cannot swipe: on a desktop the shelf is one row of as many as
-    // fit, and «عرض الكل» shows the rest.
-    if (CardsSidebarScope.of(context)) {
-      return LayoutBuilder(
-        builder: (context, constraints) {
-          final columns = math.max(
-            2,
-            ((constraints.maxWidth - CardsSpace.gutter * 2 + CardsSpace.md) /
-                    (_desktopTile + CardsSpace.md))
-                .floor(),
-          );
-          return _TileRows(
-            columns: columns,
-            children: [
-              for (final brand in brands.take(columns)) BrandTile(brand: brand),
-            ],
-          );
-        },
-      );
-    }
-    final width = MediaQuery.sizeOf(context).width;
-    final tileWidth = width < 600 ? 164.0 : 200.0;
-    return SizedBox(
-      height: tileWidth / kCardAspect + 58 + _tileTextGrowth(context),
-      child: ColumnBleed(
-        builder: (extra) => ListView.separated(
-          scrollDirection: Axis.horizontal,
-          scrollCacheExtent: const ScrollCacheExtent.pixels(900),
-          padding:
-              const EdgeInsets.symmetric(horizontal: CardsSpace.gutter) + extra,
-          itemCount: brands.length,
-          separatorBuilder: (_, _) => const SizedBox(width: CardsSpace.md),
-          itemBuilder: (context, index) => SizedBox(
-            width: tileWidth,
-            child: BrandTile(brand: brands[index]),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// How much taller a tile's name and price have grown at the phone's text size,
-/// for a shelf that has to be told its height.
-double _tileTextGrowth(BuildContext context) {
-  final scaler = MediaQuery.textScalerOf(context);
-  double grown(double fontSize) => (scaler.scale(fontSize) - fontSize) * 1.5;
-  return grown(16) + grown(12);
 }
 
 class _BuyAgainShelf extends StatelessWidget {
@@ -938,43 +880,6 @@ class _BuyAgainShelf extends StatelessWidget {
             const SizedBox(width: CardsSpace.sm),
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// Tiles in rows of [columns], each the same width: a desktop's shelf,
-/// which a mouse reads without swiping. A short last row keeps the width.
-class _TileRows extends StatelessWidget {
-  const _TileRows({required this.columns, required this.children});
-
-  final int columns;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: CardsSpace.gutter),
-      child: Column(
-        children: [
-          for (var start = 0; start < children.length; start += columns)
-            Padding(
-              padding: EdgeInsets.only(top: start == 0 ? 0 : CardsSpace.xl),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  for (var i = start; i < start + columns; i++) ...[
-                    if (i > start) const SizedBox(width: CardsSpace.md),
-                    Expanded(
-                      child: i < children.length
-                          ? children[i]
-                          : const SizedBox.shrink(),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-        ],
       ),
     );
   }

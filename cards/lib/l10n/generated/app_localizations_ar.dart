@@ -2149,4 +2149,65 @@ class AppLocalizationsAr extends AppLocalizations {
   String offerOnItem(String amount) {
     return 'بعد الخصم $amount';
   }
+
+  @override
+  String get offersTitle => 'العروض';
+
+  @override
+  String offersEntryMine(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'لديك $count عرضاً',
+      few: 'لديك $count عروض',
+      two: 'لديك عرضان',
+      one: 'لديك عرض',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String offersEntryPublic(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count عرضاً الآن',
+      few: '$count عروض الآن',
+      two: 'عرضان الآن',
+      one: 'عرض الآن',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get offersEntryHint => 'تصفّح ما تشمله العروض';
+
+  @override
+  String get offersEmptyTitle => 'لا عروض الآن';
+
+  @override
+  String get offersEmptyBody => 'حين يصلك عرض نُخبرك به، وتجده هنا.';
+
+  @override
+  String get offersSignInBody =>
+      'سجّل الدخول لترى عروضك الخاصة وتستخدمها عند الدفع.';
+
+  @override
+  String offerUsesLeft(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'تستخدمه $count مرة',
+      few: 'تستخدمه $count مرات',
+      two: 'تستخدمه مرتين',
+      one: 'تستخدمه مرة واحدة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get offerCoversAll => 'يشمل كل البطاقات';
+
+  @override
+  String get offerShopEsim => 'تصفّح باقات eSIM';
 }

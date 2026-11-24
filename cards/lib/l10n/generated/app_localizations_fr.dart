@@ -2172,4 +2172,60 @@ class AppLocalizationsFr extends AppLocalizations {
   String offerOnItem(String amount) {
     return '$amount avec l\'offre';
   }
+
+  @override
+  String get offersTitle => 'Offres';
+
+  @override
+  String offersEntryMine(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Vous avez $count offres',
+      one: 'Vous avez une offre',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String offersEntryPublic(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count offres en ce moment',
+      one: 'Une offre en ce moment',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get offersEntryHint => 'Voir ce qu\'elles couvrent';
+
+  @override
+  String get offersEmptyTitle => 'Aucune offre pour le moment';
+
+  @override
+  String get offersEmptyBody =>
+      'Quand vous recevez une offre, nous vous prévenons et vous la trouvez ici.';
+
+  @override
+  String get offersSignInBody =>
+      'Connectez-vous pour voir vos offres et les utiliser au paiement.';
+
+  @override
+  String offerUsesLeft(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Utilisable $count fois',
+      one: 'Utilisable une fois',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get offerCoversAll => 'Sur toutes les cartes';
+
+  @override
+  String get offerShopEsim => 'Voir les forfaits eSIM';
 }

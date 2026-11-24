@@ -17,6 +17,7 @@ import 'package:flutter/foundation.dart';
 /// | `/esim/turkey`                     | a destination's eSIM plans           |
 /// | `/esim/turkey/ea.PTR1G7`           | one plan, open over its destination  |
 /// | `/esims/8944…`                     | one of the customer's eSIMs          |
+/// | `/offers`                          | the customer's offers                |
 /// | `/privacy`, `/terms`, `/about`     | the legal pages and «عن التطبيق»       |
 ///
 /// Anything else (an old or mistyped address) opens the shelf. Extra query
@@ -62,6 +63,7 @@ sealed class CardsLink {
       ),
       'esims' when second() != null => EsimLink(second()!),
       'esims' => const TabLink(CardsTab.myCards),
+      'offers' => const OffersLink(),
       'privacy' => const PageLink(LinkedPage.privacy),
       'terms' => const PageLink(LinkedPage.terms),
       'about' => const PageLink(LinkedPage.about),
@@ -233,6 +235,20 @@ final class EsimLink extends CardsLink {
 
   @override
   int get hashCode => iccid.hashCode;
+}
+
+/// The offers this customer can use: what an offer's notification opens.
+final class OffersLink extends CardsLink {
+  const OffersLink();
+
+  @override
+  String get location => '/offers';
+
+  @override
+  bool operator ==(Object other) => other is OffersLink;
+
+  @override
+  int get hashCode => location.hashCode;
 }
 
 enum LinkedPage { privacy, terms, about }

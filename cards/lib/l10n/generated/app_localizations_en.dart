@@ -2150,4 +2150,60 @@ class AppLocalizationsEn extends AppLocalizations {
   String offerOnItem(String amount) {
     return '$amount with the offer';
   }
+
+  @override
+  String get offersTitle => 'Offers';
+
+  @override
+  String offersEntryMine(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'You have $count offers',
+      one: 'You have an offer',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String offersEntryPublic(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count offers now',
+      one: 'One offer now',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get offersEntryHint => 'See what they cover';
+
+  @override
+  String get offersEmptyTitle => 'No offers right now';
+
+  @override
+  String get offersEmptyBody =>
+      'When you get an offer we\'ll tell you, and you\'ll find it here.';
+
+  @override
+  String get offersSignInBody =>
+      'Sign in to see your own offers and use them at checkout.';
+
+  @override
+  String offerUsesLeft(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Use it $count times',
+      one: 'Use it once',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get offerCoversAll => 'On every card';
+
+  @override
+  String get offerShopEsim => 'Browse eSIM plans';
 }

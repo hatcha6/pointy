@@ -3428,6 +3428,66 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'بعد الخصم {amount}'**
   String offerOnItem(String amount);
+
+  /// The offers page and its entry on the shelf.
+  ///
+  /// In ar, this message translates to:
+  /// **'العروض'**
+  String get offersTitle;
+
+  /// The offers page and its entry on the shelf.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{لديك عرض} =2{لديك عرضان} few{لديك {count} عروض} other{لديك {count} عرضاً}}'**
+  String offersEntryMine(int count);
+
+  /// The offers page and its entry on the shelf.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{عرض الآن} =2{عرضان الآن} few{{count} عروض الآن} other{{count} عرضاً الآن}}'**
+  String offersEntryPublic(int count);
+
+  /// The offers page and its entry on the shelf.
+  ///
+  /// In ar, this message translates to:
+  /// **'تصفّح ما تشمله العروض'**
+  String get offersEntryHint;
+
+  /// The offers page and its entry on the shelf.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا عروض الآن'**
+  String get offersEmptyTitle;
+
+  /// The offers page and its entry on the shelf.
+  ///
+  /// In ar, this message translates to:
+  /// **'حين يصلك عرض نُخبرك به، وتجده هنا.'**
+  String get offersEmptyBody;
+
+  /// The offers page and its entry on the shelf.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجّل الدخول لترى عروضك الخاصة وتستخدمها عند الدفع.'**
+  String get offersSignInBody;
+
+  /// The offers page and its entry on the shelf.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{تستخدمه مرة واحدة} =2{تستخدمه مرتين} few{تستخدمه {count} مرات} other{تستخدمه {count} مرة}}'**
+  String offerUsesLeft(int count);
+
+  /// The offers page and its entry on the shelf.
+  ///
+  /// In ar, this message translates to:
+  /// **'يشمل كل البطاقات'**
+  String get offerCoversAll;
+
+  /// The offers page and its entry on the shelf.
+  ///
+  /// In ar, this message translates to:
+  /// **'تصفّح باقات eSIM'**
+  String get offerShopEsim;
 }
 
 class _AppLocalizationsDelegate

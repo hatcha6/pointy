@@ -312,9 +312,15 @@ func customerOfferError(w http.ResponseWriter, err error) bool {
 }
 
 // offerView is an offer with what it did so far.
-func offerView(offer control.CustomerOffer, result segments.OfferResult) map[string]any {
+func offerView(offer control.CustomerOffer, result segments.OfferResult, use control.CustomerOfferUse) map[string]any {
+	spent := use.Spent
+	if spent == nil {
+		spent = new(big.Rat)
+	}
 	return map[string]any{
 		"offer": offer,
+		// What it has given so far, unpaid orders too: what its budget counts.
+		"use": map[string]any{"orders": use.Redeemed, "spent": money(spent)},
 		"result": map[string]any{
 			"redeemers": result.Redeemers, "orders": result.Orders, "revenue": money(result.Revenue),
 			"discounts": money(result.Discounts), "profit": money(result.Profit),
@@ -364,7 +370,12 @@ func (s HTTPServer) handleCustomerAdminOffers(w http.ResponseWriter, r *http.Req
 			s.customerInternalError(w, "customer offer results failed", err)
 			return
 		}
-		views = append(views, offerView(offer, result))
+		_, use, err := store.CustomerOfferUses(r.Context(), offer.ID)
+		if err != nil {
+			s.customerInternalError(w, "customer offer uses failed", err)
+			return
+		}
+		views = append(views, offerView(offer, result, use))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"offers": views, "push_configured": s.CustomerPush != nil})
 }
@@ -392,11 +403,15 @@ type customerOfferRequest struct {
 	GetPercent  string                      `json:"get_percent"`
 	Scope       control.CustomerOfferScope  `json:"scope"`
 	Badge       string                      `json:"badge"`
-	// Notify, when it has words, tells the recipients (not the holdout).
+	// Budget caps the discounts it gives in all ("" or "0": no cap).
+	Budget string `json:"budget"`
+	// Notify, when it has words, tells the recipients (not the holdout) when
+	// it starts; Remind, the day before it ends, those who have not used it.
 	Notify *struct {
-		Title string `json:"title"`
-		Body  string `json:"body"`
-		Link  string `json:"link"`
+		Title  string `json:"title"`
+		Body   string `json:"body"`
+		Link   string `json:"link"`
+		Remind bool   `json:"remind"`
 	} `json:"notify"`
 	Actor string `json:"actor"`
 }
@@ -444,20 +459,20 @@ func (s HTTPServer) handleCustomerAdminCreateOffer(w http.ResponseWriter, r *htt
 		writeCustomerError(w, http.StatusBadRequest, "invalid_segments", "segments must name one known segment or more (none for everyone)", nil)
 		return
 	}
-	var notify *fcm.Message
-	if request.Notify != nil && (strings.TrimSpace(request.Notify.Title) != "" || strings.TrimSpace(request.Notify.Body) != "") {
+	var notice control.CustomerOfferNotice
+	if request.Notify != nil {
 		link, ok := customerNotificationLink(request.Notify.Link)
 		title, body := strings.TrimSpace(request.Notify.Title), strings.TrimSpace(request.Notify.Body)
-		if !ok || title == "" || body == "" {
+		if !ok || (title == "") != (body == "") {
 			writeCustomerError(w, http.StatusBadRequest, "invalid_notification",
 				"a notification needs a title, words and a https://cards.dftr.ly/… link or none", nil)
 			return
 		}
-		if s.CustomerPush == nil {
+		if s.CustomerPush == nil && (title != "" || request.Notify.Remind) {
 			writeCustomerError(w, http.StatusServiceUnavailable, "push_unconfigured", "notifications are not configured", nil)
 			return
 		}
-		notify = &fcm.Message{Title: title, Body: body, Link: link}
+		notice = control.CustomerOfferNotice{Title: title, Body: body, Link: link, Remind: request.Notify.Remind}
 	}
 	segmentation, err := s.customerSegmentation(r, insights, true)
 	if err != nil {
@@ -483,6 +498,7 @@ func (s HTTPServer) handleCustomerAdminCreateOffer(w http.ResponseWriter, r *htt
 		EndsAt: request.EndsAt, HoldoutPercent: request.HoldoutPercent, CreatedBy: adminActor(r, request.Actor),
 		Audience: request.Audience, Tiers: request.Tiers, TierUnit: request.TierUnit, BuyQuantity: request.BuyQuantity,
 		GetQuantity: request.GetQuantity, GetPercent: request.GetPercent, Scope: request.Scope, Badge: request.Badge,
+		Budget: request.Budget, Notice: notice,
 	}
 	if request.StartsAt != nil {
 		offer.StartsAt = *request.StartsAt
@@ -500,29 +516,17 @@ func (s HTTPServer) handleCustomerAdminCreateOffer(w http.ResponseWriter, r *htt
 		"segments", strings.Join(created.Segments, ","), "recipients", created.Recipients, "holdouts", created.Holdouts,
 		"actor", created.CreatedBy)
 	payload := map[string]any{"offer": created}
-	if notify != nil {
-		message := *notify
-		message.Campaign = "offer:" + created.ID
-		record := control.CustomerNotification{
-			Audience: "offer", Title: message.Title, Body: message.Body, Link: message.Link,
-			Campaign: message.Campaign, SentBy: created.CreatedBy,
+	// Told now when it starts now: the operator asked for it. One that starts
+	// later is told then, in the day (customer_offer_notices.go).
+	if offerNoticeDue(created, s.clock().Now()) == control.CustomerOfferLaunchNotice {
+		record, err := s.sendOfferNotice(context.WithoutCancel(r.Context()), created, control.CustomerOfferLaunchNotice, created.CreatedBy)
+		if err != nil {
+			s.logger().Warn("offer launch notice failed", "offer_id", created.ID, "error", err)
+		} else if record != nil {
+			payload["notification"] = record
 		}
-		ids := make([]string, 0, len(members))
-		for _, recipient := range recipients {
-			if !recipient.Holdout {
-				ids = append(ids, recipient.CustomerID)
-			}
-		}
-		if everyone {
-			for _, member := range members {
-				ids = append(ids, member.CustomerID)
-			}
-		}
-		if err := s.pushToCustomers(context.WithoutCancel(r.Context()), admin, ids, message, &record); err != nil {
-			record.Error = err.Error()
-		}
-		if stored, err := admin.RecordCustomerNotification(r.Context(), record); err == nil {
-			payload["notification"] = stored
+		if fresh, err := store.GetCustomerOffer(r.Context(), created.ID); err == nil {
+			payload["offer"] = fresh
 		}
 	}
 	writeJSON(w, http.StatusCreated, payload)
@@ -540,12 +544,13 @@ func (s HTTPServer) handleCustomerAdminUpdateOffer(w http.ResponseWriter, r *htt
 		Badge       *string          `json:"badge"`
 		EndsAt      optionalTimeJSON `json:"ends_at"`
 		Active      *bool            `json:"active"`
+		Remind      *bool            `json:"remind"`
 	}
 	if !decodeCustomerBody(w, r, &request) {
 		return
 	}
 	update := control.CustomerOfferUpdate{Name: request.Name, Title: request.Title, Description: request.Description,
-		Badge: request.Badge, Active: request.Active}
+		Badge: request.Badge, Active: request.Active, Remind: request.Remind}
 	if request.EndsAt.set {
 		update.EndsAt = &request.EndsAt.value
 	}

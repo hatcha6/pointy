@@ -53,8 +53,7 @@ class OffersModel extends ChangeNotifier {
           ? await api.get('/v1/customers/me/offers', signedIn: true)
           : await api.get('/v1/customers/offers');
       return [
-        for (final raw in readList(answer, 'offers'))
-          ?CardOffer.fromJson(raw),
+        for (final raw in readList(answer, 'offers')) ?CardOffer.fromJson(raw),
       ];
     });
     // Without them nothing is wrong: the shelf simply shows no offers.

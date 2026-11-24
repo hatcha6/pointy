@@ -23,6 +23,7 @@ import '../sign_in/sign_in_sheet.dart';
 import '../links/link_inbox.dart';
 import '../my_cards/my_cards_page.dart';
 import '../search/search_page.dart';
+import '../offers/offers_page.dart';
 import '../shelf/shelf_model.dart';
 import 'cards_sidebar.dart';
 import 'cards_tab_bar.dart';
@@ -175,6 +176,7 @@ class _CardsShellState extends State<CardsShell> {
     final needsCatalog =
         link is BrandLink ||
         link is OrderLink ||
+        link is OffersLink ||
         (link is ShelfLink && link.category != null);
     if (needsCatalog && shelf.loading) {
       return;
@@ -246,6 +248,9 @@ class _CardsShellState extends State<CardsShell> {
         } else {
           EsimDestinationPage.open(context, destination, plan: link.plan);
         }
+      case OffersLink():
+        _go(CardsTab.shelf.index);
+        OffersPage.open(context, shelf);
       case EsimLink(:final iccid):
         _go(CardsTab.myCards.index);
         unawaited(_openEsim(iccid));

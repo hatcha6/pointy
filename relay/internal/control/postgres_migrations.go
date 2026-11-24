@@ -1512,6 +1512,15 @@ CREATE INDEX IF NOT EXISTS relay_customer_offers_everyone_idx
 	ON relay_customer_offers (audience) WHERE audience = 'everyone' AND active;
 `,
 	},
+	{
+		version: 49,
+		name:    "customer offer notices",
+		sql: `
+-- What an offer tells its recipients, and when it did (customer_offers.go):
+-- the relay's offer notices claim each once, across nodes.
+ALTER TABLE relay_customer_offers ADD COLUMN IF NOT EXISTS notice jsonb NOT NULL DEFAULT '{}';
+`,
+	},
 }
 
 // migrationsAdvisoryLockKey serializes concurrent migrators (e.g. autoscaled

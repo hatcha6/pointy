@@ -282,6 +282,63 @@ func exerciseCustomerOffers(t *testing.T, customers CustomerStore, orders Custom
 		t.Fatalf("buy 2 get 1: %+v %v", three, err)
 	}
 
+	// A budget of 15 dinars: the first order (10 off) leaves 5, the second
+	// takes it past, and the offer is used up for everyone.
+	budgeted, err := offers.CreateCustomerOffer(ctx, CustomerOffer{
+		Name: "budget", Title: "خصم 10", Kind: CustomerOfferAmount, Value: "10", Audience: CustomerOfferForEveryone,
+		UsesPerCustomer: 5, Budget: "15", Notice: CustomerOfferNotice{Title: "هدية", Body: "خصم 10", Remind: true},
+	}, nil)
+	if err != nil || budgeted.Budget != "15.000" {
+		t.Fatalf("budgeted offer %+v %v", budgeted, err)
+	}
+	if read, _ := offers.GetCustomerOffer(ctx, budgeted.ID); read.Budget != "15.000" || read.Notice.Title != "هدية" ||
+		!read.Notice.Remind || read.Notice.SentAt != nil {
+		t.Fatalf("budgeted offer read back %+v", read)
+	}
+	for _, key := range []string{"budget-1", "budget-2"} {
+		if _, _, err := orders.BeginCustomerOrder(ctx, CustomerOrder{CustomerID: other.ID, IdempotencyKey: key, Channel: "apk",
+			ItemKey: "libyana-20", Quantity: 1, UnitPrice: "20", Method: "dafa_sadad", OfferID: budgeted.ID}, false); err != nil {
+			t.Fatalf("%s: %v", key, err)
+		}
+	}
+	if _, _, err := orders.BeginCustomerOrder(ctx, CustomerOrder{CustomerID: given.ID, IdempotencyKey: "budget-3", Channel: "apk",
+		ItemKey: "libyana-20", Quantity: 1, UnitPrice: "20", Method: "dafa_sadad", OfferID: budgeted.ID}, false); !errors.Is(err, ErrCustomerOfferUnavailable) {
+		t.Fatalf("an offer past its budget: %v", err)
+	}
+	for _, offer := range mustPublic(t, offers, clock.Now()) {
+		if offer.ID == budgeted.ID {
+			t.Fatal("an offer past its budget is still shown")
+		}
+	}
+	if each, all, err := offers.CustomerOfferUses(ctx, budgeted.ID); err != nil || each[other.ID] != 2 || all.Redeemed != 2 ||
+		FormatWalletAmount(all.Spent) != "20.000" {
+		t.Fatalf("uses %v %+v %v", each, all, err)
+	}
+	// Each notice is claimed once.
+	for _, step := range []struct {
+		notice string
+		want   bool
+	}{{CustomerOfferLaunchNotice, true}, {CustomerOfferLaunchNotice, false}, {CustomerOfferReminderNotice, true}, {CustomerOfferReminderNotice, false}} {
+		if claimed, err := offers.ClaimCustomerOfferNotice(ctx, budgeted.ID, step.notice, clock.Now()); err != nil || claimed != step.want {
+			t.Fatalf("claim %s: %v %v", step.notice, claimed, err)
+		}
+	}
+	if read, _ := offers.GetCustomerOffer(ctx, budgeted.ID); read.Notice.SentAt == nil || read.Notice.RemindedAt == nil ||
+		read.Notice.Title != "هدية" || !read.Notice.SentAt.Equal(clock.Now()) {
+		t.Fatalf("claimed notices read back %+v", read.Notice)
+	}
+	if _, err := offers.ClaimCustomerOfferNotice(ctx, budgeted.ID, "nope", clock.Now()); !errors.Is(err, ErrCustomerOfferInvalid) {
+		t.Fatalf("an unknown notice: %v", err)
+	}
+	if _, err := offers.ClaimCustomerOfferNotice(ctx, "missing", CustomerOfferLaunchNotice, clock.Now()); !errors.Is(err, ErrCustomerOfferNotFound) {
+		t.Fatalf("a missing offer's notice: %v", err)
+	}
+	remind := false
+	if updated, err := offers.UpdateCustomerOffer(ctx, budgeted.ID, CustomerOfferUpdate{Remind: &remind}); err != nil ||
+		updated.Notice.Remind || updated.Notice.SentAt == nil {
+		t.Fatalf("reminder off %+v %v", updated.Notice, err)
+	}
+
 	// What the segmentation reads.
 	facts, err := insights.CustomerFacts(ctx)
 	if err != nil || len(facts) != 3 {
@@ -322,4 +379,13 @@ func exerciseCustomerOffers(t *testing.T, customers CustomerStore, orders Custom
 	if none, total, _ := customers.(CustomerAdminStore).ListCustomers(ctx, CustomerListFilter{OnlyIDs: true}); total != 0 || len(none) != 0 {
 		t.Fatalf("an empty id list keeps none: %d", total)
 	}
+}
+
+func mustPublic(t *testing.T, offers CustomerOfferStore, now time.Time) []CustomerOffer {
+	t.Helper()
+	public, err := offers.PublicCustomerOffers(context.Background(), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return public
 }

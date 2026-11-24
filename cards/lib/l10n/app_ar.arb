@@ -2196,5 +2196,25 @@
         "type": "String"
       }
     }
-  }
+  },
+  "offersTitle": "العروض",
+  "@offersTitle": {"description": "The offers page and its entry on the shelf."},
+  "offersEntryMine": "{count, plural, =1{لديك عرض} =2{لديك عرضان} few{لديك {count} عروض} other{لديك {count} عرضاً}}",
+  "@offersEntryMine": {"description": "The offers page and its entry on the shelf.", "placeholders": {"count": {"type": "int"}}},
+  "offersEntryPublic": "{count, plural, =1{عرض الآن} =2{عرضان الآن} few{{count} عروض الآن} other{{count} عرضاً الآن}}",
+  "@offersEntryPublic": {"description": "The offers page and its entry on the shelf.", "placeholders": {"count": {"type": "int"}}},
+  "offersEntryHint": "تصفّح ما تشمله العروض",
+  "@offersEntryHint": {"description": "The offers page and its entry on the shelf."},
+  "offersEmptyTitle": "لا عروض الآن",
+  "@offersEmptyTitle": {"description": "The offers page and its entry on the shelf."},
+  "offersEmptyBody": "حين يصلك عرض نُخبرك به، وتجده هنا.",
+  "@offersEmptyBody": {"description": "The offers page and its entry on the shelf."},
+  "offersSignInBody": "سجّل الدخول لترى عروضك الخاصة وتستخدمها عند الدفع.",
+  "@offersSignInBody": {"description": "The offers page and its entry on the shelf."},
+  "offerUsesLeft": "{count, plural, =1{تستخدمه مرة واحدة} =2{تستخدمه مرتين} few{تستخدمه {count} مرات} other{تستخدمه {count} مرة}}",
+  "@offerUsesLeft": {"description": "The offers page and its entry on the shelf.", "placeholders": {"count": {"type": "int"}}},
+  "offerCoversAll": "يشمل كل البطاقات",
+  "@offerCoversAll": {"description": "The offers page and its entry on the shelf."},
+  "offerShopEsim": "تصفّح باقات eSIM",
+  "@offerShopEsim": {"description": "The offers page and its entry on the shelf."}
 }

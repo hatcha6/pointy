@@ -37,6 +37,8 @@ import '../src/design/cards_theme.dart';
 import '../src/features/card_payment/payment_page_view.dart';
 import '../src/features/brand/brand_page.dart';
 import '../src/features/home/brand_tile.dart';
+import '../src/features/offers/offers_page.dart';
+import '../src/features/shelf/shelf_model.dart';
 import '../src/features/card_payment/card_payment_page.dart';
 import '../src/features/checkout/checkout_model.dart';
 import '../src/features/checkout/checkout_sheet.dart';
@@ -251,6 +253,7 @@ class PreviewSurface extends StatelessWidget {
       // Every pairing of badges a shelf tile can wear, at a phone's and a
       // desktop's tile width.
       'badges' => const _BadgeBoard(),
+      'offers' => const _OffersHost(),
       // An offer's brand page: ?brand=lnet|pubg|apple|almadar|netflix.
       'offer-brand' => BrandPage(brand: _fixtureBrand(_param('brand', 'lnet'))),
       // An offer at checkout: ?brand=…&item=index&qty=n.
@@ -881,4 +884,30 @@ class _BadgeBoard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The offers page over its own shelf, as an offer's notification opens it.
+class _OffersHost extends StatefulWidget {
+  const _OffersHost();
+
+  @override
+  State<_OffersHost> createState() => _OffersHostState();
+}
+
+class _OffersHostState extends State<_OffersHost> {
+  ShelfModel? _shelf;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final dependencies = CardsScope.of(context);
+    _shelf ??= ShelfModel(
+      catalog: dependencies.catalog,
+      orders: dependencies.orders,
+      auth: dependencies.auth,
+    )..load();
+  }
+
+  @override
+  Widget build(BuildContext context) => OffersPage(shelf: _shelf!);
 }

@@ -411,5 +411,15 @@
   "offerEndsToday": "Se termine aujourd'hui",
   "offerEndsIn": "{days, plural, =1{Se termine demain} other{Se termine dans {days} jours}}",
   "offerSignInToUse": "Connectez-vous pour profiter de l'offre",
-  "offerOnItem": "{amount} avec l'offre"
+  "offerOnItem": "{amount} avec l'offre",
+  "offersTitle": "Offres",
+  "offersEntryMine": "{count, plural, =1{Vous avez une offre} other{Vous avez {count} offres}}",
+  "offersEntryPublic": "{count, plural, =1{Une offre en ce moment} other{{count} offres en ce moment}}",
+  "offersEntryHint": "Voir ce qu'elles couvrent",
+  "offersEmptyTitle": "Aucune offre pour le moment",
+  "offersEmptyBody": "Quand vous recevez une offre, nous vous prévenons et vous la trouvez ici.",
+  "offersSignInBody": "Connectez-vous pour voir vos offres et les utiliser au paiement.",
+  "offerUsesLeft": "{count, plural, =1{Utilisable une fois} other{Utilisable {count} fois}}",
+  "offerCoversAll": "Sur toutes les cartes",
+  "offerShopEsim": "Voir les forfaits eSIM"
 }
