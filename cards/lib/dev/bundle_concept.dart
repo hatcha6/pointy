@@ -22,6 +22,7 @@ import '../src/shared/pill.dart';
 import '../src/shared/pressable.dart';
 import '../src/shared/section_header.dart';
 import '../src/shared/side_back.dart';
+import 'bundle_logos.dart';
 
 // --- the offer ---------------------------------------------------------------
 
@@ -59,9 +60,14 @@ class BundleArt extends StatelessWidget {
     super.key,
     this.radius = CardsRadii.card,
     this.hero = false,
+    this.logos = false,
   });
 
   final double radius;
+
+  /// The brands' own logos on the cards (PUBG MOBILE on the top-up, the
+  /// three networks on the recharge) rather than drawn icons.
+  final bool logos;
 
   /// The page's header: the name larger, the saving under it.
   final bool hero;
@@ -105,36 +111,55 @@ class BundleArt extends StatelessWidget {
                   CustomPaint(painter: _Stars(seed: 7)),
                   // The phone recharge, behind.
                   PositionedDirectional(
-                    end: 14 * s,
-                    top: 22 * s,
+                    end: (logos ? 8 : 14) * s,
+                    top: (logos ? 14 : 22) * s,
                     child: Transform.rotate(
                       angle: -0.16,
-                      child: _MiniCard(
-                        width: 104 * s,
-                        colors: const [Color(0xFF14B8A6), Color(0xFF065F55)],
-                        icon: Icons.sim_card_rounded,
-                        label: 'رصيد',
-                      ),
+                      child: logos
+                          ? _MiniCard(
+                              width: 124 * s,
+                              colors: const [Colors.white, Color(0xFFE8ECEF)],
+                              icon: Icons.sim_card_rounded,
+                              label: 'رصيد',
+                              // Up top: the PUBG card covers its lower corner.
+                              content: Align(
+                                alignment: const Alignment(0, -0.7),
+                                child: _NetworkLogos(scale: s),
+                              ),
+                            )
+                          : _MiniCard(
+                              width: 104 * s,
+                              colors: const [
+                                Color(0xFF14B8A6),
+                                Color(0xFF065F55),
+                              ],
+                              icon: Icons.sim_card_rounded,
+                              label: 'رصيد',
+                            ),
                     ),
                   ),
                   // The PUBG top-up, in front.
                   PositionedDirectional(
-                    end: 44 * s,
-                    top: 50 * s,
+                    end: (logos ? 96 : 44) * s,
+                    top: (logos ? 64 : 50) * s,
                     child: Transform.rotate(
                       angle: 0.12,
                       child: _MiniCard(
-                        width: 110 * s,
-                        colors: const [Color(0xFFF5B83D), Color(0xFF9A5B0B)],
+                        width: (logos ? 100 : 110) * s,
+                        colors: logos
+                            ? const [Color(0xFF2B2B2B), Color(0xFF0B0B0B)]
+                            : const [Color(0xFFF5B83D), Color(0xFF9A5B0B)],
                         icon: Icons.sports_esports_rounded,
                         label: 'شدّات',
+                        content: logos ? _Logo('pubg', height: 44 * s) : null,
+                        accent: logos ? const Color(0xFFF2A900) : null,
                       ),
                     ),
                   ),
                   // The plus that makes it one.
                   PositionedDirectional(
-                    end: 26 * s,
-                    top: 104 * s,
+                    end: (logos ? 76 : 26) * s,
+                    top: (logos ? 50 : 104) * s,
                     child: _Coin(size: 34 * s),
                   ),
                   PositionedDirectional(
@@ -157,7 +182,9 @@ class BundleArt extends StatelessWidget {
                         ),
                         SizedBox(height: 4 * s),
                         Text(
-                          'ببجي + رصيد هاتفك',
+                          logos
+                              ? 'ببجي + ليبيانا، المدار أو LTT'
+                              : 'ببجي + رصيد هاتفك',
                           maxLines: 1,
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.8),
@@ -197,12 +224,20 @@ class _MiniCard extends StatelessWidget {
     required this.colors,
     required this.icon,
     required this.label,
+    this.content,
+    this.accent,
   });
 
   final double width;
   final List<Color> colors;
   final IconData icon;
   final String label;
+
+  /// A logo in place of the icon and the label.
+  final Widget? content;
+
+  /// The stripe's colour, where the card is a brand's own.
+  final Color? accent;
 
   @override
   Widget build(BuildContext context) {
@@ -228,29 +263,81 @@ class _MiniCard extends StatelessWidget {
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: Colors.white, size: 22 * s),
-          const Spacer(),
-          // The card's stripe.
-          Container(
-            height: 5 * s,
-            margin: EdgeInsets.only(bottom: 6 * s),
-            color: Colors.white.withValues(alpha: 0.35),
-          ),
-          Text(
-            label,
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 15 * s,
-              fontWeight: FontWeight.w800,
+      child: content != null
+          ? Column(
+              children: [
+                Expanded(child: Center(child: content)),
+                Container(
+                  height: 4 * s,
+                  color: accent ?? Colors.black.withValues(alpha: 0.08),
+                ),
+              ],
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(icon, color: Colors.white, size: 22 * s),
+                const Spacer(),
+                // The card's stripe.
+                Container(
+                  height: 5 * s,
+                  margin: EdgeInsets.only(bottom: 6 * s),
+                  color: Colors.white.withValues(alpha: 0.35),
+                ),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 15 * s,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
-      ),
     );
   }
+}
+
+/// A brand's logo from [bundleLogo], or its name where there is none.
+class _Logo extends StatelessWidget {
+  const _Logo(this.brand, {required this.height, this.fallback = ''});
+
+  final String brand;
+  final double height;
+  final String fallback;
+
+  @override
+  Widget build(BuildContext context) {
+    final bytes = bundleLogo(brand);
+    if (bytes == null) {
+      return Text(
+        fallback,
+        style: TextStyle(
+          color: const Color(0xFFB0006D),
+          fontWeight: FontWeight.w800,
+          fontSize: height * 0.55,
+        ),
+      );
+    }
+    return Image.memory(bytes, height: height, fit: BoxFit.contain);
+  }
+}
+
+/// The three networks the recharge can be on, small, on a white card.
+class _NetworkLogos extends StatelessWidget {
+  const _NetworkLogos({required this.scale});
+
+  final double scale;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+    children: [
+      _Logo('libyana-mark', height: 22 * scale, fallback: 'ليبيانا'),
+      _Logo('almadar', height: 16 * scale),
+      _Logo('ltt', height: 22 * scale),
+    ],
+  );
 }
 
 class _Coin extends StatelessWidget {
@@ -309,9 +396,10 @@ class _Stars extends CustomPainter {
 /// The bundle as a shelf tile: its art, its name, and what it starts at
 /// against the two bought apart.
 class BundleTile extends StatelessWidget {
-  const BundleTile({super.key, this.onTap});
+  const BundleTile({super.key, this.onTap, this.logos = false});
 
   final VoidCallback? onTap;
+  final bool logos;
 
   @override
   Widget build(BuildContext context) {
@@ -325,7 +413,7 @@ class BundleTile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const BundleArt(radius: CardsRadii.art),
+          BundleArt(radius: CardsRadii.art, logos: logos),
           const SizedBox(height: CardsSpace.sm),
           Text('باقة اللاعب', maxLines: 1, style: theme.textTheme.titleSmall),
           Row(
@@ -354,9 +442,14 @@ class BundleTile extends StatelessWidget {
 
 /// The shelf with a «الباقات» row at its top, as it would open.
 class BundleShelfConcept extends StatelessWidget {
-  const BundleShelfConcept({super.key, required this.telecom});
+  const BundleShelfConcept({
+    super.key,
+    required this.telecom,
+    this.logos = false,
+  });
 
   final List<CardBrand> telecom;
+  final bool logos;
 
   @override
   Widget build(BuildContext context) {
@@ -381,9 +474,11 @@ class BundleShelfConcept extends StatelessWidget {
                 SizedBox(
                   width: tile,
                   child: BundleTile(
+                    logos: logos,
                     onTap: () => Navigator.of(context).push(
                       MaterialPageRoute<void>(
-                        builder: (_) => BundlePageConcept(telecom: telecom),
+                        builder: (_) =>
+                            BundlePageConcept(telecom: telecom, logos: logos),
                       ),
                     ),
                   ),
@@ -461,7 +556,14 @@ class _NextBundle extends StatelessWidget {
 /// network and how much credit), with the player's ID asked for once,
 /// and a summary that keeps the saving in view as the choices change.
 class BundlePageConcept extends StatefulWidget {
-  const BundlePageConcept({super.key, required this.telecom});
+  const BundlePageConcept({
+    super.key,
+    required this.telecom,
+    this.logos = false,
+  });
+
+  /// The brands' own logos in place of drawn art.
+  final bool logos;
 
   /// The networks it recharges, as the shelf has them.
   final List<CardBrand> telecom;
@@ -507,7 +609,7 @@ class _BundlePageConceptState extends State<BundlePageConcept> {
               Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 460),
-                  child: const BundleArt(hero: true),
+                  child: BundleArt(hero: true, logos: widget.logos),
                 ),
               ),
               const SizedBox(height: CardsSpace.lg),
@@ -576,6 +678,7 @@ class _BundlePageConceptState extends State<BundlePageConcept> {
                           if (i > 0) const SizedBox(width: CardsSpace.sm),
                           Expanded(
                             child: _NetworkChoice(
+                              logos: widget.logos,
                               brand: widget.telecom[i],
                               selected: i == _network,
                               onTap: () => _pick(() => _network = i),
@@ -738,9 +841,11 @@ class _NetworkChoice extends StatelessWidget {
     required this.brand,
     required this.selected,
     required this.onTap,
+    this.logos = false,
   });
 
   final CardBrand brand;
+  final bool logos;
   final bool selected;
   final VoidCallback onTap;
 
@@ -762,7 +867,23 @@ class _NetworkChoice extends StatelessWidget {
         ),
         child: Column(
           children: [
-            CardArt(brand: brand, radius: CardsRadii.art, shadow: false),
+            if (logos)
+              AspectRatio(
+                aspectRatio: kCardAspect,
+                child: Container(
+                  padding: const EdgeInsets.all(CardsSpace.sm),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(CardsRadii.art),
+                    border: Border.all(color: scheme.outline),
+                  ),
+                  child: Center(
+                    child: _Logo(brand.key, height: 40, fallback: brand.name),
+                  ),
+                ),
+              )
+            else
+              CardArt(brand: brand, radius: CardsRadii.art, shadow: false),
             const SizedBox(height: 4),
             Text(
               brand.name,
@@ -927,7 +1048,9 @@ class _BuyBar extends StatelessWidget {
 /// The art at the sizes it is shown: a phone's shelf tile, a desktop's, the
 /// page's header.
 class BundleArtBoard extends StatelessWidget {
-  const BundleArtBoard({super.key});
+  const BundleArtBoard({super.key, this.logos = false});
+
+  final bool logos;
 
   @override
   Widget build(BuildContext context) {
@@ -950,9 +1073,13 @@ class BundleArtBoard extends StatelessWidget {
           spacing: CardsSpace.xl,
           crossAxisAlignment: WrapCrossAlignment.start,
           children: [
-            labelled('رأس صفحة الباقة', 420, const BundleArt(hero: true)),
-            labelled('بلاطة على الرف (248)', 248, const BundleTile()),
-            labelled('بلاطة الهاتف (164)', 164, const BundleTile()),
+            labelled(
+              'رأس صفحة الباقة',
+              420,
+              BundleArt(hero: true, logos: logos),
+            ),
+            labelled('بلاطة على الرف (248)', 248, BundleTile(logos: logos)),
+            labelled('بلاطة الهاتف (164)', 164, BundleTile(logos: logos)),
           ],
         ),
       ),

@@ -264,6 +264,15 @@ class PreviewSurface extends StatelessWidget {
       'bundle' => BundlePageConcept(telecom: _bundleNetworks()),
       'bundle-art' => const BundleArtBoard(),
       'bundle-home' => BundleShelfConcept(telecom: _bundleNetworks()),
+      'bundle-logos' => BundlePageConcept(
+        telecom: _bundleNetworks(),
+        logos: true,
+      ),
+      'bundle-logos-art' => const BundleArtBoard(logos: true),
+      'bundle-logos-home' => BundleShelfConcept(
+        telecom: _bundleNetworks(),
+        logos: true,
+      ),
       'offers' || 'offers-signed-out' => const CardsShell(),
       // An offer's brand page: ?brand=lnet|pubg|apple|almadar|netflix.
       'offer-brand' => BrandPage(brand: _fixtureBrand(_param('brand', 'lnet'))),
