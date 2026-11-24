@@ -3488,6 +3488,48 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'تصفّح باقات eSIM'**
   String get offerShopEsim;
+
+  /// An offer's coupon on the offers page.
+  ///
+  /// In ar, this message translates to:
+  /// **'خصم'**
+  String get offerHeroOff;
+
+  /// An offer's coupon on the offers page.
+  ///
+  /// In ar, this message translates to:
+  /// **'خصم حتى'**
+  String get offerHeroUpTo;
+
+  /// An offer's coupon on the offers page.
+  ///
+  /// In ar, this message translates to:
+  /// **'مجاناً'**
+  String get offerHeroFree;
+
+  /// An offer's coupon on the offers page.
+  ///
+  /// In ar, this message translates to:
+  /// **'على التالي'**
+  String get offerHeroNext;
+
+  /// An offer's coupon on the offers page.
+  ///
+  /// In ar, this message translates to:
+  /// **'يشمل'**
+  String get offerCovers;
+
+  /// An offer's coupon on the offers page.
+  ///
+  /// In ar, this message translates to:
+  /// **'تسوّق الآن'**
+  String get offerShopAll;
+
+  /// An offer's coupon on the offers page.
+  ///
+  /// In ar, this message translates to:
+  /// **'للجميع'**
+  String get offerForEveryone;
 }
 
 class _AppLocalizationsDelegate

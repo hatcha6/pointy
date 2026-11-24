@@ -2206,4 +2206,25 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get offerShopEsim => 'Browse eSIM plans';
+
+  @override
+  String get offerHeroOff => 'off';
+
+  @override
+  String get offerHeroUpTo => 'up to';
+
+  @override
+  String get offerHeroFree => 'free';
+
+  @override
+  String get offerHeroNext => 'off the next';
+
+  @override
+  String get offerCovers => 'Covers';
+
+  @override
+  String get offerShopAll => 'Shop now';
+
+  @override
+  String get offerForEveryone => 'For everyone';
 }

@@ -421,5 +421,12 @@
   "offersSignInBody": "Connectez-vous pour voir vos offres et les utiliser au paiement.",
   "offerUsesLeft": "{count, plural, =1{Utilisable une fois} other{Utilisable {count} fois}}",
   "offerCoversAll": "Sur toutes les cartes",
-  "offerShopEsim": "Voir les forfaits eSIM"
+  "offerShopEsim": "Voir les forfaits eSIM",
+  "offerHeroOff": "de remise",
+  "offerHeroUpTo": "jusqu'à",
+  "offerHeroFree": "offert",
+  "offerHeroNext": "sur le suivant",
+  "offerCovers": "Inclut",
+  "offerShopAll": "Acheter",
+  "offerForEveryone": "Pour tous"
 }

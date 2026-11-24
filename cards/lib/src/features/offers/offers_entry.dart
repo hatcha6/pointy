@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../../l10n/generated/app_localizations.dart';
-import '../../data/models/offer.dart';
 import '../../design/cards_tokens.dart';
 import '../../shared/cards_scope.dart';
 import '../../shared/pressable.dart';
@@ -30,7 +29,7 @@ class OffersEntry extends StatelessWidget {
         final theme = Theme.of(context);
         const red = Color(0xFFD92D20);
         final mine = offers.signedIn && list.any((o) => !o.forEveryone);
-        final ends = _soonestEnd(l10n, list);
+        final ends = offersSoonestEnd(l10n, list, DateTime.now());
         return Padding(
           padding: const EdgeInsets.fromLTRB(
             CardsSpace.gutter,
@@ -93,15 +92,5 @@ class OffersEntry extends StatelessWidget {
         );
       },
     );
-  }
-
-  /// When the offer ending first ends, in words, if that is soon.
-  static String? _soonestEnd(AppLocalizations l10n, List<CardOffer> offers) {
-    final now = DateTime.now();
-    final ending = [
-      for (final offer in offers)
-        if (offer.endsAt != null) offer,
-    ]..sort((a, b) => a.endsAt!.compareTo(b.endsAt!));
-    return ending.isEmpty ? null : offerEndsText(l10n, ending.first, now);
   }
 }

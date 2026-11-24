@@ -115,3 +115,50 @@ String? offerEndsText(AppLocalizations l10n, CardOffer offer, DateTime now) {
       ? l10n.offerEndsToday
       : l10n.offerEndsIn(left.inDays + 1);
 }
+
+/// An offer's value in large type, with the word under it: "15٪ / خصم",
+/// "15٪ / خصم حتى", "2+1 / مجاناً".
+({String value, String caption}) offerHeadline(
+  AppLocalizations l10n,
+  CardOffer offer,
+) => switch (offer.kind) {
+  OfferKind.percent => (
+    value: '${percentText(offer.value)}٪',
+    caption: l10n.offerHeroOff,
+  ),
+  OfferKind.amount => (
+    value: formatMoney(l10n, offer.value),
+    caption: l10n.offerHeroOff,
+  ),
+  OfferKind.tiered => (
+    value: offerValueText(
+      l10n,
+      offer.tiers.isEmpty ? offer.value : offer.tiers.last.value,
+      percent: offer.tierPercent,
+    ),
+    caption: l10n.offerHeroUpTo,
+  ),
+  OfferKind.bundle =>
+    offer.getPercent.compareTo(const Money(100000)) >= 0
+        ? (
+            value: '${offer.buyQuantity}+${offer.getQuantity}',
+            caption: l10n.offerHeroFree,
+          )
+        : (
+            value: '${percentText(offer.getPercent)}٪',
+            caption: l10n.offerHeroNext,
+          ),
+};
+
+/// When the first of [offers] to end ends, in words, if that is soon.
+String? offersSoonestEnd(
+  AppLocalizations l10n,
+  List<CardOffer> offers,
+  DateTime now,
+) {
+  final ending = [
+    for (final offer in offers)
+      if (offer.endsAt != null) offer,
+  ]..sort((a, b) => a.endsAt!.compareTo(b.endsAt!));
+  return ending.isEmpty ? null : offerEndsText(l10n, ending.first, now);
+}

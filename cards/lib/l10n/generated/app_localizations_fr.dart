@@ -2228,4 +2228,25 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get offerShopEsim => 'Voir les forfaits eSIM';
+
+  @override
+  String get offerHeroOff => 'de remise';
+
+  @override
+  String get offerHeroUpTo => 'jusqu\'à';
+
+  @override
+  String get offerHeroFree => 'offert';
+
+  @override
+  String get offerHeroNext => 'sur le suivant';
+
+  @override
+  String get offerCovers => 'Inclut';
+
+  @override
+  String get offerShopAll => 'Acheter';
+
+  @override
+  String get offerForEveryone => 'Pour tous';
 }

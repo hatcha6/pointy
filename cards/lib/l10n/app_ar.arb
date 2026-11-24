@@ -2216,5 +2216,19 @@
   "offerCoversAll": "يشمل كل البطاقات",
   "@offerCoversAll": {"description": "The offers page and its entry on the shelf."},
   "offerShopEsim": "تصفّح باقات eSIM",
-  "@offerShopEsim": {"description": "The offers page and its entry on the shelf."}
+  "@offerShopEsim": {"description": "The offers page and its entry on the shelf."},
+  "offerHeroOff": "خصم",
+  "@offerHeroOff": {"description": "An offer's coupon on the offers page."},
+  "offerHeroUpTo": "خصم حتى",
+  "@offerHeroUpTo": {"description": "An offer's coupon on the offers page."},
+  "offerHeroFree": "مجاناً",
+  "@offerHeroFree": {"description": "An offer's coupon on the offers page."},
+  "offerHeroNext": "على التالي",
+  "@offerHeroNext": {"description": "An offer's coupon on the offers page."},
+  "offerCovers": "يشمل",
+  "@offerCovers": {"description": "An offer's coupon on the offers page."},
+  "offerShopAll": "تسوّق الآن",
+  "@offerShopAll": {"description": "An offer's coupon on the offers page."},
+  "offerForEveryone": "للجميع",
+  "@offerForEveryone": {"description": "An offer's coupon on the offers page."}
 }

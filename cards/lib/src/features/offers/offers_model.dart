@@ -29,6 +29,11 @@ class OffersModel extends ChangeNotifier {
   /// the public ones (they sign in first).
   bool signedIn = false;
 
+  /// Whether they have been read at least once: until then a page shows
+  /// their places, not "no offers".
+  bool get loaded => _loaded;
+  bool _loaded = false;
+
   Future<void>? _loading;
   bool _asked = false;
 
@@ -60,8 +65,9 @@ class OffersModel extends ChangeNotifier {
     if (result case Ok(:final value)) {
       _offers = value;
       signedIn = mine;
-      notifyListeners();
     }
+    _loaded = true;
+    notifyListeners();
   }
 
   /// Forgets them (a customer signed out): what was given to one is never

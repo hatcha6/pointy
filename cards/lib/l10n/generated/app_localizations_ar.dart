@@ -2210,4 +2210,25 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get offerShopEsim => 'تصفّح باقات eSIM';
+
+  @override
+  String get offerHeroOff => 'خصم';
+
+  @override
+  String get offerHeroUpTo => 'خصم حتى';
+
+  @override
+  String get offerHeroFree => 'مجاناً';
+
+  @override
+  String get offerHeroNext => 'على التالي';
+
+  @override
+  String get offerCovers => 'يشمل';
+
+  @override
+  String get offerShopAll => 'تسوّق الآن';
+
+  @override
+  String get offerForEveryone => 'للجميع';
 }
