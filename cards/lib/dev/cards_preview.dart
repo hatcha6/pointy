@@ -37,6 +37,7 @@ import '../src/design/cards_theme.dart';
 import '../src/features/card_payment/payment_page_view.dart';
 import '../src/features/brand/brand_page.dart';
 import '../src/features/home/brand_tile.dart';
+import 'bundle_concept.dart';
 import '../src/features/links/cards_link.dart';
 import '../src/features/card_payment/card_payment_page.dart';
 import '../src/features/checkout/checkout_model.dart';
@@ -260,6 +261,9 @@ class PreviewSurface extends StatelessWidget {
       // Every pairing of badges a shelf tile can wear, at a phone's and a
       // desktop's tile width.
       'badges' => const _BadgeBoard(),
+      'bundle' => BundlePageConcept(telecom: _bundleNetworks()),
+      'bundle-art' => const BundleArtBoard(),
+      'bundle-home' => BundleShelfConcept(telecom: _bundleNetworks()),
       'offers' || 'offers-signed-out' => const CardsShell(),
       // An offer's brand page: ?brand=lnet|pubg|apple|almadar|netflix.
       'offer-brand' => BrandPage(brand: _fixtureBrand(_param('brand', 'lnet'))),
@@ -892,3 +896,10 @@ class _BadgeBoard extends StatelessWidget {
     );
   }
 }
+
+/// The networks the bundle concept recharges.
+List<CardBrand> _bundleNetworks() => [
+  _fixtureBrand('libyana'),
+  _fixtureBrand('almadar'),
+  _boardBrand('ltt', 'LTT', 'telecom'),
+];
