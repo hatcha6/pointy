@@ -115,6 +115,14 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	header := w.Header()
 	header.Set("X-Content-Type-Options", "nosniff")
 	header.Set("Referrer-Policy", "strict-origin-when-cross-origin")
+	// The page alone is cross-origin isolated, which lets the web build draw
+	// on a thread of its own (skwasm's multi-threaded renderer): every frame
+	// is laid out on one thread while the last is drawn on another, rather
+	// than both taking turns on the page's. Unlike COOP and COEP it asks
+	// nothing of what the page embeds or opens (the bank's payment frame),
+	// and a browser that does not know it ignores it: the page is drawn as
+	// before, single-threaded.
+	header.Set("Document-Isolation-Policy", "isolate-and-credentialless")
 	name := webbuild.Name(r.URL.Path)
 	webbuild.SetCaching(header, name)
 	if name == ".well-known/apple-app-site-association" {

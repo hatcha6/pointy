@@ -1,7 +1,10 @@
 import 'package:animations/animations.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
 
 import '../design/cards_tokens.dart';
+import 'container_route.dart';
 
 /// The app's motion, in one place, built on Material's motion system (the
 /// `animations` package): each kind of change moves one way everywhere.
@@ -259,6 +262,43 @@ Future<T?> showCardsDialog<T>({
 /// while the finger is still down: [predictiveBack] hands the gesture to it.
 ///
 /// iOS keeps the system's slide, which follows the finger on a swipe back.
+/// The system's iOS slide, which follows the finger on a swipe back. On the
+/// web (Safari on an iPhone) both pages slide as images drawn once, rather
+/// than drawn again at every frame (see [TransitionSnapshot]).
+class CardsCupertinoPageTransitionsBuilder extends PageTransitionsBuilder {
+  const CardsCupertinoPageTransitionsBuilder();
+
+  static const _system = CupertinoPageTransitionsBuilder();
+
+  @override
+  Duration get transitionDuration => _system.transitionDuration;
+
+  @override
+  DelegatedTransitionBuilder? get delegatedTransition =>
+      _system.delegatedTransition;
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) => _system.buildTransitions<T>(
+    route,
+    context,
+    animation,
+    secondaryAnimation,
+    kIsWeb
+        ? TransitionSnapshot(
+            animation: animation,
+            secondary: secondaryAnimation,
+            child: child,
+          )
+        : child,
+  );
+}
+
 class CardsPageTransitionsBuilder extends PageTransitionsBuilder {
   const CardsPageTransitionsBuilder({this.predictiveBack = false});
 
@@ -350,7 +390,15 @@ class _PageTransitionState<T> extends State<_PageTransition<T>> {
           ? SharedAxisTransitionType.vertical
           : SharedAxisTransitionType.scaled,
       fillColor: Theme.of(context).scaffoldBackgroundColor,
-      child: widget.child,
+      // On the web the page scales and fades as an image, drawn once, not
+      // drawn again at every frame (see [TransitionSnapshot]).
+      child: kIsWeb
+          ? TransitionSnapshot(
+              animation: widget.animation,
+              secondary: widget.secondaryAnimation,
+              child: widget.child,
+            )
+          : widget.child,
     );
     if (!widget.predictiveBack) {
       return page;

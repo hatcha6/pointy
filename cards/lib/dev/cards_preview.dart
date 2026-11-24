@@ -86,6 +86,20 @@ Future<void> main() async {
       );
   // `&slow=8`: every animation eight times slower, to look at a transition.
   timeDilation = double.tryParse(query['slow'] ?? '') ?? 1;
+  // `&perf=1`: each frame's build and raster time on the console, for the
+  // web performance runs (one line a frame, `FT build raster span` in µs).
+  if (query['perf'] != null) {
+    WidgetsFlutterBinding.ensureInitialized();
+    SchedulerBinding.instance.addTimingsCallback((timings) {
+      for (final t in timings) {
+        // ignore: avoid_print
+        print(
+          'FT ${t.buildDuration.inMicroseconds} '
+          '${t.rasterDuration.inMicroseconds} ${t.totalSpan.inMicroseconds}',
+        );
+      }
+    });
+  }
   final dark =
       (query['theme'] ?? const String.fromEnvironment('CARDS_PREVIEW_THEME')) ==
       'dark';

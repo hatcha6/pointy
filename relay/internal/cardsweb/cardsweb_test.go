@@ -49,6 +49,10 @@ func TestEveryPageOfTheAppIsIndex(t *testing.T) {
 		if got.Header().Get("Cache-Control") != "no-cache" {
 			t.Fatalf("%s: cache %q", target, got.Header().Get("Cache-Control"))
 		}
+		// Isolated, so the web build may draw on a thread of its own.
+		if policy := got.Header().Get("Document-Isolation-Policy"); policy != "isolate-and-credentialless" {
+			t.Fatalf("%s: isolation %q", target, policy)
+		}
 	}
 }
 
