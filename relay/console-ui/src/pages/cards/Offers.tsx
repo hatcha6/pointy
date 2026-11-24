@@ -1,17 +1,17 @@
 import { useMemo, useState } from "react";
-import { TicketPercent } from "lucide-react";
+import { CalendarPlus, Copy, TicketPercent } from "lucide-react";
 import { count, date, money } from "../../lib/format";
 import { Badge, Button, Card, Empty, Money, Notice } from "../../components/ui";
 import { DataTable, Stacked, type Column } from "../../components/DataTable";
 import { Unavailable } from "../../components/Unavailable";
 import { useAction } from "../../components/guarded";
 import { Dialog } from "../../components/dialog";
-import { openOfferBuilder } from "./OfferBuilder";
+import { draftOf, openOfferBuilder } from "./OfferBuilder";
 import { badgeText, offerKindInfo, scopeIsEverything } from "../../lib/offers";
 import { useRouter } from "../../lib/router";
-import { pct, segmentKeys, segmentLabel, useOffers, useSegments, type CustomerOffer, type OfferResult } from "../../lib/segments";
+import { pct, segmentKeys, segmentLabel, useOffers, useSegments, type CustomerOffer, type OfferResult, type OfferUse } from "../../lib/segments";
 
-type Row = { offer: CustomerOffer; result: OfferResult };
+type Row = { offer: CustomerOffer; result: OfferResult; use?: OfferUse };
 
 /** What an offer gives and on what, in a line. */
 function offerTerms(o: CustomerOffer): string {
@@ -37,6 +37,29 @@ function running(o: CustomerOffer): boolean {
   return o.active && (!o.ends_at || new Date(o.ends_at).getTime() > Date.now());
 }
 
+function scheduled(o: CustomerOffer): boolean {
+  return running(o) && new Date(o.starts_at).getTime() > Date.now();
+}
+
+/** Its budget, when it has one, and whether it is spent. */
+function budgetOf(o: CustomerOffer, use?: OfferUse): { budget: number; spent: number; over: boolean } | null {
+  const budget = Number(o.budget);
+  if (!(budget > 0)) return null;
+  const spent = Number(use?.spent ?? 0);
+  return { budget, spent, over: spent >= budget };
+}
+
+/** What its notifications did, in a line: «أُرسل · تذكير قبل الانتهاء». */
+function noticeText(o: CustomerOffer): string {
+  const n = o.notice;
+  if (!n) return "";
+  const parts = [
+    n.title ? (n.sent_at ? `أُرسل الإشعار ${date(n.sent_at)}` : "الإشعار ينتظر بدء العرض") : "",
+    n.remind ? (n.reminded_at ? "أُرسل التذكير" : "تذكير قبل الانتهاء") : "",
+  ].filter(Boolean);
+  return parts.join(" · ");
+}
+
 /**
  * The offers made for segments and what each did: who used it, what it gave
  * away, what it earned, and against its holdout whether it brought orders
@@ -48,7 +71,14 @@ export function Offers() {
   const { navigate } = useRouter();
   const [stopping, setStopping] = useState<CustomerOffer | null>(null);
   const stop = useAction({ invalidate: [segmentKeys.all], success: "أُوقف العرض", passkey: true });
+  const extend = useAction({ invalidate: [segmentKeys.all], success: "مُدّد العرض أسبوعاً", passkey: true });
   const rows = answer.data?.offers ?? [];
+
+  // A week more from its end: those it reminded are not reminded again.
+  async function extendWeek(offer: CustomerOffer) {
+    const ends = new Date(new Date(offer.ends_at ?? Date.now()).getTime() + 7 * 86_400_000);
+    await extend.run("PATCH", `/v1/customers/admin/offers/${encodeURIComponent(offer.id)}`, { ends_at: ends.toISOString() });
+  }
 
   const columns = useMemo<Column<Row>[]>(
     () => [
@@ -67,15 +97,36 @@ export function Offers() {
         key: "badge",
         header: "الحالة",
         mobile: "subtitle",
-        cell: ({ offer }) => (
-          <div>
-            <span className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
-              <span className="sale-pill">{badgeText(offer)}</span>
-              {running(offer) ? <Badge tone="success" dot>يعمل</Badge> : <Badge>انتهى</Badge>}
-            </span>
-            <div className="faint" style={{ fontSize: 12, marginTop: 4 }}>{offer.ends_at ? `حتى ${date(offer.ends_at)}` : "بلا نهاية"}</div>
-          </div>
-        ),
+        cell: ({ offer, use }) => {
+          const budget = budgetOf(offer, use);
+          const notice = noticeText(offer);
+          return (
+            <div>
+              <span className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
+                <span className="sale-pill">{badgeText(offer)}</span>
+                {!running(offer) ? (
+                  <Badge>انتهى</Badge>
+                ) : scheduled(offer) ? (
+                  <Badge tone="info" dot>يبدأ {date(offer.starts_at)}</Badge>
+                ) : budget?.over ? (
+                  <Badge tone="warning" dot>بلغ ميزانيته</Badge>
+                ) : (
+                  <Badge tone="success" dot>يعمل</Badge>
+                )}
+              </span>
+              <div className="faint" style={{ fontSize: 12, marginTop: 4 }}>
+                {offer.ends_at ? `حتى ${date(offer.ends_at)}` : "بلا نهاية"}
+                {budget && ` · الميزانية ${money(budget.spent)} من ${money(budget.budget)}`}
+              </div>
+              {budget && (
+                <div className="budget-bar" aria-hidden>
+                  <span style={{ width: `${Math.min(100, (budget.spent / budget.budget) * 100)}%` }} />
+                </div>
+              )}
+              {notice && <div className="faint" style={{ fontSize: 12, marginTop: 2 }}>{notice}</div>}
+            </div>
+          );
+        },
       },
       {
         key: "used",
@@ -122,15 +173,23 @@ export function Offers() {
         key: "actions",
         header: "",
         mobile: "actions",
-        cell: ({ offer }) =>
-          running(offer) ? (
-            <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); setStopping(offer); }}>
-              إيقاف
-            </Button>
-          ) : null,
+        cell: ({ offer }) => (
+          <span className="row" style={{ gap: 4, flexWrap: "wrap", justifyContent: "flex-end", maxWidth: 104 }}>
+            <Button size="sm" variant="ghost" icon={<Copy />} title="نسخ: عرض جديد بنفس الشروط" aria-label="نسخ العرض" onClick={(e) => { e.stopPropagation(); openOfferBuilder(navigate, draftOf(offer)); }} />
+            {running(offer) && offer.ends_at && (
+              <Button size="sm" variant="ghost" icon={<CalendarPlus />} title="تمديد أسبوعاً" aria-label="تمديد العرض أسبوعاً" loading={extend.busy} onClick={(e) => { e.stopPropagation(); void extendWeek(offer); }} />
+            )}
+            {running(offer) && (
+              <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); setStopping(offer); }}>
+                إيقاف
+              </Button>
+            )}
+          </span>
+        ),
       },
     ],
-    [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [extend.busy],
   );
 
   return (

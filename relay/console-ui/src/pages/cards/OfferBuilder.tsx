@@ -2,18 +2,55 @@ import { useMemo, useState } from "react";
 import { BadgePercent, Banknote, ChevronLeft, Gift, Layers, Plus, Search, Tag, TicketPercent, Trash2, X } from "lucide-react";
 import { Link, useRouter } from "../../lib/router";
 import { count, money } from "../../lib/format";
-import { Button, Card, Field, Segmented } from "../../components/ui";
+import { Button, Card, Field, Segmented, Switch } from "../../components/ui";
 import { useAction } from "../../components/guarded";
 import { OfferPreview } from "../../components/cards/OfferPreview";
 import { useCatalogItems } from "../../lib/picker";
 import { badgeText, discountOn, offerKindInfo, termsProblems, type OfferKind, type OfferTerms } from "../../lib/offers";
-import { emptyOffer, segmentInfo, segmentKeys, segmentOrder, useSegments, type OfferDraft, type SegmentKey } from "../../lib/segments";
+import { emptyOffer, segmentInfo, segmentKeys, segmentOrder, useSegments, type CustomerOffer, type OfferDraft, type SegmentKey } from "../../lib/segments";
 
 /** eSIMs are scoped by their own category, which the cards' catalog has not. */
 const ESIM = { key: "esim", name: "شرائح eSIM" };
 
 /** A draft handed over by the page that opens the builder (an insight). */
 let handedOver: Partial<OfferDraft> | null = null;
+
+/** An amount as a field shows it: 15.000 is 15, zero is empty. */
+const plain = (v?: string) => (Number(v) > 0 ? String(Number(v)) : "");
+
+/** A draft made from [offer]: what «نسخ» starts the builder with. */
+export function draftOf(offer: CustomerOffer): Partial<OfferDraft> {
+  const days = offer.ends_at ? Math.max(1, Math.round((new Date(offer.ends_at).getTime() - new Date(offer.starts_at).getTime()) / 86_400_000)) : 7;
+  return {
+    name: `${offer.name} (نسخة)`,
+    title: offer.title,
+    description: offer.description ?? "",
+    kind: offer.kind,
+    value: plain(offer.value),
+    maxDiscount: plain(offer.max_discount),
+    minOrder: plain(offer.min_order),
+    ...(offer.tiers?.length ? { tiers: offer.tiers.map((t) => ({ min: plain(t.min_order), value: plain(t.value) })) } : {}),
+    tierUnit: offer.tier_unit ?? "percent",
+    buy: String(offer.buy_quantity ?? 2),
+    get: String(offer.get_quantity ?? 1),
+    getPercent: plain(offer.get_percent) || "100",
+    categories: offer.scope?.categories ?? [],
+    brands: offer.scope?.brands ?? [],
+    items: offer.scope?.items ?? [],
+    audience: offer.audience,
+    segments: offer.segments,
+    holdout: String(offer.holdout_percent),
+    days: String(days),
+    usesPerCustomer: String(offer.uses_per_customer || 1),
+    maxRedemptions: offer.max_redemptions ? String(offer.max_redemptions) : "",
+    badge: offer.badge ?? "",
+    notifyTitle: offer.notice?.title ?? "",
+    notifyBody: offer.notice?.body ?? "",
+    remind: !!offer.notice?.remind,
+    budget: plain(offer.budget),
+    startsAt: "",
+  };
+}
 
 /** Opens the builder, filled in with [prefill]. */
 export function openOfferBuilder(navigate: (to: string) => void, prefill: Partial<OfferDraft> = {}) {
@@ -71,13 +108,21 @@ export function OfferBuilder() {
     ...(!everyone && draft.segments.length === 0 ? ["اختر شريحة أو أكثر، أو اجعله للجميع."] : []),
     ...(!everyone && draft.segments.length > 0 && given <= 0 ? ["لا زبون في هذه الشرائح يحصل على العرض."] : []),
     ...(!(Number(draft.days) > 0) ? ["المدة يوم على الأقل."] : []),
+    ...(draft.startsAt && new Date(draft.startsAt).getTime() < Date.now() - 5 * 60_000 ? ["وقت البدء مضى: اتركه فارغاً ليبدأ الآن."] : []),
+    ...(draft.budget.trim() && !(Number(draft.budget) > 0) ? ["الميزانية مبلغ أكبر من صفر، أو اتركها فارغة."] : []),
     ...cappedTiers(draft),
   ];
   const notify = !!draft.notifyTitle.trim() && !!draft.notifyBody.trim();
+  const pushes = !!segments.data?.push_configured;
+  const startsLater = !!draft.startsAt && new Date(draft.startsAt).getTime() > Date.now() + 60_000;
+  // The reminder goes in an offer's last day, to one that ran a day and a half.
+  const canRemind = Number(draft.days) >= 2;
+  const remind = pushes && canRemind && draft.remind;
   const averageOrder = chosen.length ? Number(chosen[0].average_order) : Number(segments.data?.segments.find((s) => s.orders)?.average_order ?? 0);
 
   async function submit() {
-    const ends = new Date(Date.now() + Number(draft.days) * 24 * 3600_000);
+    const starts = draft.startsAt ? new Date(draft.startsAt) : new Date();
+    const ends = new Date(starts.getTime() + Number(draft.days) * 24 * 3600_000);
     const result = await save.run("POST", "/v1/customers/admin/offers", {
       name: draft.name.trim(),
       title: draft.title.trim(),
@@ -87,9 +132,14 @@ export function OfferBuilder() {
       segments: everyone ? [] : draft.segments,
       uses_per_customer: Number(draft.usesPerCustomer) || 1,
       max_redemptions: Number(draft.maxRedemptions) || 0,
+      starts_at: draft.startsAt ? starts.toISOString() : undefined,
       ends_at: ends.toISOString(),
       holdout_percent: holdout,
-      notify: notify ? { title: draft.notifyTitle.trim(), body: draft.notifyBody.trim() } : undefined,
+      budget: draft.budget.trim() || undefined,
+      notify:
+        notify || remind
+          ? { title: notify ? draft.notifyTitle.trim() : "", body: notify ? draft.notifyBody.trim() : "", remind }
+          : undefined,
     });
     if (result) navigate("/cards/offers");
   }
@@ -242,8 +292,14 @@ export function OfferBuilder() {
               <Field label="مرات الاستخدام للزبون" htmlFor="o-uses">
                 <input id="o-uses" className="input" inputMode="numeric" value={draft.usesPerCustomer} onChange={(e) => set({ usesPerCustomer: e.target.value })} />
               </Field>
-              <Field label="حدّ الاستخدام الكلي" htmlFor="o-max" help="فارغ: بلا حدّ. يضبط الميزانية.">
+              <Field label="حدّ الطلبات الكلي" htmlFor="o-max" help="فارغ: بلا حدّ.">
                 <input id="o-max" className="input" inputMode="numeric" value={draft.maxRedemptions} onChange={(e) => set({ maxRedemptions: e.target.value })} />
+              </Field>
+              <Field label="يبدأ" htmlFor="o-starts" help={draft.startsAt ? "ويظهر للزبائن من ذلك الوقت." : "فارغ: الآن."}>
+                <input id="o-starts" className="input" type="datetime-local" value={draft.startsAt} onChange={(e) => set({ startsAt: e.target.value })} />
+              </Field>
+              <Field label="ميزانية الخصم (د.ل)" htmlFor="o-budget" help="يتوقف العرض وحده حين تبلغ خصوماته هذا المبلغ. فارغ: بلا حدّ.">
+                <input id="o-budget" className="input" inputMode="decimal" value={draft.budget} onChange={(e) => set({ budget: e.target.value })} placeholder="بلا حدّ" />
               </Field>
             </div>
           </Card>
@@ -265,14 +321,24 @@ export function OfferBuilder() {
             </div>
           </Card>
 
-          {segments.data?.push_configured && (
-            <Card title="إشعار">
+          {pushes && (
+            <Card title="الإشعارات">
               <div className="form">
-                <Field label="العنوان" htmlFor="o-ntitle" help={`اختياري: يصل لـ${count(everyone ? reachable : Math.max(reachable - Math.floor((reachable * holdout) / 100), 0))} زبوناً تقريباً عند إنشاء العرض${everyone ? "" : "، لا لمجموعة المقارنة"}.`}>
+                <Field
+                  label="العنوان"
+                  htmlFor="o-ntitle"
+                  help={`اختياري: يصل لـ${count(everyone ? reachable : Math.max(reachable - Math.floor((reachable * holdout) / 100), 0))} زبوناً تقريباً ${startsLater ? "حين يبدأ العرض" : "عند إنشاء العرض"}${everyone ? "" : "، لا لمجموعة المقارنة"}. لا يُرسل إلا بين 10 صباحاً و9 مساءً.`}
+                >
                   <input id="o-ntitle" className="input" maxLength={120} value={draft.notifyTitle} onChange={(e) => set({ notifyTitle: e.target.value })} placeholder="هدية لك" />
                 </Field>
                 <Field label="النص" htmlFor="o-nbody">
                   <textarea id="o-nbody" className="input" rows={2} maxLength={300} value={draft.notifyBody} onChange={(e) => set({ notifyBody: e.target.value })} placeholder={draft.title || "خصم على طلبك القادم، لأيام فقط."} />
+                </Field>
+                <Field
+                  label="تذكير قبل الانتهاء"
+                  help={canRemind ? "قبل نهايته بيوم، لمن لم يستخدمه بعد: «عرضك ينتهي غداً». يفتح صفحة العروض في التطبيق." : "للعروض التي تدوم يومين أو أكثر."}
+                >
+                  <Switch on={remind} disabled={!canRemind} label="ذكّر من لم يستخدمه" onChange={(on) => set({ remind: on })} />
                 </Field>
               </div>
             </Card>
@@ -290,7 +356,8 @@ export function OfferBuilder() {
               {averageOrder > 0 && given > 0 && (
                 <p className="muted" style={{ margin: 0 }}>
                   إن استخدمه 20٪ منهم بطلب بمتوسط {money(averageOrder)}، فكلفة الخصم نحو{" "}
-                  {money(Math.round(given * 0.2) * typicalDiscount(terms, averageOrder))}.
+                  {money(Math.round(given * 0.2) * typicalDiscount(terms, averageOrder))}
+                  {Number(draft.budget) > 0 ? `، والميزانية تقف به عند ${money(Number(draft.budget))}` : ""}.
                 </p>
               )}
               {problems.length > 0 && (

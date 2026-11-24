@@ -108,6 +108,10 @@ export type CustomerOffer = {
   holdouts: number;
   uses_per_customer: number;
   max_redemptions: number;
+  /** Caps what it gives away in all ("0.000": no cap). */
+  budget?: string;
+  /** Its notification at the start (sent_at once sent) and the reminder before its end. */
+  notice?: { title?: string; body?: string; link?: string; sent_at?: string; remind?: boolean; reminded_at?: string };
   starts_at: string;
   ends_at?: string;
   active: boolean;
@@ -130,6 +134,9 @@ export type OfferResult = {
   revenue_per_holdout: string;
 };
 
+/** What an offer has given so far, unpaid orders too: what its budget counts. */
+export type OfferUse = { orders: number; spent: string };
+
 export const segmentKeys = {
   all: ["cards", "segments"],
   overview: ["cards", "segments", "overview"],
@@ -148,7 +155,7 @@ export function useOffers() {
   return useQuery({
     queryKey: segmentKeys.offers,
     queryFn: () =>
-      api.get<{ offers: { offer: CustomerOffer; result: OfferResult }[]; push_configured: boolean }>("/v1/customers/admin/offers"),
+      api.get<{ offers: { offer: CustomerOffer; result: OfferResult; use?: OfferUse }[]; push_configured: boolean }>("/v1/customers/admin/offers"),
     staleTime: 30_000,
   });
 }
@@ -375,6 +382,12 @@ export type OfferDraft = {
   badge: string;
   notifyTitle: string;
   notifyBody: string;
+  /** Remind, the day before it ends, those who have not used it. */
+  remind: boolean;
+  /** Caps the discounts it gives in all, in dinars; empty: no cap. */
+  budget: string;
+  /** When it starts (a datetime-local value); empty: now. */
+  startsAt: string;
 };
 
 export const emptyOffer: OfferDraft = {
@@ -406,4 +419,7 @@ export const emptyOffer: OfferDraft = {
   badge: "",
   notifyTitle: "",
   notifyBody: "",
+  remind: true,
+  budget: "",
+  startsAt: "",
 };

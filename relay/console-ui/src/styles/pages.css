@@ -1546,6 +1546,22 @@
   background: #c88a3a;
 }
 
+/* How much of an offer's budget its discounts have used. */
+.budget-bar {
+  height: 4px;
+  max-width: 180px;
+  margin-top: 4px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.budget-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--sale);
+}
+
 .op-art .op-pill {
   position: absolute;
   top: 8px;
