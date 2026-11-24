@@ -219,9 +219,10 @@ func (s HTTPServer) handleVoucherAdminCatalog(w http.ResponseWriter, r *http.Req
 	}
 	view := vouchers.Shop(s.autoPricedDocument(loaded.document, offers, settings), loaded.record.SHA256, s.clock().Now(), s.Vouchers.MarksTest(), s.voucherAvailability(offers, settings))
 	supply := []voucherItemSupply{}
+	locator := vouchers.NewLocator(loaded.document)
 	for _, brand := range loaded.document.Brands {
 		for _, item := range brand.Items {
-			located, ok := vouchers.Find(loaded.document, item.Key)
+			located, ok := locator.Find(item.Key)
 			if !ok {
 				continue
 			}
@@ -250,7 +251,7 @@ func (s HTTPServer) handleVoucherAdminCatalog(w http.ResponseWriter, r *http.Req
 	if full, err := store.CurrentVoucherCatalog(ctx); err == nil {
 		record = full
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeLargeJSON(w, r, map[string]any{
 		"catalog": record,
 		"view":    view,
 		"supply":  supply,

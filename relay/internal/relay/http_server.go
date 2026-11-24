@@ -2,6 +2,7 @@ package relay
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -3305,22 +3306,27 @@ func relayCredentialOutcome(err error) string {
 }
 
 func writeJSON(w http.ResponseWriter, statusCode int, value any) {
+	// Encoded once: the length was an encoding of its own, which doubled the
+	// cost of every large answer.
+	body := encodeJSON(value)
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Content-Length", strconv.Itoa(jsonSize(value)))
+	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 	w.WriteHeader(statusCode)
-	_ = json.NewEncoder(w).Encode(value)
+	_, _ = w.Write(body)
+}
+
+// encodeJSON is value as json.Encoder writes it (a newline after it), or
+// "null" when it does not encode.
+func encodeJSON(value any) []byte {
+	var buffer bytes.Buffer
+	if err := json.NewEncoder(&buffer).Encode(value); err != nil {
+		return []byte("null\n")
+	}
+	return buffer.Bytes()
 }
 
 func writeNotFound(w http.ResponseWriter) {
 	writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
-}
-
-func jsonSize(value any) int {
-	content, err := json.Marshal(value)
-	if err != nil {
-		return 0
-	}
-	return len(content) + 1
 }
 
 func (s HTTPServer) logger() *slog.Logger {

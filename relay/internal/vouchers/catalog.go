@@ -720,39 +720,106 @@ func (l Located) Name() string {
 	return strings.Join(parts, " · ")
 }
 
-// Find locates an item by key in a normalized document.
+// Find locates an item by key in a normalized document. To look up many items
+// of one document, a Locator reads it once instead of once per item.
 func Find(document Document, key string) (Located, bool) {
 	key = strings.TrimSpace(key)
-	categories := map[string]Category{}
-	for _, category := range document.Categories {
-		categories[category.Key] = category
-	}
 	for _, brand := range document.Brands {
 		for _, item := range brand.Items {
-			if item.Key != key {
-				continue
+			if item.Key == key {
+				return locate(document, brand, item, nil, nil)
 			}
-			refs, err := ParseRefs(item)
-			if err != nil {
-				return Located{}, false
-			}
-			located := Located{Brand: brand, Category: categories[brand.Category], Item: item, Ref: refs[0], Refs: refs,
-				PriceFollowsCost: document.priceFollowsCost(item)}
-			if item.Country != "" {
-				for _, country := range document.Countries {
-					if country.Code == item.Country {
-						located.CountryName = countryLabel(country.Code, &country)
-						break
-					}
-				}
-				if located.CountryName == "" {
-					located.CountryName = CountryName(item.Country)
-				}
-			}
-			return located, true
 		}
 	}
 	return Located{}, false
+}
+
+// Locator finds items of one document by key, the document indexed once:
+// Find over every item of a catalog of thousands read it thousands of times
+// (the console's catalog page waited on it, and every auto-priced shelf).
+type Locator struct {
+	document   Document
+	at         map[string][2]int // item key -> brand index, item index
+	categories map[string]Category
+	countries  map[string]*Country
+}
+
+// NewLocator indexes document. Like Find, the first of a repeated key wins.
+func NewLocator(document Document) *Locator {
+	l := &Locator{
+		document:   document,
+		at:         map[string][2]int{},
+		categories: make(map[string]Category, len(document.Categories)),
+		countries:  make(map[string]*Country, len(document.Countries)),
+	}
+	for b, brand := range document.Brands {
+		for i, item := range brand.Items {
+			if _, seen := l.at[item.Key]; !seen {
+				l.at[item.Key] = [2]int{b, i}
+			}
+		}
+	}
+	for _, category := range document.Categories {
+		l.categories[category.Key] = category
+	}
+	for i := range document.Countries {
+		if _, seen := l.countries[document.Countries[i].Code]; !seen {
+			l.countries[document.Countries[i].Code] = &document.Countries[i]
+		}
+	}
+	return l
+}
+
+// Find is Find(document, key), without reading the document again.
+func (l *Locator) Find(key string) (Located, bool) {
+	at, ok := l.at[strings.TrimSpace(key)]
+	if !ok {
+		return Located{}, false
+	}
+	brand := l.document.Brands[at[0]]
+	return locate(l.document, brand, brand.Items[at[1]], l.categories, l.countries)
+}
+
+// locate is item of brand as Find reports it. categories and countries are
+// the document's, indexed; nil reads them from the document.
+func locate(document Document, brand Brand, item Item, categories map[string]Category, countries map[string]*Country) (Located, bool) {
+	refs, err := ParseRefs(item)
+	if err != nil {
+		return Located{}, false
+	}
+	var category Category
+	if categories != nil {
+		category = categories[brand.Category]
+	} else {
+		// The last of a repeated key, as the index keeps it.
+		for _, c := range document.Categories {
+			if c.Key == brand.Category {
+				category = c
+			}
+		}
+	}
+	located := Located{Brand: brand, Category: category, Item: item, Ref: refs[0], Refs: refs,
+		PriceFollowsCost: document.priceFollowsCost(item)}
+	if item.Country != "" {
+		var entry *Country
+		if countries != nil {
+			entry = countries[item.Country]
+		} else {
+			for i := range document.Countries {
+				if document.Countries[i].Code == item.Country {
+					entry = &document.Countries[i]
+					break
+				}
+			}
+		}
+		if entry != nil {
+			located.CountryName = countryLabel(entry.Code, entry)
+		}
+		if located.CountryName == "" {
+			located.CountryName = CountryName(item.Country)
+		}
+	}
+	return located, true
 }
 
 // Pricing is what an item costs at one moment.

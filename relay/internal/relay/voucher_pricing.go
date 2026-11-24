@@ -114,11 +114,15 @@ func (c *VoucherSettingsCache) rememberRates(rates []control.ExchangeRate, now t
 // supplier cost keeps its written prices.
 func (s HTTPServer) autoPricedDocument(document vouchers.Document, offers voucherOffers, settings vouchers.Settings) vouchers.Document {
 	price := s.cardPricer(offers, settings)
+	var locator *vouchers.Locator
 	return document.WithPrices(func(item vouchers.Item) (string, string, bool) {
 		if !document.AutoPriced(item) {
 			return "", "", false
 		}
-		located, found := vouchers.Find(document, item.Key)
+		if locator == nil {
+			locator = vouchers.NewLocator(document)
+		}
+		located, found := locator.Find(item.Key)
 		if !found {
 			return "", "", false
 		}

@@ -232,9 +232,10 @@ func (s HTTPServer) handleVoucherStockLevels(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	items := make([]voucherStockItem, 0, len(levels))
+	locator := vouchers.NewLocator(loaded.document)
 	for _, level := range levels {
 		item := voucherStockItem{VoucherStockLevel: level}
-		if located, found := vouchers.Find(loaded.document, level.ItemKey); found && !loaded.empty {
+		if located, found := locator.Find(level.ItemKey); found && !loaded.empty {
 			item.Name, item.Brand, item.InCatalog = located.Name(), located.Brand.Key, true
 		}
 		items = append(items, item)
@@ -386,10 +387,11 @@ func (s HTTPServer) handleVoucherStockAdd(
 	}
 	batch := control.VoucherStockBatch{Source: request.Source, Note: request.Note, Actor: request.Actor}
 	var problems []control.VoucherStockProblem
+	locator := vouchers.NewLocator(loaded.document)
 	for i, row := range request.Codes {
 		item := strings.TrimSpace(row.Item)
 		if item != "" {
-			if _, found := vouchers.Find(loaded.document, item); loaded.empty || !found {
+			if _, found := locator.Find(item); loaded.empty || !found {
 				problems = append(problems, control.VoucherStockProblem{Row: i, Field: "item", Message: "no such card in the catalog"})
 			}
 		}
