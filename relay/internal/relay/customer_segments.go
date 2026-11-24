@@ -30,6 +30,7 @@ import (
 //	                                                   holdout_percent, notify: {title, body, link}}
 //	PATCH /v1/customers/admin/offers/{id}             {name, title, description, ends_at, active}
 //	GET   /v1/customers/me/offers                     the offers this customer can use now
+//	GET   /v1/customers/offers                        the offers for everyone, for visitors
 
 // customerSegmentationFresh is how long one segmentation is used: the console
 // pages through customers, and a page must not cost a whole reading.
@@ -382,6 +383,15 @@ type customerOfferRequest struct {
 	StartsAt        *time.Time `json:"starts_at"`
 	EndsAt          *time.Time `json:"ends_at"`
 	HoldoutPercent  int        `json:"holdout_percent"`
+	// Audience is segments (the default) or everyone.
+	Audience    string                      `json:"audience"`
+	Tiers       []control.CustomerOfferTier `json:"tiers"`
+	TierUnit    string                      `json:"tier_unit"`
+	BuyQuantity int                         `json:"buy_quantity"`
+	GetQuantity int                         `json:"get_quantity"`
+	GetPercent  string                      `json:"get_percent"`
+	Scope       control.CustomerOfferScope  `json:"scope"`
+	Badge       string                      `json:"badge"`
 	// Notify, when it has words, tells the recipients (not the holdout).
 	Notify *struct {
 		Title string `json:"title"`
@@ -421,9 +431,17 @@ func (s HTTPServer) handleCustomerAdminCreateOffer(w http.ResponseWriter, r *htt
 	if !decodeCustomerBody(w, r, &request) {
 		return
 	}
+	everyone := request.Audience == control.CustomerOfferForEveryone
 	keys, ok := requestedSegments(request.Segments)
+	if everyone {
+		// Every customer: told all at once, if told; none held out.
+		keys, ok = map[string]bool{}, len(request.Segments) == 0
+		for _, key := range segments.Keys {
+			keys[key] = true
+		}
+	}
 	if !ok {
-		writeCustomerError(w, http.StatusBadRequest, "invalid_segments", "segments must name one known segment or more", nil)
+		writeCustomerError(w, http.StatusBadRequest, "invalid_segments", "segments must name one known segment or more (none for everyone)", nil)
 		return
 	}
 	var notify *fcm.Message
@@ -447,20 +465,24 @@ func (s HTTPServer) handleCustomerAdminCreateOffer(w http.ResponseWriter, r *htt
 		return
 	}
 	members := segmentation.members(keys, false)
-	recipients, err := splitHoldout(members, max(request.HoldoutPercent, 0))
-	if err != nil {
-		s.customerInternalError(w, "offer holdout failed", err)
-		return
-	}
-	names := make([]string, 0, len(keys))
-	for key := range keys {
-		names = append(names, key)
+	var recipients []control.CustomerOfferRecipient
+	names := []string{}
+	if !everyone {
+		if recipients, err = splitHoldout(members, max(request.HoldoutPercent, 0)); err != nil {
+			s.customerInternalError(w, "offer holdout failed", err)
+			return
+		}
+		for key := range keys {
+			names = append(names, key)
+		}
 	}
 	offer := control.CustomerOffer{
 		Name: request.Name, Title: request.Title, Description: request.Description, Kind: request.Kind,
 		Value: request.Value, MaxDiscount: request.MaxDiscount, MinOrder: request.MinOrder, Segments: names,
 		UsesPerCustomer: request.UsesPerCustomer, MaxRedemptions: request.MaxRedemptions,
 		EndsAt: request.EndsAt, HoldoutPercent: request.HoldoutPercent, CreatedBy: adminActor(r, request.Actor),
+		Audience: request.Audience, Tiers: request.Tiers, TierUnit: request.TierUnit, BuyQuantity: request.BuyQuantity,
+		GetQuantity: request.GetQuantity, GetPercent: request.GetPercent, Scope: request.Scope, Badge: request.Badge,
 	}
 	if request.StartsAt != nil {
 		offer.StartsAt = *request.StartsAt
@@ -474,8 +496,9 @@ func (s HTTPServer) handleCustomerAdminCreateOffer(w http.ResponseWriter, r *htt
 		return
 	}
 	s.forgetCustomerSegmentation()
-	s.logger().Info("operator made a segment offer", "offer_id", created.ID, "segments", strings.Join(created.Segments, ","),
-		"recipients", created.Recipients, "holdouts", created.Holdouts, "actor", created.CreatedBy)
+	s.logger().Info("operator made an offer", "offer_id", created.ID, "kind", created.Kind, "audience", created.Audience,
+		"segments", strings.Join(created.Segments, ","), "recipients", created.Recipients, "holdouts", created.Holdouts,
+		"actor", created.CreatedBy)
 	payload := map[string]any{"offer": created}
 	if notify != nil {
 		message := *notify
@@ -484,10 +507,15 @@ func (s HTTPServer) handleCustomerAdminCreateOffer(w http.ResponseWriter, r *htt
 			Audience: "offer", Title: message.Title, Body: message.Body, Link: message.Link,
 			Campaign: message.Campaign, SentBy: created.CreatedBy,
 		}
-		ids := make([]string, 0, created.Recipients)
+		ids := make([]string, 0, len(members))
 		for _, recipient := range recipients {
 			if !recipient.Holdout {
 				ids = append(ids, recipient.CustomerID)
+			}
+		}
+		if everyone {
+			for _, member := range members {
+				ids = append(ids, member.CustomerID)
 			}
 		}
 		if err := s.pushToCustomers(context.WithoutCancel(r.Context()), admin, ids, message, &record); err != nil {
@@ -509,13 +537,15 @@ func (s HTTPServer) handleCustomerAdminUpdateOffer(w http.ResponseWriter, r *htt
 		Name        *string          `json:"name"`
 		Title       *string          `json:"title"`
 		Description *string          `json:"description"`
+		Badge       *string          `json:"badge"`
 		EndsAt      optionalTimeJSON `json:"ends_at"`
 		Active      *bool            `json:"active"`
 	}
 	if !decodeCustomerBody(w, r, &request) {
 		return
 	}
-	update := control.CustomerOfferUpdate{Name: request.Name, Title: request.Title, Description: request.Description, Active: request.Active}
+	update := control.CustomerOfferUpdate{Name: request.Name, Title: request.Title, Description: request.Description,
+		Badge: request.Badge, Active: request.Active}
 	if request.EndsAt.set {
 		update.EndsAt = &request.EndsAt.value
 	}
@@ -551,8 +581,21 @@ func (o *optionalTimeJSON) UnmarshalJSON(raw []byte) error {
 	return nil
 }
 
-// handleCustomerOffers serves GET /v1/customers/me/offers: what the app shows
-// at the shelf and offers at checkout.
+// customerOfferView is an offer as the app reads it: its terms, scope and
+// badge, never who it was made for.
+func customerOfferView(offer control.CustomerOffer, usesLeft int) map[string]any {
+	return map[string]any{
+		"id": offer.ID, "title": offer.Title, "description": offer.Description, "kind": offer.Kind,
+		"value": offer.Value, "max_discount": offer.MaxDiscount, "min_order": offer.MinOrder,
+		"tiers": offer.Tiers, "tier_unit": offer.TierUnit, "buy_quantity": offer.BuyQuantity,
+		"get_quantity": offer.GetQuantity, "get_percent": offer.GetPercent, "scope": offer.Scope,
+		"badge": offer.Badge, "ends_at": offer.EndsAt, "uses_left": usesLeft,
+		"for_everyone": offer.Audience == control.CustomerOfferForEveryone,
+	}
+}
+
+// handleCustomerOffers serves GET /v1/customers/me/offers: the offers this
+// customer can use now, for the badges on the shelf and the checkout.
 func (s HTTPServer) handleCustomerOffers(w http.ResponseWriter, r *http.Request, customer control.Customer) {
 	store, ok := s.Store.(control.CustomerOfferStore)
 	if !ok {
@@ -566,12 +609,30 @@ func (s HTTPServer) handleCustomerOffers(w http.ResponseWriter, r *http.Request,
 	}
 	views := make([]map[string]any, 0, len(offers))
 	for _, offer := range offers {
-		views = append(views, map[string]any{
-			"id": offer.ID, "title": offer.Title, "description": offer.Description, "kind": offer.Kind,
-			"value": offer.Value, "max_discount": offer.MaxDiscount, "min_order": offer.MinOrder,
-			"ends_at": offer.EndsAt, "uses_left": offer.UsesLeft,
-		})
+		views = append(views, customerOfferView(offer.CustomerOffer, offer.UsesLeft))
 	}
+	writeJSON(w, http.StatusOK, map[string]any{"offers": views})
+}
+
+// handlePublicCustomerOffers serves GET /v1/customers/offers: the offers for
+// everyone, for a visitor who has not signed in (they sign in to use one).
+func (s HTTPServer) handlePublicCustomerOffers(w http.ResponseWriter, r *http.Request) {
+	store, ok := s.Store.(control.CustomerOfferStore)
+	if !ok {
+		writeJSON(w, http.StatusOK, map[string]any{"offers": []any{}})
+		return
+	}
+	offers, err := store.PublicCustomerOffers(r.Context(), s.clock().Now())
+	if err != nil {
+		s.customerInternalError(w, "public offers failed", err)
+		return
+	}
+	views := make([]map[string]any, 0, len(offers))
+	for _, offer := range offers {
+		views = append(views, customerOfferView(offer, offer.UsesPerCustomer))
+	}
+	// The same for every visitor, for a minute.
+	w.Header().Set("Cache-Control", "public, max-age=60")
 	writeJSON(w, http.StatusOK, map[string]any{"offers": views})
 }
 

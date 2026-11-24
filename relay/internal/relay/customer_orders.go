@@ -138,9 +138,11 @@ func (s HTTPServer) handleCustomerOrderCreate(w http.ResponseWriter, r *http.Req
 	// What is sold, and at what price: a card from the catalog, or an eSIM plan.
 	var (
 		itemKey, brandKey, itemName string
-		account                     map[string]string
-		price                       *big.Rat
-		sandbox                     bool
+		// category scopes an offer: the card's, or "esim".
+		category string
+		account  map[string]string
+		price    *big.Rat
+		sandbox  bool
 	)
 	if item, isESIM := parseESIMItem(request.Item); isESIM {
 		if request.Quantity != 1 {
@@ -159,6 +161,7 @@ func (s HTTPServer) handleCustomerOrderCreate(w http.ResponseWriter, r *http.Req
 		}
 		itemKey, brandKey, itemName, price = request.Item, esimOrderBrand(quote.Details.Country), quote.Name, quote.Price
 		account = esimOrderAccount(request.Account)
+		category = control.CustomerOfferESIM
 		// Only Airalo has a Sandbox; a plan bought from eSIM Access is real.
 		sandbox = s.ESIM.Sandbox && (quote.Details.Supplier == "" || quote.Details.Supplier == vouchers.SupplierAiralo)
 	} else {
@@ -193,6 +196,7 @@ func (s HTTPServer) handleCustomerOrderCreate(w http.ResponseWriter, r *http.Req
 			return
 		}
 		itemKey, brandKey, itemName = located.Item.Key, located.Brand.Key, located.Name()
+		category = located.Brand.Category
 	}
 	if shown, err := control.ParseWalletAmount(request.UnitPrice); err != nil || shown.Cmp(price) != 0 {
 		writeCustomerError(w, http.StatusConflict, "price_changed", "the price changed; check it and try again",
@@ -212,7 +216,9 @@ func (s HTTPServer) handleCustomerOrderCreate(w http.ResponseWriter, r *http.Req
 			writeCustomerError(w, http.StatusConflict, "offer_unavailable", "this offer cannot be used on this order", nil)
 			return
 		}
-		total.Sub(total, control.CustomerOfferDiscount(offer, total))
+		total.Sub(total, control.CustomerOfferDiscount(offer, control.CustomerOfferLine{
+			UnitPrice: price, Quantity: request.Quantity, Category: category, Brand: brandKey, Item: itemKey,
+		}))
 	}
 	needsPayment := true
 	if request.UseCredit {
@@ -267,6 +273,7 @@ func (s HTTPServer) handleCustomerOrderCreate(w http.ResponseWriter, r *http.Req
 		TestMode:   s.Vouchers.MarksTest() || s.Wallet.TestMode || review || sandbox,
 		Review:     review,
 		OfferID:    request.OfferID,
+		Category:   category,
 	}, request.UseCredit)
 	switch {
 	case errors.Is(err, control.ErrCustomerOfferUnavailable):

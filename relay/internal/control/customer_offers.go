@@ -61,13 +61,30 @@ type CustomerOffer struct {
 	Name        string `json:"name"`
 	Title       string `json:"title"`
 	Description string `json:"description,omitempty"`
-	Kind        string `json:"kind"`
-	// Value is the percentage (Kind percent) or the dinars (Kind amount) off.
+	// Kind is percent, amount, tiered or bundle (customer_offer_terms.go).
+	Kind string `json:"kind"`
+	// Value is the percentage (percent) or the dinars (amount) off; for a
+	// tiered offer its highest tier's, for a bundle GetPercent.
 	Value string `json:"value"`
 	// MaxDiscount caps a percentage's discount per order ("0.000": no cap);
 	// MinOrder is the smallest order it applies to.
 	MaxDiscount string `json:"max_discount"`
 	MinOrder    string `json:"min_order"`
+	// Tiers, in TierUnit, are a tiered offer's steps.
+	Tiers    []CustomerOfferTier `json:"tiers,omitempty"`
+	TierUnit string              `json:"tier_unit,omitempty"`
+	// A bundle: buy BuyQuantity, get GetQuantity more at GetPercent off.
+	BuyQuantity int    `json:"buy_quantity,omitempty"`
+	GetQuantity int    `json:"get_quantity,omitempty"`
+	GetPercent  string `json:"get_percent,omitempty"`
+	// Scope is what it applies to; empty, everything.
+	Scope CustomerOfferScope `json:"scope"`
+	// Badge is what the app writes on what it covers ("خصم الشتاء"); empty,
+	// the app words it from the terms.
+	Badge string `json:"badge,omitempty"`
+	// Audience is segments (Segments' customers when it was made) or
+	// everyone (every customer, and visitors are shown it).
+	Audience string `json:"audience"`
 	// Segments are the segments it was made for; Recipients how many
 	// customers were in them then and were given it.
 	Segments   []string `json:"segments"`
@@ -104,6 +121,7 @@ type CustomerOfferUpdate struct {
 	Name        *string
 	Title       *string
 	Description *string
+	Badge       *string
 	EndsAt      **time.Time
 	Active      *bool
 }
@@ -111,35 +129,6 @@ type CustomerOfferUpdate struct {
 // LiveAt reports whether the offer runs at now.
 func (o CustomerOffer) LiveAt(now time.Time) bool {
 	return o.Active && !now.Before(o.StartsAt) && (o.EndsAt == nil || now.Before(*o.EndsAt))
-}
-
-// CustomerOfferDiscount is what offer takes off an order of subtotal dinars:
-// never more than the order, and nothing below its minimum.
-func CustomerOfferDiscount(offer CustomerOffer, subtotal *big.Rat) *big.Rat {
-	discount := new(big.Rat)
-	value, err := ParseWalletAmount(offer.Value)
-	if err != nil || value.Sign() <= 0 || subtotal.Sign() <= 0 {
-		return discount
-	}
-	if minimum, err := ParseWalletAmount(offer.MinOrder); err == nil && subtotal.Cmp(minimum) < 0 {
-		return discount
-	}
-	switch offer.Kind {
-	case CustomerOfferPercent:
-		discount.Mul(subtotal, value)
-		discount.Quo(discount, big.NewRat(100, 1))
-		if cap, err := ParseWalletAmount(offer.MaxDiscount); err == nil && cap.Sign() > 0 && discount.Cmp(cap) > 0 {
-			discount.Set(cap)
-		}
-	case CustomerOfferAmount:
-		discount.Set(value)
-	}
-	if discount.Cmp(subtotal) > 0 {
-		discount.Set(subtotal)
-	}
-	// To the dirham, down: the customer is never promised a fraction the
-	// books cannot hold.
-	return roundDownToDirham(discount)
 }
 
 func roundDownToDirham(value *big.Rat) *big.Rat {
@@ -161,16 +150,25 @@ func customerOfferUses(status string) bool {
 // customerOfferTerms checks that the offer may be used now by a recipient
 // with used uses of their own, the offer having redeemed uses in all, and
 // prices the order: its total less the discount, and the discount.
-func customerOfferTerms(offer CustomerOffer, recipient bool, used, redeemed int, subtotal *big.Rat, now time.Time) (*big.Rat, *big.Rat, error) {
+func customerOfferTerms(offer CustomerOffer, recipient bool, used, redeemed int, line CustomerOfferLine, now time.Time) (*big.Rat, *big.Rat, error) {
+	if offer.Audience == CustomerOfferForEveryone {
+		recipient = true
+	}
 	if !recipient || !offer.LiveAt(now) || used >= max(offer.UsesPerCustomer, 1) ||
 		(offer.MaxRedemptions > 0 && redeemed >= offer.MaxRedemptions) {
 		return nil, nil, ErrCustomerOfferUnavailable
 	}
-	discount := CustomerOfferDiscount(offer, subtotal)
+	discount := CustomerOfferDiscount(offer, line)
 	if discount.Sign() <= 0 {
 		return nil, nil, ErrCustomerOfferUnavailable
 	}
-	return new(big.Rat).Sub(subtotal, discount), discount, nil
+	return new(big.Rat).Sub(line.Subtotal(), discount), discount, nil
+}
+
+// orderOfferLine is order as its offer prices it.
+func orderOfferLine(order CustomerOrder) CustomerOfferLine {
+	unit, _ := ParseWalletAmount(order.UnitPrice)
+	return CustomerOfferLine{UnitPrice: unit, Quantity: order.Quantity, Category: order.Category, Brand: order.BrandKey, Item: order.ItemKey}
 }
 
 // withOfferApplied is order priced by its offer.
@@ -196,23 +194,6 @@ func normalizeCustomerOffer(offer CustomerOffer, now time.Time) (CustomerOffer, 
 		len([]rune(offer.Description)) > maxCustomerOfferNotes {
 		return invalid("an offer's words are too long")
 	}
-	value, err := ParseWalletAmount(offer.Value)
-	if err != nil || value.Sign() <= 0 {
-		return invalid("value must be a positive amount")
-	}
-	switch offer.Kind {
-	case CustomerOfferPercent:
-		if value.Cmp(maxCustomerOfferPercent) > 0 {
-			return invalid("a percentage is at most 90")
-		}
-	case CustomerOfferAmount:
-		if value.Cmp(maxCustomerOfferAmount) > 0 {
-			return invalid("an amount is at most 500 dinars")
-		}
-	default:
-		return invalid("kind is percent or amount")
-	}
-	offer.Value = FormatWalletAmount(value)
 	for _, field := range []*string{&offer.MaxDiscount, &offer.MinOrder} {
 		if strings.TrimSpace(*field) == "" {
 			*field = "0"
@@ -223,6 +204,14 @@ func normalizeCustomerOffer(offer CustomerOffer, now time.Time) (CustomerOffer, 
 		}
 		*field = FormatWalletAmount(amount)
 	}
+	terms, err := normalizeCustomerOfferTerms(offer)
+	if err != nil {
+		return CustomerOffer{}, err
+	}
+	offer = terms
+	if offer.Audience != CustomerOfferForEveryone {
+		offer.Audience = CustomerOfferForSegments
+	}
 	segments := map[string]bool{}
 	cleaned := []string{}
 	for _, segment := range offer.Segments {
@@ -232,7 +221,10 @@ func normalizeCustomerOffer(offer CustomerOffer, now time.Time) (CustomerOffer, 
 			cleaned = append(cleaned, segment)
 		}
 	}
-	if len(cleaned) == 0 || len(cleaned) > maxCustomerOfferSegments {
+	switch {
+	case offer.Audience == CustomerOfferForEveryone && (len(cleaned) > 0 || offer.HoldoutPercent != 0):
+		return invalid("an offer for everyone names no segments and holds no one out")
+	case offer.Audience == CustomerOfferForSegments && (len(cleaned) == 0 || len(cleaned) > maxCustomerOfferSegments):
 		return invalid("an offer is for one segment or more")
 	}
 	sort.Strings(cleaned)
@@ -281,6 +273,9 @@ func applyCustomerOfferUpdate(offer CustomerOffer, update CustomerOfferUpdate, n
 	if update.Description != nil {
 		offer.Description = *update.Description
 	}
+	if update.Badge != nil {
+		offer.Badge = *update.Badge
+	}
 	if update.Active != nil {
 		offer.Active = *update.Active
 	}
@@ -290,6 +285,8 @@ func applyCustomerOfferUpdate(offer CustomerOffer, update CustomerOfferUpdate, n
 	checked, err := normalizeCustomerOffer(CustomerOffer{
 		ID: offer.ID, Name: offer.Name, Title: offer.Title, Description: offer.Description, Kind: offer.Kind,
 		Value: offer.Value, MaxDiscount: offer.MaxDiscount, MinOrder: offer.MinOrder, Segments: offer.Segments,
+		Tiers: offer.Tiers, TierUnit: offer.TierUnit, BuyQuantity: offer.BuyQuantity, GetQuantity: offer.GetQuantity,
+		GetPercent: offer.GetPercent, Scope: offer.Scope, Badge: offer.Badge, Audience: offer.Audience,
 		UsesPerCustomer: offer.UsesPerCustomer, MaxRedemptions: offer.MaxRedemptions,
 		HoldoutPercent: offer.HoldoutPercent, StartsAt: offer.StartsAt, EndsAt: offer.EndsAt,
 	}, now)
@@ -297,6 +294,7 @@ func applyCustomerOfferUpdate(offer CustomerOffer, update CustomerOfferUpdate, n
 		return CustomerOffer{}, err
 	}
 	offer.Name, offer.Title, offer.Description, offer.EndsAt = checked.Name, checked.Title, checked.Description, checked.EndsAt
+	offer.Badge = checked.Badge
 	offer.UpdatedAt = now.UTC()
 	return offer, nil
 }
@@ -314,6 +312,9 @@ type CustomerOfferStore interface {
 	// CustomerOffersFor is the offers customerID can use at now, and how many
 	// uses of each they have left.
 	CustomerOffersFor(ctx context.Context, customerID string, now time.Time) ([]CustomerOfferFor, error)
+	// PublicCustomerOffers is the offers for everyone running at now and not
+	// used up: what a visitor who has not signed in is shown.
+	PublicCustomerOffers(ctx context.Context, now time.Time) ([]CustomerOffer, error)
 }
 
 // CustomerOfferFor is an offer one customer can use, with their uses left.
@@ -374,13 +375,13 @@ func (s *FileStore) isOfferRecipientLocked(offerID, customerID string) bool {
 }
 
 // applyCustomerOfferLocked prices order by its offer (the store's lock held).
-func (s *FileStore) applyCustomerOfferLocked(order CustomerOrder, subtotal *big.Rat, now time.Time) (CustomerOrder, *big.Rat, error) {
+func (s *FileStore) applyCustomerOfferLocked(order CustomerOrder, _ *big.Rat, now time.Time) (CustomerOrder, *big.Rat, error) {
 	offer, ok := s.customerOffersLocked().Offers[order.OfferID]
 	if !ok {
 		return CustomerOrder{}, nil, ErrCustomerOfferUnavailable
 	}
 	used, redeemed := offerUseCounts(s.customerOrdersLocked().Orders, offer.ID, order.CustomerID)
-	total, discount, err := customerOfferTerms(offer, s.isOfferRecipientLocked(offer.ID, order.CustomerID), used, redeemed, subtotal, now)
+	total, discount, err := customerOfferTerms(offer, s.isOfferRecipientLocked(offer.ID, order.CustomerID), used, redeemed, orderOfferLine(order), now)
 	if err != nil {
 		return CustomerOrder{}, nil, err
 	}
@@ -393,7 +394,7 @@ func (s *FileStore) CreateCustomerOffer(_ context.Context, offer CustomerOffer, 
 		return CustomerOffer{}, err
 	}
 	recipients = uniqueOfferRecipients(recipients)
-	if offer.Recipients, offer.Holdouts, err = countOfferRecipients(recipients); err != nil {
+	if offer.Recipients, offer.Holdouts, err = countOfferRecipients(offer, recipients); err != nil {
 		return CustomerOffer{}, err
 	}
 	s.mu.Lock()
@@ -460,6 +461,23 @@ func (s *FileStore) CustomerOfferRecipients(_ context.Context, id string) ([]Cus
 	return append([]CustomerOfferRecipient{}, data.Recipients[id]...), nil
 }
 
+func (s *FileStore) PublicCustomerOffers(_ context.Context, now time.Time) ([]CustomerOffer, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	orders := s.customerOrdersLocked().Orders
+	out := []CustomerOffer{}
+	for _, offer := range s.customerOffersLocked().Offers {
+		if offer.Audience != CustomerOfferForEveryone || !offer.LiveAt(now) {
+			continue
+		}
+		if _, redeemed := offerUseCounts(orders, offer.ID, ""); offer.MaxRedemptions == 0 || redeemed < offer.MaxRedemptions {
+			out = append(out, offer)
+		}
+	}
+	sortCustomerOffers(out)
+	return out, nil
+}
+
 func (s *FileStore) CustomerOffersFor(_ context.Context, customerID string, now time.Time) ([]CustomerOfferFor, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -467,7 +485,7 @@ func (s *FileStore) CustomerOffersFor(_ context.Context, customerID string, now 
 	orders := s.customerOrdersLocked().Orders
 	out := []CustomerOfferFor{}
 	for _, offer := range data.Offers {
-		if !offer.LiveAt(now) || !s.isOfferRecipientLocked(offer.ID, customerID) {
+		if !offer.LiveAt(now) || (offer.Audience != CustomerOfferForEveryone && !s.isOfferRecipientLocked(offer.ID, customerID)) {
 			continue
 		}
 		used, redeemed := offerUseCounts(orders, offer.ID, customerID)
@@ -490,7 +508,13 @@ func offerUsesLeft(offer CustomerOffer, used, redeemed int) int {
 
 // countOfferRecipients counts those given an offer and those held out; an
 // offer is given to one customer at least.
-func countOfferRecipients(recipients []CustomerOfferRecipient) (given, held int, err error) {
+func countOfferRecipients(offer CustomerOffer, recipients []CustomerOfferRecipient) (given, held int, err error) {
+	if offer.Audience == CustomerOfferForEveryone {
+		if len(recipients) > 0 {
+			return 0, 0, errors.Join(ErrCustomerOfferInvalid, errors.New("an offer for everyone lists no recipients"))
+		}
+		return 0, 0, nil
+	}
 	for _, recipient := range recipients {
 		if recipient.Holdout {
 			held++
@@ -592,6 +616,14 @@ func (s *CachedInstallationStore) CustomerOfferRecipients(ctx context.Context, i
 		return nil, err
 	}
 	return store.CustomerOfferRecipients(ctx, id)
+}
+
+func (s *CachedInstallationStore) PublicCustomerOffers(ctx context.Context, now time.Time) ([]CustomerOffer, error) {
+	store, err := s.customerOfferStore()
+	if err != nil {
+		return nil, err
+	}
+	return store.PublicCustomerOffers(ctx, now)
 }
 
 func (s *CachedInstallationStore) CustomerOffersFor(ctx context.Context, customerID string, now time.Time) ([]CustomerOfferFor, error) {

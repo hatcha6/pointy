@@ -1494,6 +1494,24 @@ CREATE INDEX IF NOT EXISTS relay_customer_orders_offer_idx
 	ON relay_customer_orders (offer_id) WHERE offer_id <> '';
 `,
 	},
+	{
+		version: 48,
+		name:    "customer offer kinds, scope and audience",
+		sql: `
+-- Tiered and bundle offers, what an offer covers, its badge
+-- (customer_offer_terms.go), and offers for every customer.
+ALTER TABLE relay_customer_offers ADD COLUMN IF NOT EXISTS terms jsonb NOT NULL DEFAULT '{}';
+ALTER TABLE relay_customer_offers ADD COLUMN IF NOT EXISTS audience text NOT NULL DEFAULT 'segments';
+ALTER TABLE relay_customer_offers DROP CONSTRAINT IF EXISTS relay_customer_offers_kind_check;
+ALTER TABLE relay_customer_offers ADD CONSTRAINT relay_customer_offers_kind_check
+	CHECK (kind IN ('percent', 'amount', 'tiered', 'bundle'));
+ALTER TABLE relay_customer_offers DROP CONSTRAINT IF EXISTS relay_customer_offers_audience_check;
+ALTER TABLE relay_customer_offers ADD CONSTRAINT relay_customer_offers_audience_check
+	CHECK (audience IN ('segments', 'everyone'));
+CREATE INDEX IF NOT EXISTS relay_customer_offers_everyone_idx
+	ON relay_customer_offers (audience) WHERE audience = 'everyone' AND active;
+`,
+	},
 }
 
 // migrationsAdvisoryLockKey serializes concurrent migrators (e.g. autoscaled

@@ -166,3 +166,44 @@ func TestAnOffersHoldoutIsNotGivenIt(t *testing.T) {
 		t.Fatalf("an offer for nobody: %d", status)
 	}
 }
+
+func TestAnOfferForEveryoneIsShownToVisitorsAndKeepsToItsScope(t *testing.T) {
+	h := newOrderHarness(t)
+	h.server.Wallet.TestMode, h.dafa.testWorkspace = false, false
+	status, made := h.do(http.MethodPost, "/v1/customers/admin/offers", "admin-token", map[string]any{
+		"name": "libyana 2+1", "title": "اشترِ 2 واحصل على 1 مجاناً", "kind": "bundle", "audience": "everyone",
+		"buy_quantity": 2, "get_quantity": 1, "scope": map[string]any{"brands": []string{"libyana"}}, "badge": "2+1 مجاناً",
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("offer: %d %v", status, made)
+	}
+	id := made["offer"].(map[string]any)["id"].(string)
+
+	// A visitor sees it, with what it covers and its badge.
+	_, public := h.do(http.MethodGet, "/v1/customers/offers", "", nil)
+	offers := public["offers"].([]any)
+	if len(offers) != 1 {
+		t.Fatalf("public offers: %v", public)
+	}
+	shown := offers[0].(map[string]any)
+	if shown["badge"] != "2+1 مجاناً" || shown["kind"] != "bundle" || shown["for_everyone"] != true ||
+		shown["scope"].(map[string]any)["brands"].([]any)[0] != "libyana" {
+		t.Fatalf("public offer: %v", shown)
+	}
+
+	// Anyone who signs in may use it on three Libyana cards: one is free.
+	token := h.customer("0911111111")
+	request := sadadOrder("libyana-10", "10.00", "three", 3)
+	request["offer_id"] = id
+	status, body := h.do(http.MethodPost, "/v1/customers/orders", token, request)
+	order := orderOf(t, body)
+	if status != http.StatusCreated || order["total"] != "20.000" || order["discount"] != "10.000" {
+		t.Fatalf("buy 2 get 1: %d %v", status, order)
+	}
+	// Not on two: nothing is free yet.
+	request = sadadOrder("libyana-10", "10.00", "two", 2)
+	request["offer_id"] = id
+	if status, _ := h.do(http.MethodPost, "/v1/customers/orders", token, request); status != http.StatusConflict {
+		t.Fatalf("two cards took a buy-2-get-1: %d", status)
+	}
+}

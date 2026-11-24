@@ -12,22 +12,78 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// lineOf is quantity cards of unit dinars, of category, brand and item.
+func lineOf(unit int64, quantity int, scope ...string) CustomerOfferLine {
+	line := CustomerOfferLine{UnitPrice: big.NewRat(unit, 1), Quantity: quantity}
+	if len(scope) == 3 {
+		line.Category, line.Brand, line.Item = scope[0], scope[1], scope[2]
+	}
+	return line
+}
+
 func TestOfferDiscountRules(t *testing.T) {
 	percent := CustomerOffer{Kind: CustomerOfferPercent, Value: "15", MaxDiscount: "5", MinOrder: "20"}
 	for subtotal, want := range map[int64]string{10: "0.000", 20: "3.000", 30: "4.500", 100: "5.000"} {
-		if got := FormatWalletAmount(CustomerOfferDiscount(percent, big.NewRat(subtotal, 1))); got != want {
+		if got := FormatWalletAmount(CustomerOfferDiscount(percent, lineOf(subtotal, 1))); got != want {
 			t.Errorf("15%% of %d: %s, want %s", subtotal, got, want)
 		}
 	}
 	amount := CustomerOffer{Kind: CustomerOfferAmount, Value: "7", MaxDiscount: "0", MinOrder: "0"}
-	if got := FormatWalletAmount(CustomerOfferDiscount(amount, big.NewRat(5, 1))); got != "5.000" {
+	if got := FormatWalletAmount(CustomerOfferDiscount(amount, lineOf(5, 1))); got != "5.000" {
 		t.Fatalf("an amount larger than the order: %s", got)
 	}
 	// Down to the dirham: 33.335% of 10 is 3.3335, never 3.334.
 	third := CustomerOffer{Kind: CustomerOfferPercent, Value: "33.335", MaxDiscount: "0", MinOrder: "0"}
-	if got := FormatWalletAmount(CustomerOfferDiscount(third, big.NewRat(10, 1))); got != "3.333" {
+	if got := FormatWalletAmount(CustomerOfferDiscount(third, lineOf(10, 1))); got != "3.333" {
 		t.Fatalf("rounding: %s", got)
 	}
+
+	// 5% from 20, 10% from 50, 15% from 100, capped at 12.
+	tiered := CustomerOffer{Kind: CustomerOfferTiered, TierUnit: CustomerOfferPercent, MaxDiscount: "12", MinOrder: "20",
+		Tiers: []CustomerOfferTier{{MinOrder: "20", Value: "5"}, {MinOrder: "50", Value: "10"}, {MinOrder: "100", Value: "15"}}}
+	for subtotal, want := range map[int64]string{10: "0.000", 20: "1.000", 49: "2.450", 50: "5.000", 100: "12.000"} {
+		if got := FormatWalletAmount(CustomerOfferDiscount(tiered, lineOf(subtotal, 1))); got != want {
+			t.Errorf("tiered on %d: %s, want %s", subtotal, got, want)
+		}
+	}
+	tieredAmount := CustomerOffer{Kind: CustomerOfferTiered, TierUnit: CustomerOfferAmount, MaxDiscount: "1",
+		Tiers: []CustomerOfferTier{{MinOrder: "30", Value: "3"}, {MinOrder: "60", Value: "8"}}}
+	if got := FormatWalletAmount(CustomerOfferDiscount(tieredAmount, lineOf(70, 1))); got != "8.000" {
+		t.Fatalf("an amount tier is not capped by max_discount: %s", got)
+	}
+
+	// Buy 2, get 1 free: the third card of every three.
+	bogo := CustomerOffer{Kind: CustomerOfferBundle, BuyQuantity: 2, GetQuantity: 1, GetPercent: "100"}
+	for quantity, want := range map[int]string{1: "0.000", 2: "0.000", 3: "10.000", 5: "10.000", 6: "20.000"} {
+		if got := FormatWalletAmount(CustomerOfferDiscount(bogo, lineOf(10, quantity))); got != want {
+			t.Errorf("buy 2 get 1 on %d cards: %s, want %s", quantity, got, want)
+		}
+	}
+	half := CustomerOffer{Kind: CustomerOfferBundle, BuyQuantity: 1, GetQuantity: 1, GetPercent: "50", MaxDiscount: "6"}
+	if got := FormatWalletAmount(CustomerOfferDiscount(half, lineOf(10, 4))); got != "6.000" {
+		t.Fatalf("buy 1 get 1 half price, capped: %s", got)
+	}
+
+	// Scope: any list naming the card covers it.
+	scoped := CustomerOffer{Kind: CustomerOfferPercent, Value: "10",
+		Scope: CustomerOfferScope{Categories: []string{"games"}, Brands: []string{"libyana"}, Items: []string{"itunes-us-10"}}}
+	for name, line := range map[string]CustomerOfferLine{
+		"its category": lineOf(10, 1, "games", "pubg", "pubg-60"),
+		"its brand":    lineOf(10, 1, "telecom", "libyana", "libyana-10"),
+		"its item":     lineOf(10, 1, "gift_cards", "itunes", "itunes-us-10"),
+	} {
+		if CustomerOfferDiscount(scoped, line).Sign() == 0 {
+			t.Errorf("%s: not covered", name)
+		}
+	}
+	if CustomerOfferDiscount(scoped, lineOf(10, 1, "gift_cards", "itunes", "itunes-us-25")).Sign() != 0 {
+		t.Fatal("a card outside the scope is discounted")
+	}
+	esim := CustomerOffer{Kind: CustomerOfferPercent, Value: "10", Scope: CustomerOfferScope{Categories: []string{CustomerOfferESIM}}}
+	if CustomerOfferDiscount(esim, lineOf(30, 1, CustomerOfferESIM, "esim-tr", "plan-1")).Sign() == 0 {
+		t.Fatal("an eSIM offer does not cover an eSIM")
+	}
+
 	now := time.Date(2026, 11, 24, 9, 0, 0, 0, time.UTC)
 	for name, offer := range map[string]CustomerOffer{
 		"no title":        {Name: "n", Kind: "percent", Value: "10", Segments: []string{"loyal"}},
@@ -36,10 +92,33 @@ func TestOfferDiscountRules(t *testing.T) {
 		"unknown kind":    {Name: "n", Title: "t", Kind: "gift", Value: "10", Segments: []string{"loyal"}},
 		"ends at start":   {Name: "n", Title: "t", Kind: "amount", Value: "1", Segments: []string{"loyal"}, StartsAt: now, EndsAt: &now},
 		"holdout too big": {Name: "n", Title: "t", Kind: "amount", Value: "1", Segments: []string{"loyal"}, HoldoutPercent: 60},
+		"tiers not rising": {Name: "n", Title: "t", Kind: "tiered", Segments: []string{"loyal"},
+			Tiers: []CustomerOfferTier{{MinOrder: "20", Value: "10"}, {MinOrder: "50", Value: "5"}}},
+		"no tiers":               {Name: "n", Title: "t", Kind: "tiered", Segments: []string{"loyal"}},
+		"bundle of none":         {Name: "n", Title: "t", Kind: "bundle", Segments: []string{"loyal"}, BuyQuantity: 0, GetQuantity: 1},
+		"bundle above 100":       {Name: "n", Title: "t", Kind: "bundle", Segments: []string{"loyal"}, BuyQuantity: 1, GetQuantity: 1, GetPercent: "150"},
+		"badge too long":         {Name: "n", Title: "t", Kind: "amount", Value: "1", Segments: []string{"loyal"}, Badge: "خصم كبير جداً على كل شيء اليوم فقط"},
+		"everyone with segments": {Name: "n", Title: "t", Kind: "amount", Value: "1", Audience: "everyone", Segments: []string{"loyal"}},
+		"everyone held out":      {Name: "n", Title: "t", Kind: "amount", Value: "1", Audience: "everyone", HoldoutPercent: 10},
 	} {
 		if _, err := normalizeCustomerOffer(offer, now); !errors.Is(err, ErrCustomerOfferInvalid) {
 			t.Errorf("%s: %v", name, err)
 		}
+	}
+
+	// Tiers are put in order and written the one way; a tiered offer's
+	// value is its best tier, and its minimum its first.
+	made, err := normalizeCustomerOffer(CustomerOffer{Name: "n", Title: "t", Kind: "tiered", Segments: []string{"loyal"},
+		Tiers: []CustomerOfferTier{{MinOrder: "100", Value: "15"}, {MinOrder: "20", Value: "5"}},
+		Scope: CustomerOfferScope{Brands: []string{" pubg ", "pubg", "freefire"}}}, now)
+	if err != nil || made.Tiers[0].MinOrder != "20.000" || made.Value != "15.000" || made.MinOrder != "20.000" ||
+		made.TierUnit != "percent" || len(made.Scope.Brands) != 2 || made.Scope.Brands[0] != "freefire" || made.Audience != "segments" {
+		t.Fatalf("tiered %+v %v", made, err)
+	}
+	bundle, err := normalizeCustomerOffer(CustomerOffer{Name: "n", Title: "t", Kind: "bundle", Audience: "everyone",
+		BuyQuantity: 2, GetQuantity: 1}, now)
+	if err != nil || bundle.GetPercent != "100.000" || bundle.Segments == nil || len(bundle.Segments) != 0 {
+		t.Fatalf("bundle %+v %v", bundle, err)
 	}
 }
 
@@ -172,6 +251,35 @@ func exerciseCustomerOffers(t *testing.T, customers CustomerStore, orders Custom
 	}
 	if _, err := offers.UpdateCustomerOffer(ctx, "missing", CustomerOfferUpdate{Active: &stop}); !errors.Is(err, ErrCustomerOfferNotFound) {
 		t.Fatalf("missing offer: %v", err)
+	}
+
+	// An offer for everyone, on one brand: buy 2 get 1 free. No recipients;
+	// any customer may use it, on that brand only.
+	everyone, err := offers.CreateCustomerOffer(ctx, CustomerOffer{
+		Name: "bogo", Title: "اشترِ 2 واحصل على 1", Kind: CustomerOfferBundle, Audience: CustomerOfferForEveryone,
+		BuyQuantity: 2, GetQuantity: 1, Scope: CustomerOfferScope{Brands: []string{"libyana"}}, Badge: "2+1",
+	}, nil)
+	if err != nil || everyone.Audience != "everyone" || everyone.Recipients != 0 {
+		t.Fatalf("everyone offer %+v %v", everyone, err)
+	}
+	if read, _ := offers.GetCustomerOffer(ctx, everyone.ID); read.BuyQuantity != 2 || read.GetQuantity != 1 ||
+		read.Badge != "2+1" || len(read.Scope.Brands) != 1 || read.GetPercent != "100.000" {
+		t.Fatalf("everyone offer read back %+v", read)
+	}
+	if public, err := offers.PublicCustomerOffers(ctx, clock.Now()); err != nil || len(public) != 1 || public[0].ID != everyone.ID {
+		t.Fatalf("public offers %+v %v", public, err)
+	}
+	if mine, _ := offers.CustomerOffersFor(ctx, held.ID, clock.Now()); len(mine) != 1 || mine[0].ID != everyone.ID {
+		t.Fatalf("a held-out customer still sees an offer for everyone: %+v", mine)
+	}
+	if _, _, err := orders.BeginCustomerOrder(ctx, CustomerOrder{CustomerID: held.ID, IdempotencyKey: "other-brand", Channel: "apk",
+		BrandKey: "almadar", ItemKey: "almadar-10", Quantity: 3, UnitPrice: "10", Method: "dafa_sadad", OfferID: everyone.ID}, false); !errors.Is(err, ErrCustomerOfferUnavailable) {
+		t.Fatalf("another brand took it: %v", err)
+	}
+	three, _, err := orders.BeginCustomerOrder(ctx, CustomerOrder{CustomerID: held.ID, IdempotencyKey: "three", Channel: "apk",
+		BrandKey: "libyana", ItemKey: "libyana-10", Category: "telecom", Quantity: 3, UnitPrice: "10", Method: "dafa_sadad", OfferID: everyone.ID}, false)
+	if err != nil || three.Total != "20.000" || three.Discount != "10.000" {
+		t.Fatalf("buy 2 get 1: %+v %v", three, err)
 	}
 
 	// What the segmentation reads.

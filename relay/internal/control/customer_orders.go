@@ -98,8 +98,11 @@ type CustomerOrder struct {
 	Total     string `json:"total"`
 	// OfferID is the segment offer (customer_offers.go) the order used, and
 	// Discount what it took off; the store works the discount out itself.
-	OfferID    string `json:"offer_id,omitempty"`
-	Discount   string `json:"discount"`
+	OfferID  string `json:"offer_id,omitempty"`
+	Discount string `json:"discount"`
+	// Category is the card's category, for an offer's scope ("esim" for an
+	// eSIM); it is not stored.
+	Category   string `json:"-"`
 	CreditUsed string `json:"credit_used"`
 	AmountDue  string `json:"amount_due"`
 	// Fee is the payment gateway's fee, added on top of AmountDue: Dafa

@@ -2,7 +2,9 @@ package control
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"math/big"
 	"strings"
 	"time"
@@ -12,20 +14,49 @@ import (
 
 const selectCustomerOfferColumns = `id, name, title, description, kind, value::text, max_discount::text,
 	min_order::text, segments, recipients, uses_per_customer, max_redemptions, starts_at, ends_at, active,
-	created_by, created_at, updated_at, holdout_percent, holdouts`
+	created_by, created_at, updated_at, holdout_percent, holdouts, terms, audience`
 
-func scanCustomerOffer(row pgx.Row) (CustomerOffer, error) {
+// customerOfferTermsJSON is the part of an offer kept as one JSON column:
+// what only some kinds have, and its scope and badge.
+type customerOfferTermsJSON struct {
+	Tiers       []CustomerOfferTier `json:"tiers,omitempty"`
+	TierUnit    string              `json:"tier_unit,omitempty"`
+	BuyQuantity int                 `json:"buy_quantity,omitempty"`
+	GetQuantity int                 `json:"get_quantity,omitempty"`
+	GetPercent  string              `json:"get_percent,omitempty"`
+	Scope       CustomerOfferScope  `json:"scope"`
+	Badge       string              `json:"badge,omitempty"`
+}
+
+func customerOfferTermsOf(offer CustomerOffer) ([]byte, error) {
+	return json.Marshal(customerOfferTermsJSON{
+		Tiers: offer.Tiers, TierUnit: offer.TierUnit, BuyQuantity: offer.BuyQuantity, GetQuantity: offer.GetQuantity,
+		GetPercent: offer.GetPercent, Scope: offer.Scope, Badge: offer.Badge,
+	})
+}
+
+func scanCustomerOffer(row pgx.Row, extra ...any) (CustomerOffer, error) {
 	var offer CustomerOffer
-	err := row.Scan(&offer.ID, &offer.Name, &offer.Title, &offer.Description, &offer.Kind, &offer.Value,
+	var terms []byte
+	dest := []any{&offer.ID, &offer.Name, &offer.Title, &offer.Description, &offer.Kind, &offer.Value,
 		&offer.MaxDiscount, &offer.MinOrder, &offer.Segments, &offer.Recipients, &offer.UsesPerCustomer,
 		&offer.MaxRedemptions, &offer.StartsAt, &offer.EndsAt, &offer.Active, &offer.CreatedBy,
-		&offer.CreatedAt, &offer.UpdatedAt, &offer.HoldoutPercent, &offer.Holdouts)
+		&offer.CreatedAt, &offer.UpdatedAt, &offer.HoldoutPercent, &offer.Holdouts, &terms, &offer.Audience}
+	err := row.Scan(append(dest, extra...)...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return CustomerOffer{}, ErrCustomerOfferNotFound
 	}
 	if err != nil {
 		return CustomerOffer{}, err
 	}
+	var kept customerOfferTermsJSON
+	if len(terms) > 0 {
+		if err := json.Unmarshal(terms, &kept); err != nil {
+			return CustomerOffer{}, fmt.Errorf("customer offer %s terms: %w", offer.ID, err)
+		}
+	}
+	offer.Tiers, offer.TierUnit, offer.BuyQuantity, offer.GetQuantity = kept.Tiers, kept.TierUnit, kept.BuyQuantity, kept.GetQuantity
+	offer.GetPercent, offer.Scope, offer.Badge = kept.GetPercent, kept.Scope, kept.Badge
 	offer.Value = NormalizeWalletAmount(offer.Value)
 	offer.MaxDiscount = NormalizeWalletAmount(offer.MaxDiscount)
 	offer.MinOrder = NormalizeWalletAmount(offer.MinOrder)
@@ -43,7 +74,7 @@ func scanCustomerOffer(row pgx.Row) (CustomerOffer, error) {
 // applyCustomerOfferTx prices order by its offer, the customer's row locked.
 // The offer's row is locked too when it caps its redemptions, so two
 // customers cannot both take its last one.
-func applyCustomerOfferTx(ctx context.Context, tx pgx.Tx, order CustomerOrder, subtotal *big.Rat, now time.Time) (CustomerOrder, *big.Rat, error) {
+func applyCustomerOfferTx(ctx context.Context, tx pgx.Tx, order CustomerOrder, _ *big.Rat, now time.Time) (CustomerOrder, *big.Rat, error) {
 	offer, err := scanCustomerOffer(tx.QueryRow(ctx,
 		`SELECT `+selectCustomerOfferColumns+` FROM relay_customer_offers WHERE id = $1 FOR UPDATE`, order.OfferID))
 	if errors.Is(err, ErrCustomerOfferNotFound) {
@@ -63,7 +94,7 @@ WHERE offer_id = $1 AND status IN ('awaiting_payment', 'paid', 'fulfilling', 'de
 		offer.ID, order.CustomerID).Scan(&recipient, &used, &redeemed); err != nil {
 		return CustomerOrder{}, nil, err
 	}
-	total, discount, err := customerOfferTerms(offer, recipient, used, redeemed, subtotal, now)
+	total, discount, err := customerOfferTerms(offer, recipient, used, redeemed, orderOfferLine(order), now)
 	if err != nil {
 		return CustomerOrder{}, nil, err
 	}
@@ -76,7 +107,11 @@ func (s *PostgresStore) CreateCustomerOffer(ctx context.Context, offer CustomerO
 		return CustomerOffer{}, err
 	}
 	recipients = uniqueOfferRecipients(recipients)
-	if offer.Recipients, offer.Holdouts, err = countOfferRecipients(recipients); err != nil {
+	if offer.Recipients, offer.Holdouts, err = countOfferRecipients(offer, recipients); err != nil {
+		return CustomerOffer{}, err
+	}
+	terms, err := customerOfferTermsOf(offer)
+	if err != nil {
 		return CustomerOffer{}, err
 	}
 	tx, err := s.pool.Begin(ctx)
@@ -87,14 +122,20 @@ func (s *PostgresStore) CreateCustomerOffer(ctx context.Context, offer CustomerO
 	if _, err := tx.Exec(ctx, `
 INSERT INTO relay_customer_offers (id, name, title, description, kind, value, max_discount, min_order, segments,
 	recipients, uses_per_customer, max_redemptions, starts_at, ends_at, active, created_by, created_at, updated_at,
-	holdout_percent, holdouts)
+	holdout_percent, holdouts, terms, audience)
 VALUES ($1, $2, $3, $4, $5, $6::numeric, $7::numeric, $8::numeric, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
-	$19, $20)`,
+	$19, $20, $21::jsonb, $22)`,
 		offer.ID, offer.Name, offer.Title, offer.Description, offer.Kind, offer.Value, offer.MaxDiscount,
 		offer.MinOrder, offer.Segments, offer.Recipients, offer.UsesPerCustomer, offer.MaxRedemptions,
 		offer.StartsAt, offer.EndsAt, offer.Active, offer.CreatedBy, offer.CreatedAt, offer.UpdatedAt,
-		offer.HoldoutPercent, offer.Holdouts); err != nil {
+		offer.HoldoutPercent, offer.Holdouts, terms, offer.Audience); err != nil {
 		return CustomerOffer{}, err
+	}
+	if len(recipients) == 0 {
+		if err := tx.Commit(ctx); err != nil {
+			return CustomerOffer{}, err
+		}
+		return offer, nil
 	}
 	rows := make([][]any, 0, len(recipients))
 	for _, recipient := range recipients {
@@ -125,9 +166,14 @@ func (s *PostgresStore) UpdateCustomerOffer(ctx context.Context, id string, upda
 	if err != nil {
 		return CustomerOffer{}, err
 	}
+	terms, err := customerOfferTermsOf(updated)
+	if err != nil {
+		return CustomerOffer{}, err
+	}
 	if _, err := tx.Exec(ctx, `
-UPDATE relay_customer_offers SET name = $2, title = $3, description = $4, ends_at = $5, active = $6, updated_at = $7
-WHERE id = $1`, id, updated.Name, updated.Title, updated.Description, updated.EndsAt, updated.Active, updated.UpdatedAt); err != nil {
+UPDATE relay_customer_offers SET name = $2, title = $3, description = $4, ends_at = $5, active = $6, updated_at = $7,
+	terms = $8::jsonb
+WHERE id = $1`, id, updated.Name, updated.Title, updated.Description, updated.EndsAt, updated.Active, updated.UpdatedAt, terms); err != nil {
 		return CustomerOffer{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -180,17 +226,23 @@ func (s *PostgresStore) CustomerOfferRecipients(ctx context.Context, id string) 
 	return recipients, rows.Err()
 }
 
-func (s *PostgresStore) CustomerOffersFor(ctx context.Context, customerID string, now time.Time) ([]CustomerOfferFor, error) {
-	rows, err := s.pool.Query(ctx, `
-SELECT `+prefixColumns("f.", selectCustomerOfferColumns)+`, u.used, u.redeemed
-FROM relay_customer_offer_recipients r
-JOIN relay_customer_offers f ON f.id = r.offer_id
-LEFT JOIN LATERAL (
+// customerOfferUsesSQL counts an offer's live uses: one customer's ($1) and
+// everyone's.
+const customerOfferUsesSQL = `LEFT JOIN LATERAL (
 	SELECT count(*) FILTER (WHERE customer_id = $1) AS used, count(*) AS redeemed
 	FROM relay_customer_orders
 	WHERE offer_id = f.id AND status IN ('awaiting_payment', 'paid', 'fulfilling', 'delivered')
-) u ON true
-WHERE r.customer_id = $1 AND NOT r.holdout AND f.active AND f.starts_at <= $2 AND (f.ends_at IS NULL OR f.ends_at > $2)`,
+) u ON true`
+
+func (s *PostgresStore) CustomerOffersFor(ctx context.Context, customerID string, now time.Time) ([]CustomerOfferFor, error) {
+	rows, err := s.pool.Query(ctx, `
+SELECT `+prefixColumns("f.", selectCustomerOfferColumns)+`, u.used, u.redeemed
+FROM relay_customer_offers f
+`+customerOfferUsesSQL+`
+WHERE f.active AND f.starts_at <= $2 AND (f.ends_at IS NULL OR f.ends_at > $2)
+	AND (f.audience = 'everyone' OR EXISTS (
+		SELECT 1 FROM relay_customer_offer_recipients r
+		WHERE r.offer_id = f.id AND r.customer_id = $1 AND NOT r.holdout))`,
 		customerID, now.UTC())
 	if err != nil {
 		return nil, err
@@ -198,17 +250,11 @@ WHERE r.customer_id = $1 AND NOT r.holdout AND f.active AND f.starts_at <= $2 AN
 	defer rows.Close()
 	out := []CustomerOfferFor{}
 	for rows.Next() {
-		var offer CustomerOffer
 		var used, redeemed int
-		if err := rows.Scan(&offer.ID, &offer.Name, &offer.Title, &offer.Description, &offer.Kind, &offer.Value,
-			&offer.MaxDiscount, &offer.MinOrder, &offer.Segments, &offer.Recipients, &offer.UsesPerCustomer,
-			&offer.MaxRedemptions, &offer.StartsAt, &offer.EndsAt, &offer.Active, &offer.CreatedBy,
-			&offer.CreatedAt, &offer.UpdatedAt, &offer.HoldoutPercent, &offer.Holdouts, &used, &redeemed); err != nil {
+		offer, err := scanCustomerOffer(rows, &used, &redeemed)
+		if err != nil {
 			return nil, err
 		}
-		offer.Value = NormalizeWalletAmount(offer.Value)
-		offer.MaxDiscount = NormalizeWalletAmount(offer.MaxDiscount)
-		offer.MinOrder = NormalizeWalletAmount(offer.MinOrder)
 		if left := offerUsesLeft(offer, used, redeemed); left > 0 {
 			out = append(out, CustomerOfferFor{CustomerOffer: offer, UsesLeft: left})
 		}
@@ -218,6 +264,31 @@ WHERE r.customer_id = $1 AND NOT r.holdout AND f.active AND f.starts_at <= $2 AN
 	}
 	sortCustomerOffersFor(out)
 	return out, nil
+}
+
+func (s *PostgresStore) PublicCustomerOffers(ctx context.Context, now time.Time) ([]CustomerOffer, error) {
+	rows, err := s.pool.Query(ctx, `
+SELECT `+prefixColumns("f.", selectCustomerOfferColumns)+`, u.redeemed
+FROM relay_customer_offers f
+`+customerOfferUsesSQL+`
+WHERE f.audience = 'everyone' AND f.active AND f.starts_at <= $2 AND (f.ends_at IS NULL OR f.ends_at > $2)
+ORDER BY f.created_at DESC, f.id DESC`, "", now.UTC())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []CustomerOffer{}
+	for rows.Next() {
+		var redeemed int
+		offer, err := scanCustomerOffer(rows, &redeemed)
+		if err != nil {
+			return nil, err
+		}
+		if offer.MaxRedemptions == 0 || redeemed < offer.MaxRedemptions {
+			out = append(out, offer)
+		}
+	}
+	return out, rows.Err()
 }
 
 // --- what the segmentation reads ---------------------------------------------
