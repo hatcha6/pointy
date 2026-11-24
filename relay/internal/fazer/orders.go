@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -136,8 +137,10 @@ func codesOf(raw json.RawMessage) []Code {
 		}
 		if entry[0] == '"' {
 			var s string
-			if json.Unmarshal(entry, &s) == nil && strings.TrimSpace(s) != "" {
-				codes = append(codes, Code{Code: strings.TrimSpace(s)})
+			if json.Unmarshal(entry, &s) == nil {
+				if code, pin := splitLabelled(s); code != "" {
+					codes = append(codes, Code{Code: code, Serial: pin})
+				}
 			}
 			continue
 		}
@@ -149,6 +152,13 @@ func codesOf(raw json.RawMessage) []Code {
 			"cdk", "value", "serial_number", "serialNumber")
 		pin := textOf(object, "pin", "pin_code", "pinCode", "password", "secret")
 		link := textOf(object, "redeem_url", "redeemUrl", "redemption_url", "redemptionUrl", "url", "link")
+		if code != "" {
+			labelledCode, labelledPin := splitLabelled(code)
+			code = labelledCode
+			if pin == "" {
+				pin = labelledPin
+			}
+		}
 		switch {
 		case code != "":
 			second := pin
@@ -163,6 +173,30 @@ func codesOf(raw json.RawMessage) []Code {
 		}
 	}
 	return codes
+}
+
+// labelledPin is a code delivered as one line with its PIN after it, the way
+// fazercards writes an Apple card: "XPRCMDHC6W6G6PCJ / PIN: XPRCMDHC6W6G6PCJ".
+// Copied whole, that line is not a code any store takes.
+var labelledPin = regexp.MustCompile(`(?i)^(.*?)\s*(?:[/|,;]\s*)?\bpin(?:\s*code)?\s*[:：#=]\s*(\S.*?)$`)
+
+// labelledCode is a code written after its own label ("Code: XXXX").
+var labelledCode = regexp.MustCompile(`(?i)^(?:code|key|card(?:\s*number)?)\s*[:：#=]\s*`)
+
+// splitLabelled reads one delivered line as the code alone and its PIN. A PIN
+// that repeats the code is no second part (an Apple card has none), so it is
+// dropped: the customer copies the code, and only the code.
+func splitLabelled(line string) (code, pin string) {
+	line = strings.TrimSpace(line)
+	code = line
+	if match := labelledPin.FindStringSubmatch(line); match != nil && strings.TrimSpace(match[1]) != "" {
+		code, pin = match[1], strings.TrimSpace(match[2])
+	}
+	code = strings.TrimSpace(strings.TrimRight(strings.TrimSpace(labelledCode.ReplaceAllString(code, "")), "/|,;-"))
+	if strings.EqualFold(pin, code) {
+		pin = ""
+	}
+	return code, pin
 }
 
 func (c *Client) placeOrder(ctx context.Context, op, path string, body any, key string) (Order, error) {

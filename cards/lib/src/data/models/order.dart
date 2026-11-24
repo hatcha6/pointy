@@ -1,4 +1,5 @@
 import 'order_report.dart';
+import '../../core/code_text.dart';
 import '../../core/money.dart';
 import 'esim.dart';
 import 'json.dart';
@@ -170,11 +171,15 @@ class CardCode {
     required this.expiry,
   });
 
-  factory CardCode.fromJson(Map<String, dynamic> json) => CardCode(
-    code: readString(json, 'code'),
-    serial: readString(json, 'serial'),
-    expiry: readString(json, 'expiry'),
-  );
+  factory CardCode.fromJson(Map<String, dynamic> json) {
+    final (:code, :pin) = splitLabelledCode(readString(json, 'code'));
+    final serial = readString(json, 'serial');
+    return CardCode(
+      code: code,
+      serial: serial.isEmpty ? pin : serial,
+      expiry: readString(json, 'expiry'),
+    );
+  }
 
   final String code;
   final String serial;

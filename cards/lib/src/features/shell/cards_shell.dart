@@ -168,8 +168,13 @@ class _CardsShellState extends State<CardsShell> {
     if (link == null) {
       return;
     }
+    // An order waits too: its card's page takes the brand from the catalog
+    // (the redeem button, the QR, how to use it). Opened before the catalog
+    // was read (the web app reloaded on /my-cards/<id>), it had none of them.
     final needsCatalog =
-        link is BrandLink || (link is ShelfLink && link.category != null);
+        link is BrandLink ||
+        link is OrderLink ||
+        (link is ShelfLink && link.category != null);
     if (needsCatalog && shelf.loading) {
       return;
     }
