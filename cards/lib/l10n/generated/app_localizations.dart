@@ -3350,6 +3350,84 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'لم يعد هذا العرض متاحاً لهذا الطلب. أكمل بالسعر الكامل أو حاول لاحقاً.'**
   String get errOfferUnavailable;
+
+  /// An offer's badge: a percentage off.
+  ///
+  /// In ar, this message translates to:
+  /// **'خصم {percent}٪'**
+  String offerBadgePercent(String percent);
+
+  /// An offer's badge: an amount off.
+  ///
+  /// In ar, this message translates to:
+  /// **'خصم {amount}'**
+  String offerBadgeAmount(String amount);
+
+  /// A tiered offer's badge: the most it gives.
+  ///
+  /// In ar, this message translates to:
+  /// **'خصم حتى {value}'**
+  String offerBadgeUpTo(String value);
+
+  /// A bundle's badge: buy some, get some free.
+  ///
+  /// In ar, this message translates to:
+  /// **'اشترِ {buy} واحصل على {get} مجاناً'**
+  String offerBadgeBundleFree(String buy, String get);
+
+  /// A bundle's badge: the next ones at a percentage off.
+  ///
+  /// In ar, this message translates to:
+  /// **'اشترِ {buy} والتالي بخصم {percent}٪'**
+  String offerBadgeBundlePercent(String buy, String percent);
+
+  /// Checkout: how much more reaches the next tier.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضف {amount} لتحصل على {value}'**
+  String offerNudgeTier(String amount, String value);
+
+  /// Checkout: how many more cards make the bundle apply.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضف {count} لتحصل على العرض'**
+  String offerNudgeBundle(String count);
+
+  /// Brand page banner: an offer given to this customer.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرض لك'**
+  String get offerForYou;
+
+  /// Brand page banner: an offer for everyone.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرض'**
+  String get offerForAll;
+
+  /// An offer ends within the day.
+  ///
+  /// In ar, this message translates to:
+  /// **'ينتهي اليوم'**
+  String get offerEndsToday;
+
+  /// An offer ends in some days.
+  ///
+  /// In ar, this message translates to:
+  /// **'{days, plural, =1{ينتهي غداً} =2{ينتهي خلال يومين} few{ينتهي خلال {days} أيام} other{ينتهي خلال {days} يوماً}}'**
+  String offerEndsIn(int days);
+
+  /// A visitor sees an offer for everyone: they sign in to use it.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجّل الدخول لتستفيد من العرض'**
+  String get offerSignInToUse;
+
+  /// Under a card's price: what it costs with the offer.
+  ///
+  /// In ar, this message translates to:
+  /// **'بعد الخصم {amount}'**
+  String offerOnItem(String amount);
 }
 
 class _AppLocalizationsDelegate

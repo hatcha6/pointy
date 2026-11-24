@@ -96,6 +96,7 @@ class _CardsShellState extends State<CardsShell> {
       // Read now: the home search finds eSIMs as well as cards. And again on
       // signing in or out, which can open or close the shelf.
       unawaited(dependencies.esim.loadShelf());
+      unawaited(dependencies.offers.refresh());
       _reloadEsim = () => unawaited(dependencies.esim.loadShelf());
       _session!.addListener(_reloadEsim!);
       // A link waits for the catalog when it names a brand or a category.

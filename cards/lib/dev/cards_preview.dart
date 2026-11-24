@@ -109,7 +109,7 @@ Future<void> main() async {
         !screen.startsWith('heard-from'),
     shelfRelay: shelfRelay.isEmpty ? null : Uri.parse(shelfRelay),
     // The customer holds a segment offer: checkout shows it taken off.
-    offers: const [fixtureOffer],
+    offers: fixtureOffers,
     // A late card stays late however often the page asks.
     client: switch (screen) {
       'preparing-slow' => fixtureRelay(orderStatus: 'fulfilling'),
@@ -212,6 +212,16 @@ final CardBrand _itunes = CardBrand.fromJson(
 );
 CardBrand _topUp(int index) => CardBrand.fromJson(fixtureTopUpBrands[index]);
 
+/// A brand of the fixture shelf by key.
+CardBrand _fixtureBrand(String key) => CardBrand.fromJson(
+  (fixtureCatalog['brands'] as List).cast<Map<String, dynamic>>().firstWhere(
+    (b) => b['key'] == key,
+  ),
+);
+
+String _param(String name, String fallback) =>
+    Uri.base.queryParameters[name] ?? fallback;
+
 /// The Free Fire account typed in, for the checkout to send to.
 AccountFormModel _typedAccount(CardsDependencies dependencies) {
   final brand = _topUp(0);
@@ -237,6 +247,20 @@ class PreviewSurface extends StatelessWidget {
     return switch (screen) {
       'home' || 'signed-out' => const CardsShell(),
       'esim' => const EsimStorePage(),
+      // An offer's brand page: ?brand=lnet|pubg|apple|almadar|netflix.
+      'offer-brand' => BrandPage(brand: _fixtureBrand(_param('brand', 'lnet'))),
+      // An offer at checkout: ?brand=…&item=index&qty=n.
+      'offer-checkout' => _SheetHost(
+        sheet: CheckoutSheet(
+          model: CheckoutModel(
+            orders: dependencies.orders,
+            brand: _fixtureBrand(_param('brand', 'lnet')),
+            item: _fixtureBrand(_param('brand', 'lnet'))
+                .items[int.parse(_param('item', '0'))],
+            quantity: int.parse(_param('qty', '1')),
+          )..load(),
+        ),
+      ),
       // The shelf as a link opens it: a month's trip needing 5 GB, cheapest
       // first; and only what is on offer.
       'esim-filtered' => const EsimStorePage(

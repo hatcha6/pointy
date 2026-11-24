@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:pointy_brand/pointy_brand.dart';
 
+import '../offers/offer_pill.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../data/models/catalog.dart';
 import '../../design/cards_layout.dart';
@@ -908,12 +909,16 @@ class _BrandTile extends StatelessWidget {
                   radius: large ? CardsRadii.tile : CardsRadii.art,
                 ),
               ),
-              if (badge != null)
-                PositionedDirectional(
-                  top: CardsSpace.sm,
-                  start: CardsSpace.sm,
-                  child: badge,
+              // An offer for this customer first: it is theirs, and now.
+              PositionedDirectional(
+                top: CardsSpace.sm,
+                start: CardsSpace.sm,
+                child: BrandOfferBadge(
+                  brand: brand,
+                  surface: 'home',
+                  orElse: badge,
                 ),
+              ),
               // Across from the badge: a game's name alone does not say
               // where it is played. Beside another badge, only its logo:
               // two names do not fit side by side on a phone's tile.

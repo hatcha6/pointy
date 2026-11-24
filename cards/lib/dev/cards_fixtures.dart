@@ -666,6 +666,13 @@ http.Client fixtureRelay({
         });
       case ('GET', '/v1/customers/me/offers'):
         return json({'offers': offers});
+      case ('GET', '/v1/customers/offers'):
+        return json({
+          'offers': [
+            for (final offer in offers)
+              if (offer['for_everyone'] == true) offer,
+          ],
+        });
       case ('POST', '/v1/customers/orders'):
         final body = jsonDecode(request.body) as Map<String, dynamic>;
         final hosted = body['method'] == 'dafa_moamalat';
@@ -1233,3 +1240,94 @@ const Map<String, dynamic> fixtureOffer = {
   'min_order': '15.000',
   'uses_left': 1,
 };
+
+/// One offer of every kind, on the preview's shelf: what each badge, banner
+/// and checkout looks like.
+const List<Map<String, dynamic>> fixtureOffers = [
+  {
+    'id': 'offer-percent',
+    'title': 'خصم 15٪ على باقات ليبيا للاتصالات',
+    'description': 'لأنك من عملائنا الأوفياء',
+    'kind': 'percent',
+    'value': '15.000',
+    'max_discount': '5.000',
+    'min_order': '0.000',
+    'scope': {
+      'brands': ['lnet'],
+    },
+    'uses_left': 1,
+  },
+  {
+    'id': 'offer-amount',
+    'title': 'خصم 3 د.ل على الألعاب',
+    'kind': 'amount',
+    'value': '3.000',
+    'max_discount': '0.000',
+    'min_order': '20.000',
+    'scope': {
+      'categories': ['gaming'],
+    },
+    'uses_left': 2,
+  },
+  {
+    'id': 'offer-tiered',
+    'title': 'كلما زاد طلبك زاد خصمك',
+    'kind': 'tiered',
+    'value': '15.000',
+    'max_discount': '20.000',
+    'min_order': '20.000',
+    'tier_unit': 'percent',
+    'tiers': [
+      {'min_order': '20.000', 'value': '5.000'},
+      {'min_order': '50.000', 'value': '10.000'},
+      {'min_order': '100.000', 'value': '15.000'},
+    ],
+    'scope': {
+      'categories': ['gift_cards'],
+    },
+    'uses_left': 1,
+  },
+  {
+    'id': 'offer-bundle',
+    'title': 'اشترِ كرتين واحصل على الثالث مجاناً',
+    'kind': 'bundle',
+    'value': '100.000',
+    'max_discount': '0.000',
+    'min_order': '0.000',
+    'buy_quantity': 2,
+    'get_quantity': 1,
+    'get_percent': '100.000',
+    'scope': {
+      'brands': ['almadar'],
+    },
+    'uses_left': 1,
+    'for_everyone': true,
+  },
+  {
+    'id': 'offer-esim',
+    'title': 'خصم 10٪ على كل شرائح eSIM',
+    'kind': 'percent',
+    'value': '10.000',
+    'max_discount': '0.000',
+    'min_order': '0.000',
+    'scope': {
+      'categories': ['esim'],
+    },
+    'badge': 'eSIM أرخص',
+    'uses_left': 1,
+    'for_everyone': true,
+  },
+  {
+    'id': 'offer-badge',
+    'title': 'عرض الشتاء على ليبيانا',
+    'kind': 'amount',
+    'value': '2.000',
+    'max_discount': '0.000',
+    'min_order': '10.000',
+    'scope': {
+      'brands': ['libyana'],
+    },
+    'badge': 'عرض الشتاء',
+    'uses_left': 1,
+  },
+];

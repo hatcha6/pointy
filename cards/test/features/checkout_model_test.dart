@@ -54,14 +54,13 @@ void main() {
     expect(model.subtotal, Money.parse('10'));
     expect(model.offer, isNull);
     expect(model.discount, Money.zero);
-    expect(model.offerOutOfReach?.id, 'offer-1');
+    expect(model.coveringOffers.single.id, 'offer-1');
 
     // 20 dinars: 20% is 4.
     model.setQuantity(2);
     expect(model.offer?.id, 'offer-1');
     expect(model.discount, Money.parse('4'));
     expect(model.total, Money.parse('16'));
-    expect(model.offerOutOfReach, isNull);
     // Credit pays what is left after it.
     expect(model.creditApplied, Money.parse('10'));
     expect(model.due, Money.parse('6'));

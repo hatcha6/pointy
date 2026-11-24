@@ -2087,4 +2087,67 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get errOfferUnavailable =>
       'This offer is no longer available for this order. Continue at the full price or try later.';
+
+  @override
+  String offerBadgePercent(String percent) {
+    return '$percent% off';
+  }
+
+  @override
+  String offerBadgeAmount(String amount) {
+    return '$amount off';
+  }
+
+  @override
+  String offerBadgeUpTo(String value) {
+    return 'Up to $value off';
+  }
+
+  @override
+  String offerBadgeBundleFree(String buy, String get) {
+    return 'Buy $buy, get $get free';
+  }
+
+  @override
+  String offerBadgeBundlePercent(String buy, String percent) {
+    return 'Buy $buy, next $percent% off';
+  }
+
+  @override
+  String offerNudgeTier(String amount, String value) {
+    return 'Add $amount to get $value';
+  }
+
+  @override
+  String offerNudgeBundle(String count) {
+    return 'Add $count to get the offer';
+  }
+
+  @override
+  String get offerForYou => 'Your offer';
+
+  @override
+  String get offerForAll => 'Offer';
+
+  @override
+  String get offerEndsToday => 'Ends today';
+
+  @override
+  String offerEndsIn(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'Ends in $days days',
+      one: 'Ends tomorrow',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get offerSignInToUse => 'Sign in to use this offer';
+
+  @override
+  String offerOnItem(String amount) {
+    return '$amount with the offer';
+  }
 }

@@ -2090,5 +2090,111 @@
   "errOfferUnavailable": "لم يعد هذا العرض متاحاً لهذا الطلب. أكمل بالسعر الكامل أو حاول لاحقاً.",
   "@errOfferUnavailable": {
     "description": "The offer was used up or ended before the order was placed."
+  },
+  "offerBadgePercent": "خصم {percent}٪",
+  "@offerBadgePercent": {
+    "description": "An offer's badge: a percentage off.",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "offerBadgeAmount": "خصم {amount}",
+  "@offerBadgeAmount": {
+    "description": "An offer's badge: an amount off.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "offerBadgeUpTo": "خصم حتى {value}",
+  "@offerBadgeUpTo": {
+    "description": "A tiered offer's badge: the most it gives.",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "offerBadgeBundleFree": "اشترِ {buy} واحصل على {get} مجاناً",
+  "@offerBadgeBundleFree": {
+    "description": "A bundle's badge: buy some, get some free.",
+    "placeholders": {
+      "buy": {
+        "type": "String"
+      },
+      "get": {
+        "type": "String"
+      }
+    }
+  },
+  "offerBadgeBundlePercent": "اشترِ {buy} والتالي بخصم {percent}٪",
+  "@offerBadgeBundlePercent": {
+    "description": "A bundle's badge: the next ones at a percentage off.",
+    "placeholders": {
+      "buy": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "offerNudgeTier": "أضف {amount} لتحصل على {value}",
+  "@offerNudgeTier": {
+    "description": "Checkout: how much more reaches the next tier.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "offerNudgeBundle": "أضف {count} لتحصل على العرض",
+  "@offerNudgeBundle": {
+    "description": "Checkout: how many more cards make the bundle apply.",
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "offerForYou": "عرض لك",
+  "@offerForYou": {
+    "description": "Brand page banner: an offer given to this customer."
+  },
+  "offerForAll": "عرض",
+  "@offerForAll": {
+    "description": "Brand page banner: an offer for everyone."
+  },
+  "offerEndsToday": "ينتهي اليوم",
+  "@offerEndsToday": {
+    "description": "An offer ends within the day."
+  },
+  "offerEndsIn": "{days, plural, =1{ينتهي غداً} =2{ينتهي خلال يومين} few{ينتهي خلال {days} أيام} other{ينتهي خلال {days} يوماً}}",
+  "@offerEndsIn": {
+    "description": "An offer ends in some days.",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "offerSignInToUse": "سجّل الدخول لتستفيد من العرض",
+  "@offerSignInToUse": {
+    "description": "A visitor sees an offer for everyone: they sign in to use it."
+  },
+  "offerOnItem": "بعد الخصم {amount}",
+  "@offerOnItem": {
+    "description": "Under a card's price: what it costs with the offer.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
   }
 }

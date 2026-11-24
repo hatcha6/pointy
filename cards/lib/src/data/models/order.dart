@@ -15,6 +15,8 @@ class CardOrder {
     required this.quantity,
     required this.unitPrice,
     required this.total,
+    this.discount = Money.zero,
+    this.offerId = '',
     required this.creditUsed,
     required this.amountDue,
     required this.fee,
@@ -45,6 +47,8 @@ class CardOrder {
     quantity: readInt(json, 'quantity'),
     unitPrice: Money.parse(readString(json, 'unit_price')),
     total: Money.parse(readString(json, 'total')),
+    discount: Money.parse(readString(json, 'discount')),
+    offerId: readString(json, 'offer_id'),
     creditUsed: Money.parse(readString(json, 'credit_used')),
     amountDue: Money.parse(readString(json, 'amount_due')),
     fee: Money.parse(readString(json, 'fee')),
@@ -92,6 +96,10 @@ class CardOrder {
   final int quantity;
   final Money unitPrice;
   final Money total;
+
+  /// What an offer ([offerId]) took off [total], which is after it.
+  final Money discount;
+  final String offerId;
   final Money creditUsed;
   final Money amountDue;
   final Money fee;

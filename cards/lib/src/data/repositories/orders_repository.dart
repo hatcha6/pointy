@@ -371,7 +371,10 @@ class OrdersRepository {
   /// The offers the operator gave this customer that they can use now.
   Future<Result<List<CardOffer>>> offers() => Result.guard(() async {
     final answer = await api.get('/v1/customers/me/offers', signedIn: true);
-    return [for (final o in readList(answer, 'offers')) CardOffer.fromJson(o)];
+    return [
+      for (final raw in readList(answer, 'offers'))
+        if (CardOffer.fromJson(raw) case final offer?) offer,
+    ];
   });
 
   Future<Result<CreditStatement>> credit() => Result.guard(() async {

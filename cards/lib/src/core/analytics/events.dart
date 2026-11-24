@@ -1,6 +1,7 @@
 import '../../data/api/relay_api.dart';
 import '../../data/models/campaign.dart';
 import '../../data/models/catalog.dart';
+import '../../data/models/offer.dart';
 import '../../data/models/order.dart';
 import '../money.dart';
 import 'analytics.dart';
@@ -46,6 +47,32 @@ extension CardsEvents on Analytics {
       capture('payment_form_shown', {'form': form});
 
   void orderPlaced(CardOrder order) => capture('order_placed', _order(order));
+
+  // Offers (features/offers). Each is told with its id and kind, so a funnel
+  // runs from a badge seen to the order that took the offer.
+
+  /// An offer's badge or banner came on screen ([surface]: home, brand,
+  /// esim, checkout), once per offer and surface in a session.
+  void offerSeen(CardOffer offer, String surface) =>
+      capture('offer_seen', _offer(offer, {'surface': surface}));
+
+  /// The customer turned the offer on or off at checkout.
+  void offerToggled(CardOffer offer, {required bool on}) =>
+      capture('offer_toggled', _offer(offer, {'on': on}));
+
+  /// A nudge to a better deal (one more card, a higher tier) was shown.
+  void offerNudgeShown(CardOffer offer, String nudge) =>
+      capture('offer_nudge_shown', _offer(offer, {'nudge': nudge}));
+
+  static Map<String, Object> _offer(
+    CardOffer offer,
+    Map<String, Object> more,
+  ) => {
+    'offer_id': offer.id,
+    'offer_kind': offer.kind.name,
+    'for_everyone': offer.forEveryone,
+    ...more,
+  };
 
   /// The relay refused the order, or Dafa would not start its payment. Dafa's
   /// own code and the relay's `detail` (written for the operator) say which
@@ -175,6 +202,8 @@ extension CardsEvents on Analytics {
     'item': order.itemKey,
     'quantity': order.quantity,
     'total': dinars(order.total),
+    'discount': dinars(order.discount),
+    if (order.offerId.isNotEmpty) 'offer_id': order.offerId,
     'fee': dinars(order.fee),
     'credit_used': dinars(order.creditUsed),
     'method': order.method.isEmpty ? 'credit' : order.method,

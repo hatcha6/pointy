@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pointy_brand/pointy_brand.dart';
 
+import '../../data/models/offer.dart';
+import '../offers/offer_text.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../core/money.dart';
 import '../../core/phone.dart';
@@ -358,7 +360,12 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: CardsSpace.lg,
                 ),
-                secondary: const Icon(Icons.local_offer_rounded),
+                secondary: Icon(
+                  offer.forEveryone
+                      ? Icons.local_offer_rounded
+                      : Icons.card_giftcard_rounded,
+                  color: const Color(0xFFD92D20),
+                ),
                 value: model.useOffer,
                 onChanged: (value) {
                   Haptics.select();
@@ -367,23 +374,23 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
                 title: Text(offer.title, style: theme.textTheme.titleSmall),
                 subtitle: Text(
                   l10n.offerSaves(
-                    formatMoney(l10n, offer.discountOn(model.subtotal)),
+                    formatMoney(l10n, offer.discountOn(model.line)),
                   ),
                 ),
-              )
-            else if (model.offerOutOfReach case final offer?)
+              ),
+            if (_nudge(context) case (final offer, final nudge))
               ListTile(
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: CardsSpace.lg,
                 ),
                 leading: Icon(
-                  Icons.local_offer_outlined,
+                  Icons.trending_up_rounded,
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
-                title: Text(offer.title, style: theme.textTheme.titleSmall),
-                subtitle: Text(
-                  l10n.offerMinOrder(formatMoney(l10n, offer.minOrder)),
-                ),
+                title: Text(nudge.text, style: theme.textTheme.titleSmall),
+                subtitle: model.availableOffer == offer
+                    ? null
+                    : Text(offer.title),
               ),
             if (model.credit.isPositive)
               SwitchListTile(
@@ -558,6 +565,23 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
 /// «إلى»: the account a top-up goes to, as the relay will read it, with
 /// what the game said of it (the player's name, or that there is no such
 /// account), or a word to check it when it cannot be looked up.
+extension on _CheckoutSheetState {
+  /// A nudge to a better deal on this order: one more card for a bundle, a
+  /// little more for the next tier, an offer's minimum. Told once to
+  /// analytics.
+  (CardOffer, ({String text, String kind}))? _nudge(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final model = widget.model;
+    for (final offer in model.coveringOffers) {
+      if (offerNudge(l10n, offer, model.line) case final nudge?) {
+        model.nudgeShown(offer, nudge.kind);
+        return (offer, nudge);
+      }
+    }
+    return null;
+  }
+}
+
 class _AccountRow extends StatelessWidget {
   const _AccountRow({required this.account, required this.onEdit});
 

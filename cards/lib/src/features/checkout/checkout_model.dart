@@ -135,31 +135,41 @@ class CheckoutModel extends ChangeNotifier {
   /// its order on all the same.
   Future<CardOrder?>? placing;
 
+  /// The order as an offer prices it: its card, how many, and what it covers.
+  OfferLine get line => OfferLine(
+    unitPrice: item.price,
+    quantity: quantity,
+    category: brand.category,
+    brand: brand.key,
+    item: item.key,
+  );
+
   /// The order before any offer.
-  Money get subtotal => item.price * quantity;
+  Money get subtotal => line.subtotal;
 
   /// The offer taken off this order, if any.
-  CardOffer? get offer => useOffer ? CardOffer.bestFor(offers, subtotal) : null;
+  CardOffer? get offer => useOffer ? CardOffer.bestFor(offers, line) : null;
 
   /// The offer that would apply, whether or not it is taken: what the
   /// switch offers.
-  CardOffer? get availableOffer => CardOffer.bestFor(offers, subtotal);
-  Money get discount => offer?.discountOn(subtotal) ?? Money.zero;
+  CardOffer? get availableOffer => CardOffer.bestFor(offers, line);
+  Money get discount => offer?.discountOn(line) ?? Money.zero;
 
-  /// An offer this order is too small for, the nearest one: a few dinars
-  /// more and it applies. Null when one already applies, or none is near.
-  CardOffer? get offerOutOfReach {
-    if (availableOffer != null) {
-      return null;
-    }
-    CardOffer? nearest;
-    for (final offer in offers) {
-      if (offer.minOrder.compareTo(subtotal) > 0 &&
-          (nearest == null || offer.minOrder.compareTo(nearest.minOrder) < 0)) {
-        nearest = offer;
-      }
-    }
-    return nearest;
+  /// The offers that cover this card, the one that applies first: where a
+  /// nudge to a better deal is looked for.
+  List<CardOffer> get coveringOffers {
+    final applying = availableOffer;
+    return [
+      ?applying,
+      for (final offer in offers)
+        if (offer != applying &&
+            offer.scope.covers(
+              category: brand.category,
+              brand: brand.key,
+              item: item.key,
+            ))
+          offer,
+    ];
   }
 
   /// What the order costs: the subtotal less the offer.
@@ -189,7 +199,19 @@ class CheckoutModel extends ChangeNotifier {
 
   void setUseOffer(bool value) {
     useOffer = value;
+    if (availableOffer case final offer?) {
+      orders.analytics.offerToggled(offer, on: value);
+    }
     notifyListeners();
+  }
+
+  final Set<String> _nudged = {};
+
+  /// Tells analytics a nudge was shown, once per offer and kind.
+  void nudgeShown(CardOffer offer, String kind) {
+    if (_nudged.add('${offer.id}/$kind')) {
+      orders.analytics.offerNudgeShown(offer, kind);
+    }
   }
 
   void choose(PaymentMethod value) {

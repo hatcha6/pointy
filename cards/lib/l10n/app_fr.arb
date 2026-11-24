@@ -398,5 +398,18 @@
   "lineDiscount": "Remise",
   "offerSaves": "Économisez {amount} avec cette offre",
   "offerMinOrder": "Pour les commandes de {amount} ou plus",
-  "errOfferUnavailable": "Cette offre n'est plus disponible pour cette commande. Continuez au prix plein ou réessayez plus tard."
+  "errOfferUnavailable": "Cette offre n'est plus disponible pour cette commande. Continuez au prix plein ou réessayez plus tard.",
+  "offerBadgePercent": "-{percent} %",
+  "offerBadgeAmount": "-{amount}",
+  "offerBadgeUpTo": "Jusqu'à -{value}",
+  "offerBadgeBundleFree": "{buy} achetés, {get} offert(s)",
+  "offerBadgeBundlePercent": "{buy} achetés, le suivant -{percent} %",
+  "offerNudgeTier": "Ajoutez {amount} pour obtenir {value}",
+  "offerNudgeBundle": "Ajoutez {count} pour profiter de l'offre",
+  "offerForYou": "Votre offre",
+  "offerForAll": "Offre",
+  "offerEndsToday": "Se termine aujourd'hui",
+  "offerEndsIn": "{days, plural, =1{Se termine demain} other{Se termine dans {days} jours}}",
+  "offerSignInToUse": "Connectez-vous pour profiter de l'offre",
+  "offerOnItem": "{amount} avec l'offre"
 }

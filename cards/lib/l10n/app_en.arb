@@ -398,5 +398,18 @@
   "lineDiscount": "Discount",
   "offerSaves": "Save {amount} with this offer",
   "offerMinOrder": "On orders of {amount} or more",
-  "errOfferUnavailable": "This offer is no longer available for this order. Continue at the full price or try later."
+  "errOfferUnavailable": "This offer is no longer available for this order. Continue at the full price or try later.",
+  "offerBadgePercent": "{percent}% off",
+  "offerBadgeAmount": "{amount} off",
+  "offerBadgeUpTo": "Up to {value} off",
+  "offerBadgeBundleFree": "Buy {buy}, get {get} free",
+  "offerBadgeBundlePercent": "Buy {buy}, next {percent}% off",
+  "offerNudgeTier": "Add {amount} to get {value}",
+  "offerNudgeBundle": "Add {count} to get the offer",
+  "offerForYou": "Your offer",
+  "offerForAll": "Offer",
+  "offerEndsToday": "Ends today",
+  "offerEndsIn": "{days, plural, =1{Ends tomorrow} other{Ends in {days} days}}",
+  "offerSignInToUse": "Sign in to use this offer",
+  "offerOnItem": "{amount} with the offer"
 }

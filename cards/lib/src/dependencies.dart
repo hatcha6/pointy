@@ -12,6 +12,7 @@ import 'data/repositories/auth_repository.dart';
 import 'data/repositories/catalog_repository.dart';
 import 'data/repositories/esim_repository.dart';
 import 'data/repositories/orders_repository.dart';
+import 'features/offers/offers_model.dart';
 import 'data/session/session_store.dart';
 import 'data/settings/app_settings.dart';
 import 'data/vault/card_vault.dart';
@@ -73,7 +74,12 @@ class CardsDependencies {
       orders.forget();
       this.esim.forget();
       myCards.forget();
+      offers
+        ..forget()
+        ..refresh();
     });
+    // An order may have used an offer up.
+    orders.changes.addListener(offers.refresh);
     // A link's campaign code is taken as the link arrives; a followed
     // campaign's own page opens after it.
     this.links.onOpen ??= this.attribution.openedLink;
@@ -83,6 +89,13 @@ class CardsDependencies {
 
   final EsimRepository esim;
   EsimCompatibility? _esimCompatibility;
+
+  /// The offers the shelf, the brand pages and the checkout show.
+  late final OffersModel offers = OffersModel(
+    api: auth.api,
+    isSignedIn: () => auth.isSignedIn,
+    analytics: analytics,
+  );
 
   /// «كروتي» as it last stood, shown at once on the next visit.
   final MyCardsMemory myCards = MyCardsMemory();

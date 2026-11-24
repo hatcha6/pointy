@@ -2084,4 +2084,69 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get errOfferUnavailable =>
       'لم يعد هذا العرض متاحاً لهذا الطلب. أكمل بالسعر الكامل أو حاول لاحقاً.';
+
+  @override
+  String offerBadgePercent(String percent) {
+    return 'خصم $percent٪';
+  }
+
+  @override
+  String offerBadgeAmount(String amount) {
+    return 'خصم $amount';
+  }
+
+  @override
+  String offerBadgeUpTo(String value) {
+    return 'خصم حتى $value';
+  }
+
+  @override
+  String offerBadgeBundleFree(String buy, String get) {
+    return 'اشترِ $buy واحصل على $get مجاناً';
+  }
+
+  @override
+  String offerBadgeBundlePercent(String buy, String percent) {
+    return 'اشترِ $buy والتالي بخصم $percent٪';
+  }
+
+  @override
+  String offerNudgeTier(String amount, String value) {
+    return 'أضف $amount لتحصل على $value';
+  }
+
+  @override
+  String offerNudgeBundle(String count) {
+    return 'أضف $count لتحصل على العرض';
+  }
+
+  @override
+  String get offerForYou => 'عرض لك';
+
+  @override
+  String get offerForAll => 'عرض';
+
+  @override
+  String get offerEndsToday => 'ينتهي اليوم';
+
+  @override
+  String offerEndsIn(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'ينتهي خلال $days يوماً',
+      few: 'ينتهي خلال $days أيام',
+      two: 'ينتهي خلال يومين',
+      one: 'ينتهي غداً',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get offerSignInToUse => 'سجّل الدخول لتستفيد من العرض';
+
+  @override
+  String offerOnItem(String amount) {
+    return 'بعد الخصم $amount';
+  }
 }
