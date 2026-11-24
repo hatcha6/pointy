@@ -12,6 +12,7 @@ import { CardOrdersTable } from "./CustomerOrders";
 import { customerBadge } from "./Customers";
 import { Phone } from "../../components/cards/Phone";
 import { cardKeys } from "../../lib/cards";
+import { dayCount, segmentInfo, segmentLabel, type SegmentKey } from "../../lib/segments";
 
 type Tab = "orders" | "credit" | "devices" | "notifications";
 type Open = "credit" | "block" | "delete" | "notify" | null;
@@ -63,6 +64,14 @@ export function CustomerDetail({ id }: { id: string }) {
               {customerBadge(customer)}
             </h1>
             <div className="row" style={{ marginTop: 4 }}>
+              {detail.data.segment && detail.data.segment.key in segmentInfo && (
+                <Link to={`/cards/customers?rfm=${detail.data.segment.key}`} title={segmentInfo[detail.data.segment.key as SegmentKey].about}>
+                  <Badge tone={segmentInfo[detail.data.segment.key as SegmentKey].tone}>{segmentLabel(detail.data.segment.key)}</Badge>
+                </Link>
+              )}
+              {detail.data.segment && detail.data.segment.orders >= 2 && (
+                <span className="muted">يشتري كل {dayCount(detail.data.segment.cycle_days)} تقريباً</span>
+              )}
               <span className="muted">انضم {date(customer.created_at)}</span>
               {detail.data.attribution?.campaign_code && (
                 <Badge tone="info">
@@ -236,6 +245,10 @@ export function NotificationsTable({ notifications, showAudience }: { notificati
           cell: (n: CardNotification) =>
             n.audience === "customer" && n.customer_id ? (
               <Link to={`/cards/customers/${n.customer_id}`}>زبون</Link>
+            ) : n.audience.startsWith("segments:") ? (
+              `شرائح: ${n.audience.slice("segments:".length).split(",").map(segmentLabel).join("، ")}`
+            ) : n.audience === "offer" ? (
+              "من حصلوا على عرض"
             ) : (
               label(cardAudience, n.audience)
             ),
@@ -247,7 +260,7 @@ export function NotificationsTable({ notifications, showAudience }: { notificati
       cell: (n) =>
         n.failed && !n.sent ? (
           <span title={n.error}><Badge tone="danger">لم يُرسل</Badge></span>
-        ) : n.audience === "customer" ? (
+        ) : n.audience === "customer" || n.audience === "offer" || n.audience.startsWith("segments:") ? (
           <Badge tone={n.failed ? "warning" : "success"}>{`وصل ${count(n.sent)} من ${count(n.devices)}`}</Badge>
         ) : (
           <Badge tone="success">أُرسل</Badge>

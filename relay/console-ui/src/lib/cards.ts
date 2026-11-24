@@ -22,6 +22,8 @@ export type CardCustomer = {
   push_devices: number;
   platforms?: string;
   last_seen_at?: string;
+  /** Their segment (lib/segments.ts); none for a blocked or deleted account. */
+  rfm?: string;
 };
 
 export type CardCustomerStats = {
@@ -51,6 +53,9 @@ export type CardOrder = {
   credit_used: string;
   amount_due: string;
   fee: string;
+  /** What a segment offer (offer_id) took off total. */
+  discount?: string;
+  offer_id?: string;
   method?: string;
   payer_hint?: string;
   payment_id?: string;
@@ -128,6 +133,8 @@ export type CardCustomerDetail = {
   credit: { balance: string; entries: CardCreditEntry[] };
   orders: CardOrder[];
   notifications: CardNotification[];
+  /** Their segment, and the rhythm it was read from; null for none. */
+  segment?: { key: string; orders: number; recent_orders: number; revenue: string; cycle_days: number; due_ratio: number; high_value: boolean } | null;
 };
 
 const BASE = "/v1/customers/admin";

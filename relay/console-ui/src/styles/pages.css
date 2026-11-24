@@ -1257,3 +1257,70 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Segment insights: what the numbers say, and what to do, with the means. */
+.insights {
+  display: flex;
+  flex-direction: column;
+}
+
+.insight {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.insight:first-child {
+  padding-top: 0;
+}
+
+.insight:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.insight-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.insight-body p {
+  margin: 0;
+  line-height: 1.7;
+}
+
+.insight-action {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  color: var(--primary-strong);
+}
+
+.insight-action svg {
+  flex: none;
+  position: relative;
+  top: 2px;
+}
+
+.insight-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: none;
+  justify-content: flex-end;
+}
+
+@media (max-width: 720px) {
+  .insight {
+    flex-direction: column;
+  }
+
+  .insight-buttons {
+    justify-content: flex-start;
+  }
+}
