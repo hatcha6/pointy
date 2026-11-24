@@ -91,10 +91,15 @@ type CustomerOrder struct {
 	// it must be kept until then. Empty for a code card. Closed orders forget
 	// it when the customer deletes their account.
 	Account map[string]string `json:"account,omitempty"`
-	// UnitPrice and Total are what the customer pays, in dinars. CreditUsed
-	// is the part their credit paid; AmountDue the part Dafa collects.
-	UnitPrice  string `json:"unit_price"`
-	Total      string `json:"total"`
+	// UnitPrice and Total are what the customer pays, in dinars: Total is
+	// UnitPrice × Quantity less Discount. CreditUsed is the part their credit
+	// paid; AmountDue the part Dafa collects.
+	UnitPrice string `json:"unit_price"`
+	Total     string `json:"total"`
+	// OfferID is the segment offer (customer_offers.go) the order used, and
+	// Discount what it took off; the store works the discount out itself.
+	OfferID    string `json:"offer_id,omitempty"`
+	Discount   string `json:"discount"`
 	CreditUsed string `json:"credit_used"`
 	AmountDue  string `json:"amount_due"`
 	// Fee is the payment gateway's fee, added on top of AmountDue: Dafa
@@ -245,6 +250,8 @@ func normalizeCustomerOrder(order CustomerOrder) (CustomerOrder, *big.Rat, error
 	total := new(big.Rat).Mul(unit, big.NewRat(int64(order.Quantity), 1))
 	order.UnitPrice = FormatWalletAmount(unit)
 	order.Total = FormatWalletAmount(total)
+	order.OfferID = strings.TrimSpace(order.OfferID)
+	order.Discount = FormatWalletAmount(new(big.Rat))
 	if order.ID == "" {
 		id, err := NewInstallationID()
 		if err != nil {
@@ -259,7 +266,7 @@ func normalizeCustomerOrder(order CustomerOrder) (CustomerOrder, *big.Rat, error
 // key already names.
 func sameCustomerOrder(existing, requested CustomerOrder) bool {
 	return existing.ItemKey == requested.ItemKey && existing.Quantity == requested.Quantity &&
-		sameCustomerAccount(existing.Account, requested.Account)
+		existing.OfferID == requested.OfferID && sameCustomerAccount(existing.Account, requested.Account)
 }
 
 // maxCustomerAccountFields bounds an order's account: a game asks for a
@@ -581,8 +588,15 @@ func (s *FileStore) BeginCustomerOrder(_ context.Context, order CustomerOrder, u
 	} else if customer, ok := customers.Customers[order.CustomerID]; !ok || customer.DeletedAt != nil {
 		return CustomerOrder{}, false, ErrCustomerNotFound
 	}
+	now := s.clock.Now().UTC()
+	if order.OfferID != "" {
+		var err error
+		if order, total, err = s.applyCustomerOfferLocked(order, total, now); err != nil {
+			return CustomerOrder{}, false, err
+		}
+	}
 	balance := sumCustomerCredit(s.customerCreditLocked(order.CustomerID))
-	placed, entry := placeCustomerOrder(order, total, balance, useCredit, s.clock.Now().UTC())
+	placed, entry := placeCustomerOrder(order, total, balance, useCredit, now)
 	if err := s.appendCustomerCreditLocked(entry); err != nil {
 		return CustomerOrder{}, false, err
 	}

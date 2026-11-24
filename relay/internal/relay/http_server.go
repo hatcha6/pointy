@@ -220,6 +220,9 @@ type HTTPServer struct {
 	// VoucherCache keeps the parsed current catalog between requests. Nil
 	// parses it on every request, which is correct, only slower.
 	VoucherCache *VoucherCatalogCache
+	// CustomerSegments keeps the last customer segmentation for a minute
+	// (customer_segments.go). Nil computes it every time.
+	CustomerSegments *CustomerSegmentCache
 	// VoucherSettingsCache keeps the parsed pricing settings of top-up and
 	// bills between requests. Nil reads the store on every call, which is
 	// correct, only slower.

@@ -1704,6 +1704,7 @@ func runServer(args []string) error {
 		ESIM:                 esimConfig,
 		VoucherCache:         &relayserver.VoucherCatalogCache{},
 		VoucherSettingsCache: &relayserver.VoucherSettingsCache{},
+		CustomerSegments:     &relayserver.CustomerSegmentCache{},
 		Services:             servicesService,
 		ServiceLogos:         relayserver.NewServiceLogos(),
 		OpenRouterAPIKey:     strings.TrimSpace(*openRouterAPIKey),

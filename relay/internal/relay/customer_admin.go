@@ -105,6 +105,14 @@ func (s HTTPServer) handleCustomerAdminRoutes(w http.ResponseWriter, r *http.Req
 		return
 	case route == "notifications" && r.Method == http.MethodPost:
 		s.handleCustomerAdminNotify(w, r, store)
+	case route == "segments" && r.Method == http.MethodGet:
+		s.handleCustomerAdminSegments(w, r)
+	case route == "offers" && r.Method == http.MethodGet:
+		s.handleCustomerAdminOffers(w, r)
+	case route == "offers" && r.Method == http.MethodPost:
+		s.handleCustomerAdminCreateOffer(w, r, store)
+	case len(parts) == 2 && parts[0] == "offers" && r.Method == http.MethodPatch:
+		s.handleCustomerAdminUpdateOffer(w, r, parts[1])
 	case route == "campaigns" && r.Method == http.MethodGet:
 		s.handleCustomerAdminCampaigns(w, r)
 	case route == "campaigns" && r.Method == http.MethodPost:
@@ -135,17 +143,44 @@ func (s HTTPServer) handleCustomerAdminSummary(w http.ResponseWriter, r *http.Re
 
 func (s HTTPServer) handleCustomerAdminList(w http.ResponseWriter, r *http.Request, store customerAdminStore) {
 	query := r.URL.Query()
-	list, total, err := store.ListCustomers(r.Context(), control.CustomerListFilter{
+	filter := control.CustomerListFilter{
 		Query:   query.Get("q"),
 		Segment: query.Get("segment"),
 		Limit:   queryInt(query, "limit", 100, 500),
 		Offset:  queryInt(query, "offset", 0, 1_000_000),
-	})
+	}
+	segmentation, ok, err := s.customerSegmentFilter(r, &filter)
+	if err != nil {
+		s.customerInternalError(w, "customer segmentation failed", err)
+		return
+	}
+	if !ok {
+		writeCustomerError(w, http.StatusBadRequest, "invalid_segments", "rfm names unknown segments", nil)
+		return
+	}
+	list, total, err := store.ListCustomers(r.Context(), filter)
 	if err != nil {
 		s.customerInternalError(w, "customer list failed", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"customers": list, "total": total})
+	rows := make([]customerListRow, 0, len(list))
+	for _, summary := range list {
+		row := customerListRow{CustomerSummary: summary}
+		if segmentation != nil {
+			if profile := segmentation.profiles[summary.ID]; profile != nil {
+				row.RFM = profile.Segment
+			}
+		}
+		rows = append(rows, row)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"customers": rows, "total": total})
+}
+
+// customerListRow is a customer with their segment ("" for one in none: a
+// deleted or blocked account).
+type customerListRow struct {
+	control.CustomerSummary
+	RFM string `json:"rfm,omitempty"`
 }
 
 // customerAdminSessionView is a device as the console shows it: never its
@@ -206,8 +241,23 @@ func (s HTTPServer) handleCustomerAdminDetail(w http.ResponseWriter, r *http.Req
 		}
 		attribution = &found
 	}
+	// Their segment, and the rhythm it is read from.
+	var segment map[string]any
+	if insights, ok := s.Store.(control.CustomerInsightStore); ok {
+		if segmentation, err := s.customerSegmentation(r, insights, false); err == nil {
+			if profile := segmentation.profiles[id]; profile != nil {
+				segment = map[string]any{
+					"key": profile.Segment, "orders": profile.Orders, "recent_orders": profile.RecentOrders,
+					"revenue": money(profile.Revenue), "recent_revenue": money(profile.RecentRevenue),
+					"cycle_days": profile.Cycle.Hours() / 24, "due_ratio": profile.DueRatio,
+					"high_value": profile.HighValue, "last_order_at": profile.LastOrderAt,
+				}
+			}
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"customer":      summary,
+		"segment":       segment,
 		"attribution":   attribution,
 		"sessions":      devices,
 		"credit":        map[string]any{"balance": balance, "entries": entries},
@@ -436,11 +486,18 @@ func (s HTTPServer) handleCustomerAdminNotify(w http.ResponseWriter, r *http.Req
 		Link       string `json:"link"`
 		Campaign   string `json:"campaign"`
 		Actor      string `json:"actor"`
+		// Segments, for the audience "segments": every reachable customer
+		// in them.
+		Segments []string `json:"segments"`
 	}
 	if !decodeCustomerBody(w, r, &request) {
 		return
 	}
 	request.Title, request.Body = strings.TrimSpace(request.Title), strings.TrimSpace(request.Body)
+	if request.Audience == "segments" {
+		s.notifySegments(w, r, store, request.Segments, request.Title, request.Body, request.Link, request.Campaign, request.Actor)
+		return
+	}
 	if request.Title == "" || request.Body == "" {
 		writeCustomerError(w, http.StatusBadRequest, "invalid_notification", "a notification needs a title and words", nil)
 		return
@@ -483,7 +540,7 @@ func (s HTTPServer) handleCustomerAdminNotify(w http.ResponseWriter, r *http.Req
 		}
 	default:
 		writeCustomerError(w, http.StatusBadRequest, "invalid_audience",
-			"audience is all, ios, play, apk or customer", nil)
+			"audience is all, ios, play, apk, customer or segments", nil)
 		return
 	}
 	stored, err := store.RecordCustomerNotification(ctx, record)

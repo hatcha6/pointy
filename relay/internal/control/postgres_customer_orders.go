@@ -15,7 +15,7 @@ import (
 const selectCustomerOrderColumns = `id, customer_id, idempotency_key, channel, item_key, brand_key, item_name,
 	quantity, unit_price::text, total::text, credit_used::text, amount_due::text, fee::text, method, payer_hint,
 	payment_id, checkout_url, otp_attempts, status, error_code, error_detail, purchase_id, late_paid,
-	test_mode, created_at, updated_at, paid_at, completed_at, review, account`
+	test_mode, created_at, updated_at, paid_at, completed_at, review, account, offer_id, discount::text`
 
 func scanCustomerOrder(row pgx.Row) (CustomerOrder, error) {
 	var order CustomerOrder
@@ -26,6 +26,7 @@ func scanCustomerOrder(row pgx.Row) (CustomerOrder, error) {
 		&order.Fee, &order.Method, &order.PayerHint, &order.PaymentID, &order.CheckoutURL, &order.OTPAttempts, &order.Status,
 		&order.ErrorCode, &order.ErrorDetail, &order.PurchaseID, &order.LatePaid, &order.TestMode,
 		&order.CreatedAt, &order.UpdatedAt, &order.PaidAt, &order.CompletedAt, &order.Review, &account,
+		&order.OfferID, &order.Discount,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return CustomerOrder{}, ErrCustomerOrderNotFound
@@ -40,6 +41,7 @@ func scanCustomerOrder(row pgx.Row) (CustomerOrder, error) {
 	}
 	order.UnitPrice = NormalizeWalletAmount(order.UnitPrice)
 	order.Total = NormalizeWalletAmount(order.Total)
+	order.Discount = NormalizeWalletAmount(order.Discount)
 	order.CreditUsed = NormalizeWalletAmount(order.CreditUsed)
 	order.AmountDue = NormalizeWalletAmount(order.AmountDue)
 	order.Fee = NormalizeWalletAmount(order.Fee)
@@ -122,11 +124,19 @@ func (s *PostgresStore) BeginCustomerOrder(ctx context.Context, order CustomerOr
 	if !errors.Is(err, ErrCustomerOrderNotFound) {
 		return CustomerOrder{}, false, err
 	}
+	now := s.clock.Now().UTC()
+	if order.OfferID != "" {
+		// Under the customer's row lock: two orders at once cannot both take
+		// an offer's last use.
+		if order, total, err = applyCustomerOfferTx(ctx, tx, order, total, now); err != nil {
+			return CustomerOrder{}, false, err
+		}
+	}
 	balance, err := customerCreditBalanceTx(ctx, tx, order.CustomerID)
 	if err != nil {
 		return CustomerOrder{}, false, err
 	}
-	placed, entry := placeCustomerOrder(order, total, balance, useCredit, s.clock.Now().UTC())
+	placed, entry := placeCustomerOrder(order, total, balance, useCredit, now)
 	if err := writeCustomerOrderTx(ctx, tx, placed, true); err != nil {
 		return CustomerOrder{}, false, err
 	}
@@ -145,16 +155,16 @@ func writeCustomerOrderTx(ctx context.Context, tx pgx.Tx, order CustomerOrder, i
 		order.Quantity, order.UnitPrice, order.Total, order.CreditUsed, order.AmountDue, order.Method, order.PayerHint,
 		order.PaymentID, order.CheckoutURL, order.OTPAttempts, order.Status, order.ErrorCode, order.ErrorDetail,
 		order.PurchaseID, order.LatePaid, order.TestMode, order.CreatedAt, order.UpdatedAt, order.PaidAt, order.CompletedAt,
-		order.Fee, order.Review, customerAccountJSON(order.Account),
+		order.Fee, order.Review, customerAccountJSON(order.Account), order.OfferID, order.Discount,
 	}
 	if insert {
 		_, err := tx.Exec(ctx,
 			`INSERT INTO relay_customer_orders (id, customer_id, idempotency_key, channel, item_key, brand_key, item_name,
 				quantity, unit_price, total, credit_used, amount_due, method, payer_hint, payment_id, checkout_url,
 				otp_attempts, status, error_code, error_detail, purchase_id, late_paid, test_mode, created_at,
-				updated_at, paid_at, completed_at, fee, review, account)
+				updated_at, paid_at, completed_at, fee, review, account, offer_id, discount)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-				$21, $22, $23, $24, $25, $26, $27, $28, $29, $30)`, args...)
+				$21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32::numeric)`, args...)
 		return err
 	}
 	// Only what a transition may change is written back.

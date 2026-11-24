@@ -1444,6 +1444,56 @@ ALTER TABLE relay_channel_targets ADD COLUMN IF NOT EXISTS install_hour integer;
 ALTER TABLE relay_channel_targets ADD COLUMN IF NOT EXISTS install_date text NOT NULL DEFAULT '';
 `,
 	},
+	{
+		version: 47,
+		name:    "customer segment offers",
+		sql: `
+-- A discount made for the customers of chosen segments (customer_offers.go).
+CREATE TABLE IF NOT EXISTS relay_customer_offers (
+	id text PRIMARY KEY,
+	name text NOT NULL,
+	title text NOT NULL,
+	description text NOT NULL DEFAULT '',
+	kind text NOT NULL,
+	value numeric(14, 3) NOT NULL,
+	max_discount numeric(14, 3) NOT NULL DEFAULT 0,
+	min_order numeric(14, 3) NOT NULL DEFAULT 0,
+	segments text[] NOT NULL DEFAULT '{}',
+	recipients integer NOT NULL DEFAULT 0,
+	uses_per_customer integer NOT NULL DEFAULT 1,
+	max_redemptions integer NOT NULL DEFAULT 0,
+	starts_at timestamptz NOT NULL,
+	ends_at timestamptz,
+	active boolean NOT NULL DEFAULT true,
+	created_by text NOT NULL DEFAULT '',
+	created_at timestamptz NOT NULL,
+	updated_at timestamptz NOT NULL,
+	holdout_percent integer NOT NULL DEFAULT 0,
+	holdouts integer NOT NULL DEFAULT 0,
+	CONSTRAINT relay_customer_offers_kind_check CHECK (kind IN ('percent', 'amount')),
+	CONSTRAINT relay_customer_offers_value_check CHECK (value > 0)
+);
+
+-- Who an offer was made for, the segment each was in then, and whether they
+-- were held out (not given it, watched to measure it).
+CREATE TABLE IF NOT EXISTS relay_customer_offer_recipients (
+	offer_id text NOT NULL REFERENCES relay_customer_offers(id) ON DELETE CASCADE,
+	customer_id text NOT NULL,
+	segment text NOT NULL DEFAULT '',
+	holdout boolean NOT NULL DEFAULT false,
+	PRIMARY KEY (offer_id, customer_id)
+);
+CREATE INDEX IF NOT EXISTS relay_customer_offer_recipients_customer_idx
+	ON relay_customer_offer_recipients (customer_id);
+
+-- The offer an order took, and what it took off. Defaults only: a node from
+-- before them writes an order with no offer.
+ALTER TABLE relay_customer_orders ADD COLUMN IF NOT EXISTS offer_id text NOT NULL DEFAULT '';
+ALTER TABLE relay_customer_orders ADD COLUMN IF NOT EXISTS discount numeric(14, 3) NOT NULL DEFAULT 0;
+CREATE INDEX IF NOT EXISTS relay_customer_orders_offer_idx
+	ON relay_customer_orders (offer_id) WHERE offer_id <> '';
+`,
+	},
 }
 
 // migrationsAdvisoryLockKey serializes concurrent migrators (e.g. autoscaled
