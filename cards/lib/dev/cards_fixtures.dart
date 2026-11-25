@@ -15,6 +15,7 @@ import '../src/data/repositories/orders_repository.dart';
 import '../src/data/session/session_store.dart';
 import '../src/data/settings/app_settings.dart';
 import '../src/data/vault/card_vault.dart';
+import '../src/data/vault/payer_vault.dart';
 import '../src/data/vault/code_vault.dart';
 import '../src/data/vault/esim_vault.dart';
 import '../src/data/vault/orders_vault.dart';
@@ -460,6 +461,7 @@ Map<String, dynamic> fixtureOrder({
   String errorCode = '',
   String createdAt = '2026-10-24T10:00:00Z',
   Map<String, String>? account,
+  String method = 'dafa_sadad',
 }) => {
   'id': id,
   'status': status,
@@ -473,7 +475,7 @@ Map<String, dynamic> fixtureOrder({
   'amount_due': total,
   'fee': '0.210',
   'amount_to_pay': '10.210',
-  'method': 'dafa_sadad',
+  'method': method,
   'payer_hint': '091•••678',
   'next_action': nextAction,
   'error_code': errorCode,
@@ -509,6 +511,8 @@ http.Client fixtureRelay({
 }) {
   final catalog = topUps ? fixtureCatalogWithTopUps : fixtureCatalog;
   scripted?.learnShelf(jsonEncode(catalog));
+  // The way the last order was placed with: what its payment answers.
+  var placedMethod = 'dafa_sadad';
   http.Response json(Object body, [int status = 200]) => http.Response(
     jsonEncode(body),
     status,
@@ -676,6 +680,7 @@ http.Client fixtureRelay({
       case ('POST', '/v1/customers/orders'):
         final body = jsonDecode(request.body) as Map<String, dynamic>;
         final hosted = body['method'] == 'dafa_moamalat';
+        placedMethod = '${body['method'] ?? ''}';
         final account = (body['account'] as Map?)?.cast<String, String>();
         return json({
           'order': fixtureOrder(
@@ -684,6 +689,7 @@ http.Client fixtureRelay({
             item: body['item'] as String,
             nextAction: hosted ? 'hosted_page' : 'otp',
             account: account,
+            method: placedMethod,
           ),
         }, 201);
       case ('GET', '/v1/customers/esim/destinations'):
@@ -786,7 +792,11 @@ http.Client fixtureRelay({
     }
     if (request.method == 'POST' && path.endsWith('/card/complete')) {
       return json({
-        'order': fixtureOrder(id: 'order-new', status: confirmStatus),
+        'order': fixtureOrder(
+          id: 'order-new',
+          status: confirmStatus,
+          method: placedMethod,
+        ),
       });
     }
     if (request.method == 'POST' && path.endsWith('/cancel')) {
@@ -800,7 +810,11 @@ http.Client fixtureRelay({
       return json({
         'order': id.startsWith('topup')
             ? fixtureTopUpOrder(id: id, status: confirmStatus)
-            : fixtureOrder(id: 'order-new', status: confirmStatus),
+            : fixtureOrder(
+                id: 'order-new',
+                status: confirmStatus,
+                method: placedMethod,
+              ),
       });
     }
     if (request.method == 'POST' && path.endsWith('/report')) {
@@ -1144,6 +1158,7 @@ CardsDependencies fixtureDependencies({
   PreviewScenarios? scenarios,
   MoamalatClient? moamalat,
   CardVault? cards,
+  PayerVault? payers,
   LinkInbox? links,
   Analytics? analytics,
   Push? push,
@@ -1202,6 +1217,7 @@ CardsDependencies fixtureDependencies({
     settings: AppSettings(),
     moamalat: moamalat ?? FakeMoamalatClient(),
     cards: cards ?? MemoryCardVault(),
+    payers: payers,
     links: links,
     analytics: analytics,
     push: push ?? FixturePush(),

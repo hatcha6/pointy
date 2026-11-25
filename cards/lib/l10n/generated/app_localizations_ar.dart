@@ -2231,4 +2231,53 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get offerForEveryone => 'للجميع';
+
+  @override
+  String get savedPaymentsSettings => 'طرق الدفع المحفوظة';
+
+  @override
+  String get savedPaymentsBody =>
+      'ما يُحفظ هنا يبقى على هذا الجهاز وحده، ويجعل دفعتك القادمة بلمسة.';
+
+  @override
+  String get defaultMethodTitle => 'طريقتك المفضّلة';
+
+  @override
+  String get defaultMethodBody =>
+      'آخر طريقة نجح بها دفعك، تُختار تلقائياً في طلبك القادم.';
+
+  @override
+  String get savedWalletsTitle => 'المحافظ';
+
+  @override
+  String get savedWalletsEmpty =>
+      'لا أرقام محافظ محفوظة. يُحفظ الرقم بعد أول دفعة ناجحة منه.';
+
+  @override
+  String get savedPayerBirthYear => 'مع سنة الميلاد';
+
+  @override
+  String get removePayerTitle => 'إزالة الرقم المحفوظ؟';
+
+  @override
+  String removePayerBody(String method) {
+    return 'ستُسأل عن الرقم في دفعتك القادمة عبر $method.';
+  }
+
+  @override
+  String get savedWalletsNote =>
+      'تُحفظ أرقام المحافظ على هذا الجهاز وحده، مشفّرة، ولا يُدفع منها دون الرمز الذي ترسله المحفظة إلى هاتفك. تُحذف عند تسجيل الخروج.';
+
+  @override
+  String get payFromLabel => 'يُدفع من';
+
+  @override
+  String get payerRemember => 'احفظ الرقم لدفعاتي القادمة';
+
+  @override
+  String get savedNothingTitle => 'لا شيء محفوظ بعد';
+
+  @override
+  String get savedNothingBody =>
+      'أول دفعة ناجحة تحفظ طريقتك ورقمك، فتدفع في المرة القادمة بلمسة.';
 }

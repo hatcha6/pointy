@@ -41,6 +41,10 @@ import 'bundle_concept.dart';
 import '../src/features/links/cards_link.dart';
 import '../src/features/card_payment/card_payment_page.dart';
 import '../src/features/checkout/checkout_model.dart';
+import '../src/data/vault/payer_vault.dart';
+import '../src/features/checkout/payment_memory.dart';
+import '../src/features/checkout/payer_dialog.dart';
+import '../src/features/card_payment/saved_payments_page.dart';
 import '../src/features/checkout/checkout_sheet.dart';
 import '../src/features/legal/about_page.dart';
 import '../src/features/legal/legal_document.dart';
@@ -151,7 +155,20 @@ Future<void> main() async {
     // `&channel=ios` or `play`: the shelf as a store build has it (games and
     // gift cards «على الموقع» while the console says so).
     channel: query['channel'] ?? 'apk',
+    // Saved payments: a card, three wallets, Sadad the preferred way.
+    payers: _savedPayments.contains(screen) ? _previewPayers() : null,
   );
+  if (_savedPayments.contains(screen)) {
+    await dependencies.cards.keep(
+      number: '5078031234564821',
+      name: 'NOOR ALI',
+      expiryMonth: 8,
+      expiryYear: 28,
+    );
+    await dependencies.payments.paid(
+      CardOrder.fromJson(fixtureOrder(id: 'seed', method: 'dafa_sadad')),
+    );
+  }
   dependencies.settings.setLanguage(query['lang'] ?? 'ar');
   // `&phone=none`: a phone with no eSIM. `&phone=old`: one too old to install
   // from a link. Otherwise a current iPhone.
@@ -433,6 +450,30 @@ class PreviewSurface extends StatelessWidget {
             expiresAt: null,
             resendAt: DateTime.now().add(const Duration(seconds: 27)),
           ),
+        ),
+      ),
+      'saved-payments' || 'saved-payments-empty' => const SavedPaymentsPage(),
+      // The checkout of a customer who paid from Sadad before: chosen, and
+      // its number shown. `checkout-saved-change` opens the number's dialog.
+      'checkout-saved' => _SheetHost(
+        sheet: CheckoutSheet(
+          model:
+              CheckoutModel(
+                  orders: dependencies.orders,
+                  brand: _libyana,
+                  item: _libyana.items[1],
+                  payments: dependencies.payments,
+                )
+                ..setUseCredit(false)
+                ..load(),
+        ),
+      ),
+      'payer-change' => _DialogHost(
+        open: (context) => showPayerDialog(
+          context,
+          method: _sadad,
+          amount: Money.parse('10.21'),
+          initial: const PayerDetails(payer: '0912345678', birthYear: '1990'),
         ),
       ),
       'checkout' => _SheetHost(
@@ -926,3 +967,61 @@ List<CardBrand> _bundleNetworks() => [
   _fixtureBrand('almadar'),
   _boardBrand('ltt', 'LTT', 'telecom'),
 ];
+
+/// The screens that open with saved payments.
+const _savedPayments = {'saved-payments', 'checkout-saved', 'payer-change'};
+
+const _sadad = PaymentMethod(
+  key: 'dafa_sadad',
+  provider: 'sadad',
+  name: 'سداد',
+  kind: 'otp',
+  payer: 'phone',
+  birthYear: true,
+);
+
+MemoryPayerVault _previewPayers() => MemoryPayerVault(const [
+  SavedPayer(
+    method: 'dafa_sadad',
+    provider: 'sadad',
+    methodName: 'سداد',
+    payer: '0912345678',
+    birthYear: '1990',
+    kind: 'phone',
+  ),
+  SavedPayer(
+    method: 'dafa_edfali',
+    provider: 'edfali',
+    methodName: 'إدفعلي',
+    payer: '0925550147',
+    kind: 'phone',
+  ),
+  SavedPayer(
+    method: 'dafa_yussor_pay',
+    provider: 'yussor-pay',
+    methodName: 'يسر باي',
+    payer: '6281940012347730',
+    kind: 'card',
+  ),
+]);
+
+/// A screen that opens [open]'s dialog over the shelf as it loads.
+class _DialogHost extends StatefulWidget {
+  const _DialogHost({required this.open});
+
+  final Future<Object?> Function(BuildContext context) open;
+
+  @override
+  State<_DialogHost> createState() => _DialogHostState();
+}
+
+class _DialogHostState extends State<_DialogHost> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => widget.open(context));
+  }
+
+  @override
+  Widget build(BuildContext context) => const CardsShell();
+}

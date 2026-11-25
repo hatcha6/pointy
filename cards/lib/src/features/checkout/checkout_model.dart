@@ -1,7 +1,6 @@
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/analytics/events.dart';
 import '../../core/money.dart';
@@ -12,6 +11,7 @@ import '../../data/models/offer.dart';
 import '../../data/models/order.dart';
 import '../../data/repositories/orders_repository.dart';
 import '../topup/account_form_model.dart';
+import 'payment_memory.dart';
 
 /// One checkout: what is bought, how it is paid, and the order it became.
 ///
@@ -24,7 +24,7 @@ class CheckoutModel extends ChangeNotifier {
     required this.brand,
     required this.item,
     this.quantity = 1,
-    this.preferences,
+    this.payments,
     this.account,
     this.orderAccount = const {},
   }) : _key = _newKey();
@@ -32,7 +32,10 @@ class CheckoutModel extends ChangeNotifier {
   final OrdersRepository orders;
   final CardBrand brand;
   final CardItem item;
-  final SharedPreferencesAsync? preferences;
+
+  /// How this customer last paid, and the wallets' numbers they paid from:
+  /// the way to pay offered first, and what is not asked again.
+  final PaymentMemory? payments;
   int quantity;
 
   /// Where a top-up goes, as typed on the brand's page; null for a code.
@@ -57,8 +60,6 @@ class CheckoutModel extends ChangeNotifier {
   /// One key per attempt: a retried tap replays the same order, never a
   /// second one. A closed attempt gets a new key.
   String _key;
-
-  static const _methodKey = 'cards.last_method';
 
   static String _newKey() {
     final random = Random.secure();
@@ -92,16 +93,15 @@ class CheckoutModel extends ChangeNotifier {
       orders.checkoutOptions(),
       orders.credit(),
       orders.offers(),
+      Future<Object?>.value(payments?.load()),
     ]);
     if (results[0] case Ok(:final value)) {
       options = value as CheckoutOptions;
-      String? last;
-      try {
-        last = await preferences?.getString(_methodKey);
-      } on Exception {
-        // The first method, then.
-      }
+      // The way that last went through, while it is still offered; else the
+      // relay's first. A choice made in this sheet stands.
+      final last = payments?.lastMethod;
       method =
+          options!.methods.where((m) => m.key == method?.key).firstOrNull ??
           options!.methods.where((m) => m.key == last).firstOrNull ??
           options!.methods.firstOrNull;
     } else if (results[0] case Error(:final exception)) {
@@ -192,6 +192,34 @@ class CheckoutModel extends ChangeNotifier {
       method != null &&
       (method!.payer.isNotEmpty || method!.birthYear);
 
+  /// Another number typed for this payment, over the one kept.
+  PayerDetails? payerChoice;
+
+  /// The number kept for the chosen way to pay, when it is whole (Sadad's
+  /// birth year with it).
+  PayerDetails? get savedPayer {
+    final current = method;
+    final kept = current == null ? null : payments?.payerFor(current.key);
+    if (kept == null ||
+        (current!.payer.isNotEmpty && kept.payer.isEmpty) ||
+        (current.birthYear && kept.birthYear.isEmpty)) {
+      return null;
+    }
+    return PayerDetails(payer: kept.payer, birthYear: kept.birthYear);
+  }
+
+  /// What this payment is paid from without asking: typed here, else kept.
+  PayerDetails? get payer => payerChoice ?? savedPayer;
+
+  /// Whether the payer must be asked before paying: the method wants one and
+  /// none is known.
+  bool get mustAskPayer => needsPayerDetails && payer == null;
+
+  void choosePayer(PayerDetails details) {
+    payerChoice = details;
+    notifyListeners();
+  }
+
   void setUseCredit(bool value) {
     useCredit = value;
     notifyListeners();
@@ -216,6 +244,10 @@ class CheckoutModel extends ChangeNotifier {
 
   void choose(PaymentMethod value) {
     orders.analytics.paymentMethodSelected(value.key);
+    if (value.key != method?.key) {
+      // A number typed for one wallet is not another's.
+      payerChoice = null;
+    }
     method = value;
     error = null;
     notifyListeners();
@@ -227,18 +259,20 @@ class CheckoutModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Places the order and starts the payment.
-  Future<CardOrder?> pay({String payer = '', String birthYear = ''}) {
+  /// Places the order and starts the payment, from [payer] where the way to
+  /// pay asks for one (else the one typed or kept).
+  Future<CardOrder?> pay({PayerDetails? payer}) {
     if (busy) {
       return placing ?? Future.value(order);
     }
-    return placing = _pay(
-      payer: payer,
-      birthYear: birthYear,
-    ).whenComplete(() => placing = null);
+    if (payer != null) {
+      payerChoice = payer;
+    }
+    final from = needsPayerDetails ? this.payer : null;
+    return placing = _pay(from).whenComplete(() => placing = null);
   }
 
-  Future<CardOrder?> _pay({String payer = '', String birthYear = ''}) async {
+  Future<CardOrder?> _pay(PayerDetails? from) async {
     busy = true;
     error = null;
     _notify();
@@ -250,8 +284,8 @@ class CheckoutModel extends ChangeNotifier {
         idempotencyKey: _key,
         useCredit: useCredit && credit.isPositive,
         method: creditCovers ? '' : method?.key ?? '',
-        payerIdentifier: payer,
-        birthYear: birthYear,
+        payerIdentifier: from?.payer ?? '',
+        birthYear: from?.birthYear ?? '',
         account: account?.values ?? orderAccount,
         offerId: offer?.id ?? '',
       ),
@@ -261,8 +295,15 @@ class CheckoutModel extends ChangeNotifier {
       case Ok(:final value):
         order = value;
         try {
-          if (method != null) {
-            await preferences?.setString(_methodKey, method!.key);
+          // Kept once the payment goes through ([PaymentMemory.paid]).
+          if (!creditCovers && method != null && from != null) {
+            await payments?.expect(
+              value,
+              method!,
+              payer: from.payer,
+              birthYear: from.birthYear,
+              remember: from.remember,
+            );
           }
           // Topped up once, offered first next time.
           await account?.remember();

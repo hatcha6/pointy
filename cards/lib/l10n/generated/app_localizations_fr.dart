@@ -2249,4 +2249,54 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get offerForEveryone => 'Pour tous';
+
+  @override
+  String get savedPaymentsSettings => 'Moyens de paiement enregistrés';
+
+  @override
+  String get savedPaymentsBody =>
+      'Ce qui est enregistré ici reste sur cet appareil uniquement et rend votre prochain paiement instantané.';
+
+  @override
+  String get defaultMethodTitle => 'Votre moyen préféré';
+
+  @override
+  String get defaultMethodBody =>
+      'Le dernier moyen avec lequel votre paiement a réussi, choisi pour votre prochaine commande.';
+
+  @override
+  String get savedWalletsTitle => 'Portefeuilles';
+
+  @override
+  String get savedWalletsEmpty =>
+      'Aucun numéro de portefeuille enregistré. Un numéro est enregistré après un premier paiement réussi.';
+
+  @override
+  String get savedPayerBirthYear => 'avec l\'année de naissance';
+
+  @override
+  String get removePayerTitle => 'Supprimer le numéro enregistré ?';
+
+  @override
+  String removePayerBody(String method) {
+    return 'Le numéro vous sera demandé lors de votre prochain paiement par $method.';
+  }
+
+  @override
+  String get savedWalletsNote =>
+      'Les numéros de portefeuille sont enregistrés sur cet appareil uniquement, chiffrés, et rien n\'est payé sans le code envoyé par votre portefeuille. Ils sont supprimés à la déconnexion.';
+
+  @override
+  String get payFromLabel => 'Payé depuis';
+
+  @override
+  String get payerRemember =>
+      'Enregistrer le numéro pour mes prochains paiements';
+
+  @override
+  String get savedNothingTitle => 'Rien d\'enregistré pour l\'instant';
+
+  @override
+  String get savedNothingBody =>
+      'Votre premier paiement réussi enregistre votre moyen et votre numéro : la prochaine fois, un seul geste.';
 }

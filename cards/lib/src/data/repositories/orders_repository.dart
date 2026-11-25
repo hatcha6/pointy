@@ -105,6 +105,10 @@ class OrdersRepository {
   /// «اشترِ مجدداً» and the credit follow a purchase at once.
   final ValueNotifier<int> changes = ValueNotifier(0);
 
+  /// Told once of each order of this phone's that becomes paid, however it
+  /// was paid: what the payment memory learns the customer's way to pay from.
+  void Function(CardOrder order)? onPaid;
+
   Future<Result<CheckoutOptions>> checkoutOptions() => Result.guard(() async {
     return CheckoutOptions.fromJson(
       await api.get('/v1/customers/payment-methods'),
@@ -372,8 +376,7 @@ class OrdersRepository {
   Future<Result<List<CardOffer>>> offers() => Result.guard(() async {
     final answer = await api.get('/v1/customers/me/offers', signedIn: true);
     return [
-      for (final raw in readList(answer, 'offers'))
-        ?CardOffer.fromJson(raw),
+      for (final raw in readList(answer, 'offers')) ?CardOffer.fromJson(raw),
     ];
   });
 
@@ -454,6 +457,7 @@ class OrdersRepository {
         status == OrderStatus.delivered;
     if (paidBy(now) && !paidBy(before)) {
       analytics.orderPaid(order);
+      onPaid?.call(order);
     }
     if (now == OrderStatus.delivered) {
       analytics.orderDelivered(order);

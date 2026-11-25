@@ -2227,4 +2227,53 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get offerForEveryone => 'For everyone';
+
+  @override
+  String get savedPaymentsSettings => 'Saved payment methods';
+
+  @override
+  String get savedPaymentsBody =>
+      'What is saved here stays on this device only, and makes your next payment one tap.';
+
+  @override
+  String get defaultMethodTitle => 'Your preferred method';
+
+  @override
+  String get defaultMethodBody =>
+      'The last way you paid successfully, picked for you at your next order.';
+
+  @override
+  String get savedWalletsTitle => 'Wallets';
+
+  @override
+  String get savedWalletsEmpty =>
+      'No wallet numbers saved. A number is saved after your first successful payment from it.';
+
+  @override
+  String get savedPayerBirthYear => 'with birth year';
+
+  @override
+  String get removePayerTitle => 'Remove the saved number?';
+
+  @override
+  String removePayerBody(String method) {
+    return 'You\'ll be asked for the number at your next payment with $method.';
+  }
+
+  @override
+  String get savedWalletsNote =>
+      'Wallet numbers are saved on this device only, encrypted, and nothing is paid from them without the code your wallet sends to your phone. They are removed when you sign out.';
+
+  @override
+  String get payFromLabel => 'Paying from';
+
+  @override
+  String get payerRemember => 'Save the number for my next payments';
+
+  @override
+  String get savedNothingTitle => 'Nothing saved yet';
+
+  @override
+  String get savedNothingBody =>
+      'Your first successful payment saves your method and number, so next time you pay in one tap.';
 }

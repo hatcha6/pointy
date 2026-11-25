@@ -428,5 +428,19 @@
   "offerHeroNext": "off the next",
   "offerCovers": "Covers",
   "offerShopAll": "Shop now",
-  "offerForEveryone": "For everyone"
+  "offerForEveryone": "For everyone",
+  "savedPaymentsSettings": "Saved payment methods",
+  "savedPaymentsBody": "What is saved here stays on this device only, and makes your next payment one tap.",
+  "defaultMethodTitle": "Your preferred method",
+  "defaultMethodBody": "The last way you paid successfully, picked for you at your next order.",
+  "savedWalletsTitle": "Wallets",
+  "savedWalletsEmpty": "No wallet numbers saved. A number is saved after your first successful payment from it.",
+  "savedPayerBirthYear": "with birth year",
+  "removePayerTitle": "Remove the saved number?",
+  "removePayerBody": "You'll be asked for the number at your next payment with {method}.",
+  "savedWalletsNote": "Wallet numbers are saved on this device only, encrypted, and nothing is paid from them without the code your wallet sends to your phone. They are removed when you sign out.",
+  "payFromLabel": "Paying from",
+  "payerRemember": "Save the number for my next payments",
+  "savedNothingTitle": "Nothing saved yet",
+  "savedNothingBody": "Your first successful payment saves your method and number, so next time you pay in one tap."
 }

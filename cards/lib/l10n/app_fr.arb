@@ -428,5 +428,19 @@
   "offerHeroNext": "sur le suivant",
   "offerCovers": "Inclut",
   "offerShopAll": "Acheter",
-  "offerForEveryone": "Pour tous"
+  "offerForEveryone": "Pour tous",
+  "savedPaymentsSettings": "Moyens de paiement enregistrés",
+  "savedPaymentsBody": "Ce qui est enregistré ici reste sur cet appareil uniquement et rend votre prochain paiement instantané.",
+  "defaultMethodTitle": "Votre moyen préféré",
+  "defaultMethodBody": "Le dernier moyen avec lequel votre paiement a réussi, choisi pour votre prochaine commande.",
+  "savedWalletsTitle": "Portefeuilles",
+  "savedWalletsEmpty": "Aucun numéro de portefeuille enregistré. Un numéro est enregistré après un premier paiement réussi.",
+  "savedPayerBirthYear": "avec l'année de naissance",
+  "removePayerTitle": "Supprimer le numéro enregistré ?",
+  "removePayerBody": "Le numéro vous sera demandé lors de votre prochain paiement par {method}.",
+  "savedWalletsNote": "Les numéros de portefeuille sont enregistrés sur cet appareil uniquement, chiffrés, et rien n'est payé sans le code envoyé par votre portefeuille. Ils sont supprimés à la déconnexion.",
+  "payFromLabel": "Payé depuis",
+  "payerRemember": "Enregistrer le numéro pour mes prochains paiements",
+  "savedNothingTitle": "Rien d'enregistré pour l'instant",
+  "savedNothingBody": "Votre premier paiement réussi enregistre votre moyen et votre numéro : la prochaine fois, un seul geste."
 }

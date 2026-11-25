@@ -224,6 +224,7 @@ class _SignedInState extends State<_SignedIn> {
     for (final clear in [
       dependencies.vault.clear,
       dependencies.cards.clear,
+      dependencies.payments.clear,
       dependencies.accounts.clear,
       dependencies.esim.clearKept,
       dependencies.orders.clearKept,
@@ -269,6 +270,7 @@ class _SignedInState extends State<_SignedIn> {
     if (result is Ok) {
       await dependencies.vault.clear();
       await dependencies.cards.clear();
+      await dependencies.payments.clear();
       await dependencies.accounts.clear();
       await dependencies.esim.clearKept();
       await dependencies.orders.clearKept();

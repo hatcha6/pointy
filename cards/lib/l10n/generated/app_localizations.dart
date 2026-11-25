@@ -3530,6 +3530,90 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'للجميع'**
   String get offerForEveryone;
+
+  /// Saved payment methods: the default way to pay and the wallets' numbers.
+  ///
+  /// In ar, this message translates to:
+  /// **'طرق الدفع المحفوظة'**
+  String get savedPaymentsSettings;
+
+  /// Saved payment methods: the default way to pay and the wallets' numbers.
+  ///
+  /// In ar, this message translates to:
+  /// **'ما يُحفظ هنا يبقى على هذا الجهاز وحده، ويجعل دفعتك القادمة بلمسة.'**
+  String get savedPaymentsBody;
+
+  /// Saved payment methods: the default way to pay and the wallets' numbers.
+  ///
+  /// In ar, this message translates to:
+  /// **'طريقتك المفضّلة'**
+  String get defaultMethodTitle;
+
+  /// Saved payment methods: the default way to pay and the wallets' numbers.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر طريقة نجح بها دفعك، تُختار تلقائياً في طلبك القادم.'**
+  String get defaultMethodBody;
+
+  /// Saved payment methods: the default way to pay and the wallets' numbers.
+  ///
+  /// In ar, this message translates to:
+  /// **'المحافظ'**
+  String get savedWalletsTitle;
+
+  /// Saved payment methods: the default way to pay and the wallets' numbers.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا أرقام محافظ محفوظة. يُحفظ الرقم بعد أول دفعة ناجحة منه.'**
+  String get savedWalletsEmpty;
+
+  /// Saved payment methods: the default way to pay and the wallets' numbers.
+  ///
+  /// In ar, this message translates to:
+  /// **'مع سنة الميلاد'**
+  String get savedPayerBirthYear;
+
+  /// Saved payment methods: the default way to pay and the wallets' numbers.
+  ///
+  /// In ar, this message translates to:
+  /// **'إزالة الرقم المحفوظ؟'**
+  String get removePayerTitle;
+
+  /// Saved payment methods: the default way to pay and the wallets' numbers.
+  ///
+  /// In ar, this message translates to:
+  /// **'ستُسأل عن الرقم في دفعتك القادمة عبر {method}.'**
+  String removePayerBody(String method);
+
+  /// Saved payment methods: the default way to pay and the wallets' numbers.
+  ///
+  /// In ar, this message translates to:
+  /// **'تُحفظ أرقام المحافظ على هذا الجهاز وحده، مشفّرة، ولا يُدفع منها دون الرمز الذي ترسله المحفظة إلى هاتفك. تُحذف عند تسجيل الخروج.'**
+  String get savedWalletsNote;
+
+  /// Saved payment methods: the default way to pay and the wallets' numbers.
+  ///
+  /// In ar, this message translates to:
+  /// **'يُدفع من'**
+  String get payFromLabel;
+
+  /// Saved payment methods: the default way to pay and the wallets' numbers.
+  ///
+  /// In ar, this message translates to:
+  /// **'احفظ الرقم لدفعاتي القادمة'**
+  String get payerRemember;
+
+  /// Saved payment methods: the default way to pay and the wallets' numbers.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا شيء محفوظ بعد'**
+  String get savedNothingTitle;
+
+  /// Saved payment methods: the default way to pay and the wallets' numbers.
+  ///
+  /// In ar, this message translates to:
+  /// **'أول دفعة ناجحة تحفظ طريقتك ورقمك، فتدفع في المرة القادمة بلمسة.'**
+  String get savedNothingBody;
 }
 
 class _AppLocalizationsDelegate

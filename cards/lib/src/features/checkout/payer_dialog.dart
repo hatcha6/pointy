@@ -8,19 +8,30 @@ import '../../data/models/order.dart';
 import '../../design/cards_tokens.dart';
 import '../../shared/money_text.dart';
 import '../../shared/motion.dart';
+import 'payment_memory.dart';
 
 /// What the wallet asks of the payer, asked only after "pay" (the same rule
-/// as the shop wallet: nothing inline under the method list). Returns the
-/// payer's number (phone or wallet card) and, for Sadad, the birth year.
-Future<(String, String)?> showPayerDialog(
+/// as the shop wallet: nothing inline under the method list), or when the
+/// payer changes the number kept. Returns the payer's number (phone or
+/// wallet card), for Sadad the birth year, and whether to keep them.
+///
+/// [initial] fills it in (the number kept, to change); else a phone wallet
+/// starts from the account's own [phone].
+Future<PayerDetails?> showPayerDialog(
   BuildContext context, {
   required PaymentMethod method,
   required Money amount,
   String phone = '',
+  PayerDetails? initial,
 }) {
-  return showCardsDialog<(String, String)>(
+  return showCardsDialog<PayerDetails>(
     context: context,
-    builder: (_) => _PayerDialog(method: method, amount: amount, phone: phone),
+    builder: (_) => _PayerDialog(
+      method: method,
+      amount: amount,
+      phone: phone,
+      initial: initial,
+    ),
   );
 }
 
@@ -29,11 +40,13 @@ class _PayerDialog extends StatefulWidget {
     required this.method,
     required this.amount,
     required this.phone,
+    this.initial,
   });
 
   final PaymentMethod method;
   final Money amount;
   final String phone;
+  final PayerDetails? initial;
 
   @override
   State<_PayerDialog> createState() => _PayerDialogState();
@@ -41,9 +54,14 @@ class _PayerDialog extends StatefulWidget {
 
 class _PayerDialogState extends State<_PayerDialog> {
   late final _payer = TextEditingController(
-    text: widget.method.payer == 'phone' ? widget.phone : '',
+    text:
+        widget.initial?.payer ??
+        (widget.method.payer == 'phone' ? widget.phone : ''),
   );
-  final _year = TextEditingController();
+  late final _year = TextEditingController(
+    text: widget.initial?.birthYear ?? '',
+  );
+  late bool _remember = widget.initial?.remember ?? true;
   final _form = GlobalKey<FormState>();
 
   @override
@@ -129,6 +147,16 @@ class _PayerDialogState extends State<_PayerDialog> {
                 },
               ),
             ],
+            const SizedBox(height: CardsSpace.sm),
+            // Kept once the payment goes through, beside the saved cards.
+            CheckboxListTile(
+              value: _remember,
+              onChanged: (on) => setState(() => _remember = on ?? true),
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              dense: true,
+              title: Text(l10n.payerRemember),
+            ),
           ],
         ),
       ),
@@ -143,8 +171,13 @@ class _PayerDialogState extends State<_PayerDialog> {
           ),
           onPressed: () {
             if (_form.currentState!.validate()) {
-              Navigator.of(context)
-                  .pop((_payer.text.replaceAll(' ', ''), _year.text));
+              Navigator.of(context).pop(
+                PayerDetails(
+                  payer: _payer.text.replaceAll(' ', ''),
+                  birthYear: _year.text,
+                  remember: _remember,
+                ),
+              );
             }
           },
           child: Text(l10n.continueAction),
