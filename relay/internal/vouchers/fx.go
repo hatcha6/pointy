@@ -693,6 +693,23 @@ func (s Settings) MarketScaleRate() *big.Rat {
 	return rate
 }
 
+// ReplacementFrom is the replacement rate a market rate stood for: what a
+// dollar cost to buy again when the market was at raw. With the funding-aware
+// rate on, raw plus the refill premium the quote learned (the plain market
+// rate would understate every dollar cost); otherwise raw as Reloadly was
+// priced by it then (the buffer on top). The finance books value a past
+// dollar cost at the rate of its own hour through this.
+func (s Settings) ReplacementFrom(raw *big.Rat) *big.Rat {
+	if raw == nil || raw.Sign() <= 0 {
+		return nil
+	}
+	if s.fxApplied && s.fxQuote != nil && s.fxQuote.Premium != nil {
+		return new(big.Rat).Mul(raw, new(big.Rat).Add(fxOne, s.fxQuote.Premium))
+	}
+	rate, _ := s.WithLiveRate(raw).EffectiveUSDRate()
+	return rate
+}
+
 // BookRate is the rate the company's dollars are valued at in its books: the
 // replacement rate (what it costs to buy one now), never our peak or cushion.
 func (s Settings) BookRate() (*big.Rat, string) {

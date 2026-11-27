@@ -41,6 +41,19 @@ func TestADollarCostIsAtTheRateOfItsHour(t *testing.T) {
 		t.Fatalf("buffered %v", got)
 	}
 
+	// With the funding-aware rate on, a past cost is at that hour's
+	// replacement rate: the market then plus the learned refill premium.
+	// Never the bare market rate (understated costs), never today's peak or
+	// cushion (overstated ones).
+	withFX := *rates
+	withFX.settings = vouchers.Settings{USDRateBufferPercent: "5"}.Normalized().WithFX(vouchers.FXQuote{
+		Live: big.NewRat(11, 1), Premium: big.NewRat(7, 100), Replacement: big.NewRat(1177, 100),
+		Peak: big.NewRat(12, 1), Cushion: big.NewRat(2, 100), Market: big.NewRat(1224, 100),
+	})
+	if got := withFX.usdAt(day.Add(30 * time.Hour)); got == nil || got.FloatString(2) != "10.70" {
+		t.Fatalf("with the funding-aware rate on: %v, want 10.70", got)
+	}
+
 	// With no history (a manual rate), it is today's.
 	manual := &financeRates{current: big.NewRat(7, 1)}
 	if got := manual.usdAt(day); got.RatString() != "7" {

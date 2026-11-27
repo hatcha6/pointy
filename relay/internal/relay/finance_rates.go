@@ -15,9 +15,10 @@ import (
 // few publications a day.
 const financeRateHistoryLimit = 100_000
 
-// financeRates turns a dollar cost into dinars at the rate the relay priced
-// by when the cost was spent: the fulus.ly rate then in force (with the
-// settings' buffer), read from the stored rate history. Revenue is in the
+// financeRates turns a dollar cost into dinars at the replacement rate of
+// the hour it was spent: the fulus.ly rate then in force with the refill
+// premium (the funding-aware rate's learned one, else the settings' buffer),
+// read from the stored rate history. Revenue is in the
 // dinars the sale was charged at, so its cost must be too. At today's rate,
 // a rise in the dollar re-priced every past sale and the books showed a loss
 // that never happened, one that grew each day the dollar did.
@@ -28,7 +29,7 @@ type financeRates struct {
 	settings vouchers.Settings
 	// series is the fulus.ly rates of the series priced by, oldest first.
 	series []financeRatePoint
-	// current is the rate priced by today.
+	// current is today's replacement rate (Settings.BookRate).
 	current *big.Rat
 }
 
@@ -50,7 +51,7 @@ func (f *financeRates) usdAt(hour time.Time) *big.Rat {
 		if i > 0 {
 			point = f.series[i-1]
 		}
-		if rate, _ := f.settings.WithLiveRate(point.rate).EffectiveUSDRate(); rate != nil {
+		if rate := f.settings.ReplacementFrom(point.rate); rate != nil {
 			return rate
 		}
 	}
