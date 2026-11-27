@@ -2169,4 +2169,217 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get runnerBoardNames => 'تظهر باسم مستعار، لا برقمك.';
+
+  @override
+  String get lineDiscount => 'الخصم';
+
+  @override
+  String offerSaves(String amount) {
+    return 'وفّر $amount مع هذا العرض';
+  }
+
+  @override
+  String offerMinOrder(String amount) {
+    return 'على الطلبات من $amount فأكثر';
+  }
+
+  @override
+  String get errOfferUnavailable =>
+      'لم يعد هذا العرض متاحاً لهذا الطلب. أكمل بالسعر الكامل أو حاول لاحقاً.';
+
+  @override
+  String offerBadgePercent(String percent) {
+    return 'خصم $percent٪';
+  }
+
+  @override
+  String offerBadgeAmount(String amount) {
+    return 'خصم $amount';
+  }
+
+  @override
+  String offerBadgeUpTo(String value) {
+    return 'خصم حتى $value';
+  }
+
+  @override
+  String offerBadgeBundleFree(String buy, String get) {
+    return 'اشترِ $buy واحصل على $get مجاناً';
+  }
+
+  @override
+  String offerBadgeBundlePercent(String buy, String percent) {
+    return 'اشترِ $buy والتالي بخصم $percent٪';
+  }
+
+  @override
+  String offerNudgeTier(String amount, String value) {
+    return 'أضف $amount لتحصل على $value';
+  }
+
+  @override
+  String offerNudgeBundle(String count) {
+    return 'أضف $count لتحصل على العرض';
+  }
+
+  @override
+  String get offerForYou => 'عرض لك';
+
+  @override
+  String get offerForAll => 'عرض';
+
+  @override
+  String get offerEndsToday => 'ينتهي اليوم';
+
+  @override
+  String offerEndsIn(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'ينتهي خلال $days يوماً',
+      few: 'ينتهي خلال $days أيام',
+      two: 'ينتهي خلال يومين',
+      one: 'ينتهي غداً',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get offerSignInToUse => 'سجّل الدخول لتستفيد من العرض';
+
+  @override
+  String offerOnItem(String amount) {
+    return 'بعد الخصم $amount';
+  }
+
+  @override
+  String get offersTitle => 'العروض';
+
+  @override
+  String offersEntryMine(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'لديك $count عرضاً',
+      few: 'لديك $count عروض',
+      two: 'لديك عرضان',
+      one: 'لديك عرض',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String offersEntryPublic(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count عرضاً الآن',
+      few: '$count عروض الآن',
+      two: 'عرضان الآن',
+      one: 'عرض الآن',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get offersEntryHint => 'تصفّح ما تشمله العروض';
+
+  @override
+  String get offersEmptyTitle => 'لا عروض الآن';
+
+  @override
+  String get offersEmptyBody => 'حين يصلك عرض نُخبرك به، وتجده هنا.';
+
+  @override
+  String get offersSignInBody =>
+      'سجّل الدخول لترى عروضك الخاصة وتستخدمها عند الدفع.';
+
+  @override
+  String offerUsesLeft(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'تستخدمه $count مرة',
+      few: 'تستخدمه $count مرات',
+      two: 'تستخدمه مرتين',
+      one: 'تستخدمه مرة واحدة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get offerCoversAll => 'يشمل كل البطاقات';
+
+  @override
+  String get offerShopEsim => 'تصفّح باقات eSIM';
+
+  @override
+  String get offerHeroOff => 'خصم';
+
+  @override
+  String get offerHeroUpTo => 'خصم حتى';
+
+  @override
+  String get offerHeroFree => 'مجاناً';
+
+  @override
+  String get offerHeroNext => 'على التالي';
+
+  @override
+  String get offerCovers => 'يشمل';
+
+  @override
+  String get offerShopAll => 'تسوّق الآن';
+
+  @override
+  String get offerForEveryone => 'للجميع';
+
+  @override
+  String get savedPaymentsSettings => 'طرق الدفع المحفوظة';
+
+  @override
+  String get savedPaymentsBody =>
+      'ما يُحفظ هنا يبقى على هذا الجهاز وحده، ويجعل دفعتك القادمة بلمسة.';
+
+  @override
+  String get defaultMethodTitle => 'طريقتك المفضّلة';
+
+  @override
+  String get defaultMethodBody =>
+      'آخر طريقة نجح بها دفعك، تُختار تلقائياً في طلبك القادم.';
+
+  @override
+  String get savedWalletsTitle => 'المحافظ';
+
+  @override
+  String get savedWalletsEmpty =>
+      'لا أرقام محافظ محفوظة. يُحفظ الرقم بعد أول دفعة ناجحة منه.';
+
+  @override
+  String get savedPayerBirthYear => 'مع سنة الميلاد';
+
+  @override
+  String get removePayerTitle => 'إزالة الرقم المحفوظ؟';
+
+  @override
+  String removePayerBody(String method) {
+    return 'ستُسأل عن الرقم في دفعتك القادمة عبر $method.';
+  }
+
+  @override
+  String get savedWalletsNote =>
+      'تُحفظ أرقام المحافظ على هذا الجهاز وحده، مشفّرة، ولا يُدفع منها دون الرمز الذي ترسله المحفظة إلى هاتفك. تُحذف عند تسجيل الخروج.';
+
+  @override
+  String get payFromLabel => 'يُدفع من';
+
+  @override
+  String get payerRemember => 'احفظ الرقم لدفعاتي القادمة';
+
+  @override
+  String get savedNothingTitle => 'لا شيء محفوظ بعد';
+
+  @override
+  String get savedNothingBody =>
+      'أول دفعة ناجحة تحفظ طريقتك ورقمك، فتدفع في المرة القادمة بلمسة.';
 }

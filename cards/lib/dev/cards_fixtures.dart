@@ -15,6 +15,7 @@ import '../src/data/repositories/orders_repository.dart';
 import '../src/data/session/session_store.dart';
 import '../src/data/settings/app_settings.dart';
 import '../src/data/vault/card_vault.dart';
+import '../src/data/vault/payer_vault.dart';
 import '../src/data/vault/code_vault.dart';
 import '../src/data/vault/esim_vault.dart';
 import '../src/data/vault/orders_vault.dart';
@@ -461,6 +462,7 @@ Map<String, dynamic> fixtureOrder({
   String errorCode = '',
   String createdAt = '2026-10-24T10:00:00Z',
   Map<String, String>? account,
+  String method = 'dafa_sadad',
 }) => {
   'id': id,
   'status': status,
@@ -474,7 +476,7 @@ Map<String, dynamic> fixtureOrder({
   'amount_due': total,
   'fee': '0.210',
   'amount_to_pay': '10.210',
-  'method': 'dafa_sadad',
+  'method': method,
   'payer_hint': '091•••678',
   'next_action': nextAction,
   'error_code': errorCode,
@@ -506,9 +508,12 @@ http.Client fixtureRelay({
   ScriptedOrders? scripted,
   bool topUps = false,
   Duration lookUpTakes = Duration.zero,
+  List<Map<String, dynamic>> offers = const [],
 }) {
   final catalog = topUps ? fixtureCatalogWithTopUps : fixtureCatalog;
   scripted?.learnShelf(jsonEncode(catalog));
+  // The way the last order was placed with: what its payment answers.
+  var placedMethod = 'dafa_sadad';
   http.Response json(Object body, [int status = 200]) => http.Response(
     jsonEncode(body),
     status,
@@ -664,9 +669,19 @@ http.Client fixtureRelay({
             },
           ],
         });
+      case ('GET', '/v1/customers/me/offers'):
+        return json({'offers': offers});
+      case ('GET', '/v1/customers/offers'):
+        return json({
+          'offers': [
+            for (final offer in offers)
+              if (offer['for_everyone'] == true) offer,
+          ],
+        });
       case ('POST', '/v1/customers/orders'):
         final body = jsonDecode(request.body) as Map<String, dynamic>;
         final hosted = body['method'] == 'dafa_moamalat';
+        placedMethod = '${body['method'] ?? ''}';
         final account = (body['account'] as Map?)?.cast<String, String>();
         return json({
           'order': fixtureOrder(
@@ -675,6 +690,7 @@ http.Client fixtureRelay({
             item: body['item'] as String,
             nextAction: hosted ? 'hosted_page' : 'otp',
             account: account,
+            method: placedMethod,
           ),
         }, 201);
       case ('GET', '/v1/customers/esim/destinations'):
@@ -812,7 +828,11 @@ http.Client fixtureRelay({
     }
     if (request.method == 'POST' && path.endsWith('/card/complete')) {
       return json({
-        'order': fixtureOrder(id: 'order-new', status: confirmStatus),
+        'order': fixtureOrder(
+          id: 'order-new',
+          status: confirmStatus,
+          method: placedMethod,
+        ),
       });
     }
     if (request.method == 'POST' && path.endsWith('/cancel')) {
@@ -826,7 +846,11 @@ http.Client fixtureRelay({
       return json({
         'order': id.startsWith('topup')
             ? fixtureTopUpOrder(id: id, status: confirmStatus)
-            : fixtureOrder(id: 'order-new', status: confirmStatus),
+            : fixtureOrder(
+                id: 'order-new',
+                status: confirmStatus,
+                method: placedMethod,
+              ),
       });
     }
     if (request.method == 'POST' && path.endsWith('/report')) {
@@ -1170,6 +1194,7 @@ CardsDependencies fixtureDependencies({
   PreviewScenarios? scenarios,
   MoamalatClient? moamalat,
   CardVault? cards,
+  PayerVault? payers,
   LinkInbox? links,
   Analytics? analytics,
   Push? push,
@@ -1180,6 +1205,7 @@ CardsDependencies fixtureDependencies({
   OrdersVault? ordersVault,
   CodeVault? codeVault,
   RunnerAudio? runnerAudio,
+  List<Map<String, dynamic>> offers = const [],
 }) {
   final sessions = MemorySessionStore(signedIn ? fixtureSession : null);
   final base = shelfRelay ?? Uri.parse('https://relay.preview');
@@ -1194,6 +1220,7 @@ CardsDependencies fixtureDependencies({
           scripted: scenarios == null ? null : ScriptedOrders(scenarios),
           topUps: topUps,
           lookUpTakes: lookUpTakes,
+          offers: offers,
         ),
   );
   final auth = AuthRepository(
@@ -1227,6 +1254,7 @@ CardsDependencies fixtureDependencies({
     settings: AppSettings(),
     moamalat: moamalat ?? FakeMoamalatClient(),
     cards: cards ?? MemoryCardVault(),
+    payers: payers,
     links: links,
     analytics: analytics,
     push: push ?? FixturePush(),
@@ -1253,3 +1281,107 @@ class FixturePush extends Push {
     return true;
   }
 }
+
+/// An offer the operator gave the preview's customer: 20% off orders of 15
+/// dinars or more, at most 5 dinars.
+const Map<String, dynamic> fixtureOffer = {
+  'id': 'offer-1',
+  'title': 'خصم 20٪ على طلبك القادم',
+  'description': 'هدية لأنك من عملائنا',
+  'kind': 'percent',
+  'value': '20.000',
+  'max_discount': '5.000',
+  'min_order': '15.000',
+  'uses_left': 1,
+};
+
+/// One offer of every kind, on the preview's shelf: what each badge, banner
+/// and checkout looks like.
+const List<Map<String, dynamic>> fixtureOffers = [
+  {
+    'id': 'offer-percent',
+    'title': 'خصم 15٪ على باقات ليبيا للاتصالات',
+    'description': 'لأنك من عملائنا الأوفياء',
+    'kind': 'percent',
+    'value': '15.000',
+    'max_discount': '5.000',
+    'min_order': '0.000',
+    'scope': {
+      'brands': ['lnet'],
+    },
+    'uses_left': 1,
+  },
+  {
+    'id': 'offer-amount',
+    'title': 'خصم 3 د.ل على الألعاب',
+    'kind': 'amount',
+    'value': '3.000',
+    'max_discount': '0.000',
+    'min_order': '20.000',
+    'scope': {
+      'categories': ['gaming'],
+    },
+    'uses_left': 2,
+  },
+  {
+    'id': 'offer-tiered',
+    'title': 'كلما زاد طلبك زاد خصمك',
+    'kind': 'tiered',
+    'value': '15.000',
+    'max_discount': '20.000',
+    'min_order': '20.000',
+    'tier_unit': 'percent',
+    'tiers': [
+      {'min_order': '20.000', 'value': '5.000'},
+      {'min_order': '50.000', 'value': '10.000'},
+      {'min_order': '100.000', 'value': '15.000'},
+    ],
+    'scope': {
+      'categories': ['gift_cards'],
+    },
+    'uses_left': 1,
+  },
+  {
+    'id': 'offer-bundle',
+    'title': 'اشترِ كرتين واحصل على الثالث مجاناً',
+    'kind': 'bundle',
+    'value': '100.000',
+    'max_discount': '0.000',
+    'min_order': '0.000',
+    'buy_quantity': 2,
+    'get_quantity': 1,
+    'get_percent': '100.000',
+    'scope': {
+      'brands': ['almadar'],
+    },
+    'uses_left': 1,
+    'for_everyone': true,
+  },
+  {
+    'id': 'offer-esim',
+    'title': 'خصم 10٪ على كل شرائح eSIM',
+    'kind': 'percent',
+    'value': '10.000',
+    'max_discount': '0.000',
+    'min_order': '0.000',
+    'scope': {
+      'categories': ['esim'],
+    },
+    'badge': 'eSIM أرخص',
+    'uses_left': 1,
+    'for_everyone': true,
+  },
+  {
+    'id': 'offer-badge',
+    'title': 'عرض الشتاء على ليبيانا',
+    'kind': 'amount',
+    'value': '2.000',
+    'max_discount': '0.000',
+    'min_order': '10.000',
+    'scope': {
+      'brands': ['libyana'],
+    },
+    'badge': 'عرض الشتاء',
+    'uses_left': 1,
+  },
+];

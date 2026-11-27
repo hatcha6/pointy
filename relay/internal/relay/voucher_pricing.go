@@ -27,14 +27,11 @@ const (
 // is nil when there is none usable; problem then says why. at is the rate's
 // publication time.
 func pickUSDRate(rates []control.ExchangeRate, settings vouchers.Settings, now time.Time) (rate *big.Rat, at time.Time, problem string) {
-	series, bank := settings.RateSeries()
+	series, _ := settings.RateSeries()
 	var best *control.ExchangeRate
 	for i := range rates {
 		r := &rates[i]
-		if !strings.EqualFold(r.FromCode, "USD") || !strings.EqualFold(r.ToCode, "LYD") || !strings.EqualFold(r.Instrument, series) {
-			continue
-		}
-		if series == vouchers.RateSeriesBank && !strings.EqualFold(strings.TrimSpace(r.BankCode), bank) {
+		if !inUSDSeries(*r, settings) {
 			continue
 		}
 		if best == nil || r.EffectiveAt.After(best.EffectiveAt) {
@@ -53,6 +50,16 @@ func pickUSDRate(rates []control.ExchangeRate, settings vouchers.Settings, now t
 		return nil, best.EffectiveAt, "the fulus.ly dollar rate does not read"
 	}
 	return value, best.EffectiveAt, ""
+}
+
+// inUSDSeries reports whether r is a USD/LYD rate of the series the settings
+// price by (cash, or one bank's).
+func inUSDSeries(r control.ExchangeRate, settings vouchers.Settings) bool {
+	series, bank := settings.RateSeries()
+	if !strings.EqualFold(r.FromCode, "USD") || !strings.EqualFold(r.ToCode, "LYD") || !strings.EqualFold(r.Instrument, series) {
+		return false
+	}
+	return series != vouchers.RateSeriesBank || strings.EqualFold(strings.TrimSpace(r.BankCode), bank)
 }
 
 // withLiveRate lays the live dollar rate on settings (when they ask for it).
@@ -109,11 +116,15 @@ func (c *VoucherSettingsCache) rememberRates(rates []control.ExchangeRate, now t
 // supplier cost keeps its written prices.
 func (s HTTPServer) autoPricedDocument(document vouchers.Document, offers voucherOffers, settings vouchers.Settings) vouchers.Document {
 	price := s.cardPricer(offers, settings)
+	var locator *vouchers.Locator
 	return document.WithPrices(func(item vouchers.Item) (string, string, bool) {
 		if !document.AutoPriced(item) {
 			return "", "", false
 		}
-		located, found := vouchers.Find(document, item.Key)
+		if locator == nil {
+			locator = vouchers.NewLocator(document)
+		}
+		located, found := locator.Find(item.Key)
 		if !found {
 			return "", "", false
 		}

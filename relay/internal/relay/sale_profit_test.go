@@ -7,6 +7,14 @@ import (
 	"pointy/relay/internal/control"
 )
 
+// todays is the rates of a report with no history: one rate for everything.
+func todays(rate *big.Rat) *financeRates {
+	if rate == nil {
+		return nil
+	}
+	return &financeRates{current: rate}
+}
+
 func TestASaleCarriesItsCostAndProfit(t *testing.T) {
 	rate := big.NewRat(10, 1)
 	sold := func(cost, currency string) control.VoucherPurchase {
@@ -29,7 +37,7 @@ func TestASaleCarriesItsCostAndProfit(t *testing.T) {
 		{"no cost recorded", sold("", ""), rate, saleProfit{}},
 	}
 	for _, c := range cases {
-		if got := saleProfitOf(c.purchase.Amount, c.purchase, c.rate); got != c.want {
+		if got := saleProfitOf(c.purchase.Amount, c.purchase, todays(c.rate)); got != c.want {
 			t.Errorf("%s: got %+v, want %+v", c.name, got, c.want)
 		}
 	}
@@ -40,7 +48,7 @@ func TestASaleCarriesItsCostAndProfit(t *testing.T) {
 	test.TestMode = true
 	company := sold("100", "LYD")
 	company.InstallationID = ""
-	views := withPurchaseProfit([]control.VoucherPurchase{sold("100", "LYD"), failed, test, company}, rate)
+	views := withPurchaseProfit([]control.VoucherPurchase{sold("100", "LYD"), failed, test, company}, todays(rate))
 	if views[0].Profit != "20.000" || views[1].saleProfit != (saleProfit{}) || views[2].saleProfit != (saleProfit{}) {
 		t.Fatalf("shop purchases: %+v %+v %+v", views[0].saleProfit, views[1].saleProfit, views[2].saleProfit)
 	}
@@ -55,7 +63,7 @@ func TestAnOrderEarnsItsTotalLessItsPurchase(t *testing.T) {
 		"p-1": {ID: "p-1", Status: control.VoucherPurchaseSucceeded, SupplierCost: "9", SupplierCurrency: "USD"},
 	}
 	order := control.CustomerOrder{PurchaseID: "p-1", Status: control.CustomerOrderDelivered, Total: "100.000", Fee: "2.000"}
-	if got := orderProfit(order, purchases, big.NewRat(10, 1)); got != (saleProfit{CostLYD: "90.000", Profit: "10.000"}) {
+	if got := orderProfit(order, purchases, todays(big.NewRat(10, 1))); got != (saleProfit{CostLYD: "90.000", Profit: "10.000"}) {
 		t.Fatalf("delivered: %+v", got)
 	}
 	refunded := order
@@ -65,7 +73,7 @@ func TestAnOrderEarnsItsTotalLessItsPurchase(t *testing.T) {
 	unknown := order
 	unknown.PurchaseID = "p-2"
 	for name, o := range map[string]control.CustomerOrder{"refunded": refunded, "test": test, "unknown purchase": unknown} {
-		if got := orderProfit(o, purchases, big.NewRat(10, 1)); got != (saleProfit{}) {
+		if got := orderProfit(o, purchases, todays(big.NewRat(10, 1))); got != (saleProfit{}) {
 			t.Errorf("%s: %+v", name, got)
 		}
 	}

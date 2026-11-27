@@ -7,7 +7,7 @@ import '../../design/cards_tokens.dart';
 import '../../shared/cards_scope.dart';
 import '../../shared/grouped.dart';
 import '../../shared/haptics.dart';
-import '../card_payment/saved_cards_page.dart';
+import '../card_payment/saved_payments_page.dart';
 
 /// The phone's own choices, signed in or not: the code lock, light or dark,
 /// and (once [AppSettings.languageChoice] is on) the language.
@@ -74,20 +74,20 @@ class SettingsSection extends StatelessWidget {
             onChanged: settings.setShareUsage,
           ),
           const _NotificationsSwitch(),
-          // Cards are kept only on a phone.
-          if (CardsScope.of(context).cards.available)
-            ListTile(
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: CardsSpace.lg,
-              ),
-              leading: const Icon(Icons.credit_card_rounded),
-              title: Text(
-                l10n.savedCardsSettings,
-                style: theme.textTheme.titleSmall,
-              ),
-              trailing: const Icon(Icons.chevron_right_rounded),
-              onTap: () => SavedCardsPage.open(context),
+          // The preferred way to pay and the wallets' numbers everywhere;
+          // bank cards too, on a phone.
+          ListTile(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: CardsSpace.lg,
             ),
+            leading: const Icon(Icons.wallet_rounded),
+            title: Text(
+              l10n.savedPaymentsSettings,
+              style: theme.textTheme.titleSmall,
+            ),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => SavedPaymentsPage.open(context),
+          ),
           _ChoiceRow(
             icon: Icons.contrast_rounded,
             title: l10n.themeTitle,

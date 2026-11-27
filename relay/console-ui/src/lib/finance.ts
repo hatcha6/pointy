@@ -28,9 +28,28 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { ApiError, api, qs } from "./api";
+import { money } from "./format";
 
 // The company's books: hand-written lines (FinanceEntry) and the profit
 // summary the relay adds up from them and from its own records.
+
+/**
+ * The dollar rate a report turned supplier costs into dinars at. `basis` is
+ * "at_spend" when each cost is at the fulus.ly rate of the hour it was spent
+ * in (so a move in the dollar does not re-price past sales), "today" when one
+ * rate (a manual one) is used for every cost.
+ */
+export type UsdRateInfo = { rate?: string; source?: string; basis?: "at_spend" | "today" };
+
+/** How a report's dollar costs were priced, in a sentence; null with no rate. */
+export function usdRateNote(info: UsdRateInfo | undefined): string | null {
+  if (!info?.rate && info?.basis !== "at_spend") return null;
+  const today = info.rate ? money(Number(info.rate).toFixed(3)) : null;
+  if (info.basis === "at_spend") {
+    return `تكاليف الدولار محوّلة بسعر السوق (fulus.ly) وقت كل عملية، لا بسعر اليوم${today ? ` (اليوم ${today})` : ""}؛ تغيّر الدولار لا يغيّر ربح مبيعات سابقة.`;
+  }
+  return `تكاليف الدولار محوّلة بسعر ${today} (${info.source === "manual" ? "السعر اليدوي" : "سعر السوق من fulus.ly"}) لكل العمليات — تقدير.`;
+}
 
 /** A withdrawal is money the owners took: neither income nor an expense. */
 export type Direction = "income" | "expense" | "withdrawal";
@@ -95,7 +114,7 @@ export type FinanceSummary = {
   from: string;
   to: string;
   currency: string;
-  usd_rate: { rate?: string; source?: string };
+  usd_rate: UsdRateInfo;
   totals: FinanceTotals;
   previous: { from: string; to: string; totals: FinanceTotals };
   months: { month: string; income: string; expense: string; net: string }[];
@@ -117,7 +136,7 @@ export type ServiceProfit = { key: string; sales: string; cost: string; profit: 
  */
 export type FinancePosition = {
   as_of: string;
-  usd_rate: { rate?: string; source?: string };
+  usd_rate: UsdRateInfo;
   services: ServiceProfit[];
   gross: { sales: string; cost: string; profit: string; margin_percent: string };
   manual_income: string;

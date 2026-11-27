@@ -23,6 +23,7 @@ import '../sign_in/sign_in_sheet.dart';
 import '../links/link_inbox.dart';
 import '../my_cards/my_cards_page.dart';
 import '../search/search_page.dart';
+import '../offers/offers_page.dart';
 import '../shelf/shelf_model.dart';
 import 'cards_sidebar.dart';
 import 'cards_tab_bar.dart';
@@ -96,6 +97,7 @@ class _CardsShellState extends State<CardsShell> {
       // Read now: the home search finds eSIMs as well as cards. And again on
       // signing in or out, which can open or close the shelf.
       unawaited(dependencies.esim.loadShelf());
+      unawaited(dependencies.offers.refresh());
       _reloadEsim = () => unawaited(dependencies.esim.loadShelf());
       _session!.addListener(_reloadEsim!);
       // A link waits for the catalog when it names a brand or a category.
@@ -168,8 +170,14 @@ class _CardsShellState extends State<CardsShell> {
     if (link == null) {
       return;
     }
+    // An order waits too: its card's page takes the brand from the catalog
+    // (the redeem button, the QR, how to use it). Opened before the catalog
+    // was read (the web app reloaded on /my-cards/<id>), it had none of them.
     final needsCatalog =
-        link is BrandLink || (link is ShelfLink && link.category != null);
+        link is BrandLink ||
+        link is OrderLink ||
+        link is OffersLink ||
+        (link is ShelfLink && link.category != null);
     // The brand may not be in the first part of the shelf: the link waits
     // for the whole one.
     if (needsCatalog && (shelf.loading || (shelf.partial && !shelf.offline))) {
@@ -242,6 +250,9 @@ class _CardsShellState extends State<CardsShell> {
         } else {
           EsimDestinationPage.open(context, destination, plan: link.plan);
         }
+      case OffersLink():
+        _go(CardsTab.shelf.index);
+        OffersPage.open(context, shelf);
       case EsimLink(:final iccid):
         _go(CardsTab.myCards.index);
         unawaited(_openEsim(iccid));

@@ -79,6 +79,9 @@ type customerOrderRequest struct {
 	// takes them.
 	UserIdentifier string `json:"user_identifier"`
 	BirthYear      string `json:"birth_year"`
+	// OfferID is a segment offer (GET /v1/customers/me/offers) to take off
+	// the order; the store decides whether it may and by how much.
+	OfferID string `json:"offer_id"`
 }
 
 // handleCustomerOrderCreate serves POST /v1/customers/orders.
@@ -135,9 +138,11 @@ func (s HTTPServer) handleCustomerOrderCreate(w http.ResponseWriter, r *http.Req
 	// What is sold, and at what price: a card from the catalog, or an eSIM plan.
 	var (
 		itemKey, brandKey, itemName string
-		account                     map[string]string
-		price                       *big.Rat
-		sandbox                     bool
+		// category scopes an offer: the card's, or "esim".
+		category string
+		account  map[string]string
+		price    *big.Rat
+		sandbox  bool
 	)
 	if item, isESIM := parseESIMItem(request.Item); isESIM {
 		if request.Quantity != 1 {
@@ -156,6 +161,7 @@ func (s HTTPServer) handleCustomerOrderCreate(w http.ResponseWriter, r *http.Req
 		}
 		itemKey, brandKey, itemName, price = request.Item, esimOrderBrand(quote.Details.Country), quote.Name, quote.Price
 		account = esimOrderAccount(request.Account)
+		category = control.CustomerOfferESIM
 		// Only Airalo has a Sandbox; a plan bought from eSIM Access is real.
 		sandbox = s.ESIM.Sandbox && (quote.Details.Supplier == "" || quote.Details.Supplier == vouchers.SupplierAiralo)
 	} else {
@@ -190,6 +196,7 @@ func (s HTTPServer) handleCustomerOrderCreate(w http.ResponseWriter, r *http.Req
 			return
 		}
 		itemKey, brandKey, itemName = located.Item.Key, located.Brand.Key, located.Name()
+		category = located.Brand.Category
 	}
 	if shown, err := control.ParseWalletAmount(request.UnitPrice); err != nil || shown.Cmp(price) != 0 {
 		writeCustomerError(w, http.StatusConflict, "price_changed", "the price changed; check it and try again",
@@ -200,6 +207,19 @@ func (s HTTPServer) handleCustomerOrderCreate(w http.ResponseWriter, r *http.Req
 	// The payer is checked before anything is stored, unless the credit
 	// will clearly cover everything.
 	total := new(big.Rat).Mul(price, big.NewRat(int64(request.Quantity), 1))
+	request.OfferID = strings.TrimSpace(request.OfferID)
+	if request.OfferID != "" {
+		// What the offer takes off, to know whether credit covers the rest;
+		// the store prices it again, under its lock, and is the word.
+		offer, err := s.customerOffer(ctx, request.OfferID)
+		if err != nil {
+			writeCustomerError(w, http.StatusConflict, "offer_unavailable", "this offer cannot be used on this order", nil)
+			return
+		}
+		total.Sub(total, control.CustomerOfferDiscount(offer, control.CustomerOfferLine{
+			UnitPrice: price, Quantity: request.Quantity, Category: category, Brand: brandKey, Item: itemKey,
+		}))
+	}
 	needsPayment := true
 	if request.UseCredit {
 		balance, _, err := orders.CustomerCredit(ctx, customer.ID, 1)
@@ -252,8 +272,13 @@ func (s HTTPServer) handleCustomerOrderCreate(w http.ResponseWriter, r *http.Req
 		FeePercent: s.Wallet.FeePercent,
 		TestMode:   s.Vouchers.MarksTest() || s.Wallet.TestMode || review || sandbox,
 		Review:     review,
+		OfferID:    request.OfferID,
+		Category:   category,
 	}, request.UseCredit)
 	switch {
+	case errors.Is(err, control.ErrCustomerOfferUnavailable):
+		writeCustomerError(w, http.StatusConflict, "offer_unavailable", "this offer cannot be used on this order", nil)
+		return
 	case errors.Is(err, control.ErrCustomerOrderKeyReused):
 		writeCustomerError(w, http.StatusConflict, "idempotency_key_reused", "this key was used for another order", nil)
 		return
@@ -672,9 +697,12 @@ func customerOrderPayload(order control.CustomerOrder, codes []vouchers.Code, co
 		"quantity":        order.Quantity,
 		"unit_price":      order.UnitPrice,
 		"total":           order.Total,
-		"credit_used":     order.CreditUsed,
-		"amount_due":      order.AmountDue,
-		"fee":             order.Fee,
+		// discount is what a segment offer (offer_id) took off total.
+		"discount":    orZeroAmount(order.Discount),
+		"offer_id":    order.OfferID,
+		"credit_used": order.CreditUsed,
+		"amount_due":  order.AmountDue,
+		"fee":         order.Fee,
 		// amount_to_pay is what the payer is charged through Dafa: the
 		// amount due plus the gateway's fee.
 		"amount_to_pay": control.CustomerOrderCharge(order),

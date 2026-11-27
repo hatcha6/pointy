@@ -32,7 +32,11 @@ void main() {
         told.add((jsonDecode(request.body) as Map)['token'] as String);
         return http.Response('', 204);
       }
-      return relay.send(request).then(http.Response.fromStream);
+      // A request is sent once: the fixture relay gets a copy of it.
+      final copy = http.Request(request.method, request.url)
+        ..headers.addAll(request.headers)
+        ..bodyBytes = request.bodyBytes;
+      return relay.send(copy).then(http.Response.fromStream);
     });
     final push = TokenPush();
     final dependencies = fixtureDependencies(client: client, push: push);

@@ -190,11 +190,25 @@ func TestFileStoreFinanceTrackedRollsUpLibyanMonths(t *testing.T) {
 	if m.SMSCost != "0.080" {
 		t.Fatalf("sms cost %s", m.SMSCost)
 	}
-	if m.SupplierCost["USD"] != "10.500" || m.SupplierCost["LYD"] != "40.000" || len(m.SupplierCost) != 2 {
+	if m.SupplierCost["LYD"] != "40.000" || len(m.SupplierCost) != 1 {
 		t.Fatalf("supplier cost %+v", m.SupplierCost)
 	}
-	if m.CompanyCost["USD"] != "20.000" || m.CompanyCost["LYD"] != "15.000" || len(m.CompanyCost) != 2 {
+	if m.CompanyCost["LYD"] != "15.000" || len(m.CompanyCost) != 1 {
 		t.Fatalf("company cost %+v", m.CompanyCost)
+	}
+	// Dollars stay dollars, with the hour they were spent in, so the report
+	// turns each at the rate of that hour rather than today's.
+	wantForeign := []FinanceForeignCost{
+		{Hour: october, Cost: FinanceCostCompany, Currency: "USD", Amount: "20.000"},
+		{Hour: october, Cost: FinanceCostSupplier, Currency: "USD", Amount: "10.500"},
+	}
+	if len(m.ForeignCosts) != len(wantForeign) {
+		t.Fatalf("foreign costs %+v", m.ForeignCosts)
+	}
+	for i, want := range wantForeign {
+		if got := m.ForeignCosts[i]; !got.Hour.Equal(want.Hour) || got.Cost != want.Cost || got.Currency != want.Currency || got.Amount != want.Amount {
+			t.Fatalf("foreign cost %d: %+v, want %+v", i, got, want)
+		}
 	}
 	if m.TopUps[WalletTopUpMethodBankTransfer] != "200.000" || m.TopUps[WalletTopUpMethodDafaSadad] != "98.000" || len(m.TopUps) != 2 {
 		t.Fatalf("top-ups, as credited: %+v", m.TopUps)
@@ -415,5 +429,73 @@ func TestFileStoreVoucherOffersRememberTheirLastPriceChange(t *testing.T) {
 	}
 	if kept := read("4.95"); kept.PreviousPrice != "4.850" || kept.PriceChangedAt == nil {
 		t.Fatalf("history is kept until the price moves again: %+v", kept)
+	}
+}
+
+func TestPostgresStoreFinanceKeepsDollarCostsByHour(t *testing.T) {
+	url := os.Getenv("POINTY_RELAY_TEST_DATABASE_URL")
+	if url == "" {
+		t.Skip("POINTY_RELAY_TEST_DATABASE_URL not set")
+	}
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	if err := MigratePostgres(ctx, pool); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `DELETE FROM relay_voucher_purchases WHERE id LIKE 'fx-hour-%'`); err != nil {
+		t.Fatal(err)
+	}
+	store := &PostgresStore{pool: pool, clock: &fixedClock{now: time.Date(2031, 3, 9, 10, 0, 0, 0, time.UTC)}}
+	// Two dollar cards for customers in one hour, one the next day, a
+	// company card in dinars, and 22:30 UTC on 28 February: March in Tripoli.
+	day := time.Date(2031, 3, 3, 9, 0, 0, 0, time.UTC)
+	for _, row := range []struct {
+		id, purpose, cost, currency string
+		amount                      string
+		at                          time.Time
+	}{
+		{"fx-hour-1", VoucherPurposeCustomer, "4.5", "USD", "50", day.Add(10 * time.Minute)},
+		{"fx-hour-2", VoucherPurposeCustomer, "5.5", "usd", "60", day.Add(50 * time.Minute)},
+		{"fx-hour-3", VoucherPurposeCustomer, "10", "USD", "110", day.Add(24 * time.Hour)},
+		{"fx-hour-4", VoucherPurposeOwnUse, "", "", "30", day},
+		{"fx-hour-5", VoucherPurposeOwnUse, "2", "USD", "20", time.Date(2031, 2, 28, 22, 30, 0, 0, time.UTC)},
+	} {
+		if _, err := pool.Exec(ctx, `INSERT INTO relay_voucher_purchases (id, idempotency_key, item_key, quantity,
+				unit_price, amount, supplier, supplier_cost, supplier_currency, status, created_at, updated_at, completed_at, purpose)
+			VALUES ($1, $1, 'item', 1, $2::numeric, $2::numeric, 'bnplus', $3, $4, 'succeeded', $5, $5, $5, $6)`,
+			row.id, row.amount, row.cost, row.currency, row.at, row.purpose); err != nil {
+			t.Fatal(err)
+		}
+	}
+	defer pool.Exec(ctx, `DELETE FROM relay_voucher_purchases WHERE id LIKE 'fx-hour-%'`)
+
+	from := time.Date(2031, 3, 1, 0, 0, 0, 0, financeZone)
+	months, err := store.FinanceTracked(ctx, from, from.AddDate(0, 1, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(months) != 1 || months[0].Month != "2031-03" {
+		t.Fatalf("months %+v", months)
+	}
+	m := months[0]
+	if m.CompanyCost["LYD"] != "30.000" || len(m.CompanyCost) != 1 || len(m.CardsAppCost) != 0 {
+		t.Fatalf("dinar costs: company %v, app %v", m.CompanyCost, m.CardsAppCost)
+	}
+	want := []FinanceForeignCost{
+		{Hour: time.Date(2031, 2, 28, 22, 0, 0, 0, time.UTC), Cost: FinanceCostCompany, Currency: "USD", Amount: "2.000"},
+		{Hour: day, Cost: FinanceCostCardsApp, Currency: "USD", Amount: "10.000"},
+		{Hour: day.Add(24 * time.Hour), Cost: FinanceCostCardsApp, Currency: "USD", Amount: "10.000"},
+	}
+	if len(m.ForeignCosts) != len(want) {
+		t.Fatalf("foreign costs %+v", m.ForeignCosts)
+	}
+	for i, w := range want {
+		if got := m.ForeignCosts[i]; !got.Hour.Equal(w.Hour) || got.Cost != w.Cost || got.Currency != w.Currency || got.Amount != w.Amount {
+			t.Fatalf("foreign cost %d: %+v, want %+v", i, got, w)
+		}
 	}
 }

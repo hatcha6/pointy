@@ -1,5 +1,4 @@
-import 'package:flutter/cupertino.dart'
-    show CupertinoPageTransitionsBuilder, CupertinoThemeData;
+import 'package:flutter/cupertino.dart' show CupertinoThemeData;
 import 'package:flutter/material.dart';
 import 'package:pointy_brand/pointy_brand.dart';
 
@@ -80,7 +79,7 @@ abstract final class CardsTheme {
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {
           // The system's slide, which follows the finger on a swipe back.
-          TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+          TargetPlatform.iOS: CardsCupertinoPageTransitionsBuilder(),
           // Material's shared axis; a back swipe is the system's own
           // predictive back.
           TargetPlatform.android: CardsPageTransitionsBuilder(

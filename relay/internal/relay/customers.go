@@ -317,6 +317,12 @@ func (s HTTPServer) handleCustomerRoutes(w http.ResponseWriter, r *http.Request)
 		s.withCustomer(w, r, store, func(customer control.Customer, _ control.CustomerSession) {
 			s.handleRunnerBoard(w, r, customer)
 		})
+	case path == "/v1/customers/offers" && r.Method == http.MethodGet:
+		s.handlePublicCustomerOffers(w, r)
+	case path == "/v1/customers/me/offers" && r.Method == http.MethodGet:
+		s.withCustomer(w, r, store, func(customer control.Customer, _ control.CustomerSession) {
+			s.handleCustomerOffers(w, r, customer)
+		})
 	case path == "/v1/customers/me/push" && r.Method == http.MethodPut:
 		s.withCustomer(w, r, store, func(customer control.Customer, session control.CustomerSession) {
 			s.handleCustomerPushToken(w, r, store, customer, session)

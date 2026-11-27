@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ReceiptText, Search } from "lucide-react";
 import { Link, useSearchParam, useSearchText } from "../../lib/router";
 import { cardChannel, cardOrderStatus, useCardOrders, type CardOrder } from "../../lib/cards";
-import { count, dateTime } from "../../lib/format";
+import { count, dateTime, money } from "../../lib/format";
 import { label, method as methodLabels } from "../../lib/labels";
 import { Badge, Card, CopyText, Empty, Money, Segmented, TimeAgo } from "../../components/ui";
 import { DataTable, Stacked, type Column } from "../../components/DataTable";
@@ -55,7 +55,13 @@ export function CardOrdersTable({ orders, loading, showCustomer = true }: { orde
         }]
       : []),
     { key: "status", header: "الحالة", cell: (o) => <StatusBadge order={o} /> },
-    { key: "total", header: "المبلغ", align: "end", mobile: "trailing", cell: (o) => <Money value={o.total} /> },
+    {
+      key: "total",
+      header: "المبلغ",
+      align: "end",
+      mobile: "trailing",
+      cell: (o) => (Number(o.discount) > 0 ? <Stacked title={<Money value={o.total} />} sub={`بعد خصم ${money(o.discount)}`} /> : <Money value={o.total} />),
+    },
     { key: "profit", header: "ربحنا", align: "end", cell: (o) => <SaleProfit profit={o.profit} cost={o.cost_lyd} /> },
     { key: "when", header: "الوقت", cell: (o) => <TimeAgo value={o.created_at} /> },
   ];
@@ -84,6 +90,7 @@ export function OrderDialog({ order, onClose }: { order: CardOrder; onClose: () 
     ["المجموع", <Money value={order.total} />],
     ["تكلفتنا", order.cost_lyd ? <Money value={order.cost_lyd} /> : "—"],
     ["ربحنا", <SaleProfit profit={order.profit} cost={order.cost_lyd} />],
+    ["خصم عرض", Number(order.discount) ? <Money value={order.discount} /> : "—"],
     ["من الرصيد", Number(order.credit_used) ? <Money value={order.credit_used} /> : "—"],
     ["عبر البوابة", Number(order.amount_due) ? <Money value={order.amount_due} /> : "—"],
     ["رسوم البوابة", Number(order.fee) ? <Money value={order.fee} /> : "—"],

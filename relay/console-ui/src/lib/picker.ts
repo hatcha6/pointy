@@ -6,8 +6,9 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "./api";
 import type { SupplierOption, Target } from "./vouchers";
 
-export type PickerItem = { key: string; brand: string; name: string };
-export type PickerList = { items: PickerItem[]; brands: { key: string; name: string }[]; test_mode: boolean };
+export type PickerItem = { key: string; brand: string; name: string; price?: string };
+export type PickerBrand = { key: string; name: string; category?: string };
+export type PickerList = { items: PickerItem[]; brands: PickerBrand[]; categories: { key: string; name: string }[]; test_mode: boolean };
 
 export type PickedItem = {
   key: string;
@@ -24,7 +25,7 @@ export type PickedItem = {
 export function useCatalogItems() {
   return useQuery({
     queryKey: ["vouchers", "catalog", "items"],
-    queryFn: () => api.get<PickerList>("/v1/vouchers/admin/catalog/items").then((r) => ({ ...r, items: r.items ?? [], brands: r.brands ?? [] })),
+    queryFn: () => api.get<PickerList>("/v1/vouchers/admin/catalog/items").then((r) => ({ ...r, items: r.items ?? [], brands: r.brands ?? [], categories: r.categories ?? [] })),
     retry: false,
     staleTime: 5 * 60_000,
   });

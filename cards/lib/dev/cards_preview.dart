@@ -39,8 +39,15 @@ import '../src/data/models/order.dart';
 import '../src/design/cards_theme.dart';
 import '../src/features/card_payment/payment_page_view.dart';
 import '../src/features/brand/brand_page.dart';
+import '../src/features/home/brand_tile.dart';
+import 'bundle_concept.dart';
+import '../src/features/links/cards_link.dart';
 import '../src/features/card_payment/card_payment_page.dart';
 import '../src/features/checkout/checkout_model.dart';
+import '../src/data/vault/payer_vault.dart';
+import '../src/features/checkout/payment_memory.dart';
+import '../src/features/checkout/payer_dialog.dart';
+import '../src/features/card_payment/saved_payments_page.dart';
 import '../src/features/checkout/checkout_sheet.dart';
 import '../src/features/legal/about_page.dart';
 import '../src/features/legal/legal_document.dart';
@@ -86,6 +93,20 @@ Future<void> main() async {
       );
   // `&slow=8`: every animation eight times slower, to look at a transition.
   timeDilation = double.tryParse(query['slow'] ?? '') ?? 1;
+  // `&perf=1`: each frame's build and raster time on the console, for the
+  // web performance runs (one line a frame, `FT build raster span` in µs).
+  if (query['perf'] != null) {
+    WidgetsFlutterBinding.ensureInitialized();
+    SchedulerBinding.instance.addTimingsCallback((timings) {
+      for (final t in timings) {
+        // ignore: avoid_print
+        print(
+          'FT ${t.buildDuration.inMicroseconds} '
+          '${t.rasterDuration.inMicroseconds} ${t.totalSpan.inMicroseconds}',
+        );
+      }
+    });
+  }
   final dark =
       (query['theme'] ?? const String.fromEnvironment('CARDS_PREVIEW_THEME')) ==
       'dark';
@@ -110,9 +131,12 @@ Future<void> main() async {
     runnerAudio: MixedRunnerAudio(),
     signedIn:
         screen != 'signed-out' &&
+        screen != 'offers-signed-out' &&
         !screen.startsWith('sign-in') &&
         !screen.startsWith('heard-from'),
     shelfRelay: shelfRelay.isEmpty ? null : Uri.parse(shelfRelay),
+    // The customer holds a segment offer: checkout shows it taken off.
+    offers: fixtureOffers,
     // A late card stays late however often the page asks.
     client: switch (screen) {
       'preparing-slow' ||
@@ -137,7 +161,20 @@ Future<void> main() async {
     // `&channel=ios` or `play`: the shelf as a store build has it (games and
     // gift cards «على الموقع» while the console says so).
     channel: query['channel'] ?? 'apk',
+    // Saved payments: a card, three wallets, Sadad the preferred way.
+    payers: _savedPayments.contains(screen) ? _previewPayers() : null,
   );
+  if (_savedPayments.contains(screen)) {
+    await dependencies.cards.keep(
+      number: '5078031234564821',
+      name: 'NOOR ALI',
+      expiryMonth: 8,
+      expiryYear: 28,
+    );
+    await dependencies.payments.paid(
+      CardOrder.fromJson(fixtureOrder(id: 'seed', method: 'dafa_sadad')),
+    );
+  }
   dependencies.settings.setLanguage(query['lang'] ?? 'ar');
   // `&phone=none`: a phone with no eSIM. `&phone=old`: one too old to install
   // from a link. Otherwise a current iPhone.
@@ -155,6 +192,13 @@ Future<void> main() async {
     await dependencies.accounts.remember('tu-free-fire', {
       'player_id': '5123456789',
     }, name: 'ShadowFox_LY');
+  }
+  if (screen == 'offers' || screen == 'offers-signed-out') {
+    // As an offer's notification opens it: over the shelf.
+    Future.delayed(
+      const Duration(seconds: 2),
+      () => dependencies.links.open(const OffersLink().uri),
+    );
   }
   if (screen == 'heard-from-link') {
     // As if the app had opened cards.dftr.ly/go/UNI1.
@@ -216,6 +260,16 @@ final CardBrand _itunes = CardBrand.fromJson(
 );
 CardBrand _topUp(int index) => CardBrand.fromJson(fixtureTopUpBrands[index]);
 
+/// A brand of the fixture shelf by key.
+CardBrand _fixtureBrand(String key) => CardBrand.fromJson(
+  (fixtureCatalog['brands'] as List).cast<Map<String, dynamic>>().firstWhere(
+    (b) => b['key'] == key,
+  ),
+);
+
+String _param(String name, String fallback) =>
+    Uri.base.queryParameters[name] ?? fallback;
+
 /// The Free Fire account typed in, for the checkout to send to.
 AccountFormModel _typedAccount(CardsDependencies dependencies) {
   final brand = _topUp(0);
@@ -241,6 +295,36 @@ class PreviewSurface extends StatelessWidget {
     return switch (screen) {
       'home' || 'signed-out' => const CardsShell(),
       'esim' => const EsimStorePage(),
+      // Every pairing of badges a shelf tile can wear, at a phone's and a
+      // desktop's tile width.
+      'badges' => const _BadgeBoard(),
+      'bundle' => BundlePageConcept(telecom: _bundleNetworks()),
+      'bundle-art' => const BundleArtBoard(),
+      'bundle-home' => BundleShelfConcept(telecom: _bundleNetworks()),
+      'bundle-logos' => BundlePageConcept(
+        telecom: _bundleNetworks(),
+        logos: true,
+      ),
+      'bundle-logos-art' => const BundleArtBoard(logos: true),
+      'bundle-logos-home' => BundleShelfConcept(
+        telecom: _bundleNetworks(),
+        logos: true,
+      ),
+      'offers' || 'offers-signed-out' => const CardsShell(),
+      // An offer's brand page: ?brand=lnet|pubg|apple|almadar|netflix.
+      'offer-brand' => BrandPage(brand: _fixtureBrand(_param('brand', 'lnet'))),
+      // An offer at checkout: ?brand=…&item=index&qty=n.
+      'offer-checkout' => _SheetHost(
+        sheet: CheckoutSheet(
+          model: CheckoutModel(
+            orders: dependencies.orders,
+            brand: _fixtureBrand(_param('brand', 'lnet')),
+            item: _fixtureBrand(_param('brand', 'lnet'))
+                .items[int.parse(_param('item', '0'))],
+            quantity: int.parse(_param('qty', '1')),
+          )..load(),
+        ),
+      ),
       // The shelf as a link opens it: a month's trip needing 5 GB, cheapest
       // first; and only what is on offer.
       'esim-filtered' => const EsimStorePage(
@@ -372,6 +456,30 @@ class PreviewSurface extends StatelessWidget {
             expiresAt: null,
             resendAt: DateTime.now().add(const Duration(seconds: 27)),
           ),
+        ),
+      ),
+      'saved-payments' || 'saved-payments-empty' => const SavedPaymentsPage(),
+      // The checkout of a customer who paid from Sadad before: chosen, and
+      // its number shown. `checkout-saved-change` opens the number's dialog.
+      'checkout-saved' => _SheetHost(
+        sheet: CheckoutSheet(
+          model:
+              CheckoutModel(
+                  orders: dependencies.orders,
+                  brand: _libyana,
+                  item: _libyana.items[1],
+                  payments: dependencies.payments,
+                )
+                ..setUseCredit(false)
+                ..load(),
+        ),
+      ),
+      'payer-change' => _DialogHost(
+        open: (context) => showPayerDialog(
+          context,
+          method: _sadad,
+          amount: Money.parse('10.21'),
+          initial: const PayerDetails(payer: '0912345678', birthYear: '1990'),
         ),
       ),
       'checkout' => _SheetHost(
@@ -747,4 +855,199 @@ class _PreviewPhone extends EsimDevice {
 
   @override
   Future<bool> install(String url) async => true;
+}
+
+/// A brand of the shelf for the badge board: [key] picks which preview offer
+/// covers it, the rest what it wears of its own.
+CardBrand _boardBrand(
+  String key,
+  String name,
+  String category, {
+  String platform = '',
+  bool webOnly = false,
+  String badge = '',
+  bool available = true,
+  bool promo = false,
+}) => CardBrand.fromJson({
+  'key': key,
+  'name': name,
+  'category': category,
+  'platform': platform,
+  'web_only': webOnly,
+  'badge': badge,
+  'logo': '',
+  'items': [
+    {
+      'key': '$key-x',
+      'label': '10',
+      'face_value': '10',
+      'face_currency': 'USD',
+      'price': '30.00',
+      'retail_price': '30.00',
+      if (promo) 'regular_price': '33.00',
+      if (promo) 'promo': {'badge': 'عرض'},
+      'available': available,
+    },
+  ],
+});
+
+/// What a shelf tile shows for every pairing of its badges: an offer (each
+/// kind), the platform a game is played on, «على الموقع», the brand's own
+/// badge or a promotion, and «غير متوفر».
+class _BadgeBoard extends StatelessWidget {
+  const _BadgeBoard();
+
+  static final _cases = <(String, CardBrand)>[
+    ('عرض نسبة', _boardBrand('lnet', 'ليبيا للاتصالات', 'internet')),
+    ('عرض + منصة', _boardBrand('pubg', 'ببجي', 'gaming', platform: 'steam')),
+    (
+      'عرض طويل + منصة',
+      _boardBrand('almadar', 'المدار', 'telecom', platform: 'xbox'),
+    ),
+    (
+      'عرض متدرج + منصة',
+      _boardBrand('apple', 'آيتونز', 'gift_cards', platform: 'ea'),
+    ),
+    (
+      'عرض + شارة العلامة',
+      _boardBrand('libyana', 'ليبيانا', 'telecom', badge: 'الأكثر طلباً'),
+    ),
+    (
+      'على الموقع + منصة',
+      _boardBrand(
+        'wo-steam',
+        'ستيم',
+        'game_keys',
+        platform: 'steam',
+        webOnly: true,
+      ),
+    ),
+    (
+      'على الموقع + عرض',
+      _boardBrand('lnet', 'ليبيا للاتصالات', 'internet', webOnly: true),
+    ),
+    (
+      'ترويج + منصة',
+      _boardBrand(
+        'promo-x',
+        'فورزا',
+        'game_keys',
+        platform: 'xbox',
+        promo: true,
+      ),
+    ),
+    (
+      'منصة فقط',
+      _boardBrand('plain', 'GTA V', 'game_keys', platform: 'rockstar'),
+    ),
+    (
+      'غير متوفر + عرض',
+      _boardBrand('lnet', 'ليبيا للاتصالات', 'internet', available: false),
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    Widget grid(double tile) => Wrap(
+      spacing: 16,
+      runSpacing: 20,
+      children: [
+        for (final (label, brand) in _cases)
+          SizedBox(
+            width: tile,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: theme.textTheme.labelMedium),
+                const SizedBox(height: 6),
+                BrandTile(brand: brand),
+              ],
+            ),
+          ),
+      ],
+    );
+    return Scaffold(
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('بلاطة الهاتف (164)', style: theme.textTheme.titleMedium),
+            const SizedBox(height: 12),
+            grid(164),
+            const SizedBox(height: 32),
+            Text('بلاطة سطح المكتب (200)', style: theme.textTheme.titleMedium),
+            const SizedBox(height: 12),
+            grid(200),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The networks the bundle concept recharges.
+List<CardBrand> _bundleNetworks() => [
+  _fixtureBrand('libyana'),
+  _fixtureBrand('almadar'),
+  _boardBrand('ltt', 'LTT', 'telecom'),
+];
+
+/// The screens that open with saved payments.
+const _savedPayments = {'saved-payments', 'checkout-saved', 'payer-change'};
+
+const _sadad = PaymentMethod(
+  key: 'dafa_sadad',
+  provider: 'sadad',
+  name: 'سداد',
+  kind: 'otp',
+  payer: 'phone',
+  birthYear: true,
+);
+
+MemoryPayerVault _previewPayers() => MemoryPayerVault(const [
+  SavedPayer(
+    method: 'dafa_sadad',
+    provider: 'sadad',
+    methodName: 'سداد',
+    payer: '0912345678',
+    birthYear: '1990',
+    kind: 'phone',
+  ),
+  SavedPayer(
+    method: 'dafa_edfali',
+    provider: 'edfali',
+    methodName: 'إدفعلي',
+    payer: '0925550147',
+    kind: 'phone',
+  ),
+  SavedPayer(
+    method: 'dafa_yussor_pay',
+    provider: 'yussor-pay',
+    methodName: 'يسر باي',
+    payer: '6281940012347730',
+    kind: 'card',
+  ),
+]);
+
+/// A screen that opens [open]'s dialog over the shelf as it loads.
+class _DialogHost extends StatefulWidget {
+  const _DialogHost({required this.open});
+
+  final Future<Object?> Function(BuildContext context) open;
+
+  @override
+  State<_DialogHost> createState() => _DialogHostState();
+}
+
+class _DialogHostState extends State<_DialogHost> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => widget.open(context));
+  }
+
+  @override
+  Widget build(BuildContext context) => const CardsShell();
 }

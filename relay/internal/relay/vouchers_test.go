@@ -103,7 +103,7 @@ type voucherHarness struct {
 	now      time.Time
 }
 
-func newVoucherHarness(t *testing.T) *voucherHarness {
+func newVoucherHarness(t testing.TB) *voucherHarness {
 	t.Helper()
 	now := time.Date(2026, 10, 7, 10, 0, 0, 0, time.UTC)
 	store, err := control.NewFileStore(filepath.Join(t.TempDir(), "installations.json"), testClock{now: now})
@@ -137,7 +137,7 @@ func (h *voucherHarness) at(now time.Time) HTTPServer {
 	return server
 }
 
-func (h *voucherHarness) request(t *testing.T, server HTTPServer, method, target string, headers map[string]string, body []byte) *httptest.ResponseRecorder {
+func (h *voucherHarness) request(t testing.TB, server HTTPServer, method, target string, headers map[string]string, body []byte) *httptest.ResponseRecorder {
 	t.Helper()
 	request := httptest.NewRequest(method, "http://relay.test"+target, bytes.NewReader(body))
 	for key, value := range headers {
@@ -148,7 +148,7 @@ func (h *voucherHarness) request(t *testing.T, server HTTPServer, method, target
 	return recorder
 }
 
-func decodeBody(t *testing.T, recorder *httptest.ResponseRecorder) map[string]any {
+func decodeBody(t testing.TB, recorder *httptest.ResponseRecorder) map[string]any {
 	t.Helper()
 	var decoded map[string]any
 	if raw := recorder.Body.Bytes(); len(raw) > 0 {
@@ -169,7 +169,7 @@ func (h *voucherHarness) shop(t *testing.T, server HTTPServer, method, target, t
 	return recorder.Code, decodeBody(t, recorder)
 }
 
-func (h *voucherHarness) admin(t *testing.T, method, target, contentType string, body []byte) (int, map[string]any) {
+func (h *voucherHarness) admin(t testing.TB, method, target, contentType string, body []byte) (int, map[string]any) {
 	t.Helper()
 	recorder := h.request(t, h.server, method, target, map[string]string{
 		"Authorization": "Bearer admin-token",

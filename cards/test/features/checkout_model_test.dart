@@ -35,4 +35,43 @@ void main() {
     expect(model.fee, Money.zero);
     expect(model.needsPayerDetails, isFalse);
   });
+
+  test('an offer comes off the order before credit and the fee, and only '
+      'once the order reaches its minimum', () async {
+    final dependencies = fixtureDependencies(offers: [fixtureOffer]);
+    final brand = CardBrand.fromJson(
+      (fixtureCatalog['brands'] as List).first as Map<String, dynamic>,
+    );
+    final model = CheckoutModel(
+      orders: dependencies.orders,
+      brand: brand,
+      item: brand.items[1],
+      quantity: 1,
+    );
+    await model.load();
+
+    // 10 dinars: below the 15 the offer asks for.
+    expect(model.subtotal, Money.parse('10'));
+    expect(model.offer, isNull);
+    expect(model.discount, Money.zero);
+    expect(model.coveringOffers.single.id, 'offer-1');
+
+    // 20 dinars: 20% is 4.
+    model.setQuantity(2);
+    expect(model.offer?.id, 'offer-1');
+    expect(model.discount, Money.parse('4'));
+    expect(model.total, Money.parse('16'));
+    // Credit pays what is left after it.
+    expect(model.creditApplied, Money.parse('10'));
+    expect(model.due, Money.parse('6'));
+
+    // 40 dinars: capped at 5.
+    model.setQuantity(4);
+    expect(model.discount, Money.parse('5'));
+
+    model.setUseOffer(false);
+    expect(model.discount, Money.zero);
+    expect(model.total, Money.parse('40'));
+    expect(model.availableOffer?.id, 'offer-1');
+  });
 }

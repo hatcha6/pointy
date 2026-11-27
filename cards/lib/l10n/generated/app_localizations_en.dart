@@ -2174,4 +2174,210 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get runnerBoardNames =>
       'You show under a nickname, never your number.';
+
+  @override
+  String get lineDiscount => 'Discount';
+
+  @override
+  String offerSaves(String amount) {
+    return 'Save $amount with this offer';
+  }
+
+  @override
+  String offerMinOrder(String amount) {
+    return 'On orders of $amount or more';
+  }
+
+  @override
+  String get errOfferUnavailable =>
+      'This offer is no longer available for this order. Continue at the full price or try later.';
+
+  @override
+  String offerBadgePercent(String percent) {
+    return '$percent% off';
+  }
+
+  @override
+  String offerBadgeAmount(String amount) {
+    return '$amount off';
+  }
+
+  @override
+  String offerBadgeUpTo(String value) {
+    return 'Up to $value off';
+  }
+
+  @override
+  String offerBadgeBundleFree(String buy, String get) {
+    return 'Buy $buy, get $get free';
+  }
+
+  @override
+  String offerBadgeBundlePercent(String buy, String percent) {
+    return 'Buy $buy, next $percent% off';
+  }
+
+  @override
+  String offerNudgeTier(String amount, String value) {
+    return 'Add $amount to get $value';
+  }
+
+  @override
+  String offerNudgeBundle(String count) {
+    return 'Add $count to get the offer';
+  }
+
+  @override
+  String get offerForYou => 'Your offer';
+
+  @override
+  String get offerForAll => 'Offer';
+
+  @override
+  String get offerEndsToday => 'Ends today';
+
+  @override
+  String offerEndsIn(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'Ends in $days days',
+      one: 'Ends tomorrow',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get offerSignInToUse => 'Sign in to use this offer';
+
+  @override
+  String offerOnItem(String amount) {
+    return '$amount with the offer';
+  }
+
+  @override
+  String get offersTitle => 'Offers';
+
+  @override
+  String offersEntryMine(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'You have $count offers',
+      one: 'You have an offer',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String offersEntryPublic(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count offers now',
+      one: 'One offer now',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get offersEntryHint => 'See what they cover';
+
+  @override
+  String get offersEmptyTitle => 'No offers right now';
+
+  @override
+  String get offersEmptyBody =>
+      'When you get an offer we\'ll tell you, and you\'ll find it here.';
+
+  @override
+  String get offersSignInBody =>
+      'Sign in to see your own offers and use them at checkout.';
+
+  @override
+  String offerUsesLeft(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Use it $count times',
+      one: 'Use it once',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get offerCoversAll => 'On every card';
+
+  @override
+  String get offerShopEsim => 'Browse eSIM plans';
+
+  @override
+  String get offerHeroOff => 'off';
+
+  @override
+  String get offerHeroUpTo => 'up to';
+
+  @override
+  String get offerHeroFree => 'free';
+
+  @override
+  String get offerHeroNext => 'off the next';
+
+  @override
+  String get offerCovers => 'Covers';
+
+  @override
+  String get offerShopAll => 'Shop now';
+
+  @override
+  String get offerForEveryone => 'For everyone';
+
+  @override
+  String get savedPaymentsSettings => 'Saved payment methods';
+
+  @override
+  String get savedPaymentsBody =>
+      'What is saved here stays on this device only, and makes your next payment one tap.';
+
+  @override
+  String get defaultMethodTitle => 'Your preferred method';
+
+  @override
+  String get defaultMethodBody =>
+      'The last way you paid successfully, picked for you at your next order.';
+
+  @override
+  String get savedWalletsTitle => 'Wallets';
+
+  @override
+  String get savedWalletsEmpty =>
+      'No wallet numbers saved. A number is saved after your first successful payment from it.';
+
+  @override
+  String get savedPayerBirthYear => 'with birth year';
+
+  @override
+  String get removePayerTitle => 'Remove the saved number?';
+
+  @override
+  String removePayerBody(String method) {
+    return 'You\'ll be asked for the number at your next payment with $method.';
+  }
+
+  @override
+  String get savedWalletsNote =>
+      'Wallet numbers are saved on this device only, encrypted, and nothing is paid from them without the code your wallet sends to your phone. They are removed when you sign out.';
+
+  @override
+  String get payFromLabel => 'Paying from';
+
+  @override
+  String get payerRemember => 'Save the number for my next payments';
+
+  @override
+  String get savedNothingTitle => 'Nothing saved yet';
+
+  @override
+  String get savedNothingBody =>
+      'Your first successful payment saves your method and number, so next time you pay in one tap.';
 }

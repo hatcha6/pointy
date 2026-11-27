@@ -38,6 +38,10 @@ type CustomerListFilter struct {
 	Query string
 	// Segment: "" (live accounts), "buyers", "blocked", "deleted", "all".
 	Segment string
+	// OnlyIDs keeps only the customers in IDs (the relay's segmentation
+	// names them); empty IDs then keep none.
+	OnlyIDs bool
+	IDs     []string
 	Limit   int
 	Offset  int
 }
@@ -256,8 +260,15 @@ func (s *FileStore) ListCustomers(_ context.Context, filter CustomerListFilter) 
 	now := s.clock.Now().UTC()
 	query := strings.TrimSpace(filter.Query)
 	phone := customerPhoneQuery(query)
+	only := make(map[string]bool, len(filter.IDs))
+	for _, id := range filter.IDs {
+		only[id] = true
+	}
 	for _, customer := range s.data.Customers.Customers {
 		if query != "" && customer.ID != query && (phone == "" || !strings.Contains(customer.Phone, phone)) {
+			continue
+		}
+		if filter.OnlyIDs && !only[customer.ID] {
 			continue
 		}
 		summary := s.customerSummaryLocked(customer, now)

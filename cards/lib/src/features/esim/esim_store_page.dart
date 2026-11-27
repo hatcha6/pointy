@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../offers/offer_pill.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../core/analytics/analytics.dart';
 import '../../core/arabic_search.dart';
@@ -1293,15 +1294,21 @@ class _DestinationTile extends StatelessWidget {
                         fit: StackFit.expand,
                         children: [
                           EsimCardArt(name: '', country: row.country),
-                          if (row.promo case final promo?)
-                            PositionedDirectional(
-                              start: CardsSpace.sm,
-                              bottom: CardsSpace.sm,
-                              child: Pill(
-                                text: esimPromoLabel(l10n, promo),
-                                tone: PillTone.promo,
-                              ),
+                          PositionedDirectional(
+                            start: CardsSpace.sm,
+                            bottom: CardsSpace.sm,
+                            child: CategoryOfferBadge(
+                              category: esimCategory,
+                              surface: 'esim',
+                              orElse: switch (row.promo) {
+                                final promo? => Pill(
+                                  text: esimPromoLabel(l10n, promo),
+                                  tone: PillTone.promo,
+                                ),
+                                null => null,
+                              },
                             ),
+                          ),
                         ],
                       ),
                     ),
@@ -1529,10 +1536,18 @@ class _DestinationRow extends StatelessWidget {
               ],
             ),
           ),
-          if (row.promo case final promo?) ...[
-            Pill(text: esimPromoLabel(l10n, promo), tone: PillTone.promo),
-            const SizedBox(width: CardsSpace.sm),
-          ],
+          CategoryOfferBadge(
+            category: esimCategory,
+            surface: 'esim',
+            orElse: switch (row.promo) {
+              final promo? => Pill(
+                text: esimPromoLabel(l10n, promo),
+                tone: PillTone.promo,
+              ),
+              null => null,
+            },
+          ),
+          const SizedBox(width: CardsSpace.sm),
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 130),
             child: FittedBox(

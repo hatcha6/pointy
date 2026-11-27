@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/big"
 	"strings"
+	"time"
 
 	"pointy/relay/internal/control"
 )
@@ -15,8 +16,8 @@ import (
 //
 // The figures follow the finance book's rule (addSupplierCosts) so the rows
 // add up to its totals: a cost in dinars is taken as it is, one in dollars is
-// turned at the dollar rate in force now, and any other currency is not
-// guessed. Only a sale that went through and was not a test has a profit.
+// turned at the dollar rate in force when it was bought (financeRates), and
+// any other currency is not guessed. Only a sale that went through and was not a test has a profit.
 
 // saleProfit is the cost and profit of one sale, in dinars. Both are empty
 // when they cannot be told.
@@ -45,11 +46,11 @@ func costInDinars(cost, currency string, usdRate *big.Rat) (*big.Rat, bool) {
 
 // saleProfitOf is what the company kept of `sold` dinars once the purchase
 // that supplied it is paid for.
-func saleProfitOf(sold string, purchase control.VoucherPurchase, usdRate *big.Rat) saleProfit {
+func saleProfitOf(sold string, purchase control.VoucherPurchase, rates *financeRates) saleProfit {
 	if purchase.Status != control.VoucherPurchaseSucceeded || purchase.TestMode {
 		return saleProfit{}
 	}
-	cost, ok := costInDinars(purchase.SupplierCost, purchase.SupplierCurrency, usdRate)
+	cost, ok := costInDinars(purchase.SupplierCost, purchase.SupplierCurrency, rates.usdAt(purchaseHour(purchase)))
 	if !ok {
 		return saleProfit{}
 	}
@@ -70,10 +71,10 @@ type voucherPurchaseAdminView struct {
 // amount less its cost. The company's own purchase earns nothing (it is
 // spending), and a customer's is earned by its order, so both carry the cost
 // alone.
-func withPurchaseProfit(purchases []control.VoucherPurchase, usdRate *big.Rat) []voucherPurchaseAdminView {
+func withPurchaseProfit(purchases []control.VoucherPurchase, rates *financeRates) []voucherPurchaseAdminView {
 	views := make([]voucherPurchaseAdminView, 0, len(purchases))
 	for _, purchase := range purchases {
-		profit := saleProfitOf(purchase.Amount, purchase, usdRate)
+		profit := saleProfitOf(purchase.Amount, purchase, rates)
 		if purchase.ForCompany() {
 			profit.Profit = ""
 		}
@@ -123,10 +124,32 @@ func orderPurchases(ctx context.Context, store control.VoucherStore, orders []co
 // orderProfit is what a delivered order made: its total less what its cards
 // cost. The gateway fee the customer paid on top is Dafa's, in and out, and
 // is no part of it.
-func orderProfit(order control.CustomerOrder, purchases map[string]control.VoucherPurchase, usdRate *big.Rat) saleProfit {
+func orderProfit(order control.CustomerOrder, purchases map[string]control.VoucherPurchase, rates *financeRates) saleProfit {
 	purchase, ok := purchases[order.PurchaseID]
 	if !ok || order.Status != control.CustomerOrderDelivered || order.TestMode {
 		return saleProfit{}
 	}
-	return saleProfitOf(order.Total, purchase, usdRate)
+	return saleProfitOf(order.Total, purchase, rates)
+}
+
+// purchaseHour is the hour a purchase's cost was spent in, as the books
+// count it: when it completed, else when it was made.
+func purchaseHour(purchase control.VoucherPurchase) time.Time {
+	at := purchase.CreatedAt
+	if purchase.CompletedAt != nil {
+		at = *purchase.CompletedAt
+	}
+	return at.UTC().Truncate(time.Hour)
+}
+
+// earliestPurchase is the oldest hour among purchases (now when none), for
+// how far back the rate history is read.
+func earliestPurchase(purchases []control.VoucherPurchase, now time.Time) time.Time {
+	earliest := now
+	for _, purchase := range purchases {
+		if at := purchaseHour(purchase); at.Before(earliest) {
+			earliest = at
+		}
+	}
+	return earliest
 }

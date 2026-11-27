@@ -2198,4 +2198,211 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get runnerBoardNames =>
       'Vous apparaissez sous un pseudo, jamais votre numéro.';
+
+  @override
+  String get lineDiscount => 'Remise';
+
+  @override
+  String offerSaves(String amount) {
+    return 'Économisez $amount avec cette offre';
+  }
+
+  @override
+  String offerMinOrder(String amount) {
+    return 'Pour les commandes de $amount ou plus';
+  }
+
+  @override
+  String get errOfferUnavailable =>
+      'Cette offre n\'est plus disponible pour cette commande. Continuez au prix plein ou réessayez plus tard.';
+
+  @override
+  String offerBadgePercent(String percent) {
+    return '-$percent %';
+  }
+
+  @override
+  String offerBadgeAmount(String amount) {
+    return '-$amount';
+  }
+
+  @override
+  String offerBadgeUpTo(String value) {
+    return 'Jusqu\'à -$value';
+  }
+
+  @override
+  String offerBadgeBundleFree(String buy, String get) {
+    return '$buy achetés, $get offert(s)';
+  }
+
+  @override
+  String offerBadgeBundlePercent(String buy, String percent) {
+    return '$buy achetés, le suivant -$percent %';
+  }
+
+  @override
+  String offerNudgeTier(String amount, String value) {
+    return 'Ajoutez $amount pour obtenir $value';
+  }
+
+  @override
+  String offerNudgeBundle(String count) {
+    return 'Ajoutez $count pour profiter de l\'offre';
+  }
+
+  @override
+  String get offerForYou => 'Votre offre';
+
+  @override
+  String get offerForAll => 'Offre';
+
+  @override
+  String get offerEndsToday => 'Se termine aujourd\'hui';
+
+  @override
+  String offerEndsIn(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: 'Se termine dans $days jours',
+      one: 'Se termine demain',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get offerSignInToUse => 'Connectez-vous pour profiter de l\'offre';
+
+  @override
+  String offerOnItem(String amount) {
+    return '$amount avec l\'offre';
+  }
+
+  @override
+  String get offersTitle => 'Offres';
+
+  @override
+  String offersEntryMine(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Vous avez $count offres',
+      one: 'Vous avez une offre',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String offersEntryPublic(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count offres en ce moment',
+      one: 'Une offre en ce moment',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get offersEntryHint => 'Voir ce qu\'elles couvrent';
+
+  @override
+  String get offersEmptyTitle => 'Aucune offre pour le moment';
+
+  @override
+  String get offersEmptyBody =>
+      'Quand vous recevez une offre, nous vous prévenons et vous la trouvez ici.';
+
+  @override
+  String get offersSignInBody =>
+      'Connectez-vous pour voir vos offres et les utiliser au paiement.';
+
+  @override
+  String offerUsesLeft(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Utilisable $count fois',
+      one: 'Utilisable une fois',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get offerCoversAll => 'Sur toutes les cartes';
+
+  @override
+  String get offerShopEsim => 'Voir les forfaits eSIM';
+
+  @override
+  String get offerHeroOff => 'de remise';
+
+  @override
+  String get offerHeroUpTo => 'jusqu\'à';
+
+  @override
+  String get offerHeroFree => 'offert';
+
+  @override
+  String get offerHeroNext => 'sur le suivant';
+
+  @override
+  String get offerCovers => 'Inclut';
+
+  @override
+  String get offerShopAll => 'Acheter';
+
+  @override
+  String get offerForEveryone => 'Pour tous';
+
+  @override
+  String get savedPaymentsSettings => 'Moyens de paiement enregistrés';
+
+  @override
+  String get savedPaymentsBody =>
+      'Ce qui est enregistré ici reste sur cet appareil uniquement et rend votre prochain paiement instantané.';
+
+  @override
+  String get defaultMethodTitle => 'Votre moyen préféré';
+
+  @override
+  String get defaultMethodBody =>
+      'Le dernier moyen avec lequel votre paiement a réussi, choisi pour votre prochaine commande.';
+
+  @override
+  String get savedWalletsTitle => 'Portefeuilles';
+
+  @override
+  String get savedWalletsEmpty =>
+      'Aucun numéro de portefeuille enregistré. Un numéro est enregistré après un premier paiement réussi.';
+
+  @override
+  String get savedPayerBirthYear => 'avec l\'année de naissance';
+
+  @override
+  String get removePayerTitle => 'Supprimer le numéro enregistré ?';
+
+  @override
+  String removePayerBody(String method) {
+    return 'Le numéro vous sera demandé lors de votre prochain paiement par $method.';
+  }
+
+  @override
+  String get savedWalletsNote =>
+      'Les numéros de portefeuille sont enregistrés sur cet appareil uniquement, chiffrés, et rien n\'est payé sans le code envoyé par votre portefeuille. Ils sont supprimés à la déconnexion.';
+
+  @override
+  String get payFromLabel => 'Payé depuis';
+
+  @override
+  String get payerRemember =>
+      'Enregistrer le numéro pour mes prochains paiements';
+
+  @override
+  String get savedNothingTitle => 'Rien d\'enregistré pour l\'instant';
+
+  @override
+  String get savedNothingBody =>
+      'Votre premier paiement réussi enregistre votre moyen et votre numéro : la prochaine fois, un seul geste.';
 }

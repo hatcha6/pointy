@@ -257,10 +257,10 @@ type financeBook struct {
 	months   map[string]*[2]big.Rat // income, expense
 	topUps   map[string]*big.Rat
 	unpriced map[string]*big.Rat
-	usdRate  *big.Rat
+	rates    *financeRates
 }
 
-func newFinanceBook(usdRate *big.Rat) *financeBook {
+func newFinanceBook(rates *financeRates) *financeBook {
 	return &financeBook{
 		income:   map[string]*big.Rat{},
 		expense:  map[string]*big.Rat{},
@@ -268,7 +268,7 @@ func newFinanceBook(usdRate *big.Rat) *financeBook {
 		months:   map[string]*[2]big.Rat{},
 		topUps:   map[string]*big.Rat{},
 		unpriced: map[string]*big.Rat{},
-		usdRate:  usdRate,
+		rates:    rates,
 	}
 }
 
@@ -319,6 +319,7 @@ func (b *financeBook) addTracked(months []control.FinanceTrackedMonth) {
 		// What the company bought for itself: its own spending, beside the
 		// services' costs, not inside them.
 		b.addSupplierCosts(month.Month, "tracked:"+financeCompanyPurchases, month.CompanyCost)
+		b.addForeignCosts(month.Month, month.ForeignCosts)
 		for method, amount := range month.TopUps {
 			addTo(b.topUps, method, ratOf(amount))
 		}
@@ -339,21 +340,51 @@ const financeCardsAppCost = "cards_app_cost"
 // itself (cards, top-ups, bills) from its own suppliers.
 const financeCompanyPurchases = "company_purchases"
 
+// financeCostKeys is the book's key for each kind of supplier cost.
+var financeCostKeys = map[string]string{
+	control.FinanceCostSupplier: "tracked:supplier_cost",
+	control.FinanceCostCardsApp: "tracked:" + financeCardsAppCost,
+	control.FinanceCostCompany:  "tracked:" + financeCompanyPurchases,
+}
+
 // addSupplierCosts books supplier costs given by currency, in dinars.
 func (b *financeBook) addSupplierCosts(month, key string, costs map[string]string) {
 	for currency, cost := range costs {
-		value := ratOf(cost)
-		switch {
-		case currency == control.FinanceCurrency:
-		case currency == "USD" && b.usdRate != nil:
-			value.Mul(value, b.usdRate)
-		default:
-			// No rate for it: reported beside the result, not guessed.
-			addTo(b.unpriced, currency, value)
+		b.addCost(month, key, currency, ratOf(cost), nil)
+	}
+}
+
+// addForeignCosts books the costs spent in another currency, each at the
+// dollar rate of the hour it was spent in.
+func (b *financeBook) addForeignCosts(month string, costs []control.FinanceForeignCost) {
+	for _, cost := range costs {
+		key, ok := financeCostKeys[cost.Cost]
+		if !ok {
 			continue
 		}
-		b.add(month, control.FinanceExpense, key, value)
+		var rate *big.Rat
+		if cost.Currency == "USD" {
+			rate = b.rates.usdAt(cost.Hour)
+		}
+		b.addCost(month, key, cost.Currency, ratOf(cost.Amount), rate)
 	}
+}
+
+// addCost books value, in currency, in dinars: as it is, or at usdRate
+// (nil: today's) for dollars.
+func (b *financeBook) addCost(month, key, currency string, value, usdRate *big.Rat) {
+	switch {
+	case currency == control.FinanceCurrency:
+	case currency == "USD" && usdRate == nil && b.rates != nil && b.rates.current != nil:
+		value.Mul(value, b.rates.current)
+	case currency == "USD" && usdRate != nil:
+		value.Mul(value, usdRate)
+	default:
+		// No rate for it: reported beside the result, not guessed.
+		addTo(b.unpriced, currency, value)
+		return
+	}
+	b.add(month, control.FinanceExpense, key, value)
 }
 
 func (b *financeBook) addEntries(entries []control.FinanceEntry) {
@@ -467,7 +498,7 @@ func (s HTTPServer) financePeriod(r *http.Request) (from, to time.Time, ok bool)
 	return from, to, true
 }
 
-func (s HTTPServer) financeBookFor(r *http.Request, store control.FinanceStore, from, to time.Time, usdRate *big.Rat) (*financeBook, int, error) {
+func (s HTTPServer) financeBookFor(r *http.Request, store control.FinanceStore, from, to time.Time, rates *financeRates) (*financeBook, int, error) {
 	end := to.AddDate(0, 0, 1)
 	tracked, err := store.FinanceTracked(r.Context(), from, end)
 	if err != nil {
@@ -481,34 +512,10 @@ func (s HTTPServer) financeBookFor(r *http.Request, store control.FinanceStore, 
 	if err != nil {
 		return nil, 0, err
 	}
-	book := newFinanceBook(usdRate)
+	book := newFinanceBook(rates)
 	book.addTracked(tracked)
 	book.addEntries(entries)
 	return book, len(entries), nil
-}
-
-// financeUSDRate is the rate dollar costs are turned into dinars at: the
-// pricing rate the shops are charged at today. An estimate, and every report
-// using it says so.
-func (s HTTPServer) financeUSDRate(r *http.Request) (*big.Rat, map[string]string) {
-	rateInfo := map[string]string{}
-	voucherStore, ok := s.Store.(control.VoucherStore)
-	if !ok {
-		return nil, rateInfo
-	}
-	settings, _, err := s.currentVoucherSettings(r.Context(), voucherStore)
-	if err != nil {
-		return nil, rateInfo
-	}
-	// Dollars are valued at what a dollar costs to buy now: never at the
-	// pricing rate's peak or cushion, which would overstate them.
-	rate, source := settings.BookRate()
-	if rate == nil {
-		return nil, rateInfo
-	}
-	rateInfo["rate"] = rate.FloatString(4)
-	rateInfo["source"] = source
-	return rate, rateInfo
 }
 
 func (s HTTPServer) handleFinanceSummary(w http.ResponseWriter, r *http.Request) {
@@ -523,18 +530,18 @@ func (s HTTPServer) handleFinanceSummary(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	usdRate, rateInfo := s.financeUSDRate(r)
-
-	book, manualCount, err := s.financeBookFor(r, store, from, to, usdRate)
-	if err != nil {
-		s.writeFinanceStoreError(w, "finance summary failed", err)
-		return
-	}
 	// The period just before, as long, for the comparison.
 	days := int(to.Sub(from).Hours()/24+0.5) + 1
 	previousTo := from.AddDate(0, 0, -1)
 	previousFrom := previousTo.AddDate(0, 0, 1-days)
-	previous, _, err := s.financeBookFor(r, store, previousFrom, previousTo, usdRate)
+	rates, rateInfo := s.financeRatesFor(r, previousFrom)
+
+	book, manualCount, err := s.financeBookFor(r, store, from, to, rates)
+	if err != nil {
+		s.writeFinanceStoreError(w, "finance summary failed", err)
+		return
+	}
+	previous, _, err := s.financeBookFor(r, store, previousFrom, previousTo, rates)
 	if err != nil {
 		s.writeFinanceStoreError(w, "finance summary failed", err)
 		return
