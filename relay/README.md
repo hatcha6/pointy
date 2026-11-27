@@ -1753,11 +1753,24 @@ Public routes (no sign-in, so people can browse first):
 
 Signed-in routes (Bearer):
 
+- `POST /v1/customers/me/quote` takes `{item, channel}` and answers the price
+  an order placed now is charged: `{item, unit_price, quote, expires_at,
+  ttl_seconds}`. Dollar cards follow a moving exchange rate, so the checkout
+  shows this price, not the shelf's (`customer_quotes.go`).
+  - `quote` is HMAC-signed (a key derived from the admin token, so every node
+    reads it) and bound to the customer and the item. It lives 10 minutes.
 - `POST /v1/customers/orders` places an order.
-  - Body: `{item, quantity, unit_price, idempotency_key, channel, use_credit,
-    method, user_identifier, birth_year}`.
-  - `unit_price` is the price the customer was shown. A different current
-    price is refused with `409 price_changed`, which carries the new price.
+  - Body: `{item, quantity, unit_price, quote, idempotency_key, channel,
+    use_credit, method, user_identifier, birth_year}`.
+  - With a live `quote`, the order is charged the quoted price even if the
+    live price rose since, up to 3% above it. A price that fell is charged at
+    the lower live price.
+  - Without one (an older app, or a quote past its life), `unit_price` is the
+    price the customer was shown. It stands when the live price is that or
+    lower.
+  - A price that rose past either is refused with `409 price_changed`. The
+    refusal carries the new `unit_price` and a fresh `quote` for it, so the
+    customer's next tap places the order at that price.
   - The order carries `fee` and `amount_to_pay` (`amount_due` + `fee`), the
     figure Dafa charges.
   - The answer is `201` with the order and its next step:

@@ -23,6 +23,7 @@ import (
 // Orders of «دفتر كروت» customers (see control/customer_orders.go):
 //
 //	GET  /v1/customers/payment-methods          what the checkout offers (public)
+//	POST /v1/customers/me/quote                 the price an order is charged (Bearer, customer_quotes.go)
 //	POST /v1/customers/orders                   place an order and start paying (Bearer)
 //	GET  /v1/customers/orders                   the customer's orders (Bearer)
 //	GET  /v1/customers/orders/{id}              one order, with its codes once delivered (Bearer)
@@ -66,9 +67,11 @@ type customerOrderRequest struct {
 	Item           string `json:"item"`
 	Quantity       int    `json:"quantity"`
 	IdempotencyKey string `json:"idempotency_key"`
-	// UnitPrice is the price the customer was shown; a different current
-	// price is refused so nobody pays what they did not see.
+	// UnitPrice is the price the customer was shown, and Quote the signed
+	// quote it came from (POST /v1/customers/me/quote): the order is charged
+	// the quote's price, or less, never more than they saw (customer_quotes.go).
 	UnitPrice string `json:"unit_price"`
+	Quote     string `json:"quote"`
 	Channel   string `json:"channel"`
 	UseCredit bool   `json:"use_credit"`
 	Method    string `json:"method"`
@@ -136,71 +139,29 @@ func (s HTTPServer) handleCustomerOrderCreate(w http.ResponseWriter, r *http.Req
 	}
 
 	// What is sold, and at what price: a card from the catalog, or an eSIM plan.
-	var (
-		itemKey, brandKey, itemName string
-		// category scopes an offer: the card's, or "esim".
-		category string
-		account  map[string]string
-		price    *big.Rat
-		sandbox  bool
-	)
-	if item, isESIM := parseESIMItem(request.Item); isESIM {
-		if request.Quantity != 1 {
-			writeCustomerError(w, http.StatusBadRequest, "invalid_quantity", "an eSIM is ordered one at a time",
-				map[string]any{"max_quantity": 1})
-			return
-		}
-		if !s.esimOpenTo(customer) {
-			writeCustomerError(w, http.StatusConflict, "item_unavailable", "this eSIM cannot be bought right now", nil)
-			return
-		}
-		quote, status, failure := s.quoteESIMOrder(ctx, customer, item)
-		if failure != "" {
-			writeCustomerError(w, status, failure, "this eSIM cannot be bought right now", nil)
-			return
-		}
-		itemKey, brandKey, itemName, price = request.Item, esimOrderBrand(quote.Details.Country), quote.Name, quote.Price
+	priced, refusal := s.priceCustomerItem(ctx, customer, cards, request.Item, request.Quantity, request.Channel)
+	if refusal != nil {
+		writeCustomerError(w, refusal.status, refusal.code, refusal.message, refusal.extra)
+		return
+	}
+	itemKey, brandKey, itemName, category, sandbox := priced.itemKey, priced.brandKey, priced.itemName, priced.category, priced.sandbox
+	var account map[string]string
+	if priced.esim {
 		account = esimOrderAccount(request.Account)
-		category = control.CustomerOfferESIM
-		// Only Airalo has a Sandbox; a plan bought from eSIM Access is real.
-		sandbox = s.ESIM.Sandbox && (quote.Details.Supplier == "" || quote.Details.Supplier == vouchers.SupplierAiralo)
 	} else {
-		located, ranking, failure := s.locateCustomerCard(ctx, cards, request.Item, review)
-		if failure != "" {
-			status := http.StatusConflict
-			if failure == "unknown_item" {
-				status = http.StatusNotFound
-			}
-			writeCustomerError(w, status, failure, "this card cannot be bought right now", nil)
-			return
-		}
-		brand := shelfBrand{Key: located.Brand.Key, Category: located.Brand.Category, Target: located.Brand.Target}
-		if _, sell := s.Customers.shelf(request.Channel, brand, s.mobileGiftCards(ctx)); !sell {
-			writeCustomerError(w, http.StatusNotFound, "unknown_item", "this card is not sold in this app", nil)
-			return
-		}
-		if reason, _ := ranking.unavailable(); reason != "" {
-			writeCustomerError(w, http.StatusConflict, "item_unavailable", "this card cannot be bought right now", nil)
-			return
-		}
-		typed, refusal := readPurchaseAccount(located, request.Account, request.Quantity)
+		typed, refusal := readPurchaseAccount(priced.located, request.Account, request.Quantity)
 		if refusal != nil {
 			refusal.writeCustomer(w)
 			return
 		}
 		account = typed
-		var err error
-		price, err = control.ParseWalletAmount(vouchers.PriceAt(located.Item, s.clock().Now()).RetailPrice)
-		if err != nil || price.Sign() <= 0 {
-			writeCustomerError(w, http.StatusConflict, "item_unavailable", "this card has no price right now", nil)
-			return
-		}
-		itemKey, brandKey, itemName = located.Item.Key, located.Brand.Key, located.Name()
-		category = located.Brand.Category
 	}
-	if shown, err := control.ParseWalletAmount(request.UnitPrice); err != nil || shown.Cmp(price) != 0 {
-		writeCustomerError(w, http.StatusConflict, "price_changed", "the price changed; check it and try again",
-			map[string]any{"unit_price": control.FormatWalletAmount(price)})
+	// The price the checkout showed, held by its quote; a rise past it is
+	// asked again, with the new price and a fresh quote.
+	now := s.clock().Now()
+	price, agreed := s.customerOrderPrice(customer.ID, itemKey, request.Quote, request.UnitPrice, priced.price, now)
+	if !agreed {
+		s.writeCustomerPriceChanged(w, customer.ID, itemKey, priced.price, now)
 		return
 	}
 

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -9,6 +10,7 @@ import '../../data/api/relay_api.dart';
 import '../../data/models/catalog.dart';
 import '../../data/models/offer.dart';
 import '../../data/models/order.dart';
+import '../../data/models/price_quote.dart';
 import '../../data/repositories/orders_repository.dart';
 import '../topup/account_form_model.dart';
 import 'payment_memory.dart';
@@ -18,6 +20,11 @@ import 'payment_memory.dart';
 /// Every figure shown before paying is worked out here the relay's way
 /// (credit first, then the gateway fee on what Dafa collects); the relay's
 /// own figures on the placed order are the ones charged.
+///
+/// The price is the relay's quote, not the shelf's: dollar cards follow a
+/// moving exchange rate, so the sheet asks for the price an order placed now
+/// is charged, keeps it fresh while it stays open, and sends the quote with
+/// the order so the price shown is the price paid.
 class CheckoutModel extends ChangeNotifier {
   CheckoutModel({
     required this.orders,
@@ -27,7 +34,8 @@ class CheckoutModel extends ChangeNotifier {
     this.payments,
     this.account,
     this.orderAccount = const {},
-  }) : _key = _newKey();
+  }) : _key = _newKey(),
+       unitPrice = item.price;
 
   final OrdersRepository orders;
   final CardBrand brand;
@@ -43,6 +51,19 @@ class CheckoutModel extends ChangeNotifier {
 
   /// What an eSIM order says about who it is for.
   final Map<String, String> orderAccount;
+
+  /// One card's price: the shelf's until the relay quotes it, then the
+  /// quote's.
+  Money unitPrice;
+
+  /// The relay's hold on [unitPrice]; null before it answers, or from a
+  /// relay with no quotes (the shown price must then still be current).
+  PriceQuote? quote;
+
+  /// The price the sheet moved to while it was open (a fresh quote that
+  /// differs from what was shown); null once the customer pays at it.
+  Money? priceMovedTo;
+  Timer? _quoteTimer;
 
   CheckoutOptions? options;
   Money credit = Money.zero;
@@ -94,7 +115,11 @@ class CheckoutModel extends ChangeNotifier {
       orders.credit(),
       orders.offers(),
       Future<Object?>.value(payments?.load()),
+      orders.quote(item.key),
     ]);
+    if (results[4] case Ok(:final value)) {
+      _takeQuote(value as PriceQuote?);
+    }
     if (results[0] case Ok(:final value)) {
       options = value as CheckoutOptions;
       // The way that last went through, while it is still offered; else the
@@ -125,9 +150,48 @@ class CheckoutModel extends ChangeNotifier {
     }
   }
 
+  /// Takes a quote's price, telling the sheet when it is not the one shown,
+  /// and asks for the next one before it lapses.
+  void _takeQuote(PriceQuote? fresh) {
+    _quoteTimer?.cancel();
+    if (fresh == null || fresh.item != item.key) {
+      return;
+    }
+    quote = fresh;
+    if (fresh.unitPrice != unitPrice) {
+      priceMovedTo = fresh.unitPrice;
+      unitPrice = fresh.unitPrice;
+    }
+    _quoteTimer = Timer(fresh.refreshIn(DateTime.now()), _refreshQuote);
+  }
+
+  /// A new quote while the sheet stays open, so the one sent with the order
+  /// is alive; none once the order is placed.
+  Future<void> _refreshQuote() async {
+    if (_disposed || order != null) {
+      return;
+    }
+    if (busy) {
+      _quoteTimer = Timer(const Duration(seconds: 20), _refreshQuote);
+      return;
+    }
+    final result = await orders.quote(item.key);
+    if (_disposed || order != null || busy) {
+      return;
+    }
+    if (result case Ok(:final value)) {
+      _takeQuote(value);
+    } else {
+      // Kept: the order then stands on the shown price matching the live one.
+      _quoteTimer = Timer(const Duration(minutes: 1), _refreshQuote);
+    }
+    _notify();
+  }
+
   @override
   void dispose() {
     _disposed = true;
+    _quoteTimer?.cancel();
     super.dispose();
   }
 
@@ -137,7 +201,7 @@ class CheckoutModel extends ChangeNotifier {
 
   /// The order as an offer prices it: its card, how many, and what it covers.
   OfferLine get line => OfferLine(
-    unitPrice: item.price,
+    unitPrice: unitPrice,
     quantity: quantity,
     category: brand.category,
     brand: brand.key,
@@ -275,12 +339,14 @@ class CheckoutModel extends ChangeNotifier {
   Future<CardOrder?> _pay(PayerDetails? from) async {
     busy = true;
     error = null;
+    priceMovedTo = null;
     _notify();
     final result = await orders.place(
       OrderRequest(
         itemKey: item.key,
         quantity: quantity,
-        unitPrice: item.price,
+        unitPrice: unitPrice,
+        quote: quote?.token ?? '',
         idempotencyKey: _key,
         useCredit: useCredit && credit.isPositive,
         method: creditCovers ? '' : method?.key ?? '',
@@ -316,6 +382,25 @@ class CheckoutModel extends ChangeNotifier {
       case Error(:final exception):
         error = exception;
         _key = _newKey();
+        if (exception is RelayApiException &&
+            exception.code == 'price_changed') {
+          // The refusal carries the new price and a quote for it: the next
+          // tap is placed at that price, which the error shows.
+          final moved = PriceQuote.fromJson(
+            exception.body,
+            item: item.key,
+            now: DateTime.now(),
+          );
+          if (moved != null) {
+            _takeQuote(moved);
+          } else if (Money.parse(exception.body['unit_price'] as String?)
+              case final price when price.isPositive) {
+            // A relay from before quotes: its price alone.
+            unitPrice = price;
+          }
+          // Told by the error, not twice.
+          priceMovedTo = null;
+        }
         if (exception is RelayApiException &&
             exception.code == 'offer_unavailable') {
           // Used up or ended since it was read: read them again, so the

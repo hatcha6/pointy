@@ -445,16 +445,27 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
           alignment: Alignment.topCenter,
           child: AnimatedSwitcher(
             duration: CardsMotion.fast,
-            child: model.error == null
-                ? const SizedBox(width: double.infinity)
-                : Padding(
-                    key: ValueKey(relayErrorText(l10n, model.error!)),
-                    padding: const EdgeInsets.only(top: CardsSpace.md),
-                    child: _ErrorLine(
-                      text: relayErrorText(l10n, model.error!),
-                      passing: relayErrorIsPassing(model.error!),
-                    ),
-                  ),
+            child: switch ((model.error, model.priceMovedTo)) {
+              (final error?, _) => Padding(
+                key: ValueKey(relayErrorText(l10n, error)),
+                padding: const EdgeInsets.only(top: CardsSpace.md),
+                child: _ErrorLine(
+                  text: relayErrorText(l10n, error),
+                  passing: relayErrorIsPassing(error),
+                ),
+              ),
+              // A fresh quote moved the price while the sheet was open: the
+              // totals already show it, and this says so before the tap.
+              (null, final moved?) => Padding(
+                key: ValueKey('moved-${moved.dirhams}'),
+                padding: const EdgeInsets.only(top: CardsSpace.md),
+                child: _ErrorLine(
+                  text: l10n.errPriceChanged(formatMoney(l10n, moved)),
+                  passing: true,
+                ),
+              ),
+              _ => const SizedBox(width: double.infinity),
+            },
           ),
         ),
         const SizedBox(height: CardsSpace.xl),

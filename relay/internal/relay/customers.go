@@ -244,6 +244,10 @@ func (s HTTPServer) handleCustomerRoutes(w http.ResponseWriter, r *http.Request)
 		handleCustomerCardReturn(w, r)
 	case path == customerPaymentReturnPath && r.Method == http.MethodGet:
 		handleCustomerPaymentReturn(w, r)
+	case path == "/v1/customers/me/quote" && r.Method == http.MethodPost:
+		s.withCustomer(w, r, store, func(customer control.Customer, _ control.CustomerSession) {
+			s.handleCustomerQuote(w, r, customer)
+		})
 	case path == "/v1/customers/orders" && r.Method == http.MethodPost:
 		s.withCustomer(w, r, store, func(customer control.Customer, _ control.CustomerSession) {
 			s.handleCustomerOrderCreate(w, r, customer)

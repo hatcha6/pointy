@@ -16,6 +16,7 @@ import '../models/account_target.dart';
 import '../models/json.dart';
 import '../models/offer.dart';
 import '../models/order.dart';
+import '../models/price_quote.dart';
 import '../vault/code_vault.dart';
 import '../vault/orders_vault.dart';
 
@@ -32,13 +33,18 @@ class OrderRequest {
     this.birthYear = '',
     this.account = const {},
     this.offerId = '',
+    this.quote = '',
   });
 
   final String itemKey;
   final int quantity;
 
-  /// The price the customer was shown; the relay refuses another.
+  /// The price the customer was shown; the relay charges no more.
   final Money unitPrice;
+
+  /// The signed quote [unitPrice] came from ([PriceQuote.token]): the order
+  /// is charged it even if the price rose a little since. Empty for none.
+  final String quote;
 
   /// One per checkout attempt, so a retried tap never orders twice.
   final String idempotencyKey;
@@ -115,6 +121,16 @@ class OrdersRepository {
     );
   });
 
+  /// The price an order of [itemKey] placed now is charged, held a while.
+  Future<Result<PriceQuote?>> quote(String itemKey) => Result.guard(() async {
+    final answer = await api.post(
+      '/v1/customers/me/quote',
+      signedIn: true,
+      body: {'item': itemKey, 'channel': channel},
+    );
+    return PriceQuote.fromJson(answer, item: itemKey, now: DateTime.now());
+  });
+
   Future<Result<CardOrder>> place(OrderRequest request) =>
       Result.guard(() async {
         final answer = await api.post(
@@ -133,6 +149,7 @@ class OrdersRepository {
             if (request.birthYear.isNotEmpty) 'birth_year': request.birthYear,
             if (request.account.isNotEmpty) 'account': request.account,
             if (request.offerId.isNotEmpty) 'offer_id': request.offerId,
+            if (request.quote.isNotEmpty) 'quote': request.quote,
           },
         );
         changes.value++;
