@@ -1704,6 +1704,7 @@ func runServer(args []string) error {
 		ESIM:                 esimConfig,
 		VoucherCache:         &relayserver.VoucherCatalogCache{},
 		VoucherSettingsCache: &relayserver.VoucherSettingsCache{},
+		CustomerSegments:     &relayserver.CustomerSegmentCache{},
 		Services:             servicesService,
 		ServiceLogos:         relayserver.NewServiceLogos(),
 		OpenRouterAPIKey:     strings.TrimSpace(*openRouterAPIKey),
@@ -1960,6 +1961,12 @@ func runServer(args []string) error {
 				Logger:   logger,
 			}
 			go customerOrders.Run(ctx)
+		}
+		if _, ok := store.(control.CustomerOfferStore); ok && baseHTTPHandler.CustomerPush != nil {
+			// Offers that start later are told then; and those about to end
+			// remind who has not used them.
+			offerNotices := &relayserver.CustomerOfferNotices{Server: baseHTTPHandler, Interval: 5 * time.Minute, Logger: logger}
+			go offerNotices.Run(ctx)
 		}
 		if len(voucherConfig.Suppliers) > 0 && voucherConfig.SyncInterval > 0 {
 			offerSync := &relayserver.VoucherOfferSync{

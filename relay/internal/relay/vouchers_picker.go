@@ -26,9 +26,18 @@ type voucherPickerItem struct {
 	Brand string `json:"brand"`
 	// Name is the brand, the region and the denomination ("آيتونز · الولايات المتحدة · 10 دولار").
 	Name string `json:"name"`
+	// Price is the customer's price as the catalog writes it (an
+	// auto-priced card's moves with its cost): for an offer's preview.
+	Price string `json:"price,omitempty"`
 }
 
 type voucherPickerBrand struct {
+	Key      string `json:"key"`
+	Name     string `json:"name"`
+	Category string `json:"category"`
+}
+
+type voucherPickerCategory struct {
 	Key  string `json:"key"`
 	Name string `json:"name"`
 }
@@ -41,6 +50,7 @@ func (s HTTPServer) handleVoucherAdminPickerItems(w http.ResponseWriter, r *http
 	}
 	items := []voucherPickerItem{}
 	brands := []voucherPickerBrand{}
+	categories := []voucherPickerCategory{}
 	if !loaded.empty {
 		hidden := map[string]bool{}
 		for _, category := range loaded.document.Categories {
@@ -65,15 +75,22 @@ func (s HTTPServer) handleVoucherAdminPickerItems(w http.ResponseWriter, r *http
 				if country := vouchers.CountryName(item.Country); country != "" {
 					name += " · " + country
 				}
-				items = append(items, voucherPickerItem{Key: item.Key, Brand: brand.Key, Name: name + " · " + label})
+				items = append(items, voucherPickerItem{Key: item.Key, Brand: brand.Key, Name: name + " · " + label, Price: item.RetailPrice})
 				listed++
 			}
 			if listed > 0 {
-				brands = append(brands, voucherPickerBrand{Key: brand.Key, Name: brand.Name})
+				brands = append(brands, voucherPickerBrand{Key: brand.Key, Name: brand.Name, Category: brand.Category})
+			}
+		}
+		for _, category := range loaded.document.Categories {
+			if !hidden[category.Key] {
+				categories = append(categories, voucherPickerCategory{Key: category.Key, Name: category.Name})
 			}
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items, "brands": brands, "test_mode": s.Vouchers.MarksTest()})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"items": items, "brands": brands, "categories": categories, "test_mode": s.Vouchers.MarksTest(),
+	})
 }
 
 func (s HTTPServer) handleVoucherAdminPickerItem(w http.ResponseWriter, r *http.Request, store control.VoucherStore, key string) {

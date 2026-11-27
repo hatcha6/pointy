@@ -1257,3 +1257,507 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Segment insights: what the numbers say, and what to do, with the means. */
+.insights {
+  display: flex;
+  flex-direction: column;
+}
+
+.insight {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.insight:first-child {
+  padding-top: 0;
+}
+
+.insight:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.insight-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.insight-body p {
+  margin: 0;
+  line-height: 1.7;
+}
+
+.insight-action {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  color: var(--primary-strong);
+}
+
+.insight-action svg {
+  flex: none;
+  position: relative;
+  top: 2px;
+}
+
+.insight-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: none;
+  justify-content: flex-end;
+}
+
+@media (max-width: 720px) {
+  .insight {
+    flex-direction: column;
+  }
+
+  .insight-buttons {
+    justify-content: flex-start;
+  }
+}
+
+/* The offer builder: the form beside a preview drawn as the app draws it. */
+.offer-builder {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 16px;
+  align-items: start;
+}
+
+.offer-builder-preview {
+  position: sticky;
+  top: 16px;
+}
+
+@media (max-width: 1100px) {
+  .offer-builder {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .offer-builder-preview {
+    position: static;
+  }
+}
+
+.offer-kinds {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 8px;
+}
+
+.offer-kind {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: start;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.offer-kind:hover {
+  border-color: var(--line-strong);
+}
+
+.offer-kind.on {
+  border-color: #d92d20;
+  box-shadow: 0 0 0 1px #d92d20;
+  background: color-mix(in srgb, #d92d20 5%, var(--surface));
+}
+
+.offer-kind svg {
+  width: 18px;
+  height: 18px;
+  color: #d92d20;
+}
+
+.offer-kind span {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.tier-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tier-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.tier-head {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.tier-row .tier-step {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--surface-2);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.picked-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.picked-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px 3px 10px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-size: 12.5px;
+}
+
+.picked-chip button {
+  border: 0;
+  background: none;
+  cursor: pointer;
+  color: var(--muted);
+  padding: 0 2px;
+  display: grid;
+  place-items: center;
+}
+
+.picked-chip svg {
+  width: 12px;
+  height: 12px;
+}
+
+.pick-list {
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  margin-top: 6px;
+}
+
+.pick-list label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13.5px;
+  cursor: pointer;
+}
+
+.pick-list label:last-child {
+  border-bottom: 0;
+}
+
+.pick-list .faint {
+  margin-inline-start: auto;
+}
+
+.offer-problems {
+  margin: 0;
+  padding: 10px 14px;
+  padding-inline-start: 30px;
+  border-radius: var(--radius-sm);
+  background: var(--warning-wash);
+  color: var(--warning);
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+/* The app, drawn: its sale red, pill, tile, banner and checkout. */
+.offer-preview {
+  --sale: #d92d20;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 24px;
+  background: #f7f5f2;
+  color: #101828;
+  border: 1px solid var(--line);
+}
+
+.op-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #667085;
+  margin-top: 4px;
+}
+
+.op-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--sale);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.op-pill svg {
+  width: 12px;
+  height: 12px;
+}
+
+.op-tile {
+  width: 170px;
+}
+
+.op-art {
+  position: relative;
+  height: 106px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #0b5e4f, #14806b);
+  overflow: hidden;
+}
+
+.op-art::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: 46px;
+  height: 10px;
+  background: #c88a3a;
+}
+
+/* How much of an offer's budget its discounts have used. */
+.budget-bar {
+  height: 4px;
+  max-width: 180px;
+  margin-top: 4px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.budget-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--sale);
+}
+
+.op-art .op-pill {
+  position: absolute;
+  top: 8px;
+  inset-inline-start: 8px;
+  z-index: 1;
+}
+
+.op-art-name {
+  position: absolute;
+  bottom: 8px;
+  inset-inline-end: 10px;
+  color: #fff;
+  font-weight: 700;
+  font-size: 15px;
+  z-index: 1;
+}
+
+.op-tile-name {
+  margin-top: 6px;
+  font-weight: 600;
+  font-size: 13.5px;
+}
+
+.op-tile-price {
+  font-size: 12px;
+  color: #667085;
+}
+
+.op-banner {
+  display: flex;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--sale) 7%, #fff);
+  border: 1px solid color-mix(in srgb, var(--sale) 22%, transparent);
+}
+
+.op-banner-icon {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--sale);
+  color: #fff;
+  display: grid;
+  place-items: center;
+}
+
+.op-banner-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.op-banner-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  color: var(--sale);
+  font-size: 12px;
+}
+
+.op-banner-title {
+  font-weight: 600;
+  font-size: 14px;
+  margin-top: 4px;
+}
+
+.op-banner-sub {
+  font-size: 12px;
+  color: #667085;
+}
+
+.op-checkout {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.op-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.op-controls .select {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+}
+
+.op-stepper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 4px;
+}
+
+.op-stepper button {
+  border: 0;
+  background: none;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  color: #101828;
+}
+
+.op-stepper svg {
+  width: 14px;
+  height: 14px;
+}
+
+.op-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.op-row svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+.op-offer svg {
+  color: var(--sale);
+}
+
+.op-offer div {
+  display: flex;
+  flex-direction: column;
+}
+
+.op-offer span {
+  font-size: 12px;
+  color: #667085;
+}
+
+.op-nudge {
+  color: #344054;
+}
+
+.op-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-top: 1px solid #eaecf0;
+  padding-top: 8px;
+  font-size: 13px;
+}
+
+.op-lines div {
+  display: flex;
+  justify-content: space-between;
+  color: #667085;
+}
+
+.op-lines .op-discount span:last-child {
+  color: var(--sale);
+  font-weight: 600;
+}
+
+.op-lines .op-total {
+  color: #101828;
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.op-note {
+  margin: 0;
+  font-size: 12px;
+  color: #667085;
+}
+
+/* An offer's badge, as the app draws it, in a console listing. */
+.sale-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #d92d20;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.op-art .op-pill {
+  max-width: calc(100% - 16px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

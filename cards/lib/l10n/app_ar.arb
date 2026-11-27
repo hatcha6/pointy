@@ -2064,5 +2064,199 @@
   "esimFilterNone": "لا توجد وجهة بهذه المواصفات. جرّب مدة أقصر أو بيانات أقل.",
   "@esimFilterNone": {"description": "eSIM shelf: promotions and filters."},
   "esimShareDestination": "مشاركة",
-  "@esimShareDestination": {"description": "eSIM shelf: promotions and filters."}
+  "@esimShareDestination": {"description": "eSIM shelf: promotions and filters."},
+  "lineDiscount": "الخصم",
+  "@lineDiscount": {
+    "description": "Checkout line: what a segment offer takes off."
+  },
+  "offerSaves": "وفّر {amount} مع هذا العرض",
+  "@offerSaves": {
+    "description": "Under an offer's title at checkout: what it saves on this order.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "offerMinOrder": "على الطلبات من {amount} فأكثر",
+  "@offerMinOrder": {
+    "description": "Under an offer's title at checkout: the order is below its minimum.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "errOfferUnavailable": "لم يعد هذا العرض متاحاً لهذا الطلب. أكمل بالسعر الكامل أو حاول لاحقاً.",
+  "@errOfferUnavailable": {
+    "description": "The offer was used up or ended before the order was placed."
+  },
+  "offerBadgePercent": "خصم {percent}٪",
+  "@offerBadgePercent": {
+    "description": "An offer's badge: a percentage off.",
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "offerBadgeAmount": "خصم {amount}",
+  "@offerBadgeAmount": {
+    "description": "An offer's badge: an amount off.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "offerBadgeUpTo": "خصم حتى {value}",
+  "@offerBadgeUpTo": {
+    "description": "A tiered offer's badge: the most it gives.",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "offerBadgeBundleFree": "اشترِ {buy} واحصل على {get} مجاناً",
+  "@offerBadgeBundleFree": {
+    "description": "A bundle's badge: buy some, get some free.",
+    "placeholders": {
+      "buy": {
+        "type": "String"
+      },
+      "get": {
+        "type": "String"
+      }
+    }
+  },
+  "offerBadgeBundlePercent": "اشترِ {buy} والتالي بخصم {percent}٪",
+  "@offerBadgeBundlePercent": {
+    "description": "A bundle's badge: the next ones at a percentage off.",
+    "placeholders": {
+      "buy": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "offerNudgeTier": "أضف {amount} لتحصل على {value}",
+  "@offerNudgeTier": {
+    "description": "Checkout: how much more reaches the next tier.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "offerNudgeBundle": "أضف {count} لتحصل على العرض",
+  "@offerNudgeBundle": {
+    "description": "Checkout: how many more cards make the bundle apply.",
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "offerForYou": "عرض لك",
+  "@offerForYou": {
+    "description": "Brand page banner: an offer given to this customer."
+  },
+  "offerForAll": "عرض",
+  "@offerForAll": {
+    "description": "Brand page banner: an offer for everyone."
+  },
+  "offerEndsToday": "ينتهي اليوم",
+  "@offerEndsToday": {
+    "description": "An offer ends within the day."
+  },
+  "offerEndsIn": "{days, plural, =1{ينتهي غداً} =2{ينتهي خلال يومين} few{ينتهي خلال {days} أيام} other{ينتهي خلال {days} يوماً}}",
+  "@offerEndsIn": {
+    "description": "An offer ends in some days.",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "offerSignInToUse": "سجّل الدخول لتستفيد من العرض",
+  "@offerSignInToUse": {
+    "description": "A visitor sees an offer for everyone: they sign in to use it."
+  },
+  "offerOnItem": "بعد الخصم {amount}",
+  "@offerOnItem": {
+    "description": "Under a card's price: what it costs with the offer.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "offersTitle": "العروض",
+  "@offersTitle": {"description": "The offers page and its entry on the shelf."},
+  "offersEntryMine": "{count, plural, =1{لديك عرض} =2{لديك عرضان} few{لديك {count} عروض} other{لديك {count} عرضاً}}",
+  "@offersEntryMine": {"description": "The offers page and its entry on the shelf.", "placeholders": {"count": {"type": "int"}}},
+  "offersEntryPublic": "{count, plural, =1{عرض الآن} =2{عرضان الآن} few{{count} عروض الآن} other{{count} عرضاً الآن}}",
+  "@offersEntryPublic": {"description": "The offers page and its entry on the shelf.", "placeholders": {"count": {"type": "int"}}},
+  "offersEntryHint": "تصفّح ما تشمله العروض",
+  "@offersEntryHint": {"description": "The offers page and its entry on the shelf."},
+  "offersEmptyTitle": "لا عروض الآن",
+  "@offersEmptyTitle": {"description": "The offers page and its entry on the shelf."},
+  "offersEmptyBody": "حين يصلك عرض نُخبرك به، وتجده هنا.",
+  "@offersEmptyBody": {"description": "The offers page and its entry on the shelf."},
+  "offersSignInBody": "سجّل الدخول لترى عروضك الخاصة وتستخدمها عند الدفع.",
+  "@offersSignInBody": {"description": "The offers page and its entry on the shelf."},
+  "offerUsesLeft": "{count, plural, =1{تستخدمه مرة واحدة} =2{تستخدمه مرتين} few{تستخدمه {count} مرات} other{تستخدمه {count} مرة}}",
+  "@offerUsesLeft": {"description": "The offers page and its entry on the shelf.", "placeholders": {"count": {"type": "int"}}},
+  "offerCoversAll": "يشمل كل البطاقات",
+  "@offerCoversAll": {"description": "The offers page and its entry on the shelf."},
+  "offerShopEsim": "تصفّح باقات eSIM",
+  "@offerShopEsim": {"description": "The offers page and its entry on the shelf."},
+  "offerHeroOff": "خصم",
+  "@offerHeroOff": {"description": "An offer's coupon on the offers page."},
+  "offerHeroUpTo": "خصم حتى",
+  "@offerHeroUpTo": {"description": "An offer's coupon on the offers page."},
+  "offerHeroFree": "مجاناً",
+  "@offerHeroFree": {"description": "An offer's coupon on the offers page."},
+  "offerHeroNext": "على التالي",
+  "@offerHeroNext": {"description": "An offer's coupon on the offers page."},
+  "offerCovers": "يشمل",
+  "@offerCovers": {"description": "An offer's coupon on the offers page."},
+  "offerShopAll": "تسوّق الآن",
+  "@offerShopAll": {"description": "An offer's coupon on the offers page."},
+  "offerForEveryone": "للجميع",
+  "@offerForEveryone": {"description": "An offer's coupon on the offers page."},
+  "savedPaymentsSettings": "طرق الدفع المحفوظة",
+  "@savedPaymentsSettings": {"description": "Saved payment methods: the default way to pay and the wallets' numbers."},
+  "savedPaymentsBody": "ما يُحفظ هنا يبقى على هذا الجهاز وحده، ويجعل دفعتك القادمة بلمسة.",
+  "@savedPaymentsBody": {"description": "Saved payment methods: the default way to pay and the wallets' numbers."},
+  "defaultMethodTitle": "طريقتك المفضّلة",
+  "@defaultMethodTitle": {"description": "Saved payment methods: the default way to pay and the wallets' numbers."},
+  "defaultMethodBody": "آخر طريقة نجح بها دفعك، تُختار تلقائياً في طلبك القادم.",
+  "@defaultMethodBody": {"description": "Saved payment methods: the default way to pay and the wallets' numbers."},
+  "savedWalletsTitle": "المحافظ",
+  "@savedWalletsTitle": {"description": "Saved payment methods: the default way to pay and the wallets' numbers."},
+  "savedWalletsEmpty": "لا أرقام محافظ محفوظة. يُحفظ الرقم بعد أول دفعة ناجحة منه.",
+  "@savedWalletsEmpty": {"description": "Saved payment methods: the default way to pay and the wallets' numbers."},
+  "savedPayerBirthYear": "مع سنة الميلاد",
+  "@savedPayerBirthYear": {"description": "Saved payment methods: the default way to pay and the wallets' numbers."},
+  "removePayerTitle": "إزالة الرقم المحفوظ؟",
+  "@removePayerTitle": {"description": "Saved payment methods: the default way to pay and the wallets' numbers."},
+  "removePayerBody": "ستُسأل عن الرقم في دفعتك القادمة عبر {method}.",
+  "@removePayerBody": {"description": "Saved payment methods: the default way to pay and the wallets' numbers.", "placeholders": {"method": {"type": "String"}}},
+  "savedWalletsNote": "تُحفظ أرقام المحافظ على هذا الجهاز وحده، مشفّرة، ولا يُدفع منها دون الرمز الذي ترسله المحفظة إلى هاتفك. تُحذف عند تسجيل الخروج.",
+  "@savedWalletsNote": {"description": "Saved payment methods: the default way to pay and the wallets' numbers."},
+  "payFromLabel": "يُدفع من",
+  "@payFromLabel": {"description": "Saved payment methods: the default way to pay and the wallets' numbers."},
+  "payerRemember": "احفظ الرقم لدفعاتي القادمة",
+  "@payerRemember": {"description": "Saved payment methods: the default way to pay and the wallets' numbers."},
+  "savedNothingTitle": "لا شيء محفوظ بعد",
+  "@savedNothingTitle": {"description": "Saved payment methods: the default way to pay and the wallets' numbers."},
+  "savedNothingBody": "أول دفعة ناجحة تحفظ طريقتك ورقمك، فتدفع في المرة القادمة بلمسة.",
+  "@savedNothingBody": {"description": "Saved payment methods: the default way to pay and the wallets' numbers."}
 }

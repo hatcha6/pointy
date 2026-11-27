@@ -13,6 +13,8 @@ import '../../core/result.dart';
 import '../api/relay_api.dart';
 import '../../features/card_payment/moamalat_client.dart';
 import '../models/account_target.dart';
+import '../models/json.dart';
+import '../models/offer.dart';
 import '../models/order.dart';
 import '../vault/code_vault.dart';
 import '../vault/orders_vault.dart';
@@ -29,6 +31,7 @@ class OrderRequest {
     this.payerIdentifier = '',
     this.birthYear = '',
     this.account = const {},
+    this.offerId = '',
   });
 
   final String itemKey;
@@ -46,6 +49,9 @@ class OrderRequest {
 
   /// The account a top-up is sent to, by the brand's target fields.
   final Map<String, String> account;
+
+  /// The offer (`CardOffer`) to take off the order; empty for none.
+  final String offerId;
 }
 
 /// Orders, payment and the customer's credit.
@@ -99,6 +105,10 @@ class OrdersRepository {
   /// «اشترِ مجدداً» and the credit follow a purchase at once.
   final ValueNotifier<int> changes = ValueNotifier(0);
 
+  /// Told once of each order of this phone's that becomes paid, however it
+  /// was paid: what the payment memory learns the customer's way to pay from.
+  void Function(CardOrder order)? onPaid;
+
   Future<Result<CheckoutOptions>> checkoutOptions() => Result.guard(() async {
     return CheckoutOptions.fromJson(
       await api.get('/v1/customers/payment-methods'),
@@ -122,6 +132,7 @@ class OrdersRepository {
               'user_identifier': request.payerIdentifier,
             if (request.birthYear.isNotEmpty) 'birth_year': request.birthYear,
             if (request.account.isNotEmpty) 'account': request.account,
+            if (request.offerId.isNotEmpty) 'offer_id': request.offerId,
           },
         );
         changes.value++;
@@ -361,6 +372,14 @@ class OrdersRepository {
     preferences?.remove(_followedKey).ignore();
   }
 
+  /// The offers the operator gave this customer that they can use now.
+  Future<Result<List<CardOffer>>> offers() => Result.guard(() async {
+    final answer = await api.get('/v1/customers/me/offers', signedIn: true);
+    return [
+      for (final raw in readList(answer, 'offers')) ?CardOffer.fromJson(raw),
+    ];
+  });
+
   Future<Result<CreditStatement>> credit() => Result.guard(() async {
     return CreditStatement.fromJson(
       await api.get('/v1/customers/credit', signedIn: true),
@@ -438,6 +457,7 @@ class OrdersRepository {
         status == OrderStatus.delivered;
     if (paidBy(now) && !paidBy(before)) {
       analytics.orderPaid(order);
+      onPaid?.call(order);
     }
     if (now == OrderStatus.delivered) {
       analytics.orderDelivered(order);

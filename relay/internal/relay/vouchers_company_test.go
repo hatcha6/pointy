@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"testing"
 	"time"
+
+	"pointy/relay/internal/control"
 )
 
 func companyCardRequest(t *testing.T, fields map[string]any) []byte {
@@ -91,7 +93,13 @@ func TestTheCompanyBuysACardForItself(t *testing.T) {
 	if err != nil || len(months) != 1 {
 		t.Fatalf("tracked: %+v err=%v", months, err)
 	}
-	if months[0].CompanyCost["USD"] != "9.700" || months[0].SupplierCost["USD"] != "9.700" {
-		t.Fatalf("company %v, supplier %v", months[0].CompanyCost, months[0].SupplierCost)
+	costs := map[string]string{}
+	for _, cost := range months[0].ForeignCosts {
+		if cost.Currency == "USD" {
+			costs[cost.Cost] = cost.Amount
+		}
+	}
+	if costs[control.FinanceCostCompany] != "9.700" || costs[control.FinanceCostSupplier] != "9.700" || len(costs) != 2 {
+		t.Fatalf("dollar costs %v", months[0].ForeignCosts)
 	}
 }

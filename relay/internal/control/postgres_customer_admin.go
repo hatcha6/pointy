@@ -88,16 +88,21 @@ func (s *PostgresStore) ListCustomers(ctx context.Context, filter CustomerListFi
 	query := strings.TrimSpace(filter.Query)
 	phone := customerPhoneQuery(query)
 	where := `
-WHERE ($2 = '' OR c.id = $2 OR ($3 <> '' AND c.phone LIKE '%' || $3 || '%')) AND` + customerSegmentSQL
+WHERE ($2 = '' OR c.id = $2 OR ($3 <> '' AND c.phone LIKE '%' || $3 || '%'))
+	AND (NOT $5::boolean OR c.id = ANY($6::text[])) AND` + customerSegmentSQL
 	now := s.clock.Now().UTC()
+	ids := filter.IDs
+	if ids == nil {
+		ids = []string{}
+	}
 	var total int
 	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM (`+customerSummarySQL+where+`) counted`,
-		now, query, phone, filter.Segment).Scan(&total); err != nil {
+		now, query, phone, filter.Segment, filter.OnlyIDs, ids).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 	rows, err := s.pool.Query(ctx, customerSummarySQL+where+`
-ORDER BY c.last_sign_in_at DESC, c.id LIMIT $5 OFFSET $6`,
-		now, query, phone, filter.Segment, limit, max(filter.Offset, 0))
+ORDER BY c.last_sign_in_at DESC, c.id LIMIT $7 OFFSET $8`,
+		now, query, phone, filter.Segment, filter.OnlyIDs, ids, limit, max(filter.Offset, 0))
 	if err != nil {
 		return nil, 0, err
 	}

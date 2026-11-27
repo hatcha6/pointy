@@ -290,7 +290,15 @@ class ContainerPageRoute<T> extends MaterialPageRoute<T> {
   /// The thing tapped, and its [ContainerSource] where it has one.
   final BuildContext _tapped;
   final ContainerSourceState? _source;
-  BuildContext get _from => _source?.context ?? _tapped;
+
+  /// The source while it is still in the tree, else what was tapped. A
+  /// source can leave while its page is up (the list under it rebuilt), and
+  /// a disposed [State] has no context to ask.
+  BuildContext get _from {
+    final source = _source;
+    return source != null && source.mounted ? source.context : _tapped;
+  }
+
   Widget? _closed;
   Rect? _rect;
 
@@ -409,7 +417,9 @@ class ContainerPageRoute<T> extends MaterialPageRoute<T> {
     Animation<double> secondaryAnimation,
     bool allowSnapshotting,
     Widget? child,
-  ) => child;
+  ) => child == null || !kIsWeb
+      ? child
+      : TransitionSnapshot(animation: secondaryAnimation, child: child);
 
   @override
   Widget buildTransitions(
@@ -422,10 +432,16 @@ class ContainerPageRoute<T> extends MaterialPageRoute<T> {
       return FadeTransition(opacity: animation, child: child);
     }
     final platform = Theme.of(context).platform;
+    final above = secondaryAnimation;
     if (_underAnother) {
       secondaryAnimation = kAlwaysDismissedAnimation;
     }
     Widget page = _ContainerTransform(route: this, child: child);
+    if (kIsWeb && _underAnother) {
+      // Another of these opening over this page: it stands still, as an
+      // image (see [TransitionSnapshot]).
+      page = TransitionSnapshot(animation: above, child: page);
+    }
     if (platform == TargetPlatform.iOS) {
       // The system's edge swipe, without its slide: the finger moves this
       // route's own animation, which is the transform above. When another
@@ -572,7 +588,9 @@ class _ContainerTransformState extends State<_ContainerTransform> {
         final page = SizedBox.fromSize(
           key: _pageRoot,
           size: full.size,
-          child: widget.child,
+          child: kIsWeb
+              ? TransitionSnapshot(animation: _animation, child: widget.child)
+              : widget.child,
         );
         return AnimatedBuilder(
           animation: _animation,
@@ -998,4 +1016,85 @@ class _PredictiveBackState extends State<_PredictiveBack>
 
   @override
   Widget build(BuildContext context) => widget.child;
+}
+
+/// [child] as a still image while [animation] runs, on the web.
+///
+/// A browser keeps no raster cache: every frame of a transition draws every
+/// widget of both pages again, their blurs and shadows and text, though
+/// nothing on them moves. The phones' engines keep what has not changed;
+/// here the pages are drawn once into an image as the transition starts, and
+/// it is the image that is moved, scaled and clipped. That is what keeps the
+/// transition at the display's rate on any hardware.
+///
+/// The image is drawn again only when something in [child] does change (a
+/// card's art arriving, the tapped tile leaving its place), and never while
+/// [animation] stands still: a settled page is the page itself, live. A page
+/// holding a platform view (the payment frame) is drawn live throughout.
+class TransitionSnapshot extends StatefulWidget {
+  const TransitionSnapshot({
+    super.key,
+    required this.animation,
+    this.secondary,
+    required this.child,
+  });
+
+  final Animation<double> animation;
+
+  /// A second animation the page moves by (another page opening over it):
+  /// it is an image while either runs.
+  final Animation<double>? secondary;
+  final Widget child;
+
+  @override
+  State<TransitionSnapshot> createState() => _TransitionSnapshotState();
+}
+
+class _TransitionSnapshotState extends State<TransitionSnapshot> {
+  final _controller = SnapshotController();
+
+  @override
+  void initState() {
+    super.initState();
+    _listen(widget);
+    _follow(AnimationStatus.completed);
+  }
+
+  @override
+  void didUpdateWidget(TransitionSnapshot oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.animation != widget.animation ||
+        oldWidget.secondary != widget.secondary) {
+      _unlisten(oldWidget);
+      _listen(widget);
+      _follow(AnimationStatus.completed);
+    }
+  }
+
+  @override
+  void dispose() {
+    _unlisten(widget);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _listen(TransitionSnapshot of) {
+    of.animation.addStatusListener(_follow);
+    of.secondary?.addStatusListener(_follow);
+  }
+
+  void _unlisten(TransitionSnapshot of) {
+    of.animation.removeStatusListener(_follow);
+    of.secondary?.removeStatusListener(_follow);
+  }
+
+  void _follow(AnimationStatus _) {
+    _controller.allowSnapshotting =
+        widget.animation.isAnimating ||
+        (widget.secondary?.isAnimating ?? false);
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      SnapshotWidget(controller: _controller, child: widget.child);
 }

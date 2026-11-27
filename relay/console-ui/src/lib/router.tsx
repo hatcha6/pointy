@@ -48,21 +48,27 @@ export function usePath(): string {
   return useRouter().location.split("?")[0];
 }
 
+/**
+ * The address with `updates` laid over its query (an empty value removes
+ * one). It reads the address as it is now, not as the last render saw it:
+ * two setters called one after the other (a filter, then the page back to
+ * the first) each built on the stale copy, and the second undid the first.
+ */
+function withSearch(updates: Record<string, string>): string {
+  const [path, search = ""] = current().split("?");
+  const p = new URLSearchParams(search);
+  for (const [name, value] of Object.entries(updates)) {
+    if (value) p.set(name, value);
+    else p.delete(name);
+  }
+  const s = p.toString();
+  return path + (s ? "?" + s : "");
+}
+
 export function useSearchParam(name: string): [string, (value: string) => void] {
   const { location, navigate } = useRouter();
-  const [path, search = ""] = location.split("?");
-  const params = new URLSearchParams(search);
-  const value = params.get(name) ?? "";
-  const set = useCallback(
-    (next: string) => {
-      const p = new URLSearchParams(search);
-      if (next) p.set(name, next);
-      else p.delete(name);
-      const s = p.toString();
-      navigate(path + (s ? "?" + s : ""), { replace: true });
-    },
-    [name, navigate, path, search],
-  );
+  const value = new URLSearchParams(location.split("?")[1] ?? "").get(name) ?? "";
+  const set = useCallback((next: string) => navigate(withSearch({ [name]: next }), { replace: true }), [name, navigate]);
   return [value, set];
 }
 
@@ -96,20 +102,8 @@ export function useSearchText(name = "q"): { text: string; setText: (value: stri
 
 /** Sets several query parameters in one step (an empty value removes one). */
 export function useSetSearch(): (updates: Record<string, string>) => void {
-  const { location, navigate } = useRouter();
-  return useCallback(
-    (updates: Record<string, string>) => {
-      const [path, search = ""] = location.split("?");
-      const p = new URLSearchParams(search);
-      for (const [name, value] of Object.entries(updates)) {
-        if (value) p.set(name, value);
-        else p.delete(name);
-      }
-      const s = p.toString();
-      navigate(path + (s ? "?" + s : ""), { replace: true });
-    },
-    [location, navigate],
-  );
+  const { navigate } = useRouter();
+  return useCallback((updates: Record<string, string>) => navigate(withSearch(updates), { replace: true }), [navigate]);
 }
 
 /** Matches "/shops/:id" against a path; returns the params or null. */

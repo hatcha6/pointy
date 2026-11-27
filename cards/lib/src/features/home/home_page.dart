@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:pointy_brand/pointy_brand.dart';
 
+import 'brand_shelf.dart';
+import 'brand_tile.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../data/models/catalog.dart';
 import '../../design/cards_layout.dart';
@@ -27,6 +29,7 @@ import '../search/search_result_row.dart';
 import '../../data/models/esim.dart';
 import '../../shared/cards_scope.dart';
 import '../esim/esim_entry.dart';
+import '../offers/offers_entry.dart';
 import '../esim/esim_search.dart';
 import '../shelf/shelf_model.dart';
 import '../../shared/haptics.dart';
@@ -359,7 +362,7 @@ class _HomePageState extends State<HomePage>
                 itemBuilder: (context, index) => ShelfRise(
                   reveal: _reveal,
                   order: index,
-                  child: _BrandTile(brand: brands[index]),
+                  child: BrandTile(brand: brands[index]),
                 ),
               );
             },
@@ -381,6 +384,7 @@ class _HomePageState extends State<HomePage>
         piece(SectionHeader(title: l10n.featuredTitle)),
         piece(_FeaturedCarousel(brands: featured)),
       ],
+      piece(OffersEntry(shelf: shelf)),
       piece(const EsimEntry()),
       if (shelf.buyAgain.isNotEmpty) ...[
         piece(SectionHeader(title: l10n.buyAgainTitle)),
@@ -395,7 +399,7 @@ class _HomePageState extends State<HomePage>
               onSeeAll: () => _pickCategory(category.key),
             ),
           ),
-          piece(_BrandShelf(brands: inCategory, scope: category.key)),
+          piece(BrandShelf(brands: inCategory, scope: category.key)),
         ],
     ];
   }
@@ -725,27 +729,6 @@ class _CategoryBarState extends State<_CategoryBar> {
   }
 }
 
-/// The badge a brand wears: unavailable, bought on the website, its own, or
-/// a running promotion's. None when it would only repeat [section], the title
-/// the tile already sits under («الأكثر طلباً» on «الأكثر طلباً»).
-Widget? _badge(BuildContext context, CardBrand brand, {String? section}) {
-  if (!brand.anyAvailable) {
-    return Pill(
-      text: AppLocalizations.of(context).unavailableNow,
-      tone: PillTone.muted,
-    );
-  }
-  if (brand.webOnly) {
-    return const WebOnlyPill();
-  }
-  final text = brand.badge.isNotEmpty
-      ? brand.badge
-      : brand.items.where((i) => i.onPromo).firstOrNull?.promoBadge ?? '';
-  return text.isEmpty || text.trim() == section?.trim()
-      ? null
-      : Pill(text: text, tone: PillTone.promo);
-}
-
 class _FeaturedCarousel extends StatefulWidget {
   const _FeaturedCarousel({required this.brands});
 
@@ -769,11 +752,11 @@ class _FeaturedCarouselState extends State<_FeaturedCarousel> {
   Widget build(BuildContext context) {
     // A mouse cannot swipe: on a desktop the featured cards stand in rows.
     if (CardsSidebarScope.of(context)) {
-      return _TileRows(
+      return TileRows(
         columns: 3,
         children: [
           for (final brand in widget.brands)
-            _BrandTile(brand: brand, large: true),
+            BrandTile(brand: brand, large: true),
         ],
       );
     }
@@ -794,7 +777,7 @@ class _FeaturedCarouselState extends State<_FeaturedCarousel> {
     }
     final cardWidth = width * fraction - CardsSpace.md;
     return SizedBox(
-      height: cardWidth / kCardAspect + 64 + _tileTextGrowth(context),
+      height: cardWidth / kCardAspect + 64 + tileTextGrowth(context),
       child: PageView.builder(
         controller: _pages,
         padEnds: false,
@@ -805,144 +788,9 @@ class _FeaturedCarouselState extends State<_FeaturedCarousel> {
             padding: EdgeInsetsDirectional.only(
               start: index == 0 ? CardsSpace.gutter : CardsSpace.md,
             ),
-            child: _BrandTile(brand: brand, large: true),
+            child: BrandTile(brand: brand, large: true),
           );
         },
-      ),
-    );
-  }
-}
-
-class _BrandShelf extends StatelessWidget {
-  const _BrandShelf({required this.brands, required this.scope});
-
-  final List<CardBrand> brands;
-  final String scope;
-
-  /// About how wide a desktop's shelf tiles are.
-  static const double _desktopTile = 200;
-
-  @override
-  Widget build(BuildContext context) {
-    // A mouse cannot swipe: on a desktop the shelf is one row of as many as
-    // fit, and «عرض الكل» shows the rest.
-    if (CardsSidebarScope.of(context)) {
-      return LayoutBuilder(
-        builder: (context, constraints) {
-          final columns = math.max(
-            2,
-            ((constraints.maxWidth - CardsSpace.gutter * 2 + CardsSpace.md) /
-                    (_desktopTile + CardsSpace.md))
-                .floor(),
-          );
-          return _TileRows(
-            columns: columns,
-            children: [
-              for (final brand in brands.take(columns))
-                _BrandTile(brand: brand),
-            ],
-          );
-        },
-      );
-    }
-    final width = MediaQuery.sizeOf(context).width;
-    final tileWidth = width < 600 ? 164.0 : 200.0;
-    return SizedBox(
-      height: tileWidth / kCardAspect + 58 + _tileTextGrowth(context),
-      child: ColumnBleed(
-        builder: (extra) => ListView.separated(
-          scrollDirection: Axis.horizontal,
-          scrollCacheExtent: const ScrollCacheExtent.pixels(900),
-          padding:
-              const EdgeInsets.symmetric(horizontal: CardsSpace.gutter) + extra,
-          itemCount: brands.length,
-          separatorBuilder: (_, _) => const SizedBox(width: CardsSpace.md),
-          itemBuilder: (context, index) => SizedBox(
-            width: tileWidth,
-            child: _BrandTile(brand: brands[index]),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// How much taller a tile's name and price have grown at the phone's text size,
-/// for a shelf that has to be told its height.
-double _tileTextGrowth(BuildContext context) {
-  final scaler = MediaQuery.textScalerOf(context);
-  double grown(double fontSize) => (scaler.scale(fontSize) - fontSize) * 1.5;
-  return grown(16) + grown(12);
-}
-
-class _BrandTile extends StatelessWidget {
-  const _BrandTile({required this.brand, this.large = false});
-
-  final CardBrand brand;
-  final bool large;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
-    final from = brand.fromPrice;
-    // A large tile sits on the featured carousel.
-    final badge = _badge(
-      context,
-      brand,
-      section: large ? l10n.featuredTitle : null,
-    );
-    return Pressable(
-      semanticLabel: brand.name,
-      // The page opens out of the card's art, and closes back into it.
-      onTap: () => BrandPage.open(context, brand, from: context),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Stack(
-            children: [
-              ContainerSource(
-                child: CardArt(
-                  brand: brand,
-                  muted: !brand.anyAvailable,
-                  radius: large ? CardsRadii.tile : CardsRadii.art,
-                ),
-              ),
-              if (badge != null)
-                PositionedDirectional(
-                  top: CardsSpace.sm,
-                  start: CardsSpace.sm,
-                  child: badge,
-                ),
-              // Across from the badge: a game's name alone does not say
-              // where it is played. Beside another badge, only its logo:
-              // two names do not fit side by side on a phone's tile.
-              if (brand.gamePlatform case final platform?)
-                PositionedDirectional(
-                  top: CardsSpace.sm,
-                  end: CardsSpace.sm,
-                  child: PlatformPill(platform, compact: badge != null),
-                ),
-            ],
-          ),
-          SizedBox(height: large ? CardsSpace.md : CardsSpace.sm),
-          NameText(
-            brand.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: large
-                ? theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  )
-                : theme.textTheme.titleSmall,
-          ),
-          if (from != null)
-            Text(
-              l10n.fromPrice(formatMoney(l10n, from)),
-              style: PointyTypography.numeric(theme.textTheme.bodySmall!)
-                  .copyWith(color: theme.colorScheme.onSurfaceVariant),
-            ),
-        ],
       ),
     );
   }
@@ -1033,43 +881,6 @@ class _BuyAgainShelf extends StatelessWidget {
             const SizedBox(width: CardsSpace.sm),
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// Tiles in rows of [columns], each the same width: a desktop's shelf,
-/// which a mouse reads without swiping. A short last row keeps the width.
-class _TileRows extends StatelessWidget {
-  const _TileRows({required this.columns, required this.children});
-
-  final int columns;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: CardsSpace.gutter),
-      child: Column(
-        children: [
-          for (var start = 0; start < children.length; start += columns)
-            Padding(
-              padding: EdgeInsets.only(top: start == 0 ? 0 : CardsSpace.xl),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  for (var i = start; i < start + columns; i++) ...[
-                    if (i > start) const SizedBox(width: CardsSpace.md),
-                    Expanded(
-                      child: i < children.length
-                          ? children[i]
-                          : const SizedBox.shrink(),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-        ],
       ),
     );
   }

@@ -125,16 +125,23 @@ type FinanceTrackedMonth struct {
 	Revenue map[string]string `json:"revenue"`
 	// SMSCost is what Resala charged for the texts that went out.
 	SMSCost string `json:"sms_cost"`
-	// SupplierCost is what card, airtime and bill suppliers charged, by the
-	// currency they charged in, for what shops bought.
+	// SupplierCost is what card, airtime and bill suppliers charged in
+	// dinars (keyed "LYD") for what shops bought. What they charged in
+	// another currency is in ForeignCosts.
 	SupplierCost map[string]string `json:"supplier_cost"`
-	// CardsAppCost is what the same suppliers charged, by currency, for what
+	// CardsAppCost is what the same suppliers charged, in dinars, for what
 	// «دفتر كروت» customers bought: the cost of the cards_app revenue, kept
 	// apart so neither service's margin carries the other's.
 	CardsAppCost map[string]string `json:"cards_app_cost,omitempty"`
-	// CompanyCost is what the same suppliers charged for what the company
-	// bought for itself, by currency: its own spending, not a service's cost.
+	// CompanyCost is what the same suppliers charged, in dinars, for what the
+	// company bought for itself: its own spending, not a service's cost.
 	CompanyCost map[string]string `json:"company_cost,omitempty"`
+	// ForeignCosts are the same three costs where the supplier charged in
+	// another currency (dollars), hour by hour, so the report can turn each
+	// into dinars at the rate in force when it was spent. At today's rate a
+	// rise in the dollar re-priced every past sale and showed a loss on sales
+	// that had made money.
+	ForeignCosts []FinanceForeignCost `json:"foreign_costs,omitempty"`
 	// TopUps is money shops paid into their wallets, by method, as credited:
 	// net of the gateway fee. It is the shops' money, held, not income.
 	TopUps map[string]string `json:"topups"`
@@ -142,6 +149,23 @@ type FinanceTrackedMonth struct {
 	// card-app customers paid on top of their orders: what Dafa
 	// took from the company, and what the company charged the shops for it.
 	TopUpFees string `json:"topup_fees"`
+}
+
+// The costs a FinanceForeignCost can be.
+const (
+	FinanceCostSupplier = "supplier_cost"
+	FinanceCostCardsApp = "cards_app_cost"
+	FinanceCostCompany  = "company_cost"
+)
+
+// FinanceForeignCost is one of a month's supplier costs (FinanceCost*) that
+// was charged in a currency other than the dinar, totalled over one hour.
+type FinanceForeignCost struct {
+	// Hour is the start of the hour it was spent in, UTC.
+	Hour     time.Time `json:"hour"`
+	Cost     string    `json:"cost"`
+	Currency string    `json:"currency"`
+	Amount   string    `json:"amount"`
 }
 
 // FinanceStore is an optional store capability (type-asserted, like
@@ -374,8 +398,14 @@ type financeRollupMonth struct {
 	supplierCost map[string]*big.Rat
 	cardsAppCost map[string]*big.Rat
 	companyCost  map[string]*big.Rat
+	foreignCost  map[financeForeignKey]*big.Rat
 	topUps       map[string]*big.Rat
 	topUpFees    *big.Rat
+}
+
+type financeForeignKey struct {
+	hour           time.Time
+	cost, currency string
 }
 
 func newFinanceRollup() *financeRollup {
@@ -391,6 +421,7 @@ func (r *financeRollup) month(name string) *financeRollupMonth {
 			supplierCost: map[string]*big.Rat{},
 			cardsAppCost: map[string]*big.Rat{},
 			companyCost:  map[string]*big.Rat{},
+			foreignCost:  map[financeForeignKey]*big.Rat{},
 			topUps:       map[string]*big.Rat{},
 			topUpFees:    new(big.Rat),
 		}
@@ -421,16 +452,60 @@ func (r *financeRollup) addSMSCost(month, cost string) {
 	}
 }
 
-func (r *financeRollup) addSupplierCost(month, currency, cost string) {
-	addRat(r.month(month).supplierCost, strings.ToUpper(strings.TrimSpace(currency)), cost)
+// addCost books a supplier cost (FinanceCost*) spent at at: in the month's
+// dinars, or, in any other currency, under the hour it was spent in.
+func (r *financeRollup) addCost(kind string, at time.Time, currency, cost string) {
+	m := r.month(FinanceMonth(at))
+	currency = strings.ToUpper(strings.TrimSpace(currency))
+	if currency != FinanceCurrency {
+		value, ok := new(big.Rat).SetString(strings.TrimSpace(cost))
+		if !ok || value.Sign() == 0 {
+			return
+		}
+		key := financeForeignKey{hour: at.UTC().Truncate(time.Hour), cost: kind, currency: currency}
+		if m.foreignCost[key] == nil {
+			m.foreignCost[key] = new(big.Rat)
+		}
+		m.foreignCost[key].Add(m.foreignCost[key], value)
+		return
+	}
+	switch kind {
+	case FinanceCostCardsApp:
+		addRat(m.cardsAppCost, currency, cost)
+	case FinanceCostCompany:
+		addRat(m.companyCost, currency, cost)
+	default:
+		addRat(m.supplierCost, currency, cost)
+	}
 }
 
-func (r *financeRollup) addCardsAppCost(month, currency, cost string) {
-	addRat(r.month(month).cardsAppCost, strings.ToUpper(strings.TrimSpace(currency)), cost)
+// addCostAtHour is addCost for a row that names its hour as text (RFC 3339).
+func (r *financeRollup) addCostAtHour(kind, hour, currency, cost string) {
+	at, err := time.Parse(time.RFC3339, strings.TrimSpace(hour))
+	if err != nil {
+		return
+	}
+	r.addCost(kind, at, currency, cost)
 }
 
-func (r *financeRollup) addCompanyCost(month, currency, cost string) {
-	addRat(r.month(month).companyCost, strings.ToUpper(strings.TrimSpace(currency)), cost)
+func (m *financeRollupMonth) foreignCosts() []FinanceForeignCost {
+	out := make([]FinanceForeignCost, 0, len(m.foreignCost))
+	for key, value := range m.foreignCost {
+		out = append(out, FinanceForeignCost{Hour: key.hour, Cost: key.cost, Currency: key.currency, Amount: FormatWalletAmount(value)})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if !out[i].Hour.Equal(out[j].Hour) {
+			return out[i].Hour.Before(out[j].Hour)
+		}
+		if out[i].Cost != out[j].Cost {
+			return out[i].Cost < out[j].Cost
+		}
+		return out[i].Currency < out[j].Currency
+	})
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // companyPurchaseCost is what the company's own purchase cost it: the
@@ -479,6 +554,7 @@ func (r *financeRollup) result() []FinanceTrackedMonth {
 			SupplierCost: formatRats(m.supplierCost),
 			CardsAppCost: formatRats(m.cardsAppCost),
 			CompanyCost:  formatRats(m.companyCost),
+			ForeignCosts: m.foreignCosts(),
 			TopUps:       formatRats(m.topUps),
 			TopUpFees:    FormatWalletAmount(m.topUpFees),
 		})
@@ -644,15 +720,15 @@ func (s *FileStore) FinanceTracked(_ context.Context, from, to time.Time) ([]Fin
 			continue
 		}
 		if purchase.ForCustomer() {
-			rollup.addCardsAppCost(FinanceMonth(at), purchase.SupplierCurrency, purchase.SupplierCost)
+			rollup.addCost(FinanceCostCardsApp, at, purchase.SupplierCurrency, purchase.SupplierCost)
 			continue
 		}
 		if purchase.ForCompany() {
 			currency, cost := companyPurchaseCost(purchase)
-			rollup.addCompanyCost(FinanceMonth(at), currency, cost)
+			rollup.addCost(FinanceCostCompany, at, currency, cost)
 			continue
 		}
-		rollup.addSupplierCost(FinanceMonth(at), purchase.SupplierCurrency, purchase.SupplierCost)
+		rollup.addCost(FinanceCostSupplier, at, purchase.SupplierCurrency, purchase.SupplierCost)
 	}
 	for _, topUp := range s.data.WalletTopUps {
 		if topUp.Status != WalletTopUpPaid || topUp.TestMode || topUp.PaidAt == nil || !within(*topUp.PaidAt, from, to) {
@@ -824,6 +900,12 @@ func financeMonthSQL(column string) string {
 	return `to_char((` + column + ` AT TIME ZONE 'UTC') + interval '2 hours', 'YYYY-MM')`
 }
 
+// financeHourSQL is the UTC hour a timestamp falls in, as RFC 3339 text. A
+// Libyan month starts on a whole UTC hour, so the hour also says the month.
+func financeHourSQL(column string) string {
+	return `to_char(date_trunc('hour', ` + column + ` AT TIME ZONE 'UTC'), 'YYYY-MM-DD"T"HH24:00:00"Z"')`
+}
+
 func (s *PostgresStore) FinanceTracked(ctx context.Context, from, to time.Time) ([]FinanceTrackedMonth, error) {
 	rollup := newFinanceRollup()
 	queries := []struct {
@@ -859,27 +941,27 @@ func (s *PostgresStore) FinanceTracked(ctx context.Context, from, to time.Time) 
 			// supplier_cost is text as the supplier wrote it; anything that
 			// does not read as a number is left out rather than failing the
 			// whole report.
-			`SELECT ` + financeMonthSQL("COALESCE(completed_at, created_at)") + `, upper(supplier_currency),
+			`SELECT ` + financeHourSQL("COALESCE(completed_at, created_at)") + `, upper(supplier_currency),
 				SUM(CASE WHEN supplier_cost ~ '^\s*[0-9]+(\.[0-9]+)?\s*$' THEN trim(supplier_cost)::numeric ELSE 0 END)::text
 			FROM relay_voucher_purchases
 			WHERE status = 'succeeded' AND NOT test_mode AND installation_id IS NOT NULL
 				AND COALESCE(completed_at, created_at) >= $1 AND COALESCE(completed_at, created_at) < $2
 			GROUP BY 1, 2`,
-			rollup.addSupplierCost,
+			func(hour, currency, cost string) { rollup.addCostAtHour(FinanceCostSupplier, hour, currency, cost) },
 		},
 		{
 			// What «دفتر كروت» customers' cards cost, read the same way.
-			`SELECT ` + financeMonthSQL("COALESCE(completed_at, created_at)") + `, upper(supplier_currency),
+			`SELECT ` + financeHourSQL("COALESCE(completed_at, created_at)") + `, upper(supplier_currency),
 				SUM(CASE WHEN supplier_cost ~ '^\s*[0-9]+(\.[0-9]+)?\s*$' THEN trim(supplier_cost)::numeric ELSE 0 END)::text
 			FROM relay_voucher_purchases
 			WHERE status = 'succeeded' AND NOT test_mode AND installation_id IS NULL AND purpose = 'customer'
 				AND COALESCE(completed_at, created_at) >= $1 AND COALESCE(completed_at, created_at) < $2
 			GROUP BY 1, 2`,
-			rollup.addCardsAppCost,
+			func(hour, currency, cost string) { rollup.addCostAtHour(FinanceCostCardsApp, hour, currency, cost) },
 		},
 		{
 			// The company's own purchases, as companyPurchaseCost reads them.
-			`SELECT ` + financeMonthSQL("COALESCE(completed_at, created_at)") + `,
+			`SELECT ` + financeHourSQL("COALESCE(completed_at, created_at)") + `,
 				CASE WHEN supplier_cost ~ '^\s*[0-9]+(\.[0-9]+)?\s*$' AND supplier_currency <> ''
 					THEN upper(supplier_currency) ELSE 'LYD' END,
 				SUM(CASE WHEN supplier_cost ~ '^\s*[0-9]+(\.[0-9]+)?\s*$' AND supplier_currency <> ''
@@ -888,7 +970,7 @@ func (s *PostgresStore) FinanceTracked(ctx context.Context, from, to time.Time) 
 			WHERE status = 'succeeded' AND NOT test_mode AND installation_id IS NULL AND purpose <> 'customer'
 				AND COALESCE(completed_at, created_at) >= $1 AND COALESCE(completed_at, created_at) < $2
 			GROUP BY 1, 2`,
-			rollup.addCompanyCost,
+			func(hour, currency, cost string) { rollup.addCostAtHour(FinanceCostCompany, hour, currency, cost) },
 		},
 		{
 			// As credited: the gateway fee kept out of a top-up was never the

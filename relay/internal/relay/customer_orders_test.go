@@ -242,8 +242,13 @@ func TestCustomerOrderPaidWithSadadIsDelivered(t *testing.T) {
 	// customer once made the shops' line read as a loss and the app's as all
 	// profit.
 	if month.Revenue[control.FinanceServiceCardsApp] != "20.000" || len(month.CompanyCost) != 0 ||
-		len(month.SupplierCost) != 0 || month.CardsAppCost["USD"] != "9.700" {
+		len(month.SupplierCost) != 0 || len(month.CardsAppCost) != 0 || len(month.ForeignCosts) != 1 {
 		t.Fatalf("books month = %+v", month)
+	}
+	// Its dollar cost is kept with the hour it was spent in, for the rate then.
+	if cost := month.ForeignCosts[0]; cost.Cost != control.FinanceCostCardsApp || cost.Currency != "USD" ||
+		cost.Amount != "9.700" || !cost.Hour.Equal(time.Date(2026, 10, 7, 10, 0, 0, 0, time.UTC)) {
+		t.Fatalf("dollar cost = %+v", cost)
 	}
 	// At ten dinars a dollar, so the app's 9.700 USD reads as 97 dinars.
 	rated := []byte(`{"usd_rate":"10"}`)
@@ -264,6 +269,38 @@ func TestCustomerOrderPaidWithSadadIsDelivered(t *testing.T) {
 	}
 	if shops := lines["vouchers"]; shops != nil && shops["cost"] != "0.000" {
 		t.Fatalf("the shops' line carries the app's cost: %v", shops)
+	}
+
+	// Priced by fulus.ly: the card was bought while the dollar was at 10, and
+	// a day later it is at 11.02. The card still cost 97 dinars: a rise in
+	// the dollar once re-priced every past sale and the books showed a loss.
+	if _, err := h.store.UpsertExchangeRate(context.Background(),
+		usdRate("cash", "", "10.00", time.Date(2026, 10, 7, 8, 0, 0, 0, time.UTC))); err != nil {
+		t.Fatal(err)
+	}
+	h.clock.advance(24 * time.Hour)
+	if _, err := h.store.UpsertExchangeRate(context.Background(),
+		usdRate("cash", "", "11.02", h.clock.now.Add(-time.Hour))); err != nil {
+		t.Fatal(err)
+	}
+	live := []byte(`{"usd_rate_source":"fulus"}`)
+	if _, err := h.store.PublishVoucherSettings(context.Background(), control.VoucherSettingsRecord{
+		Document: live, SHA256: fmt.Sprintf("%x", sha256.Sum256(live)), Actor: "test"}); err != nil {
+		t.Fatal(err)
+	}
+	_, position = financeRequest(t, server, http.MethodGet, "/v1/finance/position", "")
+	rate := position["usd_rate"].(map[string]any)
+	if gross := position["gross"].(map[string]any); gross["cost"] != "97.000" || gross["profit"] != "-77.000" ||
+		rate["rate"] != "11.0200" || rate["basis"] != "at_spend" {
+		t.Fatalf("after the dollar rose: gross %v, rate %v", gross, rate)
+	}
+	_, summary := financeRequest(t, server, http.MethodGet, "/v1/finance/summary?from=2026-10-01&to=2026-10-08", "")
+	if expense := summary["totals"].(map[string]any)["expense"]; expense != "97.000" {
+		t.Fatalf("the month's cost after the dollar rose: %v (%v)", expense, summary)
+	}
+	_, listed := financeRequest(t, server, http.MethodGet, "/v1/customers/admin/orders", "")
+	if orders, _ := listed["orders"].([]any); len(orders) != 1 || orders[0].(map[string]any)["cost_lyd"] != "97.000" {
+		t.Fatalf("the order row after the dollar rose: %v", listed)
 	}
 }
 

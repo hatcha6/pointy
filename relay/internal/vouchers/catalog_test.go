@@ -3,6 +3,7 @@ package vouchers
 import (
 	"encoding/json"
 	"math/big"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -350,5 +351,37 @@ func TestRegionsAreCodesAFirstClassItemCanCarry(t *testing.T) {
 	// NA is Namibia: North America must never be written that way.
 	if CountryName("NA") != "ناميبيا" {
 		t.Errorf("NA = %q", CountryName("NA"))
+	}
+}
+
+func TestALocatorFindsWhatFindFinds(t *testing.T) {
+	document := Document{
+		Categories: []Category{{Key: "games", Name: "first"}, {Key: "games", Name: "last"}, {Key: "gift"}},
+		Countries:  []Country{{Code: "US", Name: "أمريكا"}, {Code: "US", Name: "ثانية"}},
+		Brands: []Brand{
+			{Key: "a", Category: "games", Items: []Item{
+				{Key: "a-1", Country: "US", Supplier: json.RawMessage(`{"key":"bnplus","card_id":1}`)},
+				{Key: "a-2", Country: "GB", Supplier: json.RawMessage(`{"key":"bnplus","card_id":2}`)},
+				{Key: "dup", Supplier: json.RawMessage(`{"key":"bnplus","card_id":3}`)},
+			}},
+			{Key: "b", Category: "gift", Items: []Item{
+				{Key: "dup", Supplier: json.RawMessage(`{"key":"bnplus","card_id":4}`)},
+				{Key: "bad", Supplier: json.RawMessage(`{}`)},
+			}},
+		},
+	}
+	locator := NewLocator(document)
+	for _, key := range []string{"a-1", "a-2", "dup", " dup ", "bad", "none"} {
+		want, wantOK := Find(document, key)
+		got, gotOK := locator.Find(key)
+		if gotOK != wantOK || !reflect.DeepEqual(got, want) {
+			t.Errorf("%q: locator %+v %v, Find %+v %v", key, got, gotOK, want, wantOK)
+		}
+	}
+	if got, _ := locator.Find("a-1"); got.Category.Name != "last" || got.CountryName != "أمريكا" || got.Ref.ID != "1" {
+		t.Fatalf("a-1: %+v", got)
+	}
+	if got, _ := locator.Find("dup"); got.Brand.Key != "a" {
+		t.Fatalf("the first of a repeated key: %+v", got.Brand.Key)
 	}
 }

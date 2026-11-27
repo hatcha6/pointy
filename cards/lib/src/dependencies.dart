@@ -12,12 +12,15 @@ import 'data/repositories/auth_repository.dart';
 import 'data/repositories/catalog_repository.dart';
 import 'data/repositories/esim_repository.dart';
 import 'data/repositories/orders_repository.dart';
+import 'features/offers/offers_model.dart';
 import 'data/session/session_store.dart';
 import 'data/settings/app_settings.dart';
 import 'data/vault/card_vault.dart';
 import 'data/vault/code_vault.dart';
 import 'data/vault/esim_vault.dart';
 import 'data/vault/orders_vault.dart';
+import 'data/vault/payer_vault.dart';
+import 'features/checkout/payment_memory.dart';
 import 'features/card_payment/moamalat_client.dart';
 import 'features/links/link_inbox.dart';
 import 'features/my_cards/my_cards_memory.dart';
@@ -36,6 +39,7 @@ class CardsDependencies {
     AppSettings? settings,
     MoamalatClient? moamalat,
     CardVault? cards,
+    PayerVault? payers,
     LinkInbox? links,
     AttributionRepository? attribution,
     Analytics? analytics,
@@ -60,6 +64,7 @@ class CardsDependencies {
        push = push ?? NoPush(),
        moamalat = moamalat ?? MoamalatClient(),
        cards = cards ?? MemoryCardVault(),
+       payerVault = payers ?? MemoryPayerVault(),
        links = links ?? LinkInbox(),
        attribution =
            attribution ??
@@ -73,7 +78,15 @@ class CardsDependencies {
       orders.forget();
       this.esim.forget();
       myCards.forget();
+      offers
+        ..forget()
+        ..refresh();
     });
+    // An order may have used an offer up.
+    orders.changes.addListener(offers.refresh);
+    // A payment that went through is how the next checkout knows how this
+    // customer pays.
+    orders.onPaid = (order) => payments.paid(order);
     // A link's campaign code is taken as the link arrives; a followed
     // campaign's own page opens after it.
     this.links.onOpen ??= this.attribution.openedLink;
@@ -83,6 +96,19 @@ class CardsDependencies {
 
   final EsimRepository esim;
   EsimCompatibility? _esimCompatibility;
+
+  /// How the customer last paid, and the wallets' numbers they paid from.
+  late final PaymentMemory payments = PaymentMemory(
+    payers: payerVault,
+    preferences: preferences,
+  );
+
+  /// The offers the shelf, the brand pages and the checkout show.
+  late final OffersModel offers = OffersModel(
+    api: auth.api,
+    isSignedIn: () => auth.isSignedIn,
+    analytics: analytics,
+  );
 
   /// «كروتي» as it last stood, shown at once on the next visit.
   final MyCardsMemory myCards = MyCardsMemory();
@@ -140,6 +166,7 @@ class CardsDependencies {
       ),
       vault: codeVault,
       cards: SecureCardVault(),
+      payers: SecurePayerVault(),
       esimVault: SecureEsimVault(),
       lock: CodeLock(settings: settings),
       settings: settings,
@@ -173,6 +200,9 @@ class CardsDependencies {
 
   /// Bank cards the customer chose to keep on this phone.
   final CardVault cards;
+
+  /// The wallets' numbers payments went through from ([payments] reads it).
+  final PayerVault payerVault;
 
   /// Links to places in the app (`https://cards.dftr.ly/…`) waiting to open.
   final LinkInbox links;

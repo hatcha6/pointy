@@ -26,6 +26,7 @@ String relayErrorText(AppLocalizations l10n, Object error) {
     'otp_rejected' => l10n.errOtpRejected(attempts),
     'otp_attempts_exceeded' => l10n.errTooManyAttempts,
     'declined' || 'payer_rejected' => l10n.errDeclined,
+    'offer_unavailable' => l10n.errOfferUnavailable,
     'price_changed' => l10n.errPriceChanged(
       formatMoney(l10n, Money.parse(error.body['unit_price'] as String?)),
     ),

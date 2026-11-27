@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -253,5 +254,28 @@ func TestNewAcceptsTheAPIRoot(t *testing.T) {
 	}
 	if !strings.HasPrefix(New(Config{}).baseURL, DefaultBaseURL) {
 		t.Fatal("default base URL")
+	}
+}
+
+func TestACodeDeliveredWithItsPinIsTheCodeAlone(t *testing.T) {
+	for line, want := range map[string]Code{
+		// As fazercards delivered an Apple card (2026-11-24).
+		"XPRCMDHC6W6G6PCJ / PIN: XPRCMDHC6W6G6PCJ":  {Code: "XPRCMDHC6W6G6PCJ"},
+		"XPRCMDHC6W6G6PCJ / PIN: XPRCMDHC6W6G6PCJ ": {Code: "XPRCMDHC6W6G6PCJ"},
+		"AAAA-BBBB-CCCC / PIN: 1234":                {Code: "AAAA-BBBB-CCCC", Serial: "1234"},
+		"AAAA-BBBB-CCCC | Pin Code: 1234":           {Code: "AAAA-BBBB-CCCC", Serial: "1234"},
+		"Code: AAAA-BBBB PIN: 99":                   {Code: "AAAA-BBBB", Serial: "99"},
+		"AAAA-BBBB-CCCC":                            {Code: "AAAA-BBBB-CCCC"},
+		"  AAAA/BBBB  ":                             {Code: "AAAA/BBBB"},
+	} {
+		order, err := ParseOrder(json.RawMessage(`{"id":"o","status":"completed","cards":[` + strconv.Quote(line) + `]}`))
+		if err != nil || len(order.Codes) != 1 || order.Codes[0] != want {
+			t.Errorf("%q: %+v %v, want %+v", line, order.Codes, err, want)
+		}
+	}
+	// The same line in a code field, with no pin of its own.
+	order, _ := ParseOrder(json.RawMessage(`{"cards":[{"code":"XPRCMDHC6W6G6PCJ / PIN: XPRCMDHC6W6G6PCJ"}]}`))
+	if len(order.Codes) != 1 || order.Codes[0] != (Code{Code: "XPRCMDHC6W6G6PCJ"}) {
+		t.Fatalf("object: %+v", order.Codes)
 	}
 }

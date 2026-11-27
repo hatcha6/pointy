@@ -8,6 +8,7 @@ import '../../design/cards_tokens.dart';
 import '../../shared/card_art.dart';
 import '../../shared/tilt_card.dart';
 import '../../shared/container_route.dart';
+import '../../shared/still_image.dart';
 
 /// The brand page's light: the card's own colours, cast like YouTube's
 /// ambient mode around a video. It fills the top of the page behind the
@@ -125,24 +126,30 @@ class AmbientLight extends StatelessWidget {
         child: SizedBox(
           height: height,
           width: double.infinity,
-          child: ShaderMask(
-            blendMode: BlendMode.dstIn,
-            shaderCallback: (rect) => const LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              stops: [0, 0.4, 1],
-              colors: [Colors.white, Color(0x8CFFFFFF), Colors.transparent],
-            ).createShader(rect),
-            child: ClipRect(
-              child: ImageFiltered(
-                imageFilter: ImageFilter.blur(sigmaX: 64, sigmaY: 64),
-                child: LayoutBuilder(
-                  builder: (context, constraints) => OverflowBox(
-                    maxWidth: constraints.maxWidth + _bleed * 2,
-                    maxHeight: constraints.maxHeight + _bleed * 2,
-                    child: ColorFiltered(
-                      colorFilter: _richer,
-                      child: CardArtImage(brand: brand),
+          // The blur, the mask and the colour never change while the light
+          // fades in or scrolls: on the web they are drawn once.
+          child: StillImage(
+            // Blurred to pure colour: a quarter of the sharpness is plenty.
+            resolution: 0.25,
+            child: ShaderMask(
+              blendMode: BlendMode.dstIn,
+              shaderCallback: (rect) => const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                stops: [0, 0.4, 1],
+                colors: [Colors.white, Color(0x8CFFFFFF), Colors.transparent],
+              ).createShader(rect),
+              child: ClipRect(
+                child: ImageFiltered(
+                  imageFilter: ImageFilter.blur(sigmaX: 64, sigmaY: 64),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) => OverflowBox(
+                      maxWidth: constraints.maxWidth + _bleed * 2,
+                      maxHeight: constraints.maxHeight + _bleed * 2,
+                      child: ColorFiltered(
+                        colorFilter: _richer,
+                        child: CardArtImage(brand: brand),
+                      ),
                     ),
                   ),
                 ),
@@ -170,6 +177,9 @@ class BrandCardStage extends StatelessWidget {
   final CardBrand brand;
   final double width;
   final Animation<double> light;
+
+  /// How far the pool's blur (σ 22) reaches past its art: three sigmas.
+  static const double _poolBleed = 66;
 
   static const EdgeInsets padding = EdgeInsets.only(
     top: CardsSpace.sm,
@@ -202,11 +212,13 @@ class BrandCardStage extends StatelessWidget {
             children: [
               // The pool: the art, smaller, lower and blurred to nothing at
               // its edges (decal), spreading out from under the card.
+              // Grown by the blur's reach ([_poolBleed]) on every side, so a
+              // still image of it keeps the blur's soft edge whole.
               Positioned.fill(
-                top: height * 0.18,
-                bottom: -height * 0.14,
-                left: width * 0.06,
-                right: width * 0.06,
+                top: height * 0.18 - _poolBleed,
+                bottom: -height * 0.14 - _poolBleed,
+                left: width * 0.06 - _poolBleed,
+                right: width * 0.06 - _poolBleed,
                 child: IgnorePointer(
                   child: AnimatedBuilder(
                     animation: light,
@@ -220,15 +232,24 @@ class BrandCardStage extends StatelessWidget {
                         ),
                       ),
                     ),
-                    child: ImageFiltered(
-                      imageFilter: ImageFilter.blur(
-                        sigmaX: 22,
-                        sigmaY: 22,
-                        tileMode: TileMode.decal,
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(CardsRadii.tile),
-                        child: CardArtImage(brand: brand),
+                    // Still as it fades, rises and grows: drawn once.
+                    child: StillImage(
+                      resolution: 0.5,
+                      child: Padding(
+                        padding: const EdgeInsets.all(_poolBleed),
+                        child: ImageFiltered(
+                          imageFilter: ImageFilter.blur(
+                            sigmaX: 22,
+                            sigmaY: 22,
+                            tileMode: TileMode.decal,
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(
+                              CardsRadii.tile,
+                            ),
+                            child: CardArtImage(brand: brand),
+                          ),
+                        ),
                       ),
                     ),
                   ),

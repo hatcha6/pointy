@@ -1,5 +1,6 @@
 import { Search, Smartphone, Users, BellRing } from "lucide-react";
-import { useRouter, useSearchParam, useSearchText } from "../../lib/router";
+import { useRouter, useSearchParam, useSearchText, useSetSearch } from "../../lib/router";
+import { segmentInfo, segmentLabel, segmentOrder, type SegmentKey } from "../../lib/segments";
 import { cardPlatform, useCardCustomers, useCardSummary, type CardCustomer } from "../../lib/cards";
 import { count } from "../../lib/format";
 import { label } from "../../lib/labels";
@@ -22,9 +23,11 @@ export function Customers() {
   const { text, setText, settled: query } = useSearchText();
   const [segment, setSegment] = useSearchParam("segment");
   const [pageParam, setPage] = useSearchParam("page");
+  const [rfm] = useSearchParam("rfm");
+  const setSearch = useSetSearch();
   const page = Math.max(0, Number(pageParam) || 0);
   const summary = useCardSummary();
-  const customers = useCardCustomers({ q: query.trim(), segment, limit: String(PAGE), offset: String(page * PAGE) });
+  const customers = useCardCustomers({ q: query.trim(), segment, rfm, limit: String(PAGE), offset: String(page * PAGE) });
   const stats = summary.data?.stats;
   const total = customers.data?.total ?? 0;
 
@@ -43,6 +46,12 @@ export function Customers() {
           sub={<>انضم <TimeAgo value={c.created_at} /></>}
         />
       ),
+    },
+    {
+      key: "rfm",
+      header: "الشريحة",
+      cell: (c) =>
+        c.rfm && c.rfm in segmentInfo ? <Badge tone={segmentInfo[c.rfm as SegmentKey].tone}>{segmentLabel(c.rfm)}</Badge> : <span className="muted">—</span>,
     },
     {
       key: "orders",
@@ -124,6 +133,19 @@ export function Customers() {
               { id: "deleted", label: "حذفوا حساباتهم" },
             ]}
           />
+          <select
+            className="select toolbar-select"
+            aria-label="الشريحة"
+            value={rfm.includes(",") ? "" : rfm}
+            onChange={(e) => setSearch({ rfm: e.target.value, page: "" })}
+          >
+            <option value="">{rfm.includes(",") ? rfm.split(",").map(segmentLabel).join(" + ") : "كل الشرائح"}</option>
+            {segmentOrder.map((key) => (
+              <option key={key} value={key}>
+                {segmentInfo[key].label}
+              </option>
+            ))}
+          </select>
         </div>
         {customers.isError ? (
           <Unavailable feature="customers" error={customers.error} onRetry={() => void customers.refetch()} />

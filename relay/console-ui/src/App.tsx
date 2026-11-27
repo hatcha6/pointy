@@ -44,6 +44,9 @@ const CardReports = lazy(() => import("./pages/cards/Reports").then((m) => ({ de
 const CardCampaigns = lazy(() => import("./pages/cards/Campaigns").then((m) => ({ default: m.Campaigns })));
 const CardShelf = lazy(() => import("./pages/cards/Shelf").then((m) => ({ default: m.Shelf })));
 const CardEsimPromos = lazy(() => import("./pages/cards/EsimPromos").then((m) => ({ default: m.EsimPromos })));
+const CardSegments = lazy(() => import("./pages/cards/Segments").then((m) => ({ default: m.Segments })));
+const CardOfferBuilder = lazy(() => import("./pages/cards/OfferBuilder").then((m) => ({ default: m.OfferBuilder })));
+const CardOffers = lazy(() => import("./pages/cards/Offers").then((m) => ({ default: m.Offers })));
 const CardNotifications = lazy(() => import("./pages/cards/Notifications").then((m) => ({ default: m.Notifications })));
 const Ledger = lazy(() => import("./pages/Ledger").then((m) => ({ default: m.Ledger })));
 
@@ -126,6 +129,12 @@ function Page({ path }: { path: string }) {
       return <CardEsimPromos />;
     case "/cards/campaigns":
       return <CardCampaigns />;
+    case "/cards/segments":
+      return <CardSegments />;
+    case "/cards/offers":
+      return <CardOffers />;
+    case "/cards/offers/new":
+      return <CardOfferBuilder />;
     default:
       return (
         <Card>
@@ -159,7 +168,7 @@ export function App() {
   }, [me.data]);
 
   useEffect(() => {
-    const name = pageTitles[path] ?? (path === "/catalog/edit" ? "تعديل الكتالوج" : path.startsWith("/shops/") ? "متجر" : path.startsWith("/topups/") ? "عملية شحن" : path.startsWith("/cards/customers/") ? "زبون" : "");
+    const name = pageTitles[path] ?? (path === "/catalog/edit" ? "تعديل الكتالوج" : path === "/cards/offers/new" ? "عرض جديد" : path.startsWith("/shops/") ? "متجر" : path.startsWith("/topups/") ? "عملية شحن" : path.startsWith("/cards/customers/") ? "زبون" : "");
     setPageTitle(name ? `${name} — دفتر` : "دفتر — لوحة التشغيل");
   }, [path]);
 

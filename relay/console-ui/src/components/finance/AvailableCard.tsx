@@ -3,7 +3,7 @@ import { AlertTriangle, ChevronDown, Info, PiggyBank } from "lucide-react";
 import { Button, Money, Notice, Skeleton } from "../ui";
 import { Link } from "../../lib/router";
 import { count, money } from "../../lib/format";
-import { libyaDay, serviceCategory, trackedLinks, useFinancePosition, type FinancePosition } from "../../lib/finance";
+import { libyaDay, serviceCategory, trackedLinks, useFinancePosition, usdRateNote, type FinancePosition } from "../../lib/finance";
 
 /** The ledger since the first day, for one kind of line. */
 const allTime = (direction: string) => `/ledger?direction=${direction}&period=custom&from=2020-01-01&to=${libyaDay()}`;
@@ -216,10 +216,10 @@ function Steps({ data }: { data: FinancePosition }) {
             </span>
           </li>
         )}
-        {data.usd_rate.rate && (
+        {usdRateNote(data.usd_rate) && (
           <li>
             <Info width={14} />
-            <span>تكاليف الدولار محوّلة بسعر اليوم ({money(Number(data.usd_rate.rate).toFixed(3))}) — تقدير.</span>
+            <span>{usdRateNote(data.usd_rate)}</span>
           </li>
         )}
       </ul>

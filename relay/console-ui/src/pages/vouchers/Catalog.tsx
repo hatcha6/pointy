@@ -16,7 +16,16 @@ import { PageHeader } from "../../components/PageHeader";
 import { PublishCatalogDialog } from "./PublishCatalog";
 
 export function useCatalog() {
-  return useQuery({ queryKey: ["vouchers", "catalog"], queryFn: () => api.get<CatalogAnswer>("/v1/vouchers/admin/catalog"), retry: false, staleTime: 60_000 });
+  // Kept for half an hour: coming back to a catalog page shows it at once
+  // while it is asked for again, and asked again it is mostly a 304 (the
+  // relay tags it by its content), so nothing is downloaded.
+  return useQuery({
+    queryKey: ["vouchers", "catalog"],
+    queryFn: () => api.get<CatalogAnswer>("/v1/vouchers/admin/catalog"),
+    retry: false,
+    staleTime: 60_000,
+    gcTime: 30 * 60_000,
+  });
 }
 
 /** What the company pays for an item: the cost at the supplier it is bought from now. */

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pointy_brand/pointy_brand.dart';
 
+import '../../data/models/offer.dart';
+import '../offers/offer_text.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../core/money.dart';
 import '../../core/phone.dart';
@@ -18,6 +20,7 @@ import '../../shared/relay_error_text.dart';
 import '../orders/order_progress_page.dart';
 import 'checkout_model.dart';
 import 'payer_dialog.dart';
+import 'payment_memory.dart';
 import '../../shared/haptics.dart';
 import '../../shared/shake.dart';
 import '../../core/analytics/analytics.dart';
@@ -46,7 +49,7 @@ Future<void> showCheckout(
     brand: brand,
     item: item,
     quantity: quantity,
-    preferences: dependencies.preferences,
+    payments: dependencies.payments,
     account: account,
     orderAccount: orderAccount,
   )..load();
@@ -141,8 +144,14 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
       routeSettings: screenSettings('payment_method'),
       useSafeArea: true,
       isScrollControlled: true,
-      builder: (context) =>
-          _MethodPicker(methods: options.methods, selected: model.method),
+      builder: (context) => _MethodPicker(
+        methods: options.methods,
+        selected: model.method,
+        saved: {
+          for (final payer in CardsScope.of(context).payments.saved)
+            payer.method: payer.masked,
+        },
+      ),
     );
     if (chosen != null) {
       model.choose(chosen);
@@ -153,25 +162,17 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
     if (model.busy) {
       return;
     }
-    var payer = '';
-    var birthYear = '';
-    if (model.needsPayerDetails) {
-      final session = CardsScope.of(context).auth.session.value;
-      final details = await showPayerDialog(
-        context,
-        method: model.method!,
-        amount: model.toPay,
-        phone: session == null
-            ? ''
-            : LibyanPhone.display(session.phone.replaceFirst('218', '')),
-      );
+    // Asked only for a wallet with no number kept: one the payer paid from
+    // before pays at once (its own code still confirms it).
+    PayerDetails? details;
+    if (model.mustAskPayer) {
+      details = await _askPayer();
       if (details == null || !mounted) {
         return;
       }
-      (payer, birthYear) = details;
     }
     Haptics.tap();
-    final order = await model.pay(payer: payer, birthYear: birthYear);
+    final order = await model.pay(payer: details);
     if (!mounted) {
       return;
     }
@@ -189,6 +190,29 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
       return;
     }
     _handOver(order);
+  }
+
+  /// The wallet's number, typed: from the one kept (to change it), else the
+  /// account's own phone.
+  Future<PayerDetails?> _askPayer({PayerDetails? from}) {
+    final session = CardsScope.of(context).auth.session.value;
+    return showPayerDialog(
+      context,
+      method: model.method!,
+      amount: model.toPay,
+      initial: from,
+      phone: session == null
+          ? ''
+          : LibyanPhone.display(session.phone.replaceFirst('218', '')),
+    );
+  }
+
+  Future<void> _changePayer() async {
+    final details = await _askPayer(from: model.payer);
+    if (details != null && mounted) {
+      Haptics.select();
+      model.choosePayer(details);
+    }
   }
 
   /// The order page takes every order the sheet is done with, however it
@@ -352,6 +376,46 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
                           color: CardsTheme.link(theme),
                         ),
                       ),
+              ),
+            if (model.needsPayerDetails)
+              if (model.payer case final payer?)
+                PayerRow(payer: payer, method: method!, onChange: _changePayer),
+            if (model.availableOffer case final offer?)
+              SwitchListTile(
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: CardsSpace.lg,
+                ),
+                secondary: Icon(
+                  offer.forEveryone
+                      ? Icons.local_offer_rounded
+                      : Icons.card_giftcard_rounded,
+                  color: const Color(0xFFD92D20),
+                ),
+                value: model.useOffer,
+                onChanged: (value) {
+                  Haptics.select();
+                  model.setUseOffer(value);
+                },
+                title: Text(offer.title, style: theme.textTheme.titleSmall),
+                subtitle: Text(
+                  l10n.offerSaves(
+                    formatMoney(l10n, offer.discountOn(model.line)),
+                  ),
+                ),
+              ),
+            if (_nudge(context) case (final offer, final nudge))
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: CardsSpace.lg,
+                ),
+                leading: Icon(
+                  Icons.trending_up_rounded,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                title: Text(nudge.text, style: theme.textTheme.titleSmall),
+                subtitle: model.availableOffer == offer
+                    ? null
+                    : Text(offer.title),
               ),
             if (model.credit.isPositive)
               SwitchListTile(
@@ -526,6 +590,23 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
 /// «إلى»: the account a top-up goes to, as the relay will read it, with
 /// what the game said of it (the player's name, or that there is no such
 /// account), or a word to check it when it cannot be looked up.
+extension on _CheckoutSheetState {
+  /// A nudge to a better deal on this order: one more card for a bundle, a
+  /// little more for the next tier, an offer's minimum. Told once to
+  /// analytics.
+  (CardOffer, ({String text, String kind}))? _nudge(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final model = widget.model;
+    for (final offer in model.coveringOffers) {
+      if (offerNudge(l10n, offer, model.line) case final nudge?) {
+        model.nudgeShown(offer, nudge.kind);
+        return (offer, nudge);
+      }
+    }
+    return null;
+  }
+}
+
 class _AccountRow extends StatelessWidget {
   const _AccountRow({required this.account, required this.onEdit});
 
@@ -648,10 +729,17 @@ class _AccountRow extends StatelessWidget {
 }
 
 class _MethodPicker extends StatelessWidget {
-  const _MethodPicker({required this.methods, required this.selected});
+  const _MethodPicker({
+    required this.methods,
+    required this.selected,
+    this.saved = const {},
+  });
 
   final List<PaymentMethod> methods;
   final PaymentMethod? selected;
+
+  /// Each wallet's number kept, by its method, as it may be shown.
+  final Map<String, String> saved;
 
   @override
   Widget build(BuildContext context) {
@@ -678,6 +766,7 @@ class _MethodPicker extends StatelessWidget {
                 for (final method in methods)
                   MethodRow(
                     method: method,
+                    detail: saved[method.key],
                     selected: method.key == selected?.key,
                     onTap: () {
                       Haptics.select();
@@ -727,7 +816,9 @@ class _Totals extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: CardsSpace.xs),
       child: Column(
         children: [
-          line(l10n.lineSubtotal, model.total),
+          line(l10n.lineSubtotal, model.subtotal),
+          if (model.discount.isPositive)
+            line(l10n.lineDiscount, model.discount, negative: true),
           if (model.creditApplied.isPositive)
             line(l10n.lineCredit, model.creditApplied, negative: true),
           if (model.fee.isPositive) line(l10n.lineFee, model.fee),

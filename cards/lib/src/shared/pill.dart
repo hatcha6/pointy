@@ -5,7 +5,7 @@ import '../../l10n/generated/app_localizations.dart';
 import '../data/models/catalog.dart';
 import '../design/cards_tokens.dart';
 
-enum PillTone { promo, muted, info, success, warning, danger, web }
+enum PillTone { promo, offer, muted, info, success, warning, danger, web }
 
 /// A small capsule label: a badge on a card, an order's status.
 class Pill extends StatelessWidget {
@@ -29,6 +29,9 @@ class Pill extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final (background, foreground) = switch (tone) {
       PillTone.promo => (PointyColors.accentAmber, PointyColors.ink),
+      // An offer the operator made: a warm red that reads as a deal on any
+      // card art, apart from the catalog's own amber promotions.
+      PillTone.offer => (const Color(0xFFD92D20), Colors.white),
       PillTone.muted => (const Color(0xCC101828), Colors.white),
       PillTone.info => (scheme.primaryContainer, scheme.onPrimaryContainer),
       PillTone.success => (
@@ -59,10 +62,16 @@ class Pill extends StatelessWidget {
             SizedBox.square(dimension: 13, child: leading),
             const SizedBox(width: 4),
           ],
-          Text(
-            text,
-            style: Theme.of(context).textTheme.labelSmall
-                ?.copyWith(color: foreground, fontWeight: FontWeight.w700),
+          // Within a narrow corner the words end in an ellipsis rather than
+          // spilling into the other corner's badge.
+          Flexible(
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelSmall
+                  ?.copyWith(color: foreground, fontWeight: FontWeight.w700),
+            ),
           ),
         ],
       ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 import 'package:pointy_cards/dev/cards_fixtures.dart';
 import 'package:pointy_cards/src/app.dart';
 import 'package:pointy_cards/src/features/account/account_page.dart';
@@ -201,6 +202,34 @@ void main() {
     expect(find.byType(MyCardsPage), findsOneWidget);
   });
 
+  testWidgets('started on a card while the catalog is still on its way: the '
+      'card waits for its brand, and has its redeem button (the web app, '
+      'reloaded on /my-cards/<id>, showed it without)', (tester) async {
+    await phone(tester);
+    final links = LinkInbox(
+      initial: CardsLink.parse(Uri.parse('/my-cards/order-1')),
+    );
+    await tester.pumpWidget(
+      CardsApp(
+        dependencies: fixtureDependencies(
+          links: links,
+          client: _SlowCatalog(fixtureRelay()),
+        ),
+      ),
+    );
+    // The card is never on screen without its brand's redeem button.
+    final end = _SlowCatalog.takes + const Duration(milliseconds: 400);
+    for (var t = Duration.zero; t < end; t += _tick) {
+      await tester.pump(_tick);
+      if (find.byType(RevealPage).evaluate().isNotEmpty) {
+        expect(find.text('اشحن الآن'), findsOneWidget, reason: 'at $t');
+      }
+    }
+    await tester.pumpAndSettle();
+    expect(find.byType(RevealPage), findsOneWidget);
+    expect(find.text('اشحن الآن'), findsOneWidget);
+  });
+
   testWidgets('a brand no longer sold opens the shelf', (tester) async {
     await openApp(tester, '/brand/gone');
     expect(find.byType(BrandPage), findsNothing);
@@ -244,4 +273,22 @@ void main() {
       expect(find.byType(BrandPage), findsOneWidget);
     });
   });
+}
+
+const _tick = Duration(milliseconds: 200);
+
+/// The fixture relay, with the catalog slow to come, as on a first web load.
+class _SlowCatalog extends http.BaseClient {
+  _SlowCatalog(this.inner);
+
+  static const takes = Duration(seconds: 2);
+  final http.Client inner;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    if (request.url.path == '/v1/customers/catalog') {
+      await Future<void>.delayed(takes);
+    }
+    return inner.send(request);
+  }
 }

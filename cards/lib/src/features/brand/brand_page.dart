@@ -4,6 +4,7 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:pointy_brand/pointy_brand.dart';
 
+import '../offers/offer_pill.dart';
 import '../../../l10n/generated/app_localizations.dart';
 import '../../core/money.dart';
 import '../../data/models/account_target.dart';
@@ -291,6 +292,7 @@ class _BrandPageState extends State<BrandPage> {
             Pill(text: brand.badge, tone: PillTone.promo),
         ],
       ),
+      if (!brand.webOnly) OfferBanner(brand: brand),
       if (countries.length > 1) ...[
         const SizedBox(height: CardsSpace.xl),
         Text(l10n.chooseCountry, style: theme.textTheme.titleLarge),
@@ -389,6 +391,7 @@ class _BrandPageState extends State<BrandPage> {
                   SizedBox(
                     width: tileWidth,
                     child: _ValueTile(
+                      brand: brand,
                       item: option,
                       named: named,
                       selected: option.key == item?.key,
@@ -847,11 +850,13 @@ class _ChoiceChip extends StatelessWidget {
 class _ValueTile extends StatelessWidget {
   const _ValueTile({
     this.named = false,
+    required this.brand,
     required this.item,
     required this.selected,
     required this.onTap,
   });
 
+  final CardBrand brand;
   final CardItem item;
   final bool selected;
   final VoidCallback? onTap;
@@ -947,6 +952,7 @@ class _ValueTile extends StatelessWidget {
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
+                if (!unavailable) ItemOfferPrice(brand: brand, item: item),
               ],
             ),
           ),
