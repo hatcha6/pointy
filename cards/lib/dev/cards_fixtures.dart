@@ -22,6 +22,7 @@ import '../src/dependencies.dart';
 import '../src/features/card_payment/moamalat_client.dart';
 import '../src/features/links/link_inbox.dart';
 import 'preview_scenarios.dart';
+import '../src/features/runner/runner_audio.dart';
 import '../src/core/analytics/analytics.dart';
 
 const fixtureSession = CustomerSession(
@@ -754,6 +755,41 @@ http.Client fixtureRelay({
       }
       return json({'campaign': fixtureCampaign});
     }
+    // The waiting game's shared board: a handful of players, the customer
+    // 23rd on the week's board and in the top on all time.
+    if (request.method == 'POST' && path == '/v1/customers/me/runner') {
+      return json({'best': true});
+    }
+    if (request.method == 'GET' && path == '/v1/customers/runner/leaderboard') {
+      final week = request.url.queryParameters['period'] != 'all';
+      const names = [
+        'الصقر الذهبي',
+        'الفهد السريع',
+        'الغزال الوثّاب',
+        'النمر الجريء',
+        'الذئب الهادئ',
+        'النسر اللامع',
+        'الدلفين المرح',
+        'الثعلب الذكي',
+      ];
+      return json({
+        'period': week ? '2026-W48' : 'all',
+        'entries': [
+          for (var i = 0; i < names.length; i++)
+            {
+              'rank': i + 1,
+              'name': names[i],
+              'score': (week ? 2400 : 6100) - i * (week ? 230 : 610),
+              'me': !week && i == 4,
+            },
+        ],
+        'me': {
+          'rank': week ? 23 : 5,
+          'name': 'الذئب الهادئ',
+          'score': week ? 640 : 3660,
+        },
+      });
+    }
     if (request.method == 'PUT' && path == '/v1/customers/me/attribution') {
       final sent = jsonDecode(request.body) as Map<String, dynamic>;
       return json({
@@ -1143,6 +1179,7 @@ CardsDependencies fixtureDependencies({
   EsimVault? esimVault,
   OrdersVault? ordersVault,
   CodeVault? codeVault,
+  RunnerAudio? runnerAudio,
 }) {
   final sessions = MemorySessionStore(signedIn ? fixtureSession : null);
   final base = shelfRelay ?? Uri.parse('https://relay.preview');
@@ -1194,6 +1231,7 @@ CardsDependencies fixtureDependencies({
     analytics: analytics,
     push: push ?? FixturePush(),
     esimVault: esimVault,
+    runnerAudio: runnerAudio,
   );
 }
 

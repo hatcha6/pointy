@@ -13,10 +13,12 @@ class CardCatalog {
     required this.categories,
     required this.countries,
     required this.brands,
+    this.partial = false,
   });
 
   factory CardCatalog.fromJson(Map<String, dynamic> json) => CardCatalog(
     version: readString(json, 'version'),
+    partial: readBool(json, 'partial'),
     channel: readString(json, 'channel'),
     testMode: readBool(json, 'test_mode'),
     categories: [
@@ -50,6 +52,10 @@ class CardCatalog {
   final List<CardCategory> categories;
   final List<CardCountry> countries;
   final List<CardBrand> brands;
+
+  /// Only the first part of the shelf (what the home screen shows first),
+  /// shown on a first launch while the whole shelf is still arriving.
+  final bool partial;
 
   CardBrand? brand(String key) {
     for (final brand in brands) {

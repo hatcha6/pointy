@@ -1444,6 +1444,86 @@ ALTER TABLE relay_channel_targets ADD COLUMN IF NOT EXISTS install_hour integer;
 ALTER TABLE relay_channel_targets ADD COLUMN IF NOT EXISTS install_date text NOT NULL DEFAULT '';
 `,
 	},
+	{
+		version: 50,
+		name:    "supplier fundings: what the dollars at each supplier cost",
+		sql: `
+-- Every top-up of a dollar supplier (FazerCards, Reloadly, eSIM Access): dinars
+-- paid, dollars that arrived, the bank rate that day. The dollar rate cards are
+-- priced at reads it (FX_FUNDING_PLAN.md). Never edited: a mistake is voided.
+CREATE TABLE IF NOT EXISTS relay_supplier_fundings (
+	id text PRIMARY KEY,
+	supplier text NOT NULL,
+	usd numeric(18,4) NOT NULL CHECK (usd > 0),
+	lyd numeric(18,3) NOT NULL CHECK (lyd > 0),
+	method text NOT NULL DEFAULT 'other',
+	reference text NOT NULL DEFAULT '',
+	market_rate numeric(12,4),
+	note text NOT NULL DEFAULT '',
+	actor text NOT NULL DEFAULT '',
+	funded_at timestamptz NOT NULL,
+	created_at timestamptz NOT NULL,
+	voided_at timestamptz,
+	void_reason text NOT NULL DEFAULT '',
+	void_actor text NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS relay_supplier_fundings_supplier_idx
+	ON relay_supplier_fundings (supplier, funded_at DESC);
+`,
+	},
+	{
+		version: 51,
+		name:    "mcp grants: Claude connectors' read-only access",
+		sql: `
+-- One Claude connector's access to /mcp (control/mcp_grants.go). Hashes only.
+CREATE TABLE IF NOT EXISTS relay_mcp_grants (
+	id text PRIMARY KEY,
+	name text NOT NULL,
+	kind text NOT NULL,
+	client_id text NOT NULL DEFAULT '',
+	redirect_uri text NOT NULL DEFAULT '',
+	scope text NOT NULL,
+	granted_by_id text NOT NULL,
+	granted_by text NOT NULL,
+	code_hash text,
+	code_challenge text NOT NULL DEFAULT '',
+	code_expires_at timestamptz,
+	access_hash text,
+	access_expires_at timestamptz,
+	refresh_hash text,
+	refresh_expires_at timestamptz,
+	previous_refresh_hash text,
+	created_at timestamptz NOT NULL,
+	last_used_at timestamptz,
+	revoked_at timestamptz,
+	revoked_by text NOT NULL DEFAULT ''
+);
+CREATE UNIQUE INDEX IF NOT EXISTS relay_mcp_grants_code_idx ON relay_mcp_grants (code_hash) WHERE code_hash IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS relay_mcp_grants_access_idx ON relay_mcp_grants (access_hash) WHERE access_hash IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS relay_mcp_grants_refresh_idx ON relay_mcp_grants (refresh_hash) WHERE refresh_hash IS NOT NULL;
+CREATE INDEX IF NOT EXISTS relay_mcp_grants_previous_idx ON relay_mcp_grants (previous_refresh_hash) WHERE previous_refresh_hash IS NOT NULL;
+`,
+	},
+	{
+		version: 52,
+		name:    "runner scores: the cards app's waiting-game leaderboard",
+		sql: `
+-- Each customer's best run of the waiting game (control/runner_scores.go),
+-- once for all time (period 'all') and once per Libyan ISO week
+-- ('2026-W48'). Goes with the customer's account.
+CREATE TABLE IF NOT EXISTS relay_runner_scores (
+	customer_id text NOT NULL REFERENCES relay_customers(id) ON DELETE CASCADE,
+	period text NOT NULL,
+	score integer NOT NULL CHECK (score >= 0),
+	coins integer NOT NULL DEFAULT 0,
+	seconds integer NOT NULL DEFAULT 0,
+	updated_at timestamptz NOT NULL,
+	PRIMARY KEY (customer_id, period)
+);
+CREATE INDEX IF NOT EXISTS relay_runner_scores_board_idx
+	ON relay_runner_scores (period, score DESC, updated_at);
+`,
+	},
 }
 
 // migrationsAdvisoryLockKey serializes concurrent migrators (e.g. autoscaled

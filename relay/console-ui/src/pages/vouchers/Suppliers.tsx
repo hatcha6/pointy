@@ -1,7 +1,7 @@
 import { useDeferredValue, useMemo, useState } from "react";
 import { Unavailable } from "../../components/Unavailable";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeftRight, CalendarClock, Landmark, RefreshCw, Search, Settings2, Telescope, TriangleAlert, Trophy, Truck, Wallet } from "lucide-react";
+import { ArrowLeftRight, CalendarClock, CircleDollarSign, Landmark, RefreshCw, Search, Settings2, Telescope, TriangleAlert, Trophy, Truck, Wallet } from "lucide-react";
 import { api, qs } from "../../lib/api";
 import { useSearchParam } from "../../lib/router";
 import { folded, matcher, matches } from "../../lib/search";
@@ -17,8 +17,9 @@ import { ConfigList, testOrLive, yesNo } from "../../components/ConfigList";
 import { useAction } from "../../components/guarded";
 import { useToast } from "../../components/toast";
 import { useCatalog } from "./Catalog";
+import { DollarTab } from "./Dollar";
 
-type Tab = "offers" | "compare" | "balances" | "bnplus" | "config";
+type Tab = "offers" | "compare" | "balances" | "dollar" | "bnplus" | "config";
 
 export function Suppliers() {
   const [tab, setTab] = useSearchParam("tab");
@@ -33,6 +34,7 @@ export function Suppliers() {
           { id: "offers", label: "العروض", icon: <Truck width={16} /> },
           { id: "compare", label: "المقارنة", icon: <ArrowLeftRight width={16} /> },
           { id: "balances", label: "الأرصدة", icon: <Landmark width={16} /> },
+          { id: "dollar", label: "الدولار والتمويل", icon: <CircleDollarSign width={16} /> },
           { id: "bnplus", label: "مستكشف BN Plus", icon: <Telescope width={16} /> },
           { id: "config", label: "الإعداد", icon: <Settings2 width={16} /> },
         ]}
@@ -40,6 +42,7 @@ export function Suppliers() {
       {current === "offers" && <OffersTab />}
       {current === "compare" && <CompareTab />}
       {current === "balances" && <BalancesTab />}
+      {current === "dollar" && <DollarTab />}
       {current === "bnplus" && <BNPlusTab />}
       {current === "config" && <ConfigTab />}
     </>

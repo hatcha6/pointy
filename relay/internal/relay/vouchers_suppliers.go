@@ -351,7 +351,7 @@ func balanceReason(
 	}
 	funds, ok := balance, true
 	if strings.EqualFold(currency, "USD") {
-		funds, ok = settings.USDToLYD(balance)
+		funds, ok = settings.USDToLYDFrom(offer.Supplier, balance)
 	}
 	if !ok || cost.Cmp(funds) <= 0 {
 		return ""
@@ -394,7 +394,8 @@ func offerCostLYD(offer control.VoucherOffer, settings vouchers.Settings) (*big.
 	case "", "LYD":
 		return price, ""
 	case "USD":
-		if cost, ok := settings.USDToLYD(price); ok {
+		// At the rate of the dollars this supplier holds for us (vouchers/fx.go).
+		if cost, ok := settings.USDToLYDFrom(offer.Supplier, price); ok {
 			return cost, ""
 		}
 		return nil, "rate_unset: the supplier prices in USD and the dollar rate is not set " +

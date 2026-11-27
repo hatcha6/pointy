@@ -2067,4 +2067,106 @@ class AppLocalizationsAr extends AppLocalizations {
 
   @override
   String get esimShareDestination => 'مشاركة';
+
+  @override
+  String get waitPlayTitle => 'يأخذ وقتاً أطول من المعتاد';
+
+  @override
+  String get runnerTapToJump => 'اضغط للقفز';
+
+  @override
+  String get runnerHoldHint => 'اضغط مطوّلاً لقفزة أعلى';
+
+  @override
+  String get runnerOver => 'انتهت الجولة';
+
+  @override
+  String get runnerNewBest => 'رقم قياسي جديد!';
+
+  @override
+  String runnerBest(String score) {
+    return 'الأفضل $score';
+  }
+
+  @override
+  String get runnerTapAgain => 'اضغط للعب مجدداً';
+
+  @override
+  String get runnerPaused => 'متوقفة مؤقتاً · اضغط للمتابعة';
+
+  @override
+  String get runnerUnlocked => 'فتحت شخصية جديدة!';
+
+  @override
+  String get runnerArrived => 'وصل طلبك!';
+
+  @override
+  String get runnerShowOrder => 'اعرضه الآن';
+
+  @override
+  String get runnerKeepPlaying => 'أكمل الجولة';
+
+  @override
+  String get runnerScoresTitle => 'أفضل نتائجك';
+
+  @override
+  String get runnerStatRuns => 'الجولات';
+
+  @override
+  String get runnerStatCoins => 'العملات';
+
+  @override
+  String get runnerStatBest => 'الأفضل';
+
+  @override
+  String get runnerNoRuns => 'لا نتائج بعد. أول جولة تبدأ بضغطة.';
+
+  @override
+  String get runnerCharacters => 'اختر شخصيتك';
+
+  @override
+  String runnerUnlockAt(String score) {
+    return 'عند $score';
+  }
+
+  @override
+  String get runnerCredit => 'الرسوم والأصوات: Kenney.nl';
+
+  @override
+  String get runnerSoundOn => 'تشغيل الصوت';
+
+  @override
+  String get runnerSoundOff => 'كتم الصوت';
+
+  @override
+  String get runnerGameLabel => 'لعبة قفز أثناء الانتظار. اضغط للقفز.';
+
+  @override
+  String runnerScore(String score) {
+    return 'النتيجة $score';
+  }
+
+  @override
+  String get waitPlayBody => 'يظهر هنا فور وصوله، أو تجده لاحقاً في «كروتي».';
+
+  @override
+  String get runnerTabMine => 'نتائجك';
+
+  @override
+  String get runnerTabWeek => 'هذا الأسبوع';
+
+  @override
+  String get runnerTabAll => 'كل الأوقات';
+
+  @override
+  String get runnerYou => 'أنت';
+
+  @override
+  String get runnerBoardEmpty => 'لا أحد في القائمة بعد. كن الأول!';
+
+  @override
+  String get runnerBoardFailed => 'تعذّر تحميل القائمة.';
+
+  @override
+  String get runnerBoardNames => 'تظهر باسم مستعار، لا برقمك.';
 }

@@ -44,6 +44,7 @@ import (
 //	GET  /v1/vouchers/admin/bnplus/{wallets|groups|companies|cards|orders|order}
 //	GET  /v1/vouchers/admin/reloadly/balance      the company's gift card balance at Reloadly (USD)
 //	GET  /v1/vouchers/admin/fazer/account         the company's FazerCards account: balance (USD) and plan
+//	.../v1/vouchers/admin/fx...                    the funding-aware dollar rate and the top-up ledger (fx_funding.go)
 //	POST /v1/vouchers/admin/accounts/check        look up an account a card is sent to {item, account}
 //	.../v1/vouchers/admin/stock...                 the company's own card stock (vouchers_stock.go)
 
@@ -115,6 +116,8 @@ func (s HTTPServer) handleVoucherAdminRoutes(w http.ResponseWriter, r *http.Requ
 		s.handleVoucherAdminFazer(w, r)
 	case path == "/fazer/webhook" && (r.Method == http.MethodGet || r.Method == http.MethodPost):
 		s.handleVoucherAdminFazerWebhook(w, r)
+	case path == "/fx" || strings.HasPrefix(path, "/fx/"):
+		s.handleVoucherAdminFX(w, r, store, strings.TrimPrefix(path, "/fx"))
 	case path == "/accounts/check" && r.Method == http.MethodPost:
 		s.handleVoucherAdminAccountCheck(w, r, store)
 	default:

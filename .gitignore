@@ -56,3 +56,4 @@ relay/console-ui/tsconfig.tsbuildinfo
 
 # Local design archives (screenshots, notes, restorable mock patches)
 /ui/restaurant-ordering/
+tmp-shots/

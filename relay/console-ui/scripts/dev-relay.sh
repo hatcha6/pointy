@@ -25,6 +25,14 @@ if [ "${1:-}" = "invite" ]; then
   exit
 fi
 
+# A static read-only token for the Claude connector at /mcp (claude.ai itself
+# connects with OAuth and needs a public https URL).
+if [ "${1:-}" = "mcp-token" ]; then
+  POINTY_RELAY_CONTROL_URL="http://127.0.0.1:$PORT" POINTY_RELAY_ADMIN_TOKEN="$TOKEN" \
+    POINTY_RELAY_ALLOW_INSECURE_CONTROL=true go run ./cmd/pointy-relay mcp token --name "${2:-local agent}" --days "${3:-7}"
+  exit
+fi
+
 sql() {
   if command -v psql >/dev/null; then psql "$PG/postgres" "$@"; else docker exec -i pointy-postgres-1 psql -U postgres "$@"; fi
 }

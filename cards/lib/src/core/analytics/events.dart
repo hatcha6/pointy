@@ -113,6 +113,24 @@ extension CardsEvents on Analytics {
     'error_code': order.errorCode,
   });
 
+  // The waiting game, offered while a late order is on its way: whether it
+  // keeps people company is the question these answer.
+
+  void runnerShown(CardOrder order) =>
+      capture('runner_shown', {'order_id': order.id, 'brand': order.brandKey});
+
+  void runnerPlayed({
+    required int score,
+    required int coins,
+    required bool best,
+    required Duration took,
+  }) => capture('runner_played', {
+    'score': score,
+    'coins': coins,
+    'best': best,
+    'seconds': took.inSeconds,
+  });
+
   // After buying.
 
   void codeAction(String action, {required String brand}) =>

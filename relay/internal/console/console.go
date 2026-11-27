@@ -329,6 +329,25 @@ func (c *Console) currentSession(r *http.Request) (session, error) {
 	return session{ConsoleSession: stored, Operator: operator}, nil
 }
 
+// SignedInOperator is the operator whose console session cookie the request
+// carries. Other relay pages (the Claude connector's OAuth consent) use it so
+// that only a passkey-signed-in operator can grant access.
+func (c *Console) SignedInOperator(r *http.Request) (control.ConsoleOperator, bool) {
+	who, err := c.currentSession(r)
+	if err != nil {
+		return control.ConsoleOperator{}, false
+	}
+	return who.Operator, true
+}
+
+// Audit writes one line to the console's audit log, for a caller that is not
+// an operator in a browser (the Claude connector's tool calls).
+func (c *Console) Audit(ctx context.Context, event control.ConsoleAuditEvent) {
+	if _, err := c.cfg.Store.AppendConsoleAudit(ctx, event); err != nil {
+		c.cfg.Logger.Error("console audit write failed", "actor", event.OperatorName, "path", event.Path, "error", err)
+	}
+}
+
 func (c *Console) startSession(ctx context.Context, w http.ResponseWriter, r *http.Request, operator control.ConsoleOperator) error {
 	value, err := randomToken()
 	if err != nil {

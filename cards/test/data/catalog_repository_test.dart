@@ -60,6 +60,36 @@ void main() {
     expect(seen, [null, '"v1"']);
   });
 
+  test('a whole shelf is read, saved and read back again', () async {
+    // Large enough to be read in the background, as a real shelf is.
+    final body = jsonEncode({
+      'version': 'big',
+      'brands': [
+        for (var b = 0; b < 400; b++)
+          {
+            'key': 'brand-$b',
+            'name': 'بطاقة $b',
+            'items': [
+              for (var i = 0; i < 10; i++)
+                {'key': 'brand-$b-$i', 'label': 'فئة $i', 'price': '9.00'},
+            ],
+          },
+      ],
+    });
+    expect(body.length, greaterThan(64 * 1024));
+    final client = MockClient(
+      (_) async => http.Response.bytes(
+        utf8.encode(body),
+        200,
+        headers: {'etag': '"big"', 'content-type': 'application/json'},
+      ),
+    );
+    final fresh = await repository(client).refresh();
+    expect((fresh as Ok).value.brands, hasLength(400));
+    final saved = await repository(client).cached();
+    expect(saved!.brands[399].items.last.label, 'فئة 9');
+  });
+
   test('image references resolve to the public image route', () {
     final repo = repository(MockClient((_) async => http.Response('', 404)));
     expect(

@@ -579,6 +579,10 @@ make relay-console-preview
 relay/console-ui/scripts/dev-relay.sh invite "Your name"
 ```
 
+The same relay serves the Claude connector (read-only MCP for a daily
+business-watch agent) at `/mcp`; see "Claude connector" in `relay/README.md`.
+`make relay-mcp` runs it and `make relay-mcp-token` mints a local token.
+
 Start Django and the on-prem connector in separate terminals:
 
 ```sh

@@ -35,14 +35,35 @@ class ShelfModel extends ChangeNotifier {
   Money credit = Money.zero;
   List<CardOrder> history = const [];
 
+  /// Only the first part of the shelf is on screen: the whole one is still
+  /// on its way (or could not be fetched, with [offline]).
+  bool get partial => shelf.partial;
+
   Future<void> load() async {
     final saved = await catalog.cached();
     if (saved != null) {
       shelf = saved;
       loading = false;
       notifyListeners();
+      await refresh();
+      return;
     }
-    await refresh();
+    // A first launch: nothing to open on. The first part of the shelf is
+    // small and asked for alongside the whole one, so a slow line shows
+    // the home screen long before the whole shelf has arrived.
+    final whole = refresh();
+    unawaited(_showFirstPart());
+    await whole;
+  }
+
+  Future<void> _showFirstPart() async {
+    final result = await catalog.firstPart();
+    // The whole shelf won the race (or was there already): it stays.
+    if (result case Ok(:final value) when shelf.brands.isEmpty) {
+      shelf = value;
+      loading = false;
+      notifyListeners();
+    }
   }
 
   Future<void> refresh() async {

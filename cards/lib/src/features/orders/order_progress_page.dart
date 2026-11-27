@@ -24,6 +24,8 @@ import '../topup/account_line.dart';
 import '../topup/topup_text.dart';
 import '../../shared/side_back.dart';
 import 'order_outcome_panel.dart';
+import 'order_waiting_room.dart';
+import '../runner/runner_game.dart';
 import 'order_watcher.dart';
 import '../../core/analytics/analytics.dart';
 import '../../core/analytics/events.dart';
@@ -54,6 +56,10 @@ class OrderProgressPage extends StatefulWidget {
   /// ([CardOrder.wait]), as it pushes an ending only past the same time;
   /// this is for an older relay that does not say.
   static const slowAfter = Duration(minutes: 3);
+
+  /// Past this the wait is long enough to be felt, and the page offers a
+  /// game to pass it (most cards arrive well before).
+  static const playAfter = Duration(seconds: 12);
 
   static Future<void> open(
     BuildContext context, {
@@ -141,6 +147,19 @@ class _OrderProgressPageState extends State<OrderProgressPage>
   /// payment time is not known.
   DateTime? _preparingSince;
 
+  /// The wait is long enough for the game.
+  bool _playable = false;
+  Timer? _playTimer;
+
+  /// The game, asked whether a run is under way when the order lands.
+  final _game = GlobalKey<RunnerGameState>();
+
+  /// The order landed mid-run: the game says so and waits for the customer.
+  bool _orderReady = false;
+
+  /// The customer chose to leave the game for the order.
+  bool _leaveGame = false;
+
   @override
   void initState() {
     super.initState();
@@ -175,30 +194,72 @@ class _OrderProgressPageState extends State<OrderProgressPage>
     widget.watcher.removeListener(_onChange);
     _unwatch?.call();
     _slowTimer?.cancel();
+    _playTimer?.cancel();
     super.dispose();
   }
 
-  /// Starts the clock on a card on its way, and stops it once it is not.
+  /// Starts the clocks on a card on its way, and stops them once it is not.
   void _followSlowness() {
     final order = widget.watcher.order;
     if (_outcomeOf(order) != 'preparing') {
       _slowTimer?.cancel();
       _slowTimer = null;
-      return;
-    }
-    if (_slow || _slowTimer != null) {
+      _playTimer?.cancel();
+      _playTimer = null;
       return;
     }
     final now = DateTime.now();
     _preparingSince ??= now;
-    final since = order.paidAt ?? _preparingSince!;
-    final left =
-        (order.wait ?? OrderProgressPage.slowAfter) - now.difference(since);
-    _slowTimer = Timer(left.isNegative ? Duration.zero : left, () {
-      if (mounted && _outcomeOf(widget.watcher.order) == 'preparing') {
-        setState(() => _slow = true);
+    final waited = now.difference(order.paidAt ?? _preparingSince!);
+    Timer after(Duration wait, VoidCallback then) {
+      final left = wait - waited;
+      return Timer(left.isNegative ? Duration.zero : left, () {
+        if (mounted && _outcomeOf(widget.watcher.order) == 'preparing') {
+          setState(then);
+        }
+      });
+    }
+
+    if (!_slow && _slowTimer == null) {
+      _slowTimer = after(
+        order.wait ?? OrderProgressPage.slowAfter,
+        () => _slow = true,
+      );
+    }
+    if (!_playable && waited >= OrderProgressPage.playAfter) {
+      // Already a long wait (opened again from «كروتي»): straight to the
+      // game, with no other panel first. Every caller builds next.
+      _showGame();
+    } else if (!_playable && _playTimer == null) {
+      _playTimer = after(OrderProgressPage.playAfter, _showGame);
+    }
+  }
+
+  void _showGame() {
+    _playable = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        CardsScope.of(context).analytics.runnerShown(widget.watcher.order);
       }
     });
+  }
+
+  /// The order has landed. A run under way is not cut short: the game
+  /// pauses to say so, and the customer goes to it when they choose.
+  bool _heldByGame() {
+    if (_leaveGame || !(_game.currentState?.inRun ?? false)) {
+      return false;
+    }
+    if (!_orderReady) {
+      setState(() => _orderReady = true);
+    }
+    return true;
+  }
+
+  /// From the game, to the order that landed.
+  void _showOrder() {
+    _leaveGame = true;
+    _onChange();
   }
 
   Future<void> _turnOnNotifications() async {
@@ -233,6 +294,9 @@ class _OrderProgressPageState extends State<OrderProgressPage>
       _closePaymentPage();
     }
     if (!_revealed && order.toppedUp) {
+      if (_heldByGame()) {
+        return;
+      }
       // On the account: the receipt takes this page's place.
       _revealed = true;
       TopUpDonePage.open(
@@ -244,6 +308,9 @@ class _OrderProgressPageState extends State<OrderProgressPage>
       return;
     }
     if (!_revealed && order.isEsim && order.status == OrderStatus.delivered) {
+      if (_heldByGame()) {
+        return;
+      }
       _revealed = true;
       EsimPage.openDelivered(context, order, replace: true);
       return;
@@ -251,6 +318,9 @@ class _OrderProgressPageState extends State<OrderProgressPage>
     if (!_revealed &&
         order.status == OrderStatus.delivered &&
         order.codes.isNotEmpty) {
+      if (_heldByGame()) {
+        return;
+      }
       _revealed = true;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
@@ -455,6 +525,7 @@ class _OrderProgressPageState extends State<OrderProgressPage>
         secondaryLabel: _cancelling || _checking ? null : l10n.cancelOrder,
         onSecondary: _cancel,
       ),
+      'preparing' when _playable => _waitingRoom(context, order, topUp),
       // An eSIM has no code, and may take a moment longer: the same words stay.
       'preparing' when order.isEsim => OrderOutcomePanel(
         brand: widget.brand,
@@ -525,6 +596,50 @@ class _OrderProgressPageState extends State<OrderProgressPage>
     };
   }
 
+  /// A long wait: a game under the order's line. Once the relay's wait has
+  /// passed it says, as the slow panel does, that the customer may go and
+  /// hears when it lands; before that, only that the order shows up here.
+  Widget _waitingRoom(
+    BuildContext context,
+    CardOrder order,
+    ({String kind, String item, Widget? account})? topUp,
+  ) {
+    final l10n = AppLocalizations.of(context);
+    final push = CardsScope.of(context).push;
+    final ask = _slow && push.available && !push.enabled;
+    final analytics = CardsScope.of(context).analytics;
+    return OrderWaitingRoom(
+      gameKey: _game,
+      brand: widget.brand,
+      title: !_slow
+          ? l10n.waitPlayTitle
+          : topUp != null
+          ? l10n.topUpSlowTitle(topUp.kind)
+          : l10n.preparingSlowTitle,
+      body: !_slow
+          ? l10n.waitPlayBody
+          : push.enabled
+          ? l10n.preparingSlowNotify
+          : ask
+          ? l10n.preparingSlowAsk
+          : l10n.preparingSlowLater,
+      detail: topUp?.account,
+      orderReady: _orderReady,
+      onShowOrder: _showOrder,
+      onRunEnded: (run, {required best, required took}) =>
+          analytics.runnerPlayed(
+            score: run.score,
+            coins: run.coins,
+            best: best,
+            took: took,
+          ),
+      primaryLabel: ask ? l10n.onboardingNotifyAllow : null,
+      onPrimary: ask ? _turnOnNotifications : null,
+      secondaryLabel: l10n.goToMyCards,
+      onSecondary: _toMyCards,
+    );
+  }
+
   /// A card running late: the customer may go, and hears when it lands.
   /// [topUpKind] is the account's kind for a top-up, null for a card.
   Widget _slowPanel(BuildContext context, String? topUpKind) {
@@ -589,8 +704,15 @@ class _OrderProgressPageState extends State<OrderProgressPage>
                         // answers, instead of snapping.
                         child: CardsSwitcher(
                           child: KeyedSubtree(
+                            // The game keeps its place (and its run) as the
+                            // wait turns long.
                             key: ValueKey(
-                              '${_outcomeOf(order)}${_slow ? '-slow' : ''}',
+                              '${_outcomeOf(order)}'
+                              '${_playable
+                                  ? '-play'
+                                  : _slow
+                                  ? '-slow'
+                                  : ''}',
                             ),
                             child: _panel(context, order),
                           ),

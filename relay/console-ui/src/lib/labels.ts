@@ -135,6 +135,7 @@ export const supplier: Record<string, string> = {
   bnplus: "BN Plus",
   reloadly: "Reloadly",
   fazer: "FazerCards",
+  esimaccess: "eSIM Access",
   qareeb: "قريب",
   stock: "مخزوننا",
 };

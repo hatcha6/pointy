@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -135,13 +136,20 @@ func TestCatalogPushUploadsTheImagesAndPublishes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	relay := httptest.NewServer(relayserver.HTTPServer{
+	server := relayserver.HTTPServer{
 		Store:      store,
 		Hub:        relayserver.NewHub(),
 		Logger:     slog.New(slog.NewTextHandler(io.Discard, nil)),
 		AdminToken: "admin-token",
 		Vouchers:   relayserver.VoucherConfig{TestMode: true},
-	})
+	}
+	var uploads atomic.Int32
+	relay := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/v1/vouchers/admin/images" {
+			uploads.Add(1)
+		}
+		server.ServeHTTP(w, r)
+	}))
 	t.Cleanup(relay.Close)
 	t.Setenv("POINTY_RELAY_CONTROL_URL", relay.URL)
 	t.Setenv("POINTY_RELAY_ADMIN_TOKEN", "admin-token")
@@ -179,5 +187,21 @@ func TestCatalogPushUploadsTheImagesAndPublishes(t *testing.T) {
 	}
 	if err := runVoucherCatalogShow(nil); err != nil {
 		t.Fatalf("show: %v", err)
+	}
+	if got := uploads.Load(); got != 8 {
+		t.Fatalf("the first push uploads the eight images and the second none, got %d uploads", got)
+	}
+
+	// A changed logo is the only image a later push sends.
+	writePNG(t, filepath.Join(dir, "logos/psn.png"), 200)
+	if err := runVoucherCatalogPush([]string{catalogPath, "--note", "new psn logo"}); err != nil {
+		t.Fatalf("push with a new logo: %v", err)
+	}
+	if got := uploads.Load(); got != 9 {
+		t.Fatalf("only the changed logo is uploaded, got %d uploads in all", got)
+	}
+	history, _ = store.ListVoucherCatalogs(context.Background(), 10)
+	if len(history) != 2 {
+		t.Fatalf("the new logo publishes a version, got %d", len(history))
 	}
 }

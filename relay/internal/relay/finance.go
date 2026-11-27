@@ -500,7 +500,9 @@ func (s HTTPServer) financeUSDRate(r *http.Request) (*big.Rat, map[string]string
 	if err != nil {
 		return nil, rateInfo
 	}
-	rate, source := settings.EffectiveUSDRate()
+	// Dollars are valued at what a dollar costs to buy now: never at the
+	// pricing rate's peak or cushion, which would overstate them.
+	rate, source := settings.BookRate()
 	if rate == nil {
 		return nil, rateInfo
 	}

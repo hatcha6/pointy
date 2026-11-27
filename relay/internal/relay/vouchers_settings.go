@@ -57,6 +57,12 @@ type VoucherSettingsCache struct {
 	rates   []control.ExchangeRate
 	ratesAt time.Time
 	ratesOK bool
+	// The funding ledger and the rate series the funding-aware rate is worked
+	// out from (fx_funding.go), read at fxAt for the series fxKey.
+	fxAt       time.Time
+	fxKey      string
+	fxFundings []control.SupplierFunding
+	fxSeries   []control.ExchangeRate
 }
 
 // voucherSettingsUnreadableError is the stored settings document that does not
@@ -113,6 +119,7 @@ func (c *VoucherSettingsCache) invalidate() {
 	}
 	c.mu.Lock()
 	c.checked = time.Time{}
+	c.fxAt = time.Time{}
 	c.mu.Unlock()
 }
 

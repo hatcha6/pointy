@@ -116,6 +116,8 @@ func run(args []string) error {
 		return runAlerts(args[1:])
 	case "console":
 		return runConsole(args[1:])
+	case "mcp":
+		return runMCP(args[1:])
 	case "artifacts":
 		return runArtifacts(args[1:])
 	case "migrate":
@@ -834,6 +836,16 @@ func runServer(args []string) error {
 		"console-trust-forwarded-for",
 		envBool("POINTY_RELAY_CONSOLE_TRUST_FORWARDED_FOR", false),
 		"take the console caller's address from the load balancer's X-Forwarded-For hop (on by default in the paas profile)",
+	)
+	mcpEnabled := flags.Bool(
+		"mcp",
+		envBool("POINTY_RELAY_MCP_ENABLED", true),
+		"serve the Claude connector (read-only MCP at <console origin>/mcp, OAuth approved by a console operator); on wherever the console is, false turns it off",
+	)
+	mcpRedirectURIs := flags.String(
+		"mcp-redirect-uris",
+		envString("POINTY_RELAY_MCP_REDIRECT_URIS", ""),
+		"extra OAuth redirect URIs the Claude connector accepts, comma-separated (claude.ai's callback and loopback addresses are always allowed)",
 	)
 	walletTopUpMin := flags.String(
 		"wallet-topup-min",
@@ -1765,6 +1777,25 @@ func runServer(args []string) error {
 		}, adminHTTPHandler, publicHandler)
 		if err != nil {
 			return err
+		}
+		if *mcpEnabled {
+			inner := publicHandler
+			if adminHTTPHandler != nil {
+				inner = adminHTTPHandler
+			}
+			wrapped, err = buildMCP(mcpSettings{
+				Origin:            origin,
+				AdminToken:        *adminToken,
+				Store:             store,
+				RateLimiter:       rateLimiter,
+				TrustForwardedFor: *consoleTrustForwardedFor,
+				RedirectURIs:      *mcpRedirectURIs,
+				Alerts:            alertNotifier,
+				Logger:            logger,
+			}, inner, wrapped)
+			if err != nil {
+				return err
+			}
 		}
 		if adminHTTPHandler != nil {
 			adminHTTPHandler = wrapped

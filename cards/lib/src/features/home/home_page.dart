@@ -397,6 +397,20 @@ class _HomePageState extends State<HomePage>
           ),
           piece(_BrandShelf(brands: inCategory, scope: category.key)),
         ],
+      // The first part of the shelf is on screen: the rest is on its way,
+      // or could not be fetched and is asked for again from here.
+      if (shelf.partial && !shelf.offline)
+        const SliverToBoxAdapter(child: _SkeletonShelves(rows: 1)),
+      if (shelf.partial && shelf.offline)
+        SliverToBoxAdapter(
+          child: EmptyState(
+            icon: Icons.cloud_off_rounded,
+            title: l10n.catalogLoadFailedTitle,
+            body: l10n.errorNetwork,
+            actionLabel: l10n.retryAction,
+            onAction: shelf.refresh,
+          ),
+        ),
     ];
   }
 
@@ -501,7 +515,9 @@ class _TitleBlock extends StatelessWidget {
               ),
             ),
           ],
-          if (shelf.offline && shelf.shelf.brands.isNotEmpty) ...[
+          if (shelf.offline &&
+              !shelf.partial &&
+              shelf.shelf.brands.isNotEmpty) ...[
             const SizedBox(height: CardsSpace.sm),
             Pill(
               text: l10n.savedShelfNote,
@@ -1076,7 +1092,10 @@ class _TileRows extends StatelessWidget {
 }
 
 class _SkeletonShelves extends StatelessWidget {
-  const _SkeletonShelves();
+  /// [rows] 1 is a single category row: the rest of a shelf still arriving.
+  const _SkeletonShelves({this.rows = 2});
+
+  final int rows;
 
   @override
   Widget build(BuildContext context) {
@@ -1106,16 +1125,18 @@ class _SkeletonShelves extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
-          padding: EdgeInsets.fromLTRB(
-            CardsSpace.gutter,
-            CardsSpace.xl,
-            CardsSpace.gutter,
-            CardsSpace.md,
+        if (rows > 1) ...[
+          const Padding(
+            padding: EdgeInsets.fromLTRB(
+              CardsSpace.gutter,
+              CardsSpace.xl,
+              CardsSpace.gutter,
+              CardsSpace.md,
+            ),
+            child: Skeleton(width: 140, height: 20),
           ),
-          child: Skeleton(width: 140, height: 20),
-        ),
-        shelf(MediaQuery.sizeOf(context).width * 0.8),
+          shelf(MediaQuery.sizeOf(context).width * 0.8),
+        ],
         const Padding(
           padding: EdgeInsets.fromLTRB(
             CardsSpace.gutter,

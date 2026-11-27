@@ -74,11 +74,13 @@ func (s HTTPServer) withLiveRate(ctx context.Context, settings vouchers.Settings
 		}
 		s.VoucherSettingsCache.rememberRates(rates, now)
 	}
-	rate, _, problem := pickUSDRate(rates, settings, now)
+	rate, at, problem := pickUSDRate(rates, settings, now)
 	if rate == nil {
-		return settings.WithRateProblem(problem)
+		// No fresh rate: the manual one if set, else the funding-aware
+		// fallback (the last rate and top-up, with the full cushion).
+		return s.withFX(ctx, settings.WithRateProblem(problem), nil, time.Time{})
 	}
-	return settings.WithLiveRate(rate)
+	return s.withFX(ctx, settings.WithLiveRate(rate), rate, at)
 }
 
 func (c *VoucherSettingsCache) cachedRates(now time.Time) ([]control.ExchangeRate, bool) {
@@ -133,19 +135,21 @@ func (s HTTPServer) autoPricedItem(document vouchers.Document, located vouchers.
 	return located
 }
 
-// cardPricer prices an auto-priced card from its cheapest supplier's cost.
+// cardPricer prices an auto-priced card from the cost of the supplier the
+// card will actually be bought from (the first candidate: our own stock first,
+// then the cheapest). A card no supplier can sell now is still priced from the
+// cheapest cost known, so a greyed card never shows a months-old catalog price.
 func (s HTTPServer) cardPricer(offers voucherOffers, settings vouchers.Settings) func(vouchers.Located) (string, string, bool) {
 	margin := settings.MarginFor(vouchers.ServiceKindCard)
-	rate, _ := settings.EffectiveUSDRate()
+	// Competitor prices move with the plain live rate: what competitors' own
+	// costs follow, never our premium, peak or cushion.
+	scale := settings.MarketScaleRate()
+	atReplacement := settings.AtReplacement()
 	now := s.clock().Now()
 	return func(located vouchers.Located) (string, string, bool) {
 		item := located.Item
-		var cost *big.Rat
-		for _, candidate := range s.Vouchers.rankSuppliers(located, offers, settings).Candidates {
-			if candidate.Cost != nil && (cost == nil || candidate.Cost.Cmp(cost) < 0) {
-				cost = candidate.Cost
-			}
-		}
+		ranking := s.Vouchers.rankSuppliers(located, offers, settings)
+		bought, cost := pricedFrom(ranking)
 		if cost == nil {
 			return "", "", false
 		}
@@ -159,10 +163,23 @@ func (s HTTPServer) cardPricer(offers voucherOffers, settings vouchers.Settings)
 			return vouchers.FormatDinars(shop), vouchers.FormatDinars(retail), true
 		}
 		shop, retail := big.NewRat(0, 1), big.NewRat(0, 1)
-		if marketNow := margin.MarketNow(item.Market, rate, now); marketNow != nil {
+		if marketNow := margin.MarketNow(item.Market, scale, now); marketNow != nil {
 			priced, ok := margin.MarketPrices(cost, marketNow)
 			if !ok {
 				return "", "", false
+			}
+			// The peak and the cushion protect us while the dollar moves, but
+			// never hold a card above its competitor: past that point the card
+			// is priced at the replacement rate — only when the same supplier
+			// is still the one bought from, so the price never comes from a
+			// cost we will not pay (FX_FUNDING_PLAN.md).
+			if settings.AboveReplacement() && priced.Retail.Cmp(marketNow) > 0 {
+				if again, low := pricedFrom(s.Vouchers.rankSuppliers(located, offers, atReplacement)); low != nil &&
+					low.Cmp(cost) < 0 && again == bought {
+					if lower, ok := margin.MarketPrices(low, marketNow); ok {
+						priced = lower
+					}
+				}
 			}
 			shop, retail = priced.ShopPays, priced.Retail
 		} else {
@@ -174,4 +191,33 @@ func (s HTTPServer) cardPricer(offers voucherOffers, settings vouchers.Settings)
 		}
 		return vouchers.FormatDinars(shop), vouchers.FormatDinars(retail), true
 	}
+}
+
+// pricedFrom is the supplier a card is priced from and its cost: the first
+// candidate with a known cost (the one a purchase buys from), else — a card
+// nobody can sell now — the cheapest cost any supplier quotes.
+func pricedFrom(ranking supplierRanking) (vouchers.Ref, *big.Rat) {
+	if len(ranking.Candidates) > 0 {
+		if first := ranking.Candidates[0]; first.Cost != nil {
+			return first.Ref, first.Cost
+		}
+		// The first has no known cost (our stock unvalued, a supplier never
+		// read): the cheapest known, as before.
+		var ref vouchers.Ref
+		var cost *big.Rat
+		for _, candidate := range ranking.Candidates {
+			if candidate.Cost != nil && (cost == nil || candidate.Cost.Cmp(cost) < 0) {
+				ref, cost = candidate.Ref, candidate.Cost
+			}
+		}
+		return ref, cost
+	}
+	var ref vouchers.Ref
+	var cost *big.Rat
+	for _, evaluation := range ranking.Evaluations {
+		if evaluation.Cost != nil && (cost == nil || evaluation.Cost.Cmp(cost) < 0) {
+			ref, cost = evaluation.Ref, evaluation.Cost
+		}
+	}
+	return ref, cost
 }

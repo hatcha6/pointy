@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -37,12 +38,26 @@ class RelayApi {
     required this.sessions,
     http.Client? client,
     this.timeout = const Duration(seconds: 25),
+    this.idleTimeout = const Duration(seconds: 20),
+    this.transferLimit = const Duration(minutes: 3),
   }) : _client = client ?? http.Client();
 
   final Uri baseUrl;
   final SessionStore sessions;
   final http.Client _client;
+
+  /// How long the relay has to start answering (its status and headers).
   final Duration timeout;
+
+  /// How long an answer may go without a single byte arriving. A slow line
+  /// that keeps delivering is not cut off: on weak mobile data the shelf can
+  /// take longer than [timeout] to arrive whole, and timing the whole
+  /// download is what kept such customers on the loading screen until it
+  /// gave up.
+  final Duration idleTimeout;
+
+  /// The longest an answer may take to arrive whole, however steadily.
+  final Duration transferLimit;
   Future<bool?>? _refreshing;
 
   /// Called when the session ended under the app (refresh refused): the app
@@ -135,10 +150,12 @@ class RelayApi {
     Map<String, String>? query,
     Map<String, String>? headers,
   }) async {
+    final request = http.Request('GET', resolve(path, query));
+    if (headers != null) {
+      request.headers.addAll(headers);
+    }
     try {
-      return await _client
-          .get(resolve(path, query), headers: headers)
-          .timeout(timeout);
+      return await _read(await _client.send(request).timeout(timeout));
     } on Exception {
       throw const RelayApiException(status: 0, code: 'network');
     }
@@ -178,9 +195,7 @@ class RelayApi {
     }
     final http.Response response;
     try {
-      response = await http.Response.fromStream(
-        await _client.send(request).timeout(timeout),
-      ).timeout(timeout);
+      response = await _read(await _client.send(request).timeout(timeout));
     } on Exception {
       throw const RelayApiException(status: 0, code: 'network');
     }
@@ -221,6 +236,66 @@ class RelayApi {
       code: code,
       message: decoded['error'] as String? ?? '',
       body: decoded,
+    );
+  }
+
+  /// The whole body of [streamed], given up on only when it stalls for
+  /// [idleTimeout] or runs past [transferLimit].
+  ///
+  /// A watchdog timer of its own, not `Stream.timeout`: that one never
+  /// delivers under the tests' fake clock, which left every widget test
+  /// waiting on the shelf for ever.
+  Future<http.Response> _read(http.StreamedResponse streamed) async {
+    final bytes = BytesBuilder(copy: false);
+    final done = Completer<void>();
+    late final StreamSubscription<List<int>> subscription;
+    Timer? idle;
+    void fail() {
+      if (!done.isCompleted) {
+        done.completeError(TimeoutException('the answer stalled'));
+      }
+      unawaited(subscription.cancel());
+    }
+
+    void watch() {
+      idle?.cancel();
+      idle = Timer(idleTimeout, fail);
+    }
+
+    subscription = streamed.stream.listen(
+      (chunk) {
+        bytes.add(chunk);
+        watch();
+      },
+      onError: (Object error, StackTrace stack) {
+        if (!done.isCompleted) {
+          done.completeError(error, stack);
+        }
+      },
+      onDone: () {
+        if (!done.isCompleted) {
+          done.complete();
+        }
+      },
+      cancelOnError: true,
+    );
+    watch();
+    try {
+      await done.future.timeout(transferLimit);
+    } on TimeoutException {
+      unawaited(subscription.cancel());
+      rethrow;
+    } finally {
+      idle?.cancel();
+    }
+    return http.Response.bytes(
+      bytes.takeBytes(),
+      streamed.statusCode,
+      request: streamed.request,
+      headers: streamed.headers,
+      isRedirect: streamed.isRedirect,
+      persistentConnection: streamed.persistentConnection,
+      reasonPhrase: streamed.reasonPhrase,
     );
   }
 

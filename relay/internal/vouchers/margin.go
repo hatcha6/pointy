@@ -370,6 +370,10 @@ func legacyMargin(shopPercent, retailPercent string) *Margin {
 // live fulus.ly rate with its buffer, else the manual rate) and where it came
 // from; nil when there is none.
 func (s Settings) EffectiveUSDRate() (*big.Rat, string) {
+	if s.liveRate != nil && s.fxApplied && s.rateSource() != RateSourceManual {
+		// The funding-aware rate already holds the refill premium.
+		return s.liveRate, RateSourceFulus
+	}
 	if s.liveRate != nil && s.rateSource() != RateSourceManual {
 		buffer, ok := settingsRat(settingsOr(s.USDRateBufferPercent, DefaultRateBufferPercent), settingsNumberPattern)
 		if ok {

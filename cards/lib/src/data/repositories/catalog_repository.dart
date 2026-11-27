@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/result.dart';
@@ -34,9 +35,7 @@ class CatalogRepository {
       return null;
     }
     try {
-      return _current ??= CardCatalog.fromJson(
-        jsonDecode(raw) as Map<String, dynamic>,
-      );
+      return _current ??= await _parse(raw);
     } on Object {
       // A saved copy that cannot be read (cut short, or of another shape)
       // is no saved copy: the relay's is asked for, whole.
@@ -76,9 +75,7 @@ class CatalogRepository {
         code: 'catalog_unavailable',
       );
     }
-    final shelf = CardCatalog.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
-    );
+    final shelf = await _parse(response.body);
     _current = shelf;
     try {
       // The tag goes first: a copy cut short between the two is then asked
@@ -95,15 +92,62 @@ class CatalogRepository {
     return shelf;
   });
 
+  /// A whole shelf is a couple of megabytes of JSON: read on the UI thread,
+  /// it froze the first frames of a low-end phone. A small one (tests, a
+  /// narrow channel) is read in place, where a second isolate costs more.
+  static Future<CardCatalog> _parse(String raw) async {
+    if (raw.length < _parseInBackgroundFrom) {
+      return _parseNow(raw);
+    }
+    return compute(_parseNow, raw, debugLabel: 'catalog');
+  }
+
+  static const _parseInBackgroundFrom = 64 * 1024;
+
+  static CardCatalog _parseNow(String raw) =>
+      CardCatalog.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+
+  /// The first part of the shelf: what the home screen shows first, a
+  /// small answer that arrives long before the whole shelf on a slow line.
+  /// For a first launch only; it is never saved as the device's copy, which
+  /// must stay the whole shelf.
+  Future<Result<CardCatalog>> firstPart() => Result.guard(() async {
+    final response = await api.getRaw(
+      '/v1/customers/catalog',
+      query: {'channel': channel, 'accounts': '1', 'part': 'first'},
+      headers: {'Accept': 'application/json'},
+    );
+    if (response.statusCode != 200) {
+      throw RelayApiException(
+        status: response.statusCode,
+        code: 'catalog_unavailable',
+      );
+    }
+    final part = await _parse(response.body);
+    if (!part.partial) {
+      // A relay from before parts answers with the whole shelf.
+      _current ??= part;
+    } else {
+      _first = part;
+    }
+    return part;
+  });
+
+  CardCatalog? _first;
+
+  /// The shelf brands and countries are looked up in: the whole one, or
+  /// its first part while the whole one is on its way.
+  CardCatalog? get _known => _current ?? _first;
+
   /// A brand of the shelf this device last saw.
-  CardBrand? brandOf(String key) => _current?.brand(key);
+  CardBrand? brandOf(String key) => _known?.brand(key);
 
   /// The countries by code of [_countriesOf], the shelf they were read from.
   Map<String, CardCountry> _countries = const {};
   CardCatalog? _countriesOf;
 
   CardCountry? _country(String code) {
-    final shelf = _current;
+    final shelf = _known;
     if (!identical(shelf, _countriesOf)) {
       _countriesOf = shelf;
       _countries = {

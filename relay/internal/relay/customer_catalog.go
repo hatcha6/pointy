@@ -218,6 +218,51 @@ type CustomerCatalogView struct {
 	Categories  []vouchers.ShopCategory `json:"categories"`
 	Countries   []vouchers.ShopCountry  `json:"countries"`
 	Brands      []customerBrand         `json:"brands"`
+	// Partial marks the first part of the shelf (?part=first): what the home
+	// screen shows first, for an app with no saved copy to open on while
+	// the whole shelf is still on its way. Never set on the whole shelf, so
+	// an app that does not ask for a part is answered as it always was.
+	Partial bool `json:"partial,omitempty"`
+}
+
+// firstPartPerCategory is how many brands of a category the first part
+// holds: a home-screen row and a little more.
+const firstPartPerCategory = 8
+
+// firstPart is the part of catalog the home screen shows before it is
+// scrolled: every featured brand and the first few of each category, in the
+// order the app lists them (featured, then rank, then the shelf's order).
+func (catalog CustomerCatalogView) firstPart() CustomerCatalogView {
+	ordered := make([]int, len(catalog.Brands))
+	for i := range ordered {
+		ordered[i] = i
+	}
+	sort.SliceStable(ordered, func(a, b int) bool {
+		left, right := catalog.Brands[ordered[a]], catalog.Brands[ordered[b]]
+		if left.Featured != right.Featured {
+			return left.Featured
+		}
+		return left.Rank < right.Rank
+	})
+	keep := make([]bool, len(catalog.Brands))
+	perCategory := map[string]int{}
+	for _, index := range ordered {
+		brand := catalog.Brands[index]
+		if brand.Featured || perCategory[brand.Category] < firstPartPerCategory {
+			keep[index] = true
+			perCategory[brand.Category]++
+		}
+	}
+	part := catalog
+	part.Brands = make([]customerBrand, 0, len(catalog.Brands))
+	for index, brand := range catalog.Brands {
+		if keep[index] {
+			part.Brands = append(part.Brands, brand)
+		}
+	}
+	part.Partial = true
+	part.Version = catalog.Version + "-first"
+	return part
 }
 
 type customerBrand struct {
@@ -356,6 +401,9 @@ func (s HTTPServer) handleCustomerCatalog(w http.ResponseWriter, r *http.Request
 		view = withoutAccountBrands(view)
 	}
 	catalog := s.Customers.customerCatalog(view, channel, s.mobileGiftCards(r.Context()))
+	if r.URL.Query().Get("part") == "first" {
+		catalog = catalog.firstPart()
+	}
 	etag := `"` + catalog.Version + `"`
 	w.Header().Set("ETag", etag)
 	w.Header().Set("Cache-Control", "public, no-cache")
@@ -363,7 +411,15 @@ func (s HTTPServer) handleCustomerCatalog(w http.ResponseWriter, r *http.Request
 		w.WriteHeader(http.StatusNotModified)
 		return
 	}
-	writeJSON(w, http.StatusOK, catalog)
+	// The same catalog goes to every caller of the channel: encoded and
+	// gzipped once per version, not at every request.
+	// Keyed by the store too: two relays in one process (tests) keep apart.
+	answer, err := encodedCatalogs.get(fmt.Sprintf("%p|%s", store, etag), func() any { return catalog })
+	if err != nil {
+		s.customerInternalError(w, "customer catalog encode failed", err)
+		return
+	}
+	writeEncodedJSON(w, r, answer)
 }
 
 // handleCustomerImage serves GET /v1/customers/images/{sha256}: a brand logo

@@ -670,6 +670,13 @@ relay-console-check: relay-console-install ## Type-check the operator console we
 relay-console-preview: relay-console-build ## Run a throwaway relay with the console at http://localhost:8191/console/.
 	bash "$(RELAY_DIR)/console-ui/scripts/dev-relay.sh"
 
+.PHONY: relay-mcp relay-mcp-token
+relay-mcp: relay-console-build ## Run a throwaway relay with the Claude connector (read-only MCP) at http://localhost:8191/mcp, beside the console.
+	bash "$(RELAY_DIR)/console-ui/scripts/dev-relay.sh"
+
+relay-mcp-token: ## Mint a read-only MCP token on that throwaway relay (NAME="local agent", DAYS=7).
+	bash "$(RELAY_DIR)/console-ui/scripts/dev-relay.sh" mcp-token "$(or $(NAME),local agent)" "$(or $(DAYS),7)"
+
 relay-console-dev: ## Live-reload the console app on :5173 (start the relay with CONSOLE_DEV_ORIGIN=http://localhost:5173).
 	cd "$(RELAY_DIR)/console-ui" && npm run dev
 

@@ -33,6 +33,8 @@ import (
 //	GET    /v1/customers/me/sessions     the customer's devices (Bearer)
 //	DELETE /v1/customers/me/sessions     sign every other device out (Bearer)
 //	DELETE /v1/customers/me/sessions/{id}  sign one device out (Bearer)
+//	POST   /v1/customers/me/runner       a waiting-game run (runner_leaderboard.go)
+//	GET    /v1/customers/runner/leaderboard  the waiting game's board (Bearer)
 //
 // These routes take no installation token: the caller is a person's phone,
 // not a shop. Every code is an SMS the company pays for, so codes are capped
@@ -211,6 +213,8 @@ func (s HTTPServer) handleCustomerRoutes(w http.ResponseWriter, r *http.Request)
 	if s.customerCORS(w, r) {
 		return
 	}
+	w, finish := withCustomerGzip(w, r)
+	defer finish()
 	store, ok := s.Store.(control.CustomerStore)
 	if !ok {
 		writeCustomerError(w, http.StatusServiceUnavailable, "customers_unconfigured", "this relay keeps no customers", nil)
@@ -288,6 +292,11 @@ func (s HTTPServer) handleCustomerRoutes(w http.ResponseWriter, r *http.Request)
 				}
 			}
 			s.forgetCustomerReports(r.Context(), customer.ID)
+			if runner, ok := s.Store.(control.RunnerScoreStore); ok {
+				if err := runner.ForgetRunnerScores(r.Context(), customer.ID); err != nil {
+					s.logger().Warn("forgetting a deleted customer's runner scores failed", "customer_id", customer.ID, "error", err)
+				}
+			}
 			s.logger().Info("customer deleted their account", "customer_id", customer.ID)
 			w.WriteHeader(http.StatusNoContent)
 		})
@@ -299,6 +308,14 @@ func (s HTTPServer) handleCustomerRoutes(w http.ResponseWriter, r *http.Request)
 	case path == "/v1/customers/me/attribution" && r.Method == http.MethodPut:
 		s.withCustomer(w, r, store, func(customer control.Customer, _ control.CustomerSession) {
 			s.handleCustomerAttribution(w, r, customer)
+		})
+	case path == "/v1/customers/me/runner" && r.Method == http.MethodPost:
+		s.withCustomer(w, r, store, func(customer control.Customer, _ control.CustomerSession) {
+			s.handleRunnerRun(w, r, customer)
+		})
+	case path == "/v1/customers/runner/leaderboard" && r.Method == http.MethodGet:
+		s.withCustomer(w, r, store, func(customer control.Customer, _ control.CustomerSession) {
+			s.handleRunnerBoard(w, r, customer)
 		})
 	case path == "/v1/customers/me/push" && r.Method == http.MethodPut:
 		s.withCustomer(w, r, store, func(customer control.Customer, session control.CustomerSession) {

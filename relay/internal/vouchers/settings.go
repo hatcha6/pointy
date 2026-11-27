@@ -128,6 +128,12 @@ type Settings struct {
 	USDRateBankCode      string `json:"usd_rate_bank_code,omitempty"`
 	USDRateBufferPercent string `json:"usd_rate_buffer_percent,omitempty"`
 	USDRateMaxAge        string `json:"usd_rate_max_age,omitempty"`
+	// FX is the funding-aware dollar rate (fx.go): refill premium learned from
+	// recorded top-ups, a fading peak, a cushion while the dollar climbs, and
+	// the cost of the dollars each supplier still holds as a floor. Nil (not
+	// written) means every default: a relay from before it refuses unknown
+	// fields, so it is stored only once an fx knob is set. Read it with FXRules.
+	FX *FXPolicy `json:"fx,omitempty"`
 	// Legacy fields of settings published before the margin policy: read, turned
 	// into Margin by Normalized, never written back.
 	RetailStep    string `json:"retail_step,omitempty"`
@@ -138,8 +144,11 @@ type Settings struct {
 
 	// Set by the relay at load time, never stored: the live rate priced by and
 	// why there is none.
-	liveRate    *big.Rat
-	RateProblem string `json:"-"`
+	liveRate      *big.Rat
+	fxApplied     bool
+	fxQuote       *FXQuote
+	supplierRates map[string]*big.Rat
+	RateProblem   string `json:"-"`
 }
 
 // ServicePricing is the margin on one kind of service, as percentages of the
@@ -207,8 +216,12 @@ func (s Settings) Normalized() Settings {
 		USDRateBankCode:      strings.ToLower(strings.TrimSpace(s.USDRateBankCode)),
 		USDRateBufferPercent: settingsOr(s.USDRateBufferPercent, DefaultRateBufferPercent),
 		USDRateMaxAge:        settingsOr(s.USDRateMaxAge, DefaultRateMaxAge),
+		FX:                   s.FX.trimmedOrNil(),
 		Popular:              settingsNormalizedPopular(s.Popular),
 		liveRate:             s.liveRate,
+		fxApplied:            s.fxApplied,
+		fxQuote:              s.fxQuote,
+		supplierRates:        s.supplierRates,
 		RateProblem:          s.RateProblem,
 	}
 	if s.CardMargin != nil && !s.CardMargin.isZero() {
@@ -399,6 +412,9 @@ func (s Settings) Validate() SettingsProblems {
 	if age, err := time.ParseDuration(settingsOr(s.USDRateMaxAge, DefaultRateMaxAge)); err != nil || age <= 0 {
 		add("usd_rate_max_age", "must be a duration such as 48h")
 	}
+	if s.FX != nil {
+		s.FX.validate(add)
+	}
 	for _, service := range []struct {
 		prefix, kind string
 		pricing      ServicePricing
@@ -547,7 +563,7 @@ func (s Settings) Equal(other Settings) bool {
 		a.USDRateBankCode != b.USDRateBankCode || a.USDRateMaxAge != b.USDRateMaxAge {
 		return false
 	}
-	if !a.Margin.same(b.Margin) {
+	if !a.Margin.same(b.Margin) || !a.FXRules().same(b.FXRules()) {
 		return false
 	}
 	for _, pair := range [][2]*Margin{{a.CardMargin, b.CardMargin}, {a.Airtime.Margin, b.Airtime.Margin}, {a.Bills.Margin, b.Bills.Margin}} {

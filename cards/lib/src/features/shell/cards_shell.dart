@@ -170,7 +170,9 @@ class _CardsShellState extends State<CardsShell> {
     }
     final needsCatalog =
         link is BrandLink || (link is ShelfLink && link.category != null);
-    if (needsCatalog && shelf.loading) {
+    // The brand may not be in the first part of the shelf: the link waits
+    // for the whole one.
+    if (needsCatalog && (shelf.loading || (shelf.partial && !shelf.offline))) {
       return;
     }
     links.take();

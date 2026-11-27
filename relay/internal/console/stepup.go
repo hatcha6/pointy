@@ -52,6 +52,10 @@ var stepUpRules = []stepUpRule{
 	// Prices every shop pays.
 	rule(http.MethodPut, "/v1/vouchers/admin/catalog"),
 	rule(http.MethodPut, "/v1/vouchers/admin/settings"),
+	// A supplier top-up recorded or voided moves the dollar rate cards are
+	// priced at (what its dollars cost us).
+	rule(http.MethodPost, "/v1/vouchers/admin/fx/fundings"),
+	rule(http.MethodPost, "/v1/vouchers/admin/fx/fundings/*/void"),
 	// The company's own card stock: codes worth money going on, or off, the
 	// shelf every shop buys from first.
 	rule(http.MethodPost, "/v1/vouchers/admin/stock"),

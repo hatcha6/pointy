@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -484,7 +486,8 @@ func runVoucherCatalogCheck(args []string) error {
 	return nil
 }
 
-// runVoucherCatalogPush uploads the images a catalog file names, then
+// runVoucherCatalogPush uploads the images a catalog file names that the
+// published catalog does not already use, then
 // publishes the catalog with them as uploaded references.
 func runVoucherCatalogPush(args []string) error {
 	if len(args) == 0 || strings.HasPrefix(args[0], "-") {
@@ -502,6 +505,11 @@ func runVoucherCatalogPush(args []string) error {
 	if err != nil {
 		return err
 	}
+	published, err := publishedVoucherImages(admin)
+	if err != nil {
+		fmt.Printf("Could not read the published catalog (%v): uploading every image.\n", err)
+	}
+	skipped := 0
 	uploaded := map[string]string{}
 	upload := func(ref string) (string, error) {
 		ref = strings.TrimSpace(ref)
@@ -514,6 +522,14 @@ func runVoucherCatalogPush(args []string) error {
 		data, contentType, err := readVoucherImage(filepath.Join(dir, ref))
 		if err != nil {
 			return "", err
+		}
+		// The relay names an image by the SHA-256 of its bytes, so one the
+		// published catalog already uses is on the relay: no upload needed.
+		digest := sha256.Sum256(data)
+		if sum := hex.EncodeToString(digest[:]); published[sum] {
+			uploaded[ref] = vouchers.ImagePrefix + sum
+			skipped++
+			return uploaded[ref], nil
 		}
 		raw, err := admin.requestRaw(http.MethodPost, "/v1/vouchers/admin/images", nil, contentType, data, 30*time.Second)
 		if err != nil {
@@ -548,6 +564,9 @@ func runVoucherCatalogPush(args []string) error {
 			return err
 		}
 	}
+	if skipped > 0 {
+		fmt.Printf("  %d images already on the relay, not uploaded again\n", skipped)
+	}
 	raw, err := admin.requestRaw(http.MethodPut, "/v1/vouchers/admin/catalog", nil, "application/json",
 		mustJSON(map[string]any{"document": document, "actor": resolveActor(*actor), "note": *note}), 60*time.Second)
 	if err != nil {
@@ -575,6 +594,34 @@ func runVoucherCatalogPush(args []string) error {
 			strings.Join(named, " and "))
 	}
 	return nil
+}
+
+// publishedVoucherImages is the SHA-256 of every image the relay's current
+// catalog references (none when nothing is published yet). Images are only
+// ever added to the relay's store, so each of them is there to reuse.
+func publishedVoucherImages(admin *adminControlFlags) (map[string]bool, error) {
+	raw, err := admin.requestRaw(http.MethodGet, "/v1/vouchers/admin/catalog", nil, "", nil, 2*time.Minute)
+	if err != nil {
+		return nil, err
+	}
+	var answer struct {
+		Catalog *struct {
+			Document vouchers.Document `json:"document"`
+		} `json:"catalog"`
+	}
+	if err := json.Unmarshal(raw, &answer); err != nil {
+		return nil, err
+	}
+	sums := map[string]bool{}
+	if answer.Catalog == nil {
+		return sums, nil
+	}
+	for _, ref := range vouchers.Images(answer.Catalog.Document) {
+		if sum, ok := strings.CutPrefix(ref, vouchers.ImagePrefix); ok {
+			sums[strings.ToLower(sum)] = true
+		}
+	}
+	return sums, nil
 }
 
 // pricedOnDemand names the suppliers the catalog buys from that price only the

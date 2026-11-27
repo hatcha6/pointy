@@ -561,6 +561,125 @@ The preview relay keeps update bundles in `console-ui/.dev-artifacts` (git-ignor
 The preview relay uses its own database (`relay_console_dev`) and Redis db, and
 runs suppliers in test mode whatever `relay/.env` holds.
 
+### Claude connector (read-only MCP)
+
+The relay serves a remote MCP server at `<console origin>/mcp` (Streamable
+HTTP, JSON answers, protocol 2025-03-26 to 2025-11-25), so a scheduled Claude
+agent can look the business over every day and tell the owner what our own
+alerts do not. It is **on by default wherever the console is on** (Postgres
+store required); `POINTY_RELAY_MCP_ENABLED=false` turns it off. Code:
+`internal/agentmcp`, grants in `control/mcp_grants.go` (migration 48).
+
+Rules it keeps:
+
+- **Never the fleet admin token.** claude.ai connects with OAuth 2.1 (dynamic
+  client registration, PKCE S256, rotating refresh tokens; RFC 9728/8414
+  discovery). The consent page at `/oauth/authorize` only approves for an
+  operator **signed in to the console with a passkey**; each approval is audited
+  and pushed to ntfy. Claude Code or a script can use a static token instead
+  (`pointy-relay mcp token`). Every grant is revocable on its own:
+  `pointy-relay mcp grants`, `pointy-relay mcp revoke <id>`. Reusing a rotated
+  refresh token revokes its grant.
+- **Read-only.** Every tool forwards GETs in process to the existing admin
+  handlers (the same figures the console shows). Answers are redacted by field
+  name: card codes, PINs, serials, eSIM activation data, tokens, keys, secrets,
+  idempotency keys, purchase targets/details and contact details never leave.
+- **Rate-limited and audited.** 120 calls a minute and 3000 a day per grant;
+  every call lands in the console's activity log as «Claude · name (approver)».
+
+Tools: `finance_summary`, `finance_position`, `voucher_purchases` (held,
+failed, by shop), `sales_breakdown` (by shop/item/supplier/day/buyer, latest
+500 purchases), `dollar_rate` (fulus.ly series incl. `nab`, funding-aware
+quote, supplier fundings and books), `pricing_settings`, `supplier_balances`
+(BN Plus, FazerCards, Reloadly), `catalog_items` (cost per supplier vs price),
+`company_stock` (counts, never codes), `wallet_topups`, `shop_wallets`,
+`fleet_health`, `alerts`, and the Daftar Cards app: `customers_summary`,
+`cards_customers` (id, orders, spend, credit, devices — phone removed),
+`cards_orders` (player IDs and payment references removed),
+`cards_sales_breakdown` (by item/channel/status/day/method, cost and profit),
+`cards_order_reports`, `cards_engagement` (campaigns, pushes sent),
+`cards_shelf` (store gating, eSIM promos). Known gap:
+eSIM Access's balance has no admin route yet; it only shows inside
+`dollar_rate`'s books when read.
+
+**Add it in claude.ai.** The relay must be reachable on public HTTPS port 443
+(the console's origin, e.g. `https://relay.dftr.ly`). If the relay is behind an
+allow-list, admit Anthropic's egress ranges `160.79.104.0/21` and
+`153.61.208.0/20`.
+
+1. Sign in to the console in the same browser (passkey).
+2. claude.ai → Settings → Connectors → *Add custom connector*. Name «دفتر»,
+   URL `https://<console origin>/mcp`. Leave the OAuth client fields empty
+   (dynamic registration). On a Team/Enterprise plan an owner adds it under the
+   organization's connector settings first.
+3. Connect → the relay's consent page → «موافقة». Check
+   `pointy-relay mcp grants` shows the new grant.
+
+Claude Code, with a static token instead of OAuth:
+
+```sh
+pointy-relay mcp token --name "daily agent" --days 90
+claude mcp add --transport http daftar https://<console origin>/mcp --header "Authorization: Bearer <token>"
+```
+
+**A daily scheduled agent.** In Claude Code on the web (claude.ai/code) create
+a routine (`/schedule` in Claude Code, or the Routines page), daily at 07:00
+Libya time, with the «دفتر» connector enabled (routines include your connected
+connectors) and this starter prompt:
+
+```text
+You are the daily business watch for Daftar (دفتر), a Libyan prepaid-card
+seller. Use only the «دفتر» connector tools. Money is LYD unless marked USD;
+Libya is UTC+2. Look at the last 24 hours against the 7 days before, and report
+in Arabic, shortest first. Say nothing about what is normal.
+
+Check and flag:
+1. Margin below floor: catalog_items against pricing_settings (minimum shop
+   margin); any card selling at or under cost, and sales_breakdown items whose
+   profit/sales fell under the floor.
+2. Supplier balance low: supplier_balances and dollar_rate books — at today's
+   pace (sales_breakdown by supplier), which supplier runs out within 3 days?
+3. Dollar rate shock: dollar_rate — a shock, a move over 2% in a day, the
+   pricing quote far from the live rate, or any 'problem'/'rate_problem'.
+4. Stale fulus feed: the latest history point older than 6 hours, or a
+   manual fallback.
+5. Failed or held purchases: voucher_purchases held=true (anything held over
+   30 minutes) and status=failed (repeated error codes, one supplier failing).
+6. Sales anomalies: a shop that usually sells and sold nothing, a shop or item
+   jumping over 3x, a sudden drop in total sales or profit (finance_summary).
+7. Money waiting on us: wallet_topups status=review, alerts, fleet_health shops
+   offline or failed updates.
+8. Cards app: customers_summary and cards_sales_breakdown (by channel and by
+   item) against last week — new customers, buyers, refunds and failed or
+   expired orders, open cards_order_reports, a campaign near its cap or last
+   day, and customers whose spend jumped or who stopped buying.
+
+End with at most three actions for the owner, each naming the shop, item or
+supplier. If nothing needs attention, answer with one line.
+```
+
+**Claude Duet** (claude.ai → Claude Duet, Preview) is the owner's proactive
+assistant: it runs daily briefs over the connectors on the same claude.ai
+account (it already sends a Daftar Cards brief from PostHog). Once the
+connector is added, ask Duet for a daily «دفتر» business watch using the
+prompt above. Not tested inside Duet.
+
+Tested 2026-11-26 end to end from claude.ai (custom connector → OAuth consent →
+tools in a chat) against a local relay with test data.
+
+Local development:
+
+```sh
+make relay-mcp                         # throwaway relay on :8191, connector at /mcp
+make relay-mcp-token NAME="local agent"
+claude mcp add --transport http daftar-local http://localhost:8191/mcp --header "Authorization: Bearer <token>"
+```
+
+Proposed write tools (not built; each needs the owner's explicit approval and
+would take a console step-up the way money actions do): re-check a held
+purchase (`purchases/{id}/check`), resync supplier offers, pause a card from
+sale. Nothing that moves money.
+
 ### Operator CLI
 
 The operator CLI wraps the whole admin API for day-to-day fleet management.

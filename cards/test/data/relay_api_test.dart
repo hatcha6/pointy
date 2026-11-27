@@ -163,4 +163,50 @@ void main() {
     await api.get('/v1/customers/esim/destinations', withSession: true);
     expect(seen, [null]);
   });
+
+  group('a slow line', () {
+    // Bytes that arrive every [gap], [chunks] times.
+    http.Client trickle(Duration gap, int chunks) =>
+        MockClient.streaming((request, _) async {
+          final body = utf8.encode(jsonEncode({'ok': 'x' * 64}));
+          final size = (body.length / chunks).ceil();
+          Stream<List<int>> parts() async* {
+            for (var start = 0; start < body.length; start += size) {
+              await Future<void>.delayed(gap);
+              yield body.sublist(start, (start + size).clamp(0, body.length));
+            }
+          }
+
+          return http.StreamedResponse(
+            parts(),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        });
+
+    RelayApi api(http.Client client) => RelayApi(
+      baseUrl: Uri.parse('https://relay.test'),
+      sessions: MemorySessionStore(),
+      client: client,
+      timeout: const Duration(milliseconds: 200),
+      idleTimeout: const Duration(milliseconds: 150),
+    );
+
+    test('that keeps delivering is waited for past the timeout', () async {
+      // ~400ms in all, longer than the 200ms timeout, never 150ms silent.
+      final answer = await api(trickle(const Duration(milliseconds: 50), 8))
+          .get('/v1/customers/catalog');
+      expect(answer['ok'], 'x' * 64);
+    });
+
+    test('that stalls is a network error', () async {
+      await expectLater(
+        api(trickle(const Duration(milliseconds: 400), 2))
+            .get('/v1/customers/catalog'),
+        throwsA(
+          isA<RelayApiException>().having((e) => e.isNetwork, 'network', true),
+        ),
+      );
+    });
+  });
 }

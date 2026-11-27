@@ -21,6 +21,9 @@ import 'data/vault/orders_vault.dart';
 import 'features/card_payment/moamalat_client.dart';
 import 'features/links/link_inbox.dart';
 import 'features/my_cards/my_cards_memory.dart';
+import 'features/runner/runner_audio.dart';
+import 'features/runner/runner_board.dart';
+import 'features/runner/runner_records.dart';
 import 'shared/art_preloader.dart';
 
 /// Everything the screens use, built once at launch. Screens get it from
@@ -44,9 +47,11 @@ class CardsDependencies {
     EsimRepository? esim,
     EsimVault? esimVault,
     EsimCompatibility? esimCompatibility,
+    RunnerAudio? runnerAudio,
     this.preferences,
     this.art,
   }) : settings = settings ?? AppSettings(),
+       runnerAudio = runnerAudio ?? NoRunnerAudio(),
        accounts = accounts ?? SavedAccounts(preferences: preferences),
        esim =
            esim ??
@@ -149,6 +154,7 @@ class CardsDependencies {
         analytics: analytics,
         preferences: preferences,
       ),
+      runnerAudio: MixedRunnerAudio(),
       preferences: preferences,
     );
   }
@@ -192,4 +198,18 @@ class CardsDependencies {
 
   /// Small per-device choices (the last payment method). Null in tests.
   final SharedPreferencesAsync? preferences;
+
+  /// The waiting game's sounds: silent unless the app is the real one.
+  final RunnerAudio runnerAudio;
+
+  /// The waiting game's best runs on this phone.
+  late final RunnerRecords runnerRecords = RunnerRecords(
+    preferences: preferences,
+  );
+
+  /// The waiting game's leaderboard, shared by every customer.
+  late final RunnerBoardRepository runnerBoard = RunnerBoardRepository(
+    api: auth.api,
+    isSignedIn: () => auth.isSignedIn,
+  );
 }

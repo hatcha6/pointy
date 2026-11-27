@@ -3,7 +3,7 @@
 //
 //   make cards-preview, then ?screen=board | home | brand | brand-itunes |
 //   sign-in | sign-in-code | checkout | wallet-code | preparing |
-//   preparing-slow | refunded | reveal | my-cards | account | signed-out |
+//   preparing-play | preparing-slow | refunded | reveal | my-cards | account | signed-out |
 //   notice | splash | payment-page (&url=) ; top-ups by ID: topup (a game the relay looks up) |
 //   topup-saved | topup-zone | topup-server | topup-telegram | topup-steam |
 //   topup-gift | topup-checkout | topup-preparing | topup-done |
@@ -27,6 +27,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
+
+import '../src/features/runner/runner_audio.dart';
+import 'runner_lab.dart';
 
 import '../src/app.dart';
 import '../src/core/push/push.dart';
@@ -103,6 +106,8 @@ Future<void> main() async {
   final scenarios = screen == 'home' ? PreviewScenarios() : null;
   final dependencies = fixtureDependencies(
     esim: true,
+    // The waiting game plays its real sounds, to try them by ear.
+    runnerAudio: MixedRunnerAudio(),
     signedIn:
         screen != 'signed-out' &&
         !screen.startsWith('sign-in') &&
@@ -110,7 +115,8 @@ Future<void> main() async {
     shelfRelay: shelfRelay.isEmpty ? null : Uri.parse(shelfRelay),
     // A late card stays late however often the page asks.
     client: switch (screen) {
-      'preparing-slow' => fixtureRelay(orderStatus: 'fulfilling'),
+      'preparing-slow' ||
+      'preparing-play' => fixtureRelay(orderStatus: 'fulfilling'),
       'topup-preparing' => fixtureRelay(
         orderStatus: 'fulfilling',
         topUps: true,
@@ -401,6 +407,23 @@ class PreviewSurface extends StatelessWidget {
           order: CardOrder.fromJson(fixtureOrder(status: 'fulfilling')),
         ),
       ),
+      // Paid eight seconds ago: the page opens as an order on its way, and
+      // a few seconds later the wait turns long and the game makes its
+      // entrance, as it would for a customer.
+      'preparing-play' => OrderProgressPage(
+        brand: _libyana,
+        openPaymentPage: false,
+        watcher: OrderWatcher(
+          orders: dependencies.orders,
+          vault: dependencies.vault,
+          order: CardOrder.fromJson(
+            fixtureOrder(status: 'fulfilling')
+              ..['paid_at'] = DateTime.now()
+                  .subtract(const Duration(seconds: 8))
+                  .toIso8601String(),
+          ),
+        ),
+      ),
       // Paid four minutes ago and still waiting: the page says to go.
       'preparing-slow' => OrderProgressPage(
         brand: _libyana,
@@ -429,6 +452,9 @@ class PreviewSurface extends StatelessWidget {
       'reveal' => RevealPage(
         order: CardOrder.fromJson(fixtureOrder()),
         brand: _libyana,
+      ),
+      'runner-biomes' => RunnerBiomeLab(
+        border: int.tryParse(Uri.base.queryParameters['border'] ?? '') ?? 1,
       ),
       'splash' => SplashLab(run: Uri.base.queryParameters['run']),
       'card-pay' => CardPaymentPage(

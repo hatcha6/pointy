@@ -2070,4 +2070,108 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get esimShareDestination => 'Share';
+
+  @override
+  String get waitPlayTitle => 'Taking a little longer than usual';
+
+  @override
+  String get runnerTapToJump => 'Tap to jump';
+
+  @override
+  String get runnerHoldHint => 'Hold for a higher jump';
+
+  @override
+  String get runnerOver => 'Run over';
+
+  @override
+  String get runnerNewBest => 'New best!';
+
+  @override
+  String runnerBest(String score) {
+    return 'Best $score';
+  }
+
+  @override
+  String get runnerTapAgain => 'Tap to play again';
+
+  @override
+  String get runnerPaused => 'Paused · tap to continue';
+
+  @override
+  String get runnerUnlocked => 'New runner unlocked!';
+
+  @override
+  String get runnerArrived => 'Your order is here!';
+
+  @override
+  String get runnerShowOrder => 'Show it';
+
+  @override
+  String get runnerKeepPlaying => 'Finish the run';
+
+  @override
+  String get runnerScoresTitle => 'Your best runs';
+
+  @override
+  String get runnerStatRuns => 'Runs';
+
+  @override
+  String get runnerStatCoins => 'Coins';
+
+  @override
+  String get runnerStatBest => 'Best';
+
+  @override
+  String get runnerNoRuns => 'No runs yet. The first one starts with a tap.';
+
+  @override
+  String get runnerCharacters => 'Pick your runner';
+
+  @override
+  String runnerUnlockAt(String score) {
+    return 'At $score';
+  }
+
+  @override
+  String get runnerCredit => 'Art and sounds: Kenney.nl';
+
+  @override
+  String get runnerSoundOn => 'Sound on';
+
+  @override
+  String get runnerSoundOff => 'Mute';
+
+  @override
+  String get runnerGameLabel => 'A jumping game while you wait. Tap to jump.';
+
+  @override
+  String runnerScore(String score) {
+    return 'Score $score';
+  }
+
+  @override
+  String get waitPlayBody =>
+      'It shows up here the moment it arrives, or later in My cards.';
+
+  @override
+  String get runnerTabMine => 'Yours';
+
+  @override
+  String get runnerTabWeek => 'This week';
+
+  @override
+  String get runnerTabAll => 'All time';
+
+  @override
+  String get runnerYou => 'You';
+
+  @override
+  String get runnerBoardEmpty => 'Nobody on the board yet. Be the first!';
+
+  @override
+  String get runnerBoardFailed => 'Couldn\'t load the board.';
+
+  @override
+  String get runnerBoardNames =>
+      'You show under a nickname, never your number.';
 }

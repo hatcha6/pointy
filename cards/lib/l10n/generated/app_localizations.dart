@@ -3326,6 +3326,198 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'مشاركة'**
   String get esimShareDestination;
+
+  /// The order is taking longer than usual; the waiting game is offered.
+  ///
+  /// In ar, this message translates to:
+  /// **'يأخذ وقتاً أطول من المعتاد'**
+  String get waitPlayTitle;
+
+  /// Waiting game: before the first tap.
+  ///
+  /// In ar, this message translates to:
+  /// **'اضغط للقفز'**
+  String get runnerTapToJump;
+
+  /// Waiting game: how the one control works.
+  ///
+  /// In ar, this message translates to:
+  /// **'اضغط مطوّلاً لقفزة أعلى'**
+  String get runnerHoldHint;
+
+  /// Waiting game: the runner crashed.
+  ///
+  /// In ar, this message translates to:
+  /// **'انتهت الجولة'**
+  String get runnerOver;
+
+  /// Waiting game: the run beat the best score on this phone.
+  ///
+  /// In ar, this message translates to:
+  /// **'رقم قياسي جديد!'**
+  String get runnerNewBest;
+
+  /// Waiting game: the best score on this phone.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأفضل {score}'**
+  String runnerBest(String score);
+
+  /// Waiting game: after a crash.
+  ///
+  /// In ar, this message translates to:
+  /// **'اضغط للعب مجدداً'**
+  String get runnerTapAgain;
+
+  /// Waiting game: paused while the app was away.
+  ///
+  /// In ar, this message translates to:
+  /// **'متوقفة مؤقتاً · اضغط للمتابعة'**
+  String get runnerPaused;
+
+  /// Waiting game: a new best unlocked a runner.
+  ///
+  /// In ar, this message translates to:
+  /// **'فتحت شخصية جديدة!'**
+  String get runnerUnlocked;
+
+  /// Waiting game: the order arrived during a run.
+  ///
+  /// In ar, this message translates to:
+  /// **'وصل طلبك!'**
+  String get runnerArrived;
+
+  /// Waiting game: leave the game for the arrived order.
+  ///
+  /// In ar, this message translates to:
+  /// **'اعرضه الآن'**
+  String get runnerShowOrder;
+
+  /// Waiting game: keep playing after the order arrived.
+  ///
+  /// In ar, this message translates to:
+  /// **'أكمل الجولة'**
+  String get runnerKeepPlaying;
+
+  /// Waiting game: the scores sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'أفضل نتائجك'**
+  String get runnerScoresTitle;
+
+  /// Waiting game: number of runs played.
+  ///
+  /// In ar, this message translates to:
+  /// **'الجولات'**
+  String get runnerStatRuns;
+
+  /// Waiting game: coins collected over all runs.
+  ///
+  /// In ar, this message translates to:
+  /// **'العملات'**
+  String get runnerStatCoins;
+
+  /// Waiting game: best score.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأفضل'**
+  String get runnerStatBest;
+
+  /// Waiting game: scores sheet before any run.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا نتائج بعد. أول جولة تبدأ بضغطة.'**
+  String get runnerNoRuns;
+
+  /// Waiting game: the runner picker.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر شخصيتك'**
+  String get runnerCharacters;
+
+  /// Waiting game: score that unlocks a runner.
+  ///
+  /// In ar, this message translates to:
+  /// **'عند {score}'**
+  String runnerUnlockAt(String score);
+
+  /// Waiting game: credit to the CC0 asset author.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرسوم والأصوات: Kenney.nl'**
+  String get runnerCredit;
+
+  /// Waiting game: unmute button.
+  ///
+  /// In ar, this message translates to:
+  /// **'تشغيل الصوت'**
+  String get runnerSoundOn;
+
+  /// Waiting game: mute button.
+  ///
+  /// In ar, this message translates to:
+  /// **'كتم الصوت'**
+  String get runnerSoundOff;
+
+  /// Waiting game: screen reader label.
+  ///
+  /// In ar, this message translates to:
+  /// **'لعبة قفز أثناء الانتظار. اضغط للقفز.'**
+  String get runnerGameLabel;
+
+  /// Waiting game: screen reader score.
+  ///
+  /// In ar, this message translates to:
+  /// **'النتيجة {score}'**
+  String runnerScore(String score);
+
+  /// The waiting room: where the order will show up.
+  ///
+  /// In ar, this message translates to:
+  /// **'يظهر هنا فور وصوله، أو تجده لاحقاً في «كروتي».'**
+  String get waitPlayBody;
+
+  /// Waiting game scores sheet: this phone's runs.
+  ///
+  /// In ar, this message translates to:
+  /// **'نتائجك'**
+  String get runnerTabMine;
+
+  /// Waiting game scores sheet: the shared board for this week.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا الأسبوع'**
+  String get runnerTabWeek;
+
+  /// Waiting game scores sheet: the shared all-time board.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل الأوقات'**
+  String get runnerTabAll;
+
+  /// Waiting game leaderboard: marks the customer's own row.
+  ///
+  /// In ar, this message translates to:
+  /// **'أنت'**
+  String get runnerYou;
+
+  /// Waiting game leaderboard with no runs in the period.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا أحد في القائمة بعد. كن الأول!'**
+  String get runnerBoardEmpty;
+
+  /// Waiting game leaderboard could not be read.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل القائمة.'**
+  String get runnerBoardFailed;
+
+  /// Waiting game leaderboard: privacy note under the board.
+  ///
+  /// In ar, this message translates to:
+  /// **'تظهر باسم مستعار، لا برقمك.'**
+  String get runnerBoardNames;
 }
 
 class _AppLocalizationsDelegate

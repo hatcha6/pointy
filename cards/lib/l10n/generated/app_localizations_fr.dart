@@ -2092,4 +2092,110 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get esimShareDestination => 'Partager';
+
+  @override
+  String get waitPlayTitle => 'Un peu plus long que d\'habitude';
+
+  @override
+  String get runnerTapToJump => 'Touchez pour sauter';
+
+  @override
+  String get runnerHoldHint => 'Maintenez pour sauter plus haut';
+
+  @override
+  String get runnerOver => 'Partie terminée';
+
+  @override
+  String get runnerNewBest => 'Nouveau record !';
+
+  @override
+  String runnerBest(String score) {
+    return 'Record $score';
+  }
+
+  @override
+  String get runnerTapAgain => 'Touchez pour rejouer';
+
+  @override
+  String get runnerPaused => 'En pause · touchez pour reprendre';
+
+  @override
+  String get runnerUnlocked => 'Nouveau personnage débloqué !';
+
+  @override
+  String get runnerArrived => 'Votre commande est arrivée !';
+
+  @override
+  String get runnerShowOrder => 'L\'afficher';
+
+  @override
+  String get runnerKeepPlaying => 'Finir la partie';
+
+  @override
+  String get runnerScoresTitle => 'Vos meilleures parties';
+
+  @override
+  String get runnerStatRuns => 'Parties';
+
+  @override
+  String get runnerStatCoins => 'Pièces';
+
+  @override
+  String get runnerStatBest => 'Record';
+
+  @override
+  String get runnerNoRuns =>
+      'Aucune partie. La première commence d\'une touche.';
+
+  @override
+  String get runnerCharacters => 'Choisissez votre coureur';
+
+  @override
+  String runnerUnlockAt(String score) {
+    return 'À $score';
+  }
+
+  @override
+  String get runnerCredit => 'Graphismes et sons : Kenney.nl';
+
+  @override
+  String get runnerSoundOn => 'Activer le son';
+
+  @override
+  String get runnerSoundOff => 'Couper le son';
+
+  @override
+  String get runnerGameLabel =>
+      'Un jeu de saut pendant l\'attente. Touchez pour sauter.';
+
+  @override
+  String runnerScore(String score) {
+    return 'Score $score';
+  }
+
+  @override
+  String get waitPlayBody =>
+      'Il s\'affiche ici dès son arrivée, ou plus tard dans Mes cartes.';
+
+  @override
+  String get runnerTabMine => 'Les vôtres';
+
+  @override
+  String get runnerTabWeek => 'Cette semaine';
+
+  @override
+  String get runnerTabAll => 'Depuis toujours';
+
+  @override
+  String get runnerYou => 'Vous';
+
+  @override
+  String get runnerBoardEmpty => 'Personne au classement. Soyez le premier !';
+
+  @override
+  String get runnerBoardFailed => 'Impossible de charger le classement.';
+
+  @override
+  String get runnerBoardNames =>
+      'Vous apparaissez sous un pseudo, jamais votre numéro.';
 }

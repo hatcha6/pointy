@@ -223,8 +223,19 @@ sale. Go-live steps: [`ESIM_GO_LIVE.md`](ESIM_GO_LIVE.md).
 
 Previews: `make cards-preview`, then `?screen=board`, or any single screen:
 `home`, `brand`, `brand-itunes`, `sign-in`, `sign-in-code`, `checkout`,
-`wallet-code`, `preparing`, `refunded`, `reveal`, `my-cards`, `account`,
+`wallet-code`, `preparing`, `preparing-play` (the waiting game, with its real sounds), `preparing-slow`, `runner-biomes` (the game's landscape changes, `&border=1..4`), `refunded`, `reveal`, `my-cards`, `account`,
 `signed-out`, `onboarding`, `heard-from` («من أين سمعت عنا؟»; `heard-from-link` with a followed flyer link's code, `sign-in-heard-from` in the sign-in sheet; the code `UNI1` checks), `reward` (a campaign's credit, `&kind=flyer|billboard|creator|referral|ad`, `&via=link|code`, `&name=`), `about`, `privacy`, `terms`, `card-pay` (the bank-card form; `&card=verify` has the bank ask for its code, `&card=decline` refuses the card). Top-ups sent straight to an account: `topup` (a game the relay looks up by ID; «000…» is an unknown player), `topup-saved` (the phone's saved accounts), `topup-zone` (ID with its zone; paste «123456789 (4567)»), `topup-server` (a server to pick), `topup-telegram`, `topup-steam` (a Steam login), `topup-gift` (a Steam gift by invite link), `topup-checkout`, `topup-preparing`, `topup-done`, `topup-receipt` (from «كروتي»), `topup-refunded`, and `topup-board` for all of them in phone frames. The address's path opens like a tapped `cards.dftr.ly` link: `/category/gaming?screen=home`, `/brand/pubg?screen=home`. Add `&platform=ios` or `&platform=android` for that phone's browser (the web «get the app» bar; a desktop browser's phone emulation still reports a Mac), `&theme=dark` for dark, `&lang=en` or `&lang=fr` for English or French (only while `AppSettings.languageChoice` is on).
+
+**The waiting game** (`lib/src/features/runner/`): an order still on its way
+after `OrderProgressPage.playAfter` turns its page into a waiting room with an
+endless runner (tap to jump, hold to jump higher). Its art and sounds are
+Kenney's CC0 packs, picked and converted into `assets/runner/` by
+`tool/runner_assets.sh` (download the three zips it names from kenney.nl by
+hand; needs ffmpeg, bc, and Python with Pillow and NumPy). The runner is
+rigged in code (`runner_rig.dart`), its footsteps follow the ground, and the
+game makes an entrance (`runner_intro.dart`) when the wait turns long. A test plays every
+course with a player who never misses, so a course that asks for an
+impossible jump fails CI.
 
 **Store screenshots and the app preview** come from `lib/dev/store_shots.dart`,
 the real app on the live shelf with fake orders, run on a phone, the iPhone Duo

@@ -639,6 +639,7 @@ type fileStoreData struct {
 	RevokedConnectorCertFingerprints map[string]ConnectorCertificateRevocation `json:"revoked_connector_certificate_fingerprints,omitempty"`
 	Holidays                         map[string]Holiday                        `json:"holidays,omitempty"`
 	ExchangeRates                    map[string]ExchangeRate                   `json:"exchange_rates,omitempty"`
+	SupplierFundings                 map[string]SupplierFunding                `json:"supplier_fundings,omitempty"`
 	ChannelTargets                   map[string]ChannelTarget                  `json:"channel_targets,omitempty"`
 	EnrollmentTokens                 map[string]EnrollmentTokenRecord          `json:"enrollment_tokens,omitempty"`
 	SMSMessages                      map[string]SMSMessage                     `json:"sms_messages,omitempty"`
@@ -659,6 +660,7 @@ type fileStoreData struct {
 	CustomerESIMs                    map[string]CustomerESIM                   `json:"customer_esims,omitempty"`
 	CustomerESIMNotices              map[string]time.Time                      `json:"customer_esim_notices,omitempty"`
 	CustomerOrderReports             map[string]CustomerOrderReport            `json:"customer_order_reports,omitempty"`
+	RunnerScores                     map[string]RunnerScore                    `json:"runner_scores,omitempty"`
 	ESIMCatalog                      *ESIMCatalogDocument                      `json:"esim_catalog,omitempty"`
 	Console                          *fileConsoleData                          `json:"console,omitempty"`
 	Customers                        *fileCustomerData                         `json:"customers,omitempty"`
