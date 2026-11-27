@@ -708,7 +708,7 @@ func (s *FileStore) FinanceTracked(_ context.Context, from, to time.Time) ([]Fin
 			if order.Status != CustomerOrderDelivered || order.TestMode || order.CompletedAt == nil || !within(*order.CompletedAt, from, to) {
 				continue
 			}
-			rollup.addRevenue(FinanceMonth(*order.CompletedAt), FinanceServiceCardsApp, order.Total)
+			rollup.addRevenue(FinanceMonth(*order.CompletedAt), FinanceServiceCardsApp, CustomerOrderEarned(order))
 		}
 	}
 	for _, purchase := range s.data.VoucherPurchases {
@@ -923,7 +923,7 @@ func (s *PostgresStore) FinanceTracked(ctx context.Context, from, to time.Time) 
 		},
 		{
 			// «دفتر كروت»: what customers paid for the cards they got.
-			`SELECT ` + financeMonthSQL("completed_at") + `, '` + FinanceServiceCardsApp + `', SUM(total)::text
+			`SELECT ` + financeMonthSQL("completed_at") + `, '` + FinanceServiceCardsApp + `', SUM(total - refunded)::text
 			FROM relay_customer_orders
 			WHERE status = 'delivered' AND NOT test_mode AND completed_at >= $1 AND completed_at < $2
 			GROUP BY 1, 2`,

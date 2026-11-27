@@ -143,6 +143,7 @@ export const cardKeys = {
   all: ["cards"],
   summary: ["cards", "summary"],
   shelf: ["cards", "shelf"],
+  bundles: ["cards", "bundles"],
   customers: (filter: Record<string, string>) => ["cards", "customers", filter],
   customer: (id: string) => ["cards", "customer", id],
   orders: (filter: Record<string, string>) => ["cards", "orders", filter],
@@ -394,3 +395,62 @@ export function useEsimPromos() {
     queryFn: () => api.get<EsimPromoAnswer>(`${BASE}/esim-promos`),
   });
 }
+
+/** Cards sold together for less (/v1/customers/admin/bundles). */
+export type CardBundleTier = { key: string; saving: string; parts: string[][] };
+export type CardBundle = {
+  key: string;
+  name: string;
+  tagline: string;
+  rank: number;
+  /** Art by choice: the brands picked in the parts the buyer picks in, joined by commas ("libyana"). */
+  art: Record<string, string>;
+  tiers: CardBundleTier[];
+  actor?: string;
+  updated_at?: string;
+};
+
+export function useCardBundles() {
+  return useQuery({
+    queryKey: cardKeys.bundles,
+    queryFn: () => api.get<{ bundles: CardBundle[] }>(`${BASE}/bundles`),
+  });
+}
+
+/** One card a part offers, as the relay prices it now. */
+export type BundleItemView = {
+  item: string;
+  brand: string;
+  brand_name: string;
+  label: string;
+  name: string;
+  logo: string;
+  price: string;
+  cost: string;
+  found: boolean;
+  available: boolean;
+  reason?: string;
+  to_account: boolean;
+  web_only: string[];
+};
+
+/** One size with one pick: what it sells and makes. */
+export type BundleChoiceView = {
+  pick: string[];
+  choice: string;
+  label: string;
+  apart: string;
+  price: string;
+  saving: string;
+  cost: string;
+  margin: string;
+  margin_percent: string;
+  warnings: string[];
+};
+
+export type BundleEvaluation = {
+  tiers: { key: string; saving: string; parts: BundleItemView[][]; choices: BundleChoiceView[]; warnings: string[] }[];
+  choices: string[];
+  warnings: string[];
+  channels: Record<string, number>;
+};

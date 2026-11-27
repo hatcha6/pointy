@@ -199,7 +199,7 @@ func (s *FileStore) customerSummaryLocked(customer Customer, now time.Time) Cust
 			if order.Status == CustomerOrderDelivered {
 				summary.Delivered++
 				if !order.TestMode && !order.Review {
-					if total, ok := new(big.Rat).SetString(order.Total); ok {
+					if total, ok := new(big.Rat).SetString(CustomerOrderEarned(order)); ok {
 						spent.Add(spent, total)
 					}
 				}

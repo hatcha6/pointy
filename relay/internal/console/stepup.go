@@ -88,6 +88,9 @@ var stepUpRules = []stepUpRule{
 	rule(http.MethodPut, "/v1/customers/admin/shelf"),
 	// A promotion sells every plan it touches for less.
 	rule(http.MethodPut, "/v1/customers/admin/esim-promos"),
+	// A bundle sells its cards for less.
+	rule(http.MethodPut, "/v1/customers/admin/bundles/*"),
+	rule(http.MethodDelete, "/v1/customers/admin/bundles/*"),
 	// A campaign's reward is credit every customer it brings is given.
 	rule(http.MethodPost, "/v1/customers/admin/campaigns"),
 	rule(http.MethodPatch, "/v1/customers/admin/campaigns/*"),

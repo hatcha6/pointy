@@ -85,6 +85,10 @@ type customerOrderRequest struct {
 	// OfferID is a segment offer (GET /v1/customers/me/offers) to take off
 	// the order; the store decides whether it may and by how much.
 	OfferID string `json:"offer_id"`
+	// BundleItems makes the order a bundle's (customer_bundle_orders.go):
+	// Item is then the bundle's size, and these the card picked for each
+	// of its parts.
+	BundleItems []string `json:"bundle_items"`
 }
 
 // handleCustomerOrderCreate serves POST /v1/customers/orders.
@@ -120,6 +124,19 @@ func (s HTTPServer) handleCustomerOrderCreate(w http.ResponseWriter, r *http.Req
 			"channel must be one of "+strings.Join(customerChannels, ", "), nil)
 		return
 	}
+	isBundle := len(request.BundleItems) > 0
+	if isBundle {
+		// A bundle is its own deal: bought one at a time, with no offer.
+		switch {
+		case request.Quantity != 1:
+			writeCustomerError(w, http.StatusBadRequest, "invalid_quantity", "a bundle is bought one at a time",
+				map[string]any{"max_quantity": 1})
+			return
+		case strings.TrimSpace(request.OfferID) != "":
+			writeCustomerError(w, http.StatusConflict, "offer_unavailable", "a bundle takes no offer", nil)
+			return
+		}
+	}
 	ctx := r.Context()
 	// The stores' review account buys for show: see customer_review.go.
 	review := s.Customers.isReviewPhone(customer.Phone)
@@ -127,7 +144,7 @@ func (s HTTPServer) handleCustomerOrderCreate(w http.ResponseWriter, r *http.Req
 	// A replay answers with the order as it stands, whatever the catalog says now.
 	if existing, found := s.findCustomerOrderByKey(ctx, orders, customer.ID, request.IdempotencyKey); found {
 		if existing.ItemKey != request.Item || existing.Quantity != request.Quantity ||
-			!sameAccountTyped(existing.Account, request.Account) {
+			!sameAccountTyped(existing.Account, request.Account) || !sameBundleRequest(existing, request.BundleItems) {
 			writeCustomerError(w, http.StatusConflict, "idempotency_key_reused", "this key was used for another order", nil)
 			return
 		}
@@ -139,14 +156,29 @@ func (s HTTPServer) handleCustomerOrderCreate(w http.ResponseWriter, r *http.Req
 	}
 
 	// What is sold, and at what price: a card from the catalog, or an eSIM plan.
-	priced, refusal := s.priceCustomerItem(ctx, customer, cards, request.Item, request.Quantity, request.Channel)
+	var priced customerPricedItem
+	var refusal *customerRefusal
+	var bundle pricedBundle
+	quoteItem := request.Item
+	if isBundle {
+		bundle, refusal = s.priceCustomerBundle(ctx, customer, cards, request.Item, request.BundleItems, request.Channel)
+		if refusal == nil {
+			priced = customerPricedItem{itemKey: bundle.tier.Key, brandKey: customerBundleBrandPrefix + bundle.bundle.Key,
+				itemName: bundle.name, category: "bundle", price: bundle.price}
+			quoteItem = bundle.quoteKey()
+		}
+	} else {
+		priced, refusal = s.priceCustomerItem(ctx, customer, cards, request.Item, request.Quantity, request.Channel)
+	}
 	if refusal != nil {
 		writeCustomerError(w, refusal.status, refusal.code, refusal.message, refusal.extra)
 		return
 	}
 	itemKey, brandKey, itemName, category, sandbox := priced.itemKey, priced.brandKey, priced.itemName, priced.category, priced.sandbox
 	var account map[string]string
-	if priced.esim {
+	if isBundle {
+		// No card of a bundle is sent to an account.
+	} else if priced.esim {
 		account = esimOrderAccount(request.Account)
 	} else {
 		typed, refusal := readPurchaseAccount(priced.located, request.Account, request.Quantity)
@@ -159,9 +191,15 @@ func (s HTTPServer) handleCustomerOrderCreate(w http.ResponseWriter, r *http.Req
 	// The price the checkout showed, held by its quote; a rise past it is
 	// asked again, with the new price and a fresh quote.
 	now := s.clock().Now()
-	price, agreed := s.customerOrderPrice(customer.ID, itemKey, request.Quote, request.UnitPrice, priced.price, now)
+	price, agreed := s.customerOrderPrice(customer.ID, quoteItem, request.Quote, request.UnitPrice, priced.price, now)
 	if !agreed {
-		s.writeCustomerPriceChanged(w, customer.ID, itemKey, priced.price, now)
+		s.writeCustomerPriceChanged(w, customer.ID, quoteItem, priced.price, now)
+		return
+	}
+	if isBundle && price.Cmp(priced.price) != 0 {
+		// Each card's line is booked from the shelf's prices now, so a
+		// bundle is sold at those or asked again; never at a quote's.
+		s.writeCustomerPriceChanged(w, customer.ID, quoteItem, priced.price, now)
 		return
 	}
 
@@ -235,6 +273,7 @@ func (s HTTPServer) handleCustomerOrderCreate(w http.ResponseWriter, r *http.Req
 		Review:     review,
 		OfferID:    request.OfferID,
 		Category:   category,
+		Bundle:     bundle.cards,
 	}, request.UseCredit)
 	switch {
 	case errors.Is(err, control.ErrCustomerOfferUnavailable):
@@ -384,6 +423,9 @@ func (s HTTPServer) advanceCustomerOrder(
 	order control.CustomerOrder,
 	watching bool,
 ) (control.CustomerOrder, []vouchers.Code, bool) {
+	if len(order.Bundle) > 0 {
+		return s.advanceCustomerBundle(ctx, orders, cards, order, watching)
+	}
 	var codes []vouchers.Code
 	if order.Status == control.CustomerOrderPaid {
 		purchase, bought, ok := s.claimCustomerPurchase(ctx, orders, cards, order)
@@ -531,6 +573,9 @@ func (s HTTPServer) claimCustomerPurchase(
 }
 
 func (s HTTPServer) customerOrderCodes(ctx context.Context, cards control.VoucherStore, order control.CustomerOrder) (control.CustomerOrder, []vouchers.Code, bool) {
+	if len(order.Bundle) > 0 {
+		return s.customerBundleCodes(ctx, cards, order, nil)
+	}
 	if isESIMOrder(order) {
 		// An eSIM's details are read from its own route, not with the order.
 		return order, nil, false
@@ -690,6 +735,9 @@ func customerOrderPayload(order control.CustomerOrder, codes []vouchers.Code, co
 		"created_at":     order.CreatedAt,
 		"paid_at":        order.PaidAt,
 		"completed_at":   order.CompletedAt,
+	}
+	if len(order.Bundle) > 0 {
+		customerBundlePayload(order, payload)
 	}
 	if isESIMOrder(order) {
 		// What installs an eSIM never rides on an order: the app asks for the

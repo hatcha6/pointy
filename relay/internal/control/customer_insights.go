@@ -103,7 +103,7 @@ func (s *FileStore) CustomerOrderFacts(_ context.Context) ([]CustomerOrderFact, 
 		}
 		fact := CustomerOrderFact{
 			ID: order.ID, CustomerID: order.CustomerID, CompletedAt: order.CompletedAt.UTC(), Channel: order.Channel,
-			BrandKey: order.BrandKey, Total: NormalizeWalletAmount(order.Total),
+			BrandKey: order.BrandKey, Total: CustomerOrderEarned(order),
 			Discount: NormalizeWalletAmount(orDefault(order.Discount, "0")), OfferID: order.OfferID,
 		}
 		if purchase, ok := s.data.VoucherPurchases[order.PurchaseID]; ok && order.PurchaseID != "" {

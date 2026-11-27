@@ -66,6 +66,10 @@ const (
 // the operator, never served and never credited automatically.
 const CustomerOrderPaymentMismatch = "payment_mismatch"
 
+// CustomerOrderPartlyRefunded marks a delivered bundle some of whose cards
+// could not be bought: their share went back to the customer as credit.
+const CustomerOrderPartlyRefunded = "partly_refunded"
+
 // CustomerOrderOpen reports whether an order can still change on its own.
 func CustomerOrderOpen(status string) bool {
 	switch status {
@@ -123,6 +127,14 @@ type CustomerOrder struct {
 	ErrorDetail string `json:"error_detail,omitempty"`
 	// PurchaseID is the supplier purchase claimed for it.
 	PurchaseID string `json:"purchase_id,omitempty"`
+	// Bundle is a bundle order's cards, one per part (customer_bundles.go):
+	// ItemKey is then the bundle's tier, BrandKey "bundle:<key>", and
+	// PurchaseID the first card's. Nil for an order of one card.
+	Bundle []CustomerBundleCard `json:"bundle,omitempty"`
+	// Refunded is what went back to the customer as credit for the cards
+	// of a delivered bundle that could not be bought: what the order made
+	// is its Total less this.
+	Refunded string `json:"refunded,omitempty"`
 	// LatePaid marks a payment proven after the order was written off and
 	// kept as credit.
 	LatePaid bool `json:"late_paid,omitempty"`
@@ -269,7 +281,34 @@ func normalizeCustomerOrder(order CustomerOrder) (CustomerOrder, *big.Rat, error
 // key already names.
 func sameCustomerOrder(existing, requested CustomerOrder) bool {
 	return existing.ItemKey == requested.ItemKey && existing.Quantity == requested.Quantity &&
-		existing.OfferID == requested.OfferID && sameCustomerAccount(existing.Account, requested.Account)
+		existing.OfferID == requested.OfferID && sameCustomerAccount(existing.Account, requested.Account) &&
+		sameCustomerBundleItems(existing.Bundle, requested.Bundle)
+}
+
+// sameCustomerBundleItems reports whether two bundle orders name the same cards.
+func sameCustomerBundleItems(a, b []CustomerBundleCard) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].Item != b[i].Item {
+			return false
+		}
+	}
+	return true
+}
+
+// CustomerOrderEarned is what an order made the company: its total less what
+// was refunded of a bundle's cards.
+func CustomerOrderEarned(order CustomerOrder) string {
+	total, ok := new(big.Rat).SetString(NormalizeWalletAmount(order.Total))
+	if !ok {
+		return order.Total
+	}
+	if refunded, ok := new(big.Rat).SetString(NormalizeWalletAmount(order.Refunded)); ok {
+		total.Sub(total, refunded)
+	}
+	return FormatWalletAmount(total)
 }
 
 // maxCustomerAccountFields bounds an order's account: a game asks for a
@@ -459,12 +498,17 @@ func finishCustomerOrder(order CustomerOrder, delivered bool, code, detail strin
 	if delivered {
 		order.Status = CustomerOrderDelivered
 		order.ErrorCode, order.ErrorDetail = "", ""
+		if CustomerOrderEarned(order) != NormalizeWalletAmount(order.Total) {
+			// A bundle delivered without a card it could not buy.
+			order.ErrorCode = CustomerOrderPartlyRefunded
+		}
 		return order, nil, true
 	}
 	order.Status = CustomerOrderRefunded
 	order.ErrorCode = truncateRunes(code, 64)
 	order.ErrorDetail = truncateRunes(detail, 500)
-	return order, order.creditEntry(CustomerCreditRefund, order.Total, now), true
+	// A bundle card refunded on its own is not refunded twice.
+	return order, order.creditEntry(CustomerCreditRefund, CustomerOrderEarned(order), now), true
 }
 
 // customerOrderSwept is CustomerOrderFilter.Sweep for one order.

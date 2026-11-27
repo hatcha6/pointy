@@ -1601,6 +1601,30 @@ CREATE INDEX IF NOT EXISTS relay_runner_scores_board_idx
 	ON relay_runner_scores (period, score DESC, updated_at);
 `,
 	},
+	{
+		version: 53,
+		name:    "cards app bundles",
+		sql: `
+-- Bundles of the cards app (control/customer_bundles.go): cards sold together
+-- for less, composed in the console. No row is no bundle: nothing to switch.
+CREATE TABLE IF NOT EXISTS relay_customer_bundles (
+	key text PRIMARY KEY,
+	name text NOT NULL,
+	tagline text NOT NULL DEFAULT '',
+	rank integer NOT NULL DEFAULT 0,
+	art jsonb NOT NULL DEFAULT '{}'::jsonb,
+	tiers jsonb NOT NULL,
+	actor text NOT NULL DEFAULT '',
+	updated_at timestamptz NOT NULL
+);
+
+-- A bundle order's cards, and what went back as credit for those that could
+-- not be bought. Expand only: a relay from before reads and writes orders as
+-- it always did, and its orders keep these at their defaults.
+ALTER TABLE relay_customer_orders ADD COLUMN IF NOT EXISTS bundle jsonb;
+ALTER TABLE relay_customer_orders ADD COLUMN IF NOT EXISTS refunded numeric(14, 3) NOT NULL DEFAULT 0;
+`,
+	},
 }
 
 // migrationsAdvisoryLockKey serializes concurrent migrators (e.g. autoscaled

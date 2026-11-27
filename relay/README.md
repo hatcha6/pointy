@@ -2037,6 +2037,67 @@ Settings:
   - `make relay-run` allows the local `make cards-web` origin.
 - `POINTY_RELAY_CUSTOMER_ORDER_RATE_LIMIT` (`20/hour` per customer).
 
+### Bundles
+
+Two or more cards sold together for less: a PUBG top-up with phone credit for
+the buyer's own network (`customer_bundles.go`, `customer_bundle_orders.go`,
+store `control/customer_bundles.go`, migration 53).
+
+- **Composed in the console** under «تطبيق دفتر كروت ← الباقات», phone-first.
+  A bundle has a key, name, tagline, rank, artwork and sizes (tiers). A tier
+  has a key (what an order names, unique across bundles and never a card's
+  key), a `saving` in dinars and 2 to 4 parts. A part is one card the company
+  fixed, or several the buyer picks one of (one per network). The company
+  fixes every amount; the buyer picks the size and their network.
+  - While editing, `POST /v1/customers/admin/bundles/evaluate {bundle}`
+    answers, per size and per pick: each card's shelf price and supplier
+    cost, the price bought apart, the bundle's price, the saving, the margin
+    and its percentage, with warnings: a loss, a saving above the game card's
+    margin, a card not sellable (unavailable, sent to an account, website-only
+    on a channel), choices of different prices, a network with no art.
+  - Art is one designed 800x500 PNG per network choice, uploaded like brand
+    art (`POST /v1/vouchers/admin/images`) and served by content hash at
+    `/v1/customers/images/{sha256}`. Its key is the brands picked in the parts
+    the buyer picks in, joined by commas (`libyana`); `""` is the fallback.
+  - `GET /v1/customers/admin/bundles`, `PUT /v1/customers/admin/bundles/{key}
+    {bundle}`, `DELETE /v1/customers/admin/bundles/{key}`. Saving and deleting
+    need a passkey tap and take effect at once.
+- **No switch.** No bundle stored is no `bundles` key in the catalog, and the
+  catalog's version (and ETag) is the one it always had. With bundles, the
+  version names them too, so a phone's cached shelf is read again on a change.
+- **Catalog** (`GET /v1/customers/catalog`): `bundles: [{key, name, tagline,
+  rank, art: {"<network>": "sha256:…"}, tiers: [{key, saving: "0.750", parts:
+  [["pubg-ww-60uc"], ["libyana-5lyd", "almadar-5lyd", "ltt-5lyd"]]}]}]`, per
+  channel: a card the channel does not sell as a code (missing, sent to an
+  account, website-only) leaves its part, a size with an empty part is left
+  out, and a bundle with no size left is not shown (iOS sells no game card,
+  so it shows no PUBG bundle).
+- **Orders**: `POST /v1/customers/orders` with `item` = the tier key,
+  `bundle_items` = the card picked for each part, `quantity` 1 and
+  `unit_price` = the cards' current prices less the saving. No `offer_id`
+  (`409 offer_unavailable`), no quantity above one (`400 invalid_quantity`),
+  every item one of its part's (`400 invalid_bundle_items`), every card
+  sellable here now (`409 item_unavailable`). A price that rose is
+  `409 price_changed` with the new price and a quote, as for a card; a bundle
+  is always charged the shelf's price now. The order answers `brand:
+  "bundle:<key>"`, `item` = the tier, `name` = «<bundle> · <labels joined by
+  ' + '>», `bundle_items`, `bundle_refunded`, `refunded`, and each code with
+  its `brand` and `item`.
+  - One Dafa payment. Each card is then its own no-shop purchase (key
+    `corder:<order>:<part>`), bought through the suppliers like any card.
+  - A card that cannot be bought after the payment gives the customer back
+    its share as credit (a `refund` entry keyed `<order>#<part>`), and the
+    rest are delivered: the order is `delivered` with `error_code:
+    partly_refunded`. Only when no card can be bought is the whole order
+    refunded.
+  - On the books each card is sold at its shelf price, except the card that
+    carries the saving (the first fixed part, the game card), sold for its
+    price less the saving. Revenue is the order's total less what was
+    refunded (`relay_customer_orders.refunded`).
+- Old relays and old apps: the migration only adds a table and two columns
+  with defaults, so a relay from before keeps reading and writing orders; an
+  app that does not know `bundles` ignores the key.
+
 ## Shop Wallets (Dafa top-ups)
 
 Every installation has a **wallet**: a prepaid balance with the company that

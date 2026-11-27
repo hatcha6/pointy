@@ -35,6 +35,10 @@ import (
 //	PUT    /v1/customers/admin/shelf                    {ios_gift_cards}
 //	GET    /v1/customers/admin/esim-promos              (esim_promos.go)
 //	PUT    /v1/customers/admin/esim-promos              {promos}
+//	GET    /v1/customers/admin/bundles                  (customer_bundles.go)
+//	POST   /v1/customers/admin/bundles/evaluate         {bundle}
+//	PUT    /v1/customers/admin/bundles/{key}            {bundle}
+//	DELETE /v1/customers/admin/bundles/{key}
 //	GET    /v1/customers/admin/campaigns                (customer_campaigns.go)
 //	POST   /v1/customers/admin/campaigns                {code, name, kind, note, landing}
 //	PATCH  /v1/customers/admin/campaigns/{id}           {name, note, landing, active}
@@ -103,6 +107,14 @@ func (s HTTPServer) handleCustomerAdminRoutes(w http.ResponseWriter, r *http.Req
 	case route == "esim-promos" && r.Method == http.MethodPut:
 		s.handleCustomerAdminSetESIMPromos(w, r)
 		return
+	case route == "bundles" && r.Method == http.MethodGet:
+		s.handleCustomerAdminBundles(w, r)
+	case route == "bundles/evaluate" && r.Method == http.MethodPost:
+		s.handleCustomerAdminEvaluateBundle(w, r)
+	case len(parts) == 2 && parts[0] == "bundles" && r.Method == http.MethodPut:
+		s.handleCustomerAdminSaveBundle(w, r, parts[1])
+	case len(parts) == 2 && parts[0] == "bundles" && r.Method == http.MethodDelete:
+		s.handleCustomerAdminDeleteBundle(w, r, parts[1])
 	case route == "notifications" && r.Method == http.MethodPost:
 		s.handleCustomerAdminNotify(w, r, store)
 	case route == "segments" && r.Method == http.MethodGet:

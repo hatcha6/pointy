@@ -33,7 +33,7 @@ FROM relay_customers c
 LEFT JOIN LATERAL (
 	SELECT count(*) AS orders,
 		count(*) FILTER (WHERE status = 'delivered') AS delivered,
-		sum(total) FILTER (WHERE status = 'delivered' AND NOT test_mode AND NOT review) AS spent,
+		sum(total - refunded) FILTER (WHERE status = 'delivered' AND NOT test_mode AND NOT review) AS spent,
 		max(created_at) AS last_order_at
 	FROM relay_customer_orders WHERE customer_id = c.id
 ) o ON true
@@ -140,7 +140,7 @@ FROM (
 	FROM relay_customers c
 	LEFT JOIN LATERAL (
 		SELECT count(*) FILTER (WHERE status = 'delivered') AS delivered,
-			sum(total) FILTER (WHERE status = 'delivered' AND NOT test_mode AND NOT review) AS spent
+			sum(total - refunded) FILTER (WHERE status = 'delivered' AND NOT test_mode AND NOT review) AS spent
 		FROM relay_customer_orders WHERE customer_id = c.id
 	) o ON true
 	LEFT JOIN LATERAL (

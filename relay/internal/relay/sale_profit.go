@@ -90,6 +90,11 @@ func orderPurchases(ctx context.Context, store control.VoucherStore, orders []co
 	for _, order := range orders {
 		if order.PurchaseID != "" && order.Status == control.CustomerOrderDelivered && !order.TestMode {
 			wanted[order.PurchaseID] = true
+			for _, card := range order.Bundle {
+				if card.PurchaseID != "" && !card.Refunded {
+					wanted[card.PurchaseID] = true
+				}
+			}
 		}
 	}
 	found := map[string]control.VoucherPurchase{}
@@ -125,6 +130,9 @@ func orderPurchases(ctx context.Context, store control.VoucherStore, orders []co
 // cost. The gateway fee the customer paid on top is Dafa's, in and out, and
 // is no part of it.
 func orderProfit(order control.CustomerOrder, purchases map[string]control.VoucherPurchase, rates *financeRates) saleProfit {
+	if len(order.Bundle) > 0 {
+		return bundleProfit(order, purchases, rates)
+	}
 	purchase, ok := purchases[order.PurchaseID]
 	if !ok || order.Status != control.CustomerOrderDelivered || order.TestMode {
 		return saleProfit{}
@@ -152,4 +160,31 @@ func earliestPurchase(purchases []control.VoucherPurchase, now time.Time) time.T
 		}
 	}
 	return earliest
+}
+
+// bundleProfit is orderProfit for a bundle: each card delivered, at what the
+// order booked for it, less what it cost.
+func bundleProfit(order control.CustomerOrder, purchases map[string]control.VoucherPurchase, rates *financeRates) saleProfit {
+	if order.Status != control.CustomerOrderDelivered || order.TestMode {
+		return saleProfit{}
+	}
+	cost, profit := new(big.Rat), new(big.Rat)
+	for _, card := range order.Bundle {
+		if card.Refunded {
+			continue
+		}
+		purchase, ok := purchases[card.PurchaseID]
+		if !ok {
+			return saleProfit{}
+		}
+		line := saleProfitOf(card.Booked, purchase, rates)
+		lineCost, okCost := new(big.Rat).SetString(line.CostLYD)
+		lineProfit, okProfit := new(big.Rat).SetString(line.Profit)
+		if !okCost || !okProfit {
+			return saleProfit{}
+		}
+		cost.Add(cost, lineCost)
+		profit.Add(profit, lineProfit)
+	}
+	return saleProfit{CostLYD: control.FormatWalletAmount(cost), Profit: control.FormatWalletAmount(profit)}
 }

@@ -656,6 +656,7 @@ type fileStoreData struct {
 	VoucherStock                     map[string]VoucherStockCode               `json:"voucher_stock,omitempty"`
 	AlertSettings                    *AlertSettings                            `json:"alert_settings,omitempty"`
 	CustomerShelf                    *CustomerShelfSettings                    `json:"customer_shelf,omitempty"`
+	CustomerBundles                  map[string]CustomerBundle                 `json:"customer_bundles,omitempty"`
 	ESIMPromos                       *ESIMPromoSettings                        `json:"esim_promos,omitempty"`
 	CustomerESIMs                    map[string]CustomerESIM                   `json:"customer_esims,omitempty"`
 	CustomerESIMNotices              map[string]time.Time                      `json:"customer_esim_notices,omitempty"`

@@ -229,7 +229,7 @@ SELECT c.campaign_code, c.heard_from, coalesce(o.delivered, 0) > 0, coalesce(o.s
 FROM relay_customers c
 LEFT JOIN LATERAL (
 	SELECT count(*) FILTER (WHERE status = 'delivered') AS delivered,
-		sum(total) FILTER (WHERE status = 'delivered' AND NOT test_mode AND NOT review) AS spent
+		sum(total - refunded) FILTER (WHERE status = 'delivered' AND NOT test_mode AND NOT review) AS spent
 	FROM relay_customer_orders WHERE customer_id = c.id
 ) o ON true`,
 		func(rows pgx.Rows) error {

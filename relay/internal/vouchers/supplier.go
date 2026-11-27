@@ -312,6 +312,10 @@ const (
 type Code struct {
 	Code   string `json:"code"`
 	Serial string `json:"serial,omitempty"`
+	// Brand and Item name the card a code is in an order of several kinds
+	// (a «دفتر كروت» bundle); empty everywhere else.
+	Brand string `json:"brand,omitempty"`
+	Item  string `json:"item,omitempty"`
 }
 
 // Purchase is what a supplier says about one order.

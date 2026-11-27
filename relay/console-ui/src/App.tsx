@@ -43,6 +43,7 @@ const CardOrders = lazy(() => import("./pages/cards/CustomerOrders").then((m) =>
 const CardReports = lazy(() => import("./pages/cards/Reports").then((m) => ({ default: m.Reports })));
 const CardCampaigns = lazy(() => import("./pages/cards/Campaigns").then((m) => ({ default: m.Campaigns })));
 const CardShelf = lazy(() => import("./pages/cards/Shelf").then((m) => ({ default: m.Shelf })));
+const CardBundles = lazy(() => import("./pages/cards/Bundles").then((m) => ({ default: m.Bundles })));
 const CardEsimPromos = lazy(() => import("./pages/cards/EsimPromos").then((m) => ({ default: m.EsimPromos })));
 const CardSegments = lazy(() => import("./pages/cards/Segments").then((m) => ({ default: m.Segments })));
 const CardOfferBuilder = lazy(() => import("./pages/cards/OfferBuilder").then((m) => ({ default: m.OfferBuilder })));
@@ -127,6 +128,8 @@ function Page({ path }: { path: string }) {
       return <CardShelf />;
     case "/cards/esim-promos":
       return <CardEsimPromos />;
+    case "/cards/bundles":
+      return <CardBundles />;
     case "/cards/campaigns":
       return <CardCampaigns />;
     case "/cards/segments":

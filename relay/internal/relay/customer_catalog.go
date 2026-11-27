@@ -218,6 +218,9 @@ type CustomerCatalogView struct {
 	Categories  []vouchers.ShopCategory `json:"categories"`
 	Countries   []vouchers.ShopCountry  `json:"countries"`
 	Brands      []customerBrand         `json:"brands"`
+	// Bundles are cards sold together for less (customer_bundles.go); the
+	// key is left out while there are none.
+	Bundles []customerBundle `json:"bundles,omitempty"`
 	// Partial marks the first part of the shelf (?part=first): what the home
 	// screen shows first, for an app with no saved copy to open on while
 	// the whole shelf is still on its way. Never set on the whole shelf, so
@@ -401,6 +404,7 @@ func (s HTTPServer) handleCustomerCatalog(w http.ResponseWriter, r *http.Request
 		view = withoutAccountBrands(view)
 	}
 	catalog := s.Customers.customerCatalog(view, channel, s.mobileGiftCards(r.Context()))
+	catalog = withBundles(catalog, s.customerBundles(r.Context()))
 	if r.URL.Query().Get("part") == "first" {
 		catalog = catalog.firstPart()
 	}

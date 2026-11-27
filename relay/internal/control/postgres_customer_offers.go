@@ -410,7 +410,7 @@ ORDER BY c.id`, s.clock.Now().UTC())
 
 func (s *PostgresStore) CustomerOrderFacts(ctx context.Context) ([]CustomerOrderFact, error) {
 	rows, err := s.pool.Query(ctx, `
-SELECT o.id, o.customer_id, o.completed_at, o.channel, o.brand_key, o.total::text, o.discount::text, o.offer_id,
+SELECT o.id, o.customer_id, o.completed_at, o.channel, o.brand_key, (o.total - o.refunded)::text, o.discount::text, o.offer_id,
 	coalesce(p.supplier_cost, ''), coalesce(p.supplier_currency, ''),
 	coalesce(p.completed_at, p.created_at, o.completed_at)
 FROM relay_customer_orders o

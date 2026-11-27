@@ -30,6 +30,7 @@ var (
 	_ VoucherStore           = (*CachedInstallationStore)(nil)
 	_ CustomerStore          = (*CachedInstallationStore)(nil)
 	_ CustomerOrderStore     = (*CachedInstallationStore)(nil)
+	_ CustomerBundleStore    = (*CachedInstallationStore)(nil)
 )
 
 var (
