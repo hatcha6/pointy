@@ -19,7 +19,23 @@ typedef BuyAgain = ({CardBrand brand, CardItem item});
 /// the category filter, and for a signed-in customer their credit and what
 /// they bought before.
 class ShelfModel extends ChangeNotifier {
-  ShelfModel({required this.catalog, required this.orders, required this.auth});
+  ShelfModel({required this.catalog, required this.orders, required this.auth})
+    : _signedInAs = auth.session.value?.customerId {
+    auth.session.addListener(_onSession);
+  }
+
+  String? _signedInAs;
+
+  /// Someone signed in or out: the shelf is asked for again, as it can
+  /// differ by who asks (the stores' review account sees the bundles).
+  void _onSession() {
+    final now = auth.session.value?.customerId;
+    if (now == _signedInAs) {
+      return;
+    }
+    _signedInAs = now;
+    unawaited(refresh());
+  }
 
   final CatalogRepository catalog;
   final OrdersRepository orders;
@@ -131,6 +147,7 @@ class ShelfModel extends ChangeNotifier {
   @override
   void dispose() {
     _searched?.cancel();
+    auth.session.removeListener(_onSession);
     super.dispose();
   }
 

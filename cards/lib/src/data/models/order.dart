@@ -36,6 +36,9 @@ class CardOrder {
     this.account = '',
     this.accountValues = const {},
     this.toAccount = false,
+    this.bundleItems = const [],
+    this.bundleRefunded = const [],
+    this.refunded = Money.zero,
   });
 
   factory CardOrder.fromJson(Map<String, dynamic> json) => CardOrder(
@@ -79,7 +82,39 @@ class CardOrder {
         if (value is String) key: value,
     },
     toAccount: readString(json, 'delivery') == 'account',
+    bundleItems: [
+      for (final item in json['bundle_items'] as List? ?? const [])
+        if (item is String) item,
+    ],
+    bundleRefunded: [
+      for (final item in json['bundle_refunded'] as List? ?? const [])
+        if (item is String) item,
+    ],
+    refunded: Money.parse(readString(json, 'refunded')),
   );
+
+  /// A bundle's cards, as bought (item keys, one per part); empty for an
+  /// order of one card.
+  final List<String> bundleItems;
+
+  /// A bundle's cards that could not be bought after the payment: their
+  /// share went back to the customer's credit ([refunded]), and the rest
+  /// were delivered.
+  final List<String> bundleRefunded;
+
+  /// What went back to the customer's credit for [bundleRefunded].
+  final Money refunded;
+
+  /// A bundle delivered without one of its cards, whose share is in credit.
+  bool get partlyRefunded =>
+      status == OrderStatus.delivered &&
+      (errorCode == 'partly_refunded' || bundleRefunded.isNotEmpty);
+
+  /// How many cards the order came to: a bundle's delivered cards, else
+  /// its quantity.
+  int get cardCount => bundleItems.isNotEmpty
+      ? (bundleItems.length - bundleRefunded.length) * quantity
+      : quantity;
 
   /// An eSIM or a top-up of one: no code to show, its own pages.
   bool get isEsim => EsimItems.isEsim(itemKey);
@@ -177,6 +212,8 @@ class CardCode {
     required this.code,
     required this.serial,
     required this.expiry,
+    this.brandKey = '',
+    this.itemKey = '',
   });
 
   factory CardCode.fromJson(Map<String, dynamic> json) {
@@ -186,12 +223,19 @@ class CardCode {
       code: code,
       serial: serial.isEmpty ? pin : serial,
       expiry: readString(json, 'expiry'),
+      brandKey: readString(json, 'brand'),
+      itemKey: readString(json, 'item'),
     );
   }
 
   final String code;
   final String serial;
   final String expiry;
+
+  /// The card this code is, in an order of several kinds (a bundle); empty
+  /// where it is the order's own.
+  final String brandKey;
+  final String itemKey;
 }
 
 /// A way to pay through Dafa (`GET /v1/customers/payment-methods`).

@@ -2405,4 +2405,66 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get savedNothingBody =>
       'Votre premier paiement réussi enregistre votre moyen et votre numéro : la prochaine fois, un seul geste.';
+
+  @override
+  String get bundlesTitle => 'Packs à prix réduit';
+
+  @override
+  String bundleSave(String amount) {
+    return 'Économisez $amount';
+  }
+
+  @override
+  String get bundleNetworkTitle => 'Votre réseau';
+
+  @override
+  String get bundleNetworkBody =>
+      'Le crédit arrive sous forme de carte pour votre réseau.';
+
+  @override
+  String get bundleTierTitle => 'Choisissez un pack';
+
+  @override
+  String get bundleContentsTitle => 'Dans le pack';
+
+  @override
+  String bundleApart(String price) {
+    return '$price séparément';
+  }
+
+  @override
+  String get bundlePromise =>
+      'Un seul paiement ; chaque carte arrive avec son code tout de suite.';
+
+  @override
+  String get bundleNoOffers =>
+      'Le prix du pack est déjà réduit : il ne se cumule pas avec vos autres offres.';
+
+  @override
+  String get bundleBuy => 'Acheter';
+
+  @override
+  String bundleCards(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count cartes, un paiement',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String bundleCardRefundedTitle(String card) {
+    return '$card n\'a pas pu être acheté';
+  }
+
+  @override
+  String get statusPartlyRefunded => 'En partie remboursé';
+
+  @override
+  String get bundleTierNotOnNetwork => 'Pas sur votre réseau';
+
+  @override
+  String get errBundleChanged =>
+      'Ce pack a changé depuis que vous l\'avez ouvert. Rouvrez-le pour voir son contenu actuel.';
 }

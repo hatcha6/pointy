@@ -101,6 +101,54 @@ and every tap answers. The rules live in `src/design/`:
       dev/cards_fixtures.dart       a fake relay with a realistic shelf (preview + widget tests)
       dev/cards_preview.dart        preview harness (not shipped)
 
+## Bundles
+
+Cards bought together for less: a PUBG top-up with phone credit for the
+buyer's own network (`data/models/bundle.dart`, `features/bundle/`).
+
+- **The company sets every amount.** A tier fixes each part; the buyer picks
+  only the size and, where a part offers one card per network, their
+  network. Only 5 and 10 dinars are sold on all of Libyana, Almadar and LTT,
+  so a free amount picker would offer amounts that vanish on a network
+  change. A bundle is bought one at a time and takes no segment offer.
+- **Priced from the shelf:** the cards' own prices less the tier's `saving`,
+  so a dollar card moving with the rate carries through. A tier missing a
+  card (not sold, sent to an account, website only) is left off.
+- **Off until the relay serves `bundles` in the catalog.** The wire shape:
+  `{key, name, tagline, rank, art: {<network>: <image ref>}, tiers: [{key,
+  saving, parts: [[item keys]]}]}`. An order sends the tier as `item` plus
+  `bundle_items`; the relay answers `brand: "bundle:<key>"`, echoes
+  `bundle_items`, and gives each code its `brand` and `item`.
+- **One brand everywhere:** a bundle stands in as a `CardBrand` (category
+  `bundle`, its art the artwork for the network picked), so checkout, the
+  order's page, «كروتي» and the reveal show it like any card. The reveal pages
+  through its codes, each as its own card, the page's colour following the
+  swipe. `CatalogRepository.brandOfOrder` finds a bought one's network, and
+  keeps its name and art if the bundle later leaves the shelf.
+- **Art** is real artwork, one 800x500 PNG per network, uploaded like any
+  card's. `make cards-bundle-art` draws it with the shelf tiles' own pipeline
+  (`ops/catalog/tools/bundle_art.py`: the brands' official marks, colours,
+  halos and rings) into `ops/catalog/logos/bundles/`.
+- **The stores' review account always sees bundles**, the live ones or the
+  relay's demo set when none is composed, so the feature can be reviewed.
+  The app sends the customer's token with the shelf request
+  (`Authorization: Bearer`, optional; the relay answers everyone else the
+  public shelf, never a 401) and asks again on sign-in and sign-out. On
+  iPhone it is only the bundle of phone credit and internet (services used
+  outside the app; a PUBG bundle would need Apple's in-app purchase, 3.1.1).
+  **Paste into the review notes of the next App Store and Play builds:**
+  «Bundles: this review account always sees «الباقات» (cards sold together
+  for less) on the home screen, even when none is on sale to the public, so
+  the feature can be reviewed. On iPhone only the bundle of phone credit and
+  internet (services used outside the app) is shown; purchases with this
+  account are simulated and nothing is charged.»
+- **Before composing the first bundle,** every relay node must run the
+  version that knows bundles: an older node reads a paid bundle order as an
+  unknown card and refunds it in full (see `relay/README.md`).
+- **Try it on the real shelf:** `make cards-bundle-shelf`, then
+  `make cards-preview-live CARDS_RELAY_URL=http://127.0.0.1:8099` and open
+  `?screen=home`; payment and codes stay fake.
+
 ## Screens
 
 - **Home** (`features/home`):

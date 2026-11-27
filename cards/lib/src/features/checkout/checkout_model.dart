@@ -34,6 +34,7 @@ class CheckoutModel extends ChangeNotifier {
     this.payments,
     this.account,
     this.orderAccount = const {},
+    this.bundleItems = const [],
   }) : _key = _newKey(),
        unitPrice = item.price;
 
@@ -51,6 +52,14 @@ class CheckoutModel extends ChangeNotifier {
 
   /// What an eSIM order says about who it is for.
   final Map<String, String> orderAccount;
+
+  /// A bundle's cards as picked ([brand] is the bundle's stand-in and [item]
+  /// its tier); empty for a card on its own. A bundle is priced from the
+  /// shelf (its cards less its saving), takes no offer and is bought one at
+  /// a time.
+  final List<String> bundleItems;
+
+  bool get isBundle => bundleItems.isNotEmpty;
 
   /// One card's price: the shelf's until the relay quotes it, then the
   /// quote's.
@@ -115,7 +124,9 @@ class CheckoutModel extends ChangeNotifier {
       orders.credit(),
       orders.offers(),
       Future<Object?>.value(payments?.load()),
-      orders.quote(item.key),
+      isBundle
+          ? Future.value(const Ok<PriceQuote?>(null))
+          : orders.quote(item.key),
     ]);
     if (results[4] case Ok(:final value)) {
       _takeQuote(value as PriceQuote?);
@@ -135,8 +146,9 @@ class CheckoutModel extends ChangeNotifier {
     if (results[1] case Ok(:final value)) {
       credit = (value as CreditStatement).balance;
     }
-    // Without them the order is simply paid in full.
-    if (results[2] case Ok(:final value)) {
+    // Without them the order is simply paid in full. A bundle is its own
+    // deal and takes none.
+    if (results[2] case Ok(:final value) when !isBundle) {
       offers = value as List<CardOffer>;
     }
     loading = false;
@@ -168,7 +180,7 @@ class CheckoutModel extends ChangeNotifier {
   /// A new quote while the sheet stays open, so the one sent with the order
   /// is alive; none once the order is placed.
   Future<void> _refreshQuote() async {
-    if (_disposed || order != null) {
+    if (_disposed || order != null || isBundle) {
       return;
     }
     if (busy) {
@@ -318,6 +330,9 @@ class CheckoutModel extends ChangeNotifier {
   }
 
   void setQuantity(int value) {
+    if (isBundle) {
+      return;
+    }
     final max = options?.maxQuantity ?? 10;
     quantity = value.clamp(1, max == 0 ? 10 : max);
     notifyListeners();
@@ -354,6 +369,7 @@ class CheckoutModel extends ChangeNotifier {
         birthYear: from?.birthYear ?? '',
         account: account?.values ?? orderAccount,
         offerId: offer?.id ?? '',
+        bundleItems: bundleItems,
       ),
     );
     busy = false;

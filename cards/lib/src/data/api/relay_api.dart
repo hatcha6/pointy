@@ -149,13 +149,35 @@ class RelayApi {
     String path, {
     Map<String, String>? query,
     Map<String, String>? headers,
+    bool withSession = false,
   }) async {
-    final request = http.Request('GET', resolve(path, query));
-    if (headers != null) {
-      request.headers.addAll(headers);
+    http.Request build({required bool signed, String token = ''}) {
+      final request = http.Request('GET', resolve(path, query));
+      if (headers != null) {
+        request.headers.addAll(headers);
+      }
+      if (signed && token.isNotEmpty) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
+      return request;
     }
+
+    // [withSession]: the access token as it is, if there is one. Never
+    // refreshed for this, and never what decides the answer: a token the
+    // relay will not take is asked again unsigned.
+    final token = withSession ? (await sessions.read())?.accessToken ?? '' : '';
     try {
-      return await _read(await _client.send(request).timeout(timeout));
+      final answer = await _read(
+        await _client
+            .send(build(signed: withSession, token: token))
+            .timeout(timeout),
+      );
+      if (answer.statusCode == 401 && token.isNotEmpty) {
+        return await _read(
+          await _client.send(build(signed: false)).timeout(timeout),
+        );
+      }
+      return answer;
     } on Exception {
       throw const RelayApiException(status: 0, code: 'network');
     }

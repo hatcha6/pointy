@@ -584,6 +584,23 @@
         "frontend-remote-sessions-preview"
       ],
       "port": 8080
+    },
+    {
+      "name": "cards-bundle-shelf",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "cards/tool/bundle_shelf.py"
+      ],
+      "port": 8099
+    },
+    {
+      "name": "cards-preview-bundles",
+      "runtimeExecutable": "make",
+      "runtimeArgs": [
+        "cards-preview-live",
+        "CARDS_RELAY_URL=http://127.0.0.1:8099"
+      ],
+      "port": 8090
     }
   ]
 }

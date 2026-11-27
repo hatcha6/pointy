@@ -2380,4 +2380,66 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get savedNothingBody =>
       'Your first successful payment saves your method and number, so next time you pay in one tap.';
+
+  @override
+  String get bundlesTitle => 'Bundles for less';
+
+  @override
+  String bundleSave(String amount) {
+    return 'Save $amount';
+  }
+
+  @override
+  String get bundleNetworkTitle => 'Your network';
+
+  @override
+  String get bundleNetworkBody =>
+      'The phone credit comes as a card for your network.';
+
+  @override
+  String get bundleTierTitle => 'Pick a size';
+
+  @override
+  String get bundleContentsTitle => 'In the bundle';
+
+  @override
+  String bundleApart(String price) {
+    return '$price apart';
+  }
+
+  @override
+  String get bundlePromise =>
+      'One payment; each card arrives with its own code at once.';
+
+  @override
+  String get bundleNoOffers =>
+      'A bundle\'s price is its own deal, so it doesn\'t combine with your other offers.';
+
+  @override
+  String get bundleBuy => 'Buy bundle';
+
+  @override
+  String bundleCards(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count cards, one payment',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String bundleCardRefundedTitle(String card) {
+    return '$card couldn\'t be bought';
+  }
+
+  @override
+  String get statusPartlyRefunded => 'Part back in credit';
+
+  @override
+  String get bundleTierNotOnNetwork => 'Not on your network';
+
+  @override
+  String get errBundleChanged =>
+      'This bundle changed since you opened it. Open it again to see what\'s in it now.';
 }

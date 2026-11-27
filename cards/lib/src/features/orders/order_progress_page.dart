@@ -472,7 +472,7 @@ class _OrderProgressPageState extends State<OrderProgressPage>
     CardOrder order,
   ) {
     final brand =
-        widget.brand ?? CardsScope.of(context).catalog.brandOf(order.brandKey);
+        widget.brand ?? CardsScope.of(context).catalog.brandOfOrder(order);
     if (!order.toAccount && brand?.target == null) {
       return null;
     }

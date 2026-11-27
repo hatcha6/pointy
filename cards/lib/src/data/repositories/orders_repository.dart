@@ -34,9 +34,15 @@ class OrderRequest {
     this.account = const {},
     this.offerId = '',
     this.quote = '',
+    this.bundleItems = const [],
   });
 
+  /// The card bought; for a bundle, its tier.
   final String itemKey;
+
+  /// A bundle's cards, one per part, as picked: the relay sells the tier
+  /// only with exactly these. Empty for a card on its own.
+  final List<String> bundleItems;
   final int quantity;
 
   /// The price the customer was shown; the relay charges no more.
@@ -150,6 +156,8 @@ class OrdersRepository {
             if (request.account.isNotEmpty) 'account': request.account,
             if (request.offerId.isNotEmpty) 'offer_id': request.offerId,
             if (request.quote.isNotEmpty) 'quote': request.quote,
+            if (request.bundleItems.isNotEmpty)
+              'bundle_items': request.bundleItems,
           },
         );
         changes.value++;

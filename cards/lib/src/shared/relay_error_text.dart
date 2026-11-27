@@ -31,6 +31,7 @@ String relayErrorText(AppLocalizations l10n, Object error) {
       formatMoney(l10n, Money.parse(error.body['unit_price'] as String?)),
     ),
     'item_unavailable' || 'unknown_item' => l10n.errItemUnavailable,
+    'invalid_bundle_items' || 'unknown_bundle' => l10n.errBundleChanged,
     'payments_unavailable' ||
     'cards_unavailable' ||
     'customers_unconfigured' => l10n.errPaymentsUnavailable,

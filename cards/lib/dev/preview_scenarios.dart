@@ -26,7 +26,11 @@ enum PreviewOutcome {
   unpaid('لم يكتمل الدفع', 'لم يكتمل'),
   wrongCode('رمز المحفظة خاطئ أولاً، ثم صحيح', 'رمز خاطئ'),
   declined('رُفض الدفع عند البدء', 'رفض'),
-  offline('انقطع الاتصال عند الدفع', 'دون اتصال');
+  offline('انقطع الاتصال عند الدفع', 'دون اتصال'),
+  partlyRefunded(
+    'باقة: يتعذّر كرت منها فيُعاد ثمنه إلى الرصيد',
+    'استرداد جزئي',
+  );
 
   const PreviewOutcome(this.description, this.short);
 
@@ -67,12 +71,21 @@ class _Script {
   final Map<String, dynamic> order;
   bool paid = false;
   bool wrongCodeTried = false;
+
+  /// A bundle's codes, given once it is delivered; null for one card.
+  List<Map<String, String>>? codes;
   int polls = 0;
 
   /// What each poll answers once paid (or, on the bank's page, from the
   /// start): a beat of "preparing", then the ending.
   List<(String, String)> get afterPayment => switch (outcome) {
     PreviewOutcome.refunded => [('fulfilling', ''), ('refunded', '')],
+    // A bundle's last card fails after the payment; a single card is simply
+    // delivered.
+    PreviewOutcome.partlyRefunded when codes != null => [
+      ('fulfilling', ''),
+      ('delivered', 'partly_refunded'),
+    ],
     PreviewOutcome.review => [('paid', ''), ('failed', 'payment_mismatch')],
     PreviewOutcome.unpaid => [('awaiting_payment', ''), ('expired', '')],
     _ => [('fulfilling', ''), ('delivered', '')],
@@ -88,6 +101,12 @@ class ScriptedOrders {
   final PreviewScenarios scenarios;
   final _scripts = <String, _Script>{};
   final _items = <String, (String, String, String)>{};
+
+  /// Each bundle tier's bundle: its stand-in brand key and its name.
+  final _tiers = <String, (String, String)>{};
+
+  /// Each item's own label, for a bundle's name.
+  final _labels = <String, String>{};
   int _count = 0;
 
   /// Remembers each item's brand, name and price from a catalog answer.
@@ -102,6 +121,16 @@ class ScriptedOrders {
             b['key'] as String,
             '${b['name']} · ${i['label']}',
             i['price'] as String,
+          );
+          _labels[i['key'] as String] = '${i['label']}';
+        }
+      }
+      for (final bundle in catalog['bundles'] as List? ?? const []) {
+        final b = bundle as Map<String, dynamic>;
+        for (final tier in b['tiers'] as List) {
+          _tiers[(tier as Map<String, dynamic>)['key'] as String] = (
+            'bundle:${b['key']}',
+            '${b['name']}',
           );
         }
       }
@@ -140,8 +169,12 @@ class ScriptedOrders {
       }
       final itemKey = sent['item'] as String;
       final quantity = (sent['quantity'] as num?)?.toInt() ?? 1;
-      final (brand, name, price) =
-          _items[itemKey] ?? ('libyana', 'ليبيانا · 10 دينار', '10.00');
+      final bundleItems = [
+        for (final item in sent['bundle_items'] as List? ?? const []) '$item',
+      ];
+      final (brand, name, price) = bundleItems.isNotEmpty
+          ? _bundle(itemKey, bundleItems, '${sent['unit_price']}')
+          : _items[itemKey] ?? ('libyana', 'ليبيانا · 10 دينار', '10.00');
       final total = ((double.tryParse(price) ?? 10) * quantity).toStringAsFixed(
         3,
       );
@@ -156,7 +189,11 @@ class ScriptedOrders {
         total: total,
         nextAction: hosted ? 'hosted_page' : 'otp',
       );
-      final script = _Script(outcome: outcome, hosted: hosted, order: placed);
+      if (bundleItems.isNotEmpty) {
+        placed['bundle_items'] = bundleItems;
+      }
+      final script = _Script(outcome: outcome, hosted: hosted, order: placed)
+        ..codes = bundleItems.isEmpty ? null : _codesFor(bundleItems);
       _scripts[id] = script;
       // Credit that covers it all pays at once, as the relay does.
       if (sent['use_credit'] == true && (double.tryParse(total) ?? 99) <= 10) {
@@ -201,13 +238,64 @@ class ScriptedOrders {
     String status,
     String errorCode,
     OrderJson order,
-  ) => order(
-    id: script.order['id'] as String,
-    status: status,
-    item: script.order['item'] as String,
-    brand: script.order['brand'] as String,
-    name: script.order['name'] as String,
-    total: script.order['total'] as String,
-    errorCode: errorCode,
-  );
+  ) => {
+    ...order(
+      id: script.order['id'] as String,
+      status: status,
+      item: script.order['item'] as String,
+      brand: script.order['brand'] as String,
+      name: script.order['name'] as String,
+      total: script.order['total'] as String,
+      errorCode: errorCode,
+    ),
+    // A bundle's codes, one per card, each saying which card it is.
+    if (script.order['bundle_items'] case final List<Object?> items)
+      'bundle_items': items,
+    if (script.codes case final codes? when status == 'delivered')
+      ...(errorCode == 'partly_refunded'
+          ? {
+              'codes': codes.take(codes.length - 1).toList(),
+              'bundle_refunded': [codes.last['item']],
+              'refunded': _items[codes.last['item']]?.$3 ?? '0',
+            }
+          : {'codes': codes}),
+  };
+
+  /// The orders bought in this preview, newest first, as «كروتي» lists
+  /// them: where each one ended.
+  List<Map<String, dynamic>> placed(OrderJson order) => [
+    for (final script in _scripts.values.toList().reversed)
+      if (script.paid || script.hosted)
+        _with(
+          script,
+          script.afterPayment.last.$1,
+          script.afterPayment.last.$2,
+          order,
+        )
+      else
+        script.order,
+  ];
+
+  /// A bundle order's brand, name and price: «باقة اللاعب · 60 شدة + 5
+  /// دينار» at the price the page showed.
+  (String, String, String) _bundle(
+    String tier,
+    List<String> items,
+    String price,
+  ) {
+    final (brand, name) = _tiers[tier] ?? ('bundle:', 'باقة');
+    final labels = items.map((item) => _labels[item] ?? item).join(' + ');
+    return (brand, '$name · $labels', price);
+  }
+
+  /// A made-up code for each of a bundle's cards.
+  List<Map<String, String>> _codesFor(List<String> items) => [
+    for (final (index, item) in items.indexed)
+      {
+        'code': index.isEven ? '5A2F-91KD-PQ7X-3M8T' : '4827 1930 5561 2208',
+        'serial': 'LY-0098123$index',
+        'brand': _items[item]?.$1 ?? '',
+        'item': item,
+      },
+  ];
 }

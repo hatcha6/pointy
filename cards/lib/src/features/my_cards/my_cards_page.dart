@@ -632,11 +632,16 @@ class _OrderRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final brand = CardsScope.of(context).catalog.brandOf(order.brandKey);
+    final brand = CardsScope.of(context).catalog.brandOfOrder(order);
     final kind = kindKey(brand?.target?.kind);
     final (status, tone) = switch (order.status) {
       OrderStatus.delivered when order.toAccount => (
         l10n.statusToppedUp(kind),
+        PillTone.success,
+      ),
+      // A bundle delivered without one card: its share is in credit.
+      OrderStatus.delivered when order.partlyRefunded => (
+        l10n.statusPartlyRefunded,
         PillTone.success,
       ),
       OrderStatus.delivered => (used ? l10n.usedBadge : null, PillTone.muted),
@@ -703,7 +708,7 @@ class _OrderRow extends StatelessWidget {
                         Text(
                           order.toAccount && order.account.isNotEmpty
                               ? '${l10n.orderTo(isolated(accountShown(order.account)))} · ${formatMoney(l10n, order.total)}'
-                              : '${l10n.cardCount(order.quantity)} · ${formatMoney(l10n, order.total)}',
+                              : '${l10n.cardCount(order.cardCount)} · ${formatMoney(l10n, order.total)}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodySmall?.copyWith(
@@ -749,7 +754,7 @@ Future<void> openCardOrder(
     await EsimPage.openDelivered(context, order, from: from);
     return;
   }
-  final brand = CardsScope.of(context).catalog.brandOf(order.brandKey);
+  final brand = CardsScope.of(context).catalog.brandOfOrder(order);
   // A top-up past paying: where it stands, live, with a way to report it.
   if (order.toAccount && order.status != OrderStatus.awaitingPayment) {
     await TopUpOrderPage.open(context, order: order, brand: brand, from: from);

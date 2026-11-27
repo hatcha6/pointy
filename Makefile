@@ -345,7 +345,7 @@ frontend-web-build: frontend-install ## Build the web app the relay serves on ap
 	cd "$(FRONTEND_DIR)" && ../tools/flutter_web_postbuild.sh
 
 CARDS_DIR ?= cards
-.PHONY: cards-install cards-check cards-run cards-web cards-web-build cards-preview cards-preview-live cards-splash
+.PHONY: cards-install cards-check cards-run cards-web cards-web-build cards-preview cards-preview-live cards-splash cards-bundle-art cards-bundle-shelf
 CARDS_WEB_PORT ?= 8090
 CARDS_WEB_APP_PORT ?= 8093
 
@@ -371,6 +371,12 @@ cards-preview: cards-install ## Run the card app's preview harness (?screen=boar
 
 cards-preview-live: cards-install ## The preview harness signed in on a local relay's real shelf (make relay-run + a pushed catalog): every screen, no sign-in, nothing paid.
 	cd "$(CARDS_DIR)" && $(FLUTTER) run -d web-server --web-hostname $(WEB_HOST) --web-port $(CARDS_WEB_PORT) -t lib/dev/cards_preview.dart --dart-define=CARDS_PREVIEW_RELAY=$(or $(CARDS_RELAY_URL),http://127.0.0.1:8091)
+
+cards-bundle-art: ## Render the bundle artworks (ops/catalog/logos/bundles, 800x500 PNG) the way the shelf's tiles are drawn.
+	python3 ops/catalog/tools/bundle_art.py
+
+cards-bundle-shelf: ## The live shelf with bundles on it, on :8099, for trying bundles before the relay serves them (then: make cards-preview-live CARDS_RELAY_URL=http://127.0.0.1:8099).
+	python3 cards/tool/bundle_shelf.py
 
 cards-splash: cards-install ## Lay out the card app's Android 12 splash icon from the Daftar mark, check the opening's trace against the logo, and regenerate the native splash (Android, iOS, web).
 	cd "$(CARDS_DIR)" && $(FLUTTER) test tool/render_splash_test.dart && $(FLUTTER) pub run flutter_native_splash:create

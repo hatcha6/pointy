@@ -1,5 +1,6 @@
 import '../../core/money.dart';
 import 'account_target.dart';
+import 'bundle.dart';
 import 'json.dart';
 
 /// The card shelf as the relay shows this app build (`GET
@@ -13,6 +14,7 @@ class CardCatalog {
     required this.categories,
     required this.countries,
     required this.brands,
+    this.bundles = const [],
     this.partial = false,
   });
 
@@ -35,6 +37,9 @@ class CardCatalog {
             AccountTarget.fromJson(readMap(b, 'target')) != null)
           CardBrand.fromJson(b),
     ],
+    bundles: [
+      for (final b in readList(json, 'bundles')) CardBundle.fromJson(b),
+    ],
   );
 
   static const empty = CardCatalog(
@@ -53,17 +58,36 @@ class CardCatalog {
   final List<CardCountry> countries;
   final List<CardBrand> brands;
 
+  /// Cards sold together for less, as the relay defines them; [shelfBundles]
+  /// are the ones this shelf can sell. None until the relay serves them:
+  /// that is the switch that turns bundles on.
+  final List<CardBundle> bundles;
+
+  static final Expando<List<ShelfBundle>> _shelfBundles = Expando();
+
+  /// The bundles whose every part is on this shelf, by rank.
+  List<ShelfBundle> get shelfBundles => _shelfBundles[this] ??= [
+    for (final bundle in [...bundles]..sort((a, b) => a.rank - b.rank))
+      ?ShelfBundle.resolve(bundle, this),
+  ];
+
+  ShelfBundle? shelfBundle(String key) =>
+      shelfBundles.where((bundle) => bundle.key == key).firstOrNull;
+
   /// Only the first part of the shelf (what the home screen shows first),
   /// shown on a first launch while the whole shelf is still arriving.
   final bool partial;
 
+  /// A brand, or a bundle's stand-in brand ("bundle:…") with its default
+  /// pick.
   CardBrand? brand(String key) {
     for (final brand in brands) {
       if (brand.key == key) {
         return brand;
       }
     }
-    return null;
+    final bundle = bundleOfBrandKey(key);
+    return bundle.isEmpty ? null : shelfBundle(bundle)?.asBrand();
   }
 }
 
@@ -149,6 +173,9 @@ class CardBrand {
   /// An eSIM's destination (ISO code; empty for a region): its card is drawn
   /// with this flag. Never comes from the catalog.
   final String flagCountry;
+
+  /// A bundle's stand-in ([ShelfBundle.asBrand]).
+  bool get isBundle => category == bundleCategory;
 
   final String key;
   final String name;

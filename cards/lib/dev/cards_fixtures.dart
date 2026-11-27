@@ -368,6 +368,116 @@ Map<String, dynamic> get fixtureCatalogWithTopUps => {
   ...fixtureCatalog,
   'categories': [...fixtureCatalog['categories'] as List, fixtureTopUpCategory],
   'brands': [...fixtureCatalog['brands'] as List, ...fixtureTopUpBrands],
+  'bundles': [fixtureBundle],
+};
+
+/// A bundle bought earlier: PUBG with Almadar's credit, its two codes each
+/// saying which card it is.
+final Map<String, dynamic> fixtureBundleOrder = {
+  ...fixtureOrder(
+    id: 'order-bundle',
+    item: 'gamer-325',
+    brand: 'bundle:gamer',
+    name: 'باقة اللاعب · 325 شدة + 10 دينار',
+    total: '35.750',
+    createdAt: '2026-10-24T13:00:00Z',
+  ),
+  'bundle_items': ['pubg-325', 'almadar-10'],
+  'codes': [
+    {
+      'code': '5A2F-91KD-PQ7X-3M8T',
+      'serial': 'PB-00981230',
+      'brand': 'pubg',
+      'item': 'pubg-325',
+    },
+    {
+      'code': '4827 1930 5561 2208',
+      'serial': 'MD-00981231',
+      'brand': 'almadar',
+      'item': 'almadar-10',
+    },
+  ],
+};
+
+/// A bundle whose network card could not be bought after the payment: its
+/// PUBG code delivered, the credit's 10 dinars back in the customer's
+/// credit, as the relay answers it.
+final Map<String, dynamic> fixturePartlyRefundedBundleOrder = {
+  ...fixtureOrder(
+    id: 'order-bundle-partly',
+    item: 'gamer-325',
+    brand: 'bundle:gamer',
+    name: 'باقة اللاعب · 325 شدة + 10 دينار',
+    total: '35.750',
+    errorCode: 'partly_refunded',
+    createdAt: '2026-10-24T12:30:00Z',
+  ),
+  'bundle_items': ['pubg-325', 'libyana-10'],
+  'bundle_refunded': ['libyana-10'],
+  'refunded': '10.000',
+  'codes': [
+    {
+      'code': '7QX2-M4PA-81LD-6TZK',
+      'serial': 'PB-00981240',
+      'brand': 'pubg',
+      'item': 'pubg-325',
+    },
+  ],
+};
+
+/// The fixture shelf's card keys as the real shelf has them, for the bought
+/// bundles «كروتي» shows on a real shelf.
+const _realKeys = {
+  'pubg-325': 'pubg-ww-325uc',
+  'almadar-10': 'almadar-10lyd',
+  'libyana-10': 'libyana-10lyd',
+};
+
+Map<String, dynamic> _onRealShelf(Map<String, dynamic> order) {
+  String real(Object? key) => _realKeys[key] ?? '$key';
+  return {
+    ...order,
+    'bundle_items': [
+      for (final key in order['bundle_items'] as List) real(key),
+    ],
+    'bundle_refunded': [
+      for (final key in order['bundle_refunded'] as List? ?? const [])
+        real(key),
+    ],
+    'codes': [
+      for (final code in order['codes'] as List)
+        {...code as Map<String, dynamic>, 'item': real(code['item'])},
+    ],
+  };
+}
+
+/// A bundle on the fixture shelf: PUBG with the buyer's own network's
+/// credit, in two sizes. Its art is the drawn card (the fixture has none);
+/// `make cards-preview-live` on cards/tool/bundle_shelf.py shows the real
+/// artwork.
+const Map<String, dynamic> fixtureBundle = {
+  'key': 'gamer',
+  'name': 'باقة اللاعب',
+  'tagline': 'شدّات ببجي مع رصيد خطك',
+  'rank': 1,
+  'tiers': [
+    {
+      'key': 'gamer-60',
+      'saving': '0.500',
+      'parts': [
+        ['pubg-60'],
+        ['libyana-5', 'almadar-5'],
+      ],
+    },
+    {
+      'key': 'gamer-325',
+      'saving': '1.250',
+      'parts': [
+        ['pubg-325'],
+        ['libyana-10', 'almadar-10'],
+      ],
+    },
+  ],
 };
 
 /// A Free Fire top-up, the way the relay answers it.
@@ -623,6 +733,14 @@ http.Client fixtureRelay({
       case ('GET', '/v1/customers/orders'):
         return json({
           'orders': [
+            ...?scripted?.placed(fixtureOrder),
+            if (topUps) ...[
+              for (final order in [
+                fixtureBundleOrder,
+                fixturePartlyRefundedBundleOrder,
+              ])
+                shelf == null ? order : _onRealShelf(order),
+            ],
             if (topUps) fixtureTopUpOrder(createdAt: '2026-10-24T12:00:00Z'),
             fixtureOrder(
               id: 'order-2',
@@ -864,6 +982,23 @@ http.Client fixtureRelay({
           'created_at': DateTime.now().toUtc().toIso8601String(),
         },
       }, 201);
+    }
+    if (request.method == 'GET' &&
+        path == '/v1/customers/orders/${fixtureBundleOrder['id']}') {
+      return json({
+        'order': shelf == null
+            ? fixtureBundleOrder
+            : _onRealShelf(fixtureBundleOrder),
+      });
+    }
+    if (request.method == 'GET' &&
+        path ==
+            '/v1/customers/orders/${fixturePartlyRefundedBundleOrder['id']}') {
+      return json({
+        'order': shelf == null
+            ? fixturePartlyRefundedBundleOrder
+            : _onRealShelf(fixturePartlyRefundedBundleOrder),
+      });
     }
     if (request.method == 'GET' && path.startsWith('/v1/customers/orders/')) {
       final id = path.split('/').last;

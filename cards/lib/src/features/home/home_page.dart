@@ -6,8 +6,8 @@ import 'package:pointy_brand/pointy_brand.dart';
 
 import 'brand_shelf.dart';
 import 'brand_tile.dart';
+import '../bundle/bundle_tile.dart';
 import '../../../l10n/generated/app_localizations.dart';
-import '../../data/models/catalog.dart';
 import '../../design/cards_layout.dart';
 import '../../design/cards_logo.dart';
 import '../../design/cards_tokens.dart';
@@ -382,7 +382,24 @@ class _HomePageState extends State<HomePage>
     return [
       if (featured.isNotEmpty) ...[
         piece(SectionHeader(title: l10n.featuredTitle)),
-        piece(_FeaturedCarousel(brands: featured)),
+        piece(
+          _FeaturedCarousel(
+            tiles: [
+              for (final brand in featured)
+                BrandTile(brand: brand, large: true),
+            ],
+          ),
+        ),
+      ],
+      // Cards bought together for less: shown once the relay serves them.
+      if (shelf.shelf.shelfBundles case final bundles
+          when bundles.isNotEmpty) ...[
+        piece(SectionHeader(title: l10n.bundlesTitle)),
+        piece(
+          _FeaturedCarousel(
+            tiles: [for (final bundle in bundles) BundleTile(bundle: bundle)],
+          ),
+        ),
       ],
       piece(OffersEntry(shelf: shelf)),
       piece(const EsimEntry()),
@@ -745,10 +762,11 @@ class _CategoryBarState extends State<_CategoryBar> {
   }
 }
 
+/// Large tiles in a swipeable row: the most wanted brands, the bundles.
 class _FeaturedCarousel extends StatefulWidget {
-  const _FeaturedCarousel({required this.brands});
+  const _FeaturedCarousel({required this.tiles});
 
-  final List<CardBrand> brands;
+  final List<Widget> tiles;
 
   @override
   State<_FeaturedCarousel> createState() => _FeaturedCarouselState();
@@ -768,13 +786,7 @@ class _FeaturedCarouselState extends State<_FeaturedCarousel> {
   Widget build(BuildContext context) {
     // A mouse cannot swipe: on a desktop the featured cards stand in rows.
     if (CardsSidebarScope.of(context)) {
-      return TileRows(
-        columns: 3,
-        children: [
-          for (final brand in widget.brands)
-            BrandTile(brand: brand, large: true),
-        ],
-      );
+      return TileRows(columns: 3, children: widget.tiles);
     }
     final width = MediaQuery.sizeOf(context).width;
     // About one and a sixth cards on a phone, more on a tablet: the next one
@@ -797,16 +809,13 @@ class _FeaturedCarouselState extends State<_FeaturedCarousel> {
       child: PageView.builder(
         controller: _pages,
         padEnds: false,
-        itemCount: widget.brands.length,
-        itemBuilder: (context, index) {
-          final brand = widget.brands[index];
-          return Padding(
-            padding: EdgeInsetsDirectional.only(
-              start: index == 0 ? CardsSpace.gutter : CardsSpace.md,
-            ),
-            child: BrandTile(brand: brand, large: true),
-          );
-        },
+        itemCount: widget.tiles.length,
+        itemBuilder: (context, index) => Padding(
+          padding: EdgeInsetsDirectional.only(
+            start: index == 0 ? CardsSpace.gutter : CardsSpace.md,
+          ),
+          child: widget.tiles[index],
+        ),
       ),
     );
   }

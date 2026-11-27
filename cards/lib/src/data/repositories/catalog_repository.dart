@@ -5,7 +5,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/result.dart';
 import '../api/relay_api.dart';
+import '../models/bundle.dart';
 import '../models/catalog.dart';
+import '../models/order.dart';
 
 /// The card shelf, kept on the device so the app opens on it at once and
 /// still shows it offline. A refresh sends the stored ETag: a shelf that did
@@ -61,6 +63,10 @@ class CatalogRepository {
       // This build asks for the account a top-up is sent to, so it is shown
       // those cards too.
       query: {'channel': channel, 'accounts': '1'},
+      // Who is asking, when someone is signed in: the stores' review account
+      // is shown the bundles even while none are on sale, so the feature
+      // can be reviewed. Everyone else's shelf is the same as unsigned.
+      withSession: true,
       headers: {
         'Accept': 'application/json',
         if (etag != null && cachedShelf != null) 'If-None-Match': etag,
@@ -141,6 +147,63 @@ class CatalogRepository {
 
   /// A brand of the shelf this device last saw.
   CardBrand? brandOf(String key) => _known?.brand(key);
+
+  /// A bundle of the shelf this device last saw.
+  ShelfBundle? shelfBundle(String key) => _known?.shelfBundle(key);
+
+  /// The brand an order shows: its card's, or for a bundle the bundle with
+  /// the cards actually bought (their network's artwork). A bundle no longer
+  /// on the shelf still shows, under its order's name with its first card's
+  /// art, so a bought one never loses its picture in «كروتي».
+  CardBrand? brandOfOrder(CardOrder order) {
+    final bundle = bundleOfBrandKey(order.brandKey);
+    if (bundle.isEmpty) {
+      return brandOf(order.brandKey);
+    }
+    // Its cards by their items; else (items this shelf no longer has) by
+    // the brands its codes carry.
+    final byItem = order.bundleItems.map(_brandOfItem).nonNulls.toList();
+    final cards = byItem.isNotEmpty
+        ? byItem
+        : [for (final code in order.codes) ?brandOf(code.brandKey)];
+    if (_known?.shelfBundle(bundle) case final shelf?) {
+      final pick = [
+        for (final part in shelf.tiers.first.parts)
+          cards
+                  .map((brand) => brand.key)
+                  .where((key) => part.any((card) => card.brand.key == key))
+                  .firstOrNull ??
+              part.first.brand.key,
+      ];
+      return shelf.asBrand(pick);
+    }
+    return CardBrand(
+      key: order.brandKey,
+      name: order.name.split(' · ').first,
+      aliases: const [],
+      category: bundleCategory,
+      rank: 0,
+      featured: false,
+      badge: '',
+      redeemHint: '',
+      logo: cards.firstOrNull?.logo ?? '',
+      items: const [],
+    );
+  }
+
+  CardBrand? _brandOfItem(String itemKey) => cardOfItem(itemKey)?.brand;
+
+  /// A card on the shelf by its item key, with its brand.
+  ({CardBrand brand, CardItem item})? cardOfItem(String itemKey) {
+    for (final brand in _known?.brands ?? const <CardBrand>[]) {
+      for (final item in brand.items) {
+        if (item.key == itemKey) {
+          return (brand: brand, item: item);
+        }
+      }
+    }
+    return null;
+  }
 
   /// The countries by code of [_countriesOf], the shelf they were read from.
   Map<String, CardCountry> _countries = const {};

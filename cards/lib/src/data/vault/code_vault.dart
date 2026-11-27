@@ -63,7 +63,13 @@ class SecureCodeVault implements CodeVault {
       key: _key(orderId),
       value: jsonEncode([
         for (final code in codes)
-          {'code': code.code, 'serial': code.serial, 'expiry': code.expiry},
+          {
+            'code': code.code,
+            'serial': code.serial,
+            'expiry': code.expiry,
+            if (code.brandKey.isNotEmpty) 'brand': code.brandKey,
+            if (code.itemKey.isNotEmpty) 'item': code.itemKey,
+          },
       ]),
     );
   }

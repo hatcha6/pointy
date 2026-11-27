@@ -3806,6 +3806,96 @@ abstract class AppLocalizations {
   /// In ar, this message translates to:
   /// **'أول دفعة ناجحة تحفظ طريقتك ورقمك، فتدفع في المرة القادمة بلمسة.'**
   String get savedNothingBody;
+
+  /// Home: the shelf of bundles (cards bought together for less).
+  ///
+  /// In ar, this message translates to:
+  /// **'باقات بسعر أقل'**
+  String get bundlesTitle;
+
+  /// Bundle badge and tier: what buying together saves, e.g. وفّر 1.75 د.ل.
+  ///
+  /// In ar, this message translates to:
+  /// **'وفّر {amount}'**
+  String bundleSave(String amount);
+
+  /// Bundle page: pick the phone network the credit card is for.
+  ///
+  /// In ar, this message translates to:
+  /// **'شبكة خطك'**
+  String get bundleNetworkTitle;
+
+  /// Bundle page: under the network title.
+  ///
+  /// In ar, this message translates to:
+  /// **'يصلك رصيد الهاتف كرتاً لشبكتك.'**
+  String get bundleNetworkBody;
+
+  /// Bundle page: the sizes of the bundle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر الباقة'**
+  String get bundleTierTitle;
+
+  /// Bundle page: the cards the chosen bundle is made of.
+  ///
+  /// In ar, this message translates to:
+  /// **'في الباقة'**
+  String get bundleContentsTitle;
+
+  /// Bundle page: what the cards cost bought one by one, shown struck through.
+  ///
+  /// In ar, this message translates to:
+  /// **'منفصلةً {price}'**
+  String bundleApart(String price);
+
+  /// Bundle page: how a bundle is delivered.
+  ///
+  /// In ar, this message translates to:
+  /// **'دفعة واحدة، ويصلك كل كرت برمزه فوراً.'**
+  String get bundlePromise;
+
+  /// Bundle page: bundles take no segment offer.
+  ///
+  /// In ar, this message translates to:
+  /// **'سعر الباقة خاص، فلا تُجمع مع عروضك الأخرى.'**
+  String get bundleNoOffers;
+
+  /// Bundle page: the buy button.
+  ///
+  /// In ar, this message translates to:
+  /// **'اشترِ الباقة'**
+  String get bundleBuy;
+
+  /// Bundle buy bar: how many cards the bundle is.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =2{كرتان في دفعة واحدة} few{{count} كروت في دفعة واحدة} other{{count} كرتاً في دفعة واحدة}}'**
+  String bundleCards(int count);
+
+  /// Reveal page of a bundle delivered without one of its cards, e.g. تعذّر شراء المدار الجديد · 10 دينار.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر شراء {card}'**
+  String bundleCardRefundedTitle(String card);
+
+  /// My cards badge: a bundle delivered without one card, whose share went to credit.
+  ///
+  /// In ar, this message translates to:
+  /// **'جزء منه لرصيدك'**
+  String get statusPartlyRefunded;
+
+  /// Bundle page: a size that has no card for the network picked.
+  ///
+  /// In ar, this message translates to:
+  /// **'غير متوفرة لشبكتك'**
+  String get bundleTierNotOnNetwork;
+
+  /// Checkout refusal: the bundle's sizes or cards changed on the relay.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيّرت هذه الباقة منذ فتحتها. افتحها من جديد لترى ما فيها الآن.'**
+  String get errBundleChanged;
 }
 
 class _AppLocalizationsDelegate

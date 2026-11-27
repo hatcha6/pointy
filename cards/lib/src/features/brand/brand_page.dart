@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:pointy_brand/pointy_brand.dart';
@@ -17,14 +16,16 @@ import '../../shared/cards_scope.dart';
 import '../../shared/money_text.dart';
 import '../../shared/pill.dart';
 import '../../shared/pressable.dart';
-import '../../shared/quantity_stepper.dart';
 import '../../shared/side_back.dart';
 import '../../shared/status_tap.dart';
 import '../checkout/checkout_sheet.dart';
 import '../links/cards_link.dart';
 import '../sign_in/sign_in_sheet.dart';
 import 'brand_light.dart';
+import '../bundle/bundle_page.dart';
+import '../../data/models/bundle.dart';
 import 'brand_share.dart';
+import 'buy_bar.dart';
 import '../../shared/haptics.dart';
 import '../../core/analytics/analytics.dart';
 import '../../core/analytics/events.dart';
@@ -55,6 +56,15 @@ class BrandPage extends StatefulWidget {
     CardItem? item,
     BuildContext? from,
   }) {
+    // A bundle has its own page: a bought one again («اشترِ مجدداً»), a
+    // link or an offer reach it here like any brand.
+    if (brand.isBundle) {
+      final bundle = CardsScope.of(context).catalog
+          .shelfBundle(bundleOfBrandKey(brand.key));
+      return bundle == null
+          ? Future.value()
+          : BundlePage.open(context, bundle, from: from, tier: item?.key);
+    }
     // Its address (cards.dftr.ly/brand/…), shown in the web build's bar.
     final settings = RouteSettings(
       name: BrandLink(brand.key).location,
@@ -543,7 +553,7 @@ class _BrandPageState extends State<BrandPage> {
     }
     final account = _account;
     if (account == null) {
-      return _BuyBar(
+      return BuyBar(
         total: item.price * _quantity,
         quantity: _quantity,
         enabled: item.available,
@@ -557,7 +567,7 @@ class _BrandPageState extends State<BrandPage> {
     final kind = kindKey(account.target.kind);
     return ListenableBuilder(
       listenable: account,
-      builder: (context, _) => _BuyBar(
+      builder: (context, _) => BuyBar(
         total: item.price,
         quantity: 1,
         enabled: item.available,
@@ -1018,225 +1028,6 @@ class _RedeemCard extends StatelessWidget {
                   hint,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// The frosted bar: the total on one side, the quantity and the button on the
-/// other — the way a booking bar is laid out.
-class _BuyBar extends StatelessWidget {
-  const _BuyBar({
-    required this.total,
-    required this.quantity,
-    required this.enabled,
-    required this.onQuantity,
-    required this.onBuy,
-    this.webOnly = false,
-    this.floating = false,
-    this.note,
-    this.actionLabel,
-  });
-
-  final Money total;
-  final int quantity;
-  final bool enabled;
-
-  /// Bought on the website only: the bar says so, with no way to pay.
-  final bool webOnly;
-  final ValueChanged<int> onQuantity;
-  final VoidCallback onBuy;
-
-  /// A glass panel floating over the page (beside the card on a wide
-  /// screen), rather than a bar across the bottom edge.
-  final bool floating;
-
-  /// In place of the card count and the quantity: where a top-up goes.
-  final String? note;
-
-  /// In place of «اشترِ».
-  final String? actionLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
-    final row = webOnly
-        ? const _WebOnlyNote()
-        : Row(
-            children: [
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: AlignmentDirectional.centerStart,
-                      child: Text(
-                        formatMoney(l10n, total),
-                        style: PointyTypography.numeric(
-                          theme.textTheme.titleLarge!,
-                        ),
-                      ),
-                    ),
-                    AnimatedSwitcher(
-                      duration: CardsMotion.fast,
-                      layoutBuilder: (current, previous) => Stack(
-                        alignment: AlignmentDirectional.centerStart,
-                        children: [...previous, ?current],
-                      ),
-                      child: Text(
-                        note ?? l10n.cardCount(quantity),
-                        key: ValueKey(note),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (note == null) ...[
-                QuantityStepper(value: quantity, onChanged: onQuantity),
-                const SizedBox(width: CardsSpace.sm),
-              ],
-              SizedBox(
-                width: 112,
-                child: FilledButton(
-                  onPressed: enabled ? onBuy : null,
-                  child: Text(actionLabel ?? l10n.buyNow),
-                ),
-              ),
-            ],
-          );
-    final glass = theme.colorScheme.surface.withValues(alpha: 0.86);
-    if (floating) {
-      final radius = BorderRadius.circular(CardsRadii.sheet);
-      return Padding(
-        padding: EdgeInsets.fromLTRB(
-          CardsSpace.gutter,
-          0,
-          CardsSpace.gutter,
-          MediaQuery.paddingOf(context).bottom + CardsSpace.lg,
-        ),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: radius,
-            boxShadow: CardsShadows.hero,
-          ),
-          child: ClipRRect(
-            borderRadius: radius,
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: glass,
-                  borderRadius: radius,
-                  border: Border.all(
-                    color: theme.colorScheme.outline.withValues(alpha: 0.6),
-                  ),
-                ),
-                child: Padding(
-                  padding: const EdgeInsetsDirectional.fromSTEB(
-                    CardsSpace.xl,
-                    CardsSpace.md,
-                    CardsSpace.md,
-                    CardsSpace.md,
-                  ),
-                  child: row,
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-        child: Container(
-          decoration: BoxDecoration(
-            color: glass,
-            border: Border(
-              top: BorderSide(color: theme.colorScheme.outline, width: 0.8),
-            ),
-          ),
-          child: SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                CardsSpace.gutter,
-                CardsSpace.md,
-                CardsSpace.gutter,
-                CardsSpace.md,
-              ),
-              child: row,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// In place of the buy button on a card bought on the website only: where
-/// to find it, and nothing to tap.
-class _WebOnlyNote extends StatelessWidget {
-  const _WebOnlyNote();
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.all(CardsSpace.md),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(CardsRadii.tile),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surface,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.language_rounded,
-              size: 20,
-              color: theme.colorScheme.onPrimaryContainer,
-            ),
-          ),
-          const SizedBox(width: CardsSpace.md),
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  l10n.webOnlyTitle,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: theme.colorScheme.onPrimaryContainer,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  l10n.webOnlyBody,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onPrimaryContainer,
                   ),
                 ),
               ],

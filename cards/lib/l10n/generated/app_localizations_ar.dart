@@ -2382,4 +2382,65 @@ class AppLocalizationsAr extends AppLocalizations {
   @override
   String get savedNothingBody =>
       'أول دفعة ناجحة تحفظ طريقتك ورقمك، فتدفع في المرة القادمة بلمسة.';
+
+  @override
+  String get bundlesTitle => 'باقات بسعر أقل';
+
+  @override
+  String bundleSave(String amount) {
+    return 'وفّر $amount';
+  }
+
+  @override
+  String get bundleNetworkTitle => 'شبكة خطك';
+
+  @override
+  String get bundleNetworkBody => 'يصلك رصيد الهاتف كرتاً لشبكتك.';
+
+  @override
+  String get bundleTierTitle => 'اختر الباقة';
+
+  @override
+  String get bundleContentsTitle => 'في الباقة';
+
+  @override
+  String bundleApart(String price) {
+    return 'منفصلةً $price';
+  }
+
+  @override
+  String get bundlePromise => 'دفعة واحدة، ويصلك كل كرت برمزه فوراً.';
+
+  @override
+  String get bundleNoOffers => 'سعر الباقة خاص، فلا تُجمع مع عروضك الأخرى.';
+
+  @override
+  String get bundleBuy => 'اشترِ الباقة';
+
+  @override
+  String bundleCards(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count كرتاً في دفعة واحدة',
+      few: '$count كروت في دفعة واحدة',
+      two: 'كرتان في دفعة واحدة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String bundleCardRefundedTitle(String card) {
+    return 'تعذّر شراء $card';
+  }
+
+  @override
+  String get statusPartlyRefunded => 'جزء منه لرصيدك';
+
+  @override
+  String get bundleTierNotOnNetwork => 'غير متوفرة لشبكتك';
+
+  @override
+  String get errBundleChanged =>
+      'تغيّرت هذه الباقة منذ فتحتها. افتحها من جديد لترى ما فيها الآن.';
 }

@@ -474,5 +474,20 @@
   "payFromLabel": "Paying from",
   "payerRemember": "Save the number for my next payments",
   "savedNothingTitle": "Nothing saved yet",
-  "savedNothingBody": "Your first successful payment saves your method and number, so next time you pay in one tap."
+  "savedNothingBody": "Your first successful payment saves your method and number, so next time you pay in one tap.",
+  "bundlesTitle": "Bundles for less",
+  "bundleSave": "Save {amount}",
+  "bundleNetworkTitle": "Your network",
+  "bundleNetworkBody": "The phone credit comes as a card for your network.",
+  "bundleTierTitle": "Pick a size",
+  "bundleContentsTitle": "In the bundle",
+  "bundleApart": "{price} apart",
+  "bundlePromise": "One payment; each card arrives with its own code at once.",
+  "bundleNoOffers": "A bundle's price is its own deal, so it doesn't combine with your other offers.",
+  "bundleBuy": "Buy bundle",
+  "bundleCards": "{count, plural, other{{count} cards, one payment}}",
+  "bundleCardRefundedTitle": "{card} couldn't be bought",
+  "statusPartlyRefunded": "Part back in credit",
+  "bundleTierNotOnNetwork": "Not on your network",
+  "errBundleChanged": "This bundle changed since you opened it. Open it again to see what's in it now."
 }

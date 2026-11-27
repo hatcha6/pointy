@@ -474,5 +474,20 @@
   "payFromLabel": "Payé depuis",
   "payerRemember": "Enregistrer le numéro pour mes prochains paiements",
   "savedNothingTitle": "Rien d'enregistré pour l'instant",
-  "savedNothingBody": "Votre premier paiement réussi enregistre votre moyen et votre numéro : la prochaine fois, un seul geste."
+  "savedNothingBody": "Votre premier paiement réussi enregistre votre moyen et votre numéro : la prochaine fois, un seul geste.",
+  "bundlesTitle": "Packs à prix réduit",
+  "bundleSave": "Économisez {amount}",
+  "bundleNetworkTitle": "Votre réseau",
+  "bundleNetworkBody": "Le crédit arrive sous forme de carte pour votre réseau.",
+  "bundleTierTitle": "Choisissez un pack",
+  "bundleContentsTitle": "Dans le pack",
+  "bundleApart": "{price} séparément",
+  "bundlePromise": "Un seul paiement ; chaque carte arrive avec son code tout de suite.",
+  "bundleNoOffers": "Le prix du pack est déjà réduit : il ne se cumule pas avec vos autres offres.",
+  "bundleBuy": "Acheter",
+  "bundleCards": "{count, plural, other{{count} cartes, un paiement}}",
+  "bundleCardRefundedTitle": "{card} n'a pas pu être acheté",
+  "statusPartlyRefunded": "En partie remboursé",
+  "bundleTierNotOnNetwork": "Pas sur votre réseau",
+  "errBundleChanged": "Ce pack a changé depuis que vous l'avez ouvert. Rouvrez-le pour voir son contenu actuel."
 }

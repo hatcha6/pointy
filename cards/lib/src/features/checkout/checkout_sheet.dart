@@ -42,6 +42,7 @@ Future<void> showCheckout(
   AccountFormModel? account,
   VoidCallback? onEditAccount,
   Map<String, String> orderAccount = const {},
+  List<String> bundleItems = const [],
 }) async {
   final dependencies = CardsScope.of(context);
   final model = CheckoutModel(
@@ -52,6 +53,7 @@ Future<void> showCheckout(
     payments: dependencies.payments,
     account: account,
     orderAccount: orderAccount,
+    bundleItems: bundleItems,
   )..load();
   final order = await showModalBottomSheet<CardOrder>(
     context: context,
@@ -316,7 +318,7 @@ class _CheckoutSheetState extends State<CheckoutSheet> {
                     ),
                   ),
                   Text(
-                    model.account == null
+                    model.account == null && !model.isBundle
                         ? '$label × ${model.quantity}'
                         : label,
                     style: theme.textTheme.bodyMedium?.copyWith(

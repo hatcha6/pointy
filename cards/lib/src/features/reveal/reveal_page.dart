@@ -20,6 +20,7 @@ import '../../shared/cards_scope.dart';
 import '../../shared/haptics.dart';
 import '../../shared/side_back.dart';
 import '../../shared/success_seal.dart';
+import 'bundle_refund_note.dart';
 import 'card_faces.dart';
 import 'qr_pass.dart';
 import '../../core/analytics/events.dart';
@@ -326,20 +327,82 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
     }
   }
 
+  /// The card [code] is: its own brand in a bundle, else the order's.
+  CardBrand? _brandOf(BuildContext context, CardCode? code) {
+    final catalog = CardsScope.of(context).catalog;
+    if (code != null && code.brandKey.isNotEmpty) {
+      return catalog.brandOf(code.brandKey) ?? _orderBrand(context);
+    }
+    return _orderBrand(context);
+  }
+
+  CardBrand? _orderBrand(BuildContext context) =>
+      widget.brand ?? CardsScope.of(context).catalog.brandOfOrder(widget.order);
+
   @override
   Widget build(BuildContext context) {
-    final brand =
-        widget.brand ??
-        CardsScope.of(context).catalog.brandOf(widget.order.brandKey);
-    final current = _codes.isEmpty
+    final current = _codes.isEmpty || _locked
         ? null
         : _codes[_page.clamp(0, _codes.length - 1)];
+    final brand = _brandOf(context, current);
+    // Cards of several kinds (a bundle): the page's colour follows the
+    // swipe, from one card's colours into the next's.
+    final shown = _locked ? const <CardCode>[] : _codes;
+    if ({for (final code in shown) code.brandKey}.length > 1) {
+      return AnimatedBuilder(
+        animation: _pages,
+        builder: (context, _) =>
+            _scaffold(context, brand, current, _paletteAt(context, shown)),
+      );
+    }
     // The page takes the card's own colours, read from its art.
     return ArtPaletteBuilder(
       brand: brand,
       builder: (context, palette) =>
           _scaffold(context, brand, current, palette),
     );
+  }
+
+  /// Each brand's colours, read from its art once.
+  final Map<String, ArtPalette> _palettes = {};
+  final Set<String> _reading = {};
+
+  ArtPalette _paletteOf(BuildContext context, CardBrand? of) {
+    final brand = of ?? _orderBrand(context);
+    if (brand == null) {
+      return const ArtPalette(
+        light: Color(0xFF0F766E),
+        dark: Color(0xFF064E3B),
+        tint: Color(0xFF0F766E),
+      );
+    }
+    if (_palettes[brand.key] case final palette?) {
+      return palette;
+    }
+    if (_reading.add(brand.key)) {
+      ArtPalette.of(context, brand).then((palette) {
+        if (mounted && palette != null) {
+          setState(() => _palettes[brand.key] = palette);
+        }
+      });
+    }
+    return ArtPalette.drawn(brand);
+  }
+
+  /// The colours where the pager is: between two cards, part of each.
+  ArtPalette _paletteAt(BuildContext context, List<CardCode> codes) {
+    final position = _pages.hasClients && _pages.position.haveDimensions
+        ? (_pages.page ?? _page.toDouble())
+        : _page.toDouble();
+    final at = position.clamp(0, codes.length - 1).toDouble();
+    final from = at.floor();
+    final to = at.ceil();
+    final a = _paletteOf(context, _brandOf(context, codes[from]));
+    if (from == to) {
+      return a;
+    }
+    final b = _paletteOf(context, _brandOf(context, codes[to]));
+    return ArtPalette.lerp(a, b, at - from);
   }
 
   Widget _scaffold(
@@ -385,52 +448,64 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
             ),
           ),
           child: SafeArea(
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 480),
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(
+            child: LayoutBuilder(
+              // A column 480 wide at most, held by the list's own padding:
+              // the list itself spans the screen, so the cards' pager can
+              // run past the column and fade there rather than be cut.
+              builder: (context, box) => ListView(
+                padding: EdgeInsets.fromLTRB(
+                  math.max(
                     CardsSpace.gutter,
-                    CardsSpace.sm,
-                    CardsSpace.gutter,
-                    CardsSpace.xxl,
+                    (box.maxWidth - 480) / 2 + CardsSpace.gutter,
                   ),
-                  children: [
-                    if (!widget.fromHistory) ...[
-                      SuccessSeal(animation: _seal),
-                      const SizedBox(height: CardsSpace.md),
-                      Text(
-                        l10n.purchaseSuccess,
-                        textAlign: TextAlign.center,
-                        style: theme.textTheme.headlineSmall,
-                      ),
-                      NameText(
-                        widget.order.name,
-                        textAlign: TextAlign.center,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(height: CardsSpace.xl),
-                    ],
-                    if (brand != null) _cards(context, brand, palette),
-                    const SizedBox(height: CardsSpace.lg),
-                    // Whatever sits under the card rises in when it changes:
-                    // the codes after Face ID, or after they arrive.
-                    AnimatedSwitcher(
-                      duration: CardsMotion.emphasized,
-                      reverseDuration: CardsMotion.fast,
-                      switchInCurve: CardsMotion.curve,
-                      switchOutCurve: Curves.easeIn,
-                      transitionBuilder: _rise,
-                      layoutBuilder: (current, previous) => Stack(
-                        alignment: Alignment.topCenter,
-                        children: [...previous, ?current],
-                      ),
-                      child: _below(context, brand, current, palette),
-                    ),
-                  ],
+                  CardsSpace.sm,
+                  math.max(
+                    CardsSpace.gutter,
+                    (box.maxWidth - 480) / 2 + CardsSpace.gutter,
+                  ),
+                  CardsSpace.xxl,
                 ),
+                children: [
+                  if (!widget.fromHistory) ...[
+                    SuccessSeal(animation: _seal),
+                    const SizedBox(height: CardsSpace.md),
+                    Text(
+                      l10n.purchaseSuccess,
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.headlineSmall,
+                    ),
+                    NameText(
+                      widget.order.name,
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: CardsSpace.xl),
+                  ],
+                  // A bundle delivered without one of its cards: which,
+                  // and that its money is in the customer's credit.
+                  if (widget.order.partlyRefunded) ...[
+                    BundleRefundNote(order: widget.order),
+                    const SizedBox(height: CardsSpace.lg),
+                  ],
+                  if (brand != null) _cards(context, brand, palette),
+                  const SizedBox(height: CardsSpace.lg),
+                  // Whatever sits under the card rises in when it changes:
+                  // the codes after Face ID, or after they arrive.
+                  AnimatedSwitcher(
+                    duration: CardsMotion.emphasized,
+                    reverseDuration: CardsMotion.fast,
+                    switchInCurve: CardsMotion.curve,
+                    switchOutCurve: Curves.easeIn,
+                    transitionBuilder: _rise,
+                    layoutBuilder: (current, previous) => Stack(
+                      alignment: Alignment.topCenter,
+                      children: [...previous, ?current],
+                    ),
+                    child: _below(context, brand, current, palette),
+                  ),
+                ],
               ),
             ),
           ),
@@ -535,47 +610,44 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
   }
 
   /// One card, or a pager of them with dots for several.
-  Widget _cards(BuildContext context, CardBrand brand, ArtPalette palette) {
-    final l10n = AppLocalizations.of(context);
+  Widget _cards(BuildContext context, CardBrand fallback, ArtPalette palette) {
     final codes = _codes.isEmpty || _locked ? const <CardCode?>[null] : _codes;
     final width = math.min(
       MediaQuery.sizeOf(context).width - CardsSpace.gutter * 2,
       440.0,
     );
     // The card answers the phone's tilt once it has turned to its code.
-    Widget card(CardCode? code, {bool shown = true}) => Opacity(
-      opacity: shown && _passUp ? 0 : 1,
-      child: shown
-          // The row's card in «كروتي» lands here.
-          ? ContainerLanding(
-              // The card as it arrives (its picture side), for a row to
-              // turn into: the card itself holds a key.
-              arriving: CardArt(
-                brand: brand,
-                radius: CardsRadii.tile,
-                shadow: false,
-              ),
-              child: TiltCard(
-                key: shown ? _shown : null,
-                radius: CardsRadii.tile,
-                strength: _flip,
-                child: _FlipCard(
-                  animation: _flip,
-                  brand: brand,
-                  palette: palette,
-                  code: code?.code,
-                  used: code != null && _used.contains(code.code),
-                  qrScratched: code != null && _scratched.contains(code.code),
-                  onTap: code == null
-                      ? null
-                      : () {
-                          _track('qr');
-                          _showQr(brand, palette, code);
-                        },
-                ),
-              ),
-            )
-          : TiltCard(
+    // In a bundle each code is its own card.
+    Widget card(CardCode? code, {bool shown = true}) {
+      final brand = _brandOf(context, code) ?? fallback;
+      return _card(context, brand, palette, code, shown: shown);
+    }
+
+    if (codes.length == 1) {
+      return card(codes.first);
+    }
+    return _pager(context, codes, width, card);
+  }
+
+  Widget _card(
+    BuildContext context,
+    CardBrand brand,
+    ArtPalette palette,
+    CardCode? code, {
+    bool shown = true,
+  }) => Opacity(
+    opacity: shown && _passUp ? 0 : 1,
+    child: shown
+        // The row's card in «كروتي» lands here.
+        ? ContainerLanding(
+            // The card as it arrives (its picture side), for a row to
+            // turn into: the card itself holds a key.
+            arriving: CardArt(
+              brand: brand,
+              radius: CardsRadii.tile,
+              shadow: false,
+            ),
+            child: TiltCard(
               key: shown ? _shown : null,
               radius: CardsRadii.tile,
               strength: _flip,
@@ -594,15 +666,41 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
                       },
               ),
             ),
-    );
-    if (codes.length == 1) {
-      return card(codes.first);
-    }
+          )
+        : TiltCard(
+            key: shown ? _shown : null,
+            radius: CardsRadii.tile,
+            strength: _flip,
+            child: _FlipCard(
+              animation: _flip,
+              brand: brand,
+              palette: palette,
+              code: code?.code,
+              used: code != null && _used.contains(code.code),
+              qrScratched: code != null && _scratched.contains(code.code),
+              onTap: code == null
+                  ? null
+                  : () {
+                      _track('qr');
+                      _showQr(brand, palette, code);
+                    },
+            ),
+          ),
+  );
+
+  Widget _pager(
+    BuildContext context,
+    List<CardCode?> codes,
+    double width,
+    Widget Function(CardCode? code, {bool shown}) card,
+  ) {
+    final l10n = AppLocalizations.of(context);
     return Column(
       children: [
-        SizedBox(
+        _FadingPager(
+          width: width,
           height: width / kCardAspect + CardsSpace.lg,
-          child: PageView.builder(
+          builder: (bleed) => PageView.builder(
             controller: _pages,
             itemCount: codes.length,
             onPageChanged: (page) {
@@ -610,8 +708,8 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
               setState(() => _page = page);
             },
             itemBuilder: (context, index) => Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: CardsSpace.xs,
+              padding: EdgeInsets.symmetric(
+                horizontal: bleed + CardsSpace.xs,
                 vertical: CardsSpace.sm,
               ),
               child: card(codes[index], shown: index == _page),
@@ -642,6 +740,57 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
           style: Theme.of(context).textTheme.labelMedium,
         ),
       ],
+    );
+  }
+}
+
+/// The cards' pager, a little wider than the page's column, its cards
+/// fading out towards its sides: a card swiped away dissolves rather than
+/// being cut at the column's margin, on a phone (where the fade reaches the
+/// screen's edge) and on a wide screen alike.
+class _FadingPager extends StatelessWidget {
+  const _FadingPager({
+    required this.width,
+    required this.height,
+    required this.builder,
+  });
+
+  /// The column's width, where a card rests.
+  final double width;
+  final double height;
+
+  /// The pager, each page padded by the room it runs into on either side.
+  final Widget Function(double bleed) builder;
+
+  @override
+  Widget build(BuildContext context) {
+    final screen = MediaQuery.sizeOf(context).width;
+    // A phone: out to the screen's edge. Wider: a little past the column.
+    final bleed = screen < 600
+        ? ((screen - width) / 2).clamp(0.0, CardsSpace.gutter)
+        : 96.0;
+    final total = width + bleed * 2;
+    final fade = bleed / total;
+    return SizedBox(
+      width: width,
+      height: height,
+      child: OverflowBox(
+        minWidth: total,
+        maxWidth: total,
+        child: ShaderMask(
+          blendMode: BlendMode.dstIn,
+          shaderCallback: (rect) => LinearGradient(
+            colors: const [
+              Colors.transparent,
+              Colors.white,
+              Colors.white,
+              Colors.transparent,
+            ],
+            stops: [0, fade, 1 - fade, 1],
+          ).createShader(rect),
+          child: builder(bleed),
+        ),
+      ),
     );
   }
 }
