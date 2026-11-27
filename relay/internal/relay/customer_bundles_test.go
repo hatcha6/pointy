@@ -65,17 +65,24 @@ type bundleHarness struct {
 
 func newBundleHarness(t *testing.T) *bundleHarness {
 	t.Helper()
+	return newBundleHarnessOn(t, bundleShelfDocument, map[string]string{"601": "4.20", "51": "4.85", "52": "4.90"})
+}
+
+// newBundleHarnessOn publishes document as the shelf, with the suppliers'
+// offers at costs (by card id, in dinars).
+func newBundleHarnessOn(t *testing.T, document string, costs map[string]string) *bundleHarness {
+	t.Helper()
 	h := newOrderHarness(t)
 	supplier := &bundleSupplier{fakeSupplier: h.supplier, fails: map[string]bool{}}
 	h.server.Vouchers.Suppliers = map[string]vouchers.Supplier{vouchers.SupplierBNPlus: supplier}
 	h.cards.server = h.server
 	h.clock.advance(time.Second) // a newer catalog than the harness's own
-	body := []byte(`{"document": ` + bundleShelfDocument + `, "actor": "ops", "note": "bundles"}`)
+	body := []byte(`{"document": ` + document + `, "actor": "ops", "note": "bundles"}`)
 	if status, published := h.cards.admin(t, http.MethodPut, "/v1/vouchers/admin/catalog", "application/json", body); status != http.StatusCreated {
 		t.Fatalf("publish: %d %v", status, published)
 	}
 	offers := []control.VoucherOffer{}
-	for ref, cost := range map[string]string{"601": "4.20", "51": "4.85", "52": "4.90"} {
+	for ref, cost := range costs {
 		offers = append(offers, control.VoucherOffer{Supplier: vouchers.SupplierBNPlus, Ref: ref, Name: ref, Price: cost,
 			Currency: "LYD", InStock: true, SyncedAt: h.clock.now})
 	}

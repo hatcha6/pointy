@@ -53,7 +53,7 @@ func (s HTTPServer) priceCustomerBundle(
 	channel string,
 ) (pricedBundle, *customerRefusal) {
 	unavailable := &customerRefusal{http.StatusConflict, "item_unavailable", "this bundle cannot be bought right now", nil}
-	bundle, tier, found := findBundleTier(s.customerBundles(ctx), tierKey)
+	bundle, tier, found := findBundleTier(s.bundlesFor(ctx, s.Customers.isReviewPhone(customer.Phone)), tierKey)
 	if !found {
 		return pricedBundle{}, &customerRefusal{http.StatusNotFound, "unknown_item", "no bundle has this size", nil}
 	}

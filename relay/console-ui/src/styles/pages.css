@@ -1986,6 +1986,21 @@
   min-width: 0;
 }
 
+.bundle-row-issue {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  color: var(--danger);
+  font-size: 13px;
+}
+
+.bundle-row-issue svg {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  margin-top: 3px;
+}
+
 .bundle-editor {
   display: grid;
   gap: 16px;

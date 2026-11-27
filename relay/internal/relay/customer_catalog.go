@@ -404,13 +404,26 @@ func (s HTTPServer) handleCustomerCatalog(w http.ResponseWriter, r *http.Request
 		view = withoutAccountBrands(view)
 	}
 	catalog := s.Customers.customerCatalog(view, channel, s.mobileGiftCards(r.Context()))
-	catalog = withBundles(catalog, s.customerBundles(r.Context()))
+	// The review account always sees bundles (customer_bundle_review.go),
+	// under a version of its own so no cache hands it the public shelf.
+	review := s.catalogReviewer(r)
+	catalog = withBundles(catalog, s.bundlesFor(r.Context(), review))
+	if review {
+		catalog.Version = reviewCatalogVersion(catalog.Version)
+	}
 	if r.URL.Query().Get("part") == "first" {
 		catalog = catalog.firstPart()
 	}
 	etag := `"` + catalog.Version + `"`
 	w.Header().Set("ETag", etag)
-	w.Header().Set("Cache-Control", "public, no-cache")
+	// A signed request may be answered for its customer: never stored for
+	// anyone else, and no shared cache keys it by the URL alone.
+	addVary(w.Header(), "Authorization")
+	if r.Header.Get("Authorization") != "" {
+		w.Header().Set("Cache-Control", "private, no-cache")
+	} else {
+		w.Header().Set("Cache-Control", "public, no-cache")
+	}
 	if match := strings.TrimSpace(r.Header.Get("If-None-Match")); match != "" && match == etag {
 		w.WriteHeader(http.StatusNotModified)
 		return
@@ -429,6 +442,9 @@ func (s HTTPServer) handleCustomerCatalog(w http.ResponseWriter, r *http.Request
 // handleCustomerImage serves GET /v1/customers/images/{sha256}: a brand logo
 // or a flag, public like the catalog that names it.
 func (s HTTPServer) handleCustomerImage(w http.ResponseWriter, r *http.Request, sum string) {
+	if writeDemoBundleArt(w, sum) {
+		return
+	}
 	store, ok := s.voucherStore()
 	if !ok {
 		writeNotFound(w)
@@ -474,4 +490,10 @@ func (s HTTPServer) handleCustomerPaymentMethods(w http.ResponseWriter, _ *http.
 		"fee_percent": s.Wallet.feePercent().FloatString(2),
 		"test_mode":   s.Wallet.TestMode && len(methods) > 0,
 	})
+}
+
+// reviewCatalogVersion is the review account's version of a shelf version.
+func reviewCatalogVersion(version string) string {
+	sum := sha256.Sum256([]byte(version + "|review"))
+	return hex.EncodeToString(sum[:16])
 }

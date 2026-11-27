@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Package, Plus } from "lucide-react";
+import { AlertTriangle, Package, Plus } from "lucide-react";
 import { useCardBundles, type CardBundle } from "../../lib/cards";
 import { count, dateTime } from "../../lib/format";
 import { Badge, Button, Card, Empty } from "../../components/ui";
@@ -54,7 +54,7 @@ export function Bundles() {
       ) : (
         <div className="bundle-list">
           {bundles.map((bundle) => (
-            <BundleRow key={bundle.key} bundle={bundle} onOpen={() => setEditing(bundle)} />
+            <BundleRow key={bundle.key} bundle={bundle} issues={answer.data?.issues?.[bundle.key] ?? []} onOpen={() => setEditing(bundle)} />
           ))}
         </div>
       )}
@@ -62,7 +62,7 @@ export function Bundles() {
   );
 }
 
-function BundleRow({ bundle, onOpen }: { bundle: CardBundle; onOpen: () => void }) {
+function BundleRow({ bundle, issues, onOpen }: { bundle: CardBundle; issues: string[]; onOpen: () => void }) {
   const art = useVoucherImage(Object.values(bundle.art)[0]);
   return (
     <button type="button" className="bundle-row card" onClick={onOpen}>
@@ -70,6 +70,12 @@ function BundleRow({ bundle, onOpen }: { bundle: CardBundle; onOpen: () => void 
       <span className="bundle-row-text">
         <strong>{bundle.name}</strong>
         <span className="muted">{bundle.tagline || "—"}</span>
+        {issues.length > 0 && (
+          <span className="bundle-row-issue">
+            <AlertTriangle /> {issues[0]}
+            {issues.length > 1 ? ` (+${issues.length - 1})` : ""}
+          </span>
+        )}
         <span className="row" style={{ gap: 6, flexWrap: "wrap" }}>
           <Badge tone="outline">{count(bundle.tiers.length)} أحجام</Badge>
           <Badge tone="outline">الترتيب {bundle.rank}</Badge>

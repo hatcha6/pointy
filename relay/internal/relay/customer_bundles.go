@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/big"
 	"net/http"
 	"sort"
@@ -69,13 +70,21 @@ func (s HTTPServer) customerBundles(ctx context.Context) []control.CustomerBundl
 // cached shelf is read again when one changes; a catalog with none keeps the
 // version it always had.
 func withBundles(catalog CustomerCatalogView, bundles []control.CustomerBundle) CustomerCatalogView {
-	sellable := map[string]bool{}
+	type shelfCard struct {
+		brand string
+		price *big.Rat
+	}
+	sellable := map[string]shelfCard{}
 	for _, brand := range catalog.Brands {
 		if brand.WebOnly || brand.Target != nil {
 			continue
 		}
 		for _, item := range brand.Items {
-			sellable[item.Key] = true
+			price, ok := new(big.Rat).SetString(item.Price)
+			if !ok {
+				price = nil
+			}
+			sellable[item.Key] = shelfCard{brand: brand.Key, price: price}
 		}
 	}
 	served := []customerBundle{}
@@ -89,10 +98,17 @@ func withBundles(catalog CustomerCatalogView, bundles []control.CustomerBundle) 
 			parts := [][]string{}
 			for _, part := range tier.Parts {
 				options := []string{}
+				brands := map[string]bool{}
 				for _, item := range part {
-					if sellable[item] {
-						options = append(options, item)
+					card, ok := sellable[item]
+					// A part's choices are one per brand: the app picks by
+					// brand, so a second card of the same brand is never
+					// reachable.
+					if !ok || brands[card.brand] {
+						continue
 					}
+					brands[card.brand] = true
+					options = append(options, item)
 				}
 				if len(options) == 0 {
 					parts = nil
@@ -100,9 +116,10 @@ func withBundles(catalog CustomerCatalogView, bundles []control.CustomerBundle) 
 				}
 				parts = append(parts, options)
 			}
-			if len(parts) >= 2 {
-				out.Tiers = append(out.Tiers, customerBundleTier{Key: tier.Key, Saving: tier.Saving, Parts: parts})
+			if len(parts) < 2 || !savingFits(tier.Saving, parts[savingCarrier(tier.Parts)], func(item string) *big.Rat { return sellable[item].price }) {
+				continue
 			}
+			out.Tiers = append(out.Tiers, customerBundleTier{Key: tier.Key, Saving: tier.Saving, Parts: parts})
 		}
 		if len(out.Tiers) > 0 {
 			served = append(served, out)
@@ -194,6 +211,23 @@ func itemLabel(item vouchers.Item) string {
 	return strings.TrimSpace(item.FaceValue + " " + item.FaceCurrency)
 }
 
+// savingFits reports whether a tier's saving is a sale: no negative amount,
+// and under the price of every card of the part that carries it (savingCarrier,
+// judged on the stored parts as an order books it), since the order books
+// that card at its price less the saving. A card of unknown price fits.
+func savingFits(raw string, carrier []string, price func(string) *big.Rat) bool {
+	saving, err := control.ParseWalletAmount(raw)
+	if err != nil || saving.Sign() < 0 {
+		return false
+	}
+	for _, item := range carrier {
+		if p := price(item); p != nil && saving.Cmp(p) >= 0 {
+			return false
+		}
+	}
+	return true
+}
+
 // savingCarrier is the part whose card the tier's saving is taken from on the
 // books: the first part the company fixed (the game card), else the first.
 func savingCarrier(parts [][]string) int {
@@ -260,6 +294,10 @@ type bundleTierView struct {
 	Parts    [][]bundleItemView `json:"parts"`
 	Choices  []bundleChoiceView `json:"choices"`
 	Warnings []string           `json:"warnings"`
+	// Broken are the warnings that keep the size, or a card of it, off the
+	// app whatever the prices: a card gone from the catalog or sent to an
+	// account, two choices of one brand, a size key that is a card's.
+	Broken []string `json:"broken"`
 }
 
 type bundleEvaluation struct {
@@ -318,7 +356,16 @@ func (s HTTPServer) evaluateBundle(ctx context.Context, cards control.VoucherSto
 	choices := map[string]bool{}
 	for _, tier := range bundle.Tiers {
 		tv := bundleTierView{Key: tier.Key, Saving: control.NormalizeWalletAmount(tier.Saving),
-			Parts: [][]bundleItemView{}, Choices: []bundleChoiceView{}, Warnings: []string{}}
+			Parts: [][]bundleItemView{}, Choices: []bundleChoiceView{}, Warnings: []string{}, Broken: []string{}}
+		broken := func(warning string) {
+			tv.Warnings = append(tv.Warnings, warning)
+			tv.Broken = append(tv.Broken, warning)
+		}
+		if shelf.ok {
+			if _, isCard := vouchers.Find(shelf.document, tier.Key); isCard {
+				broken("مفتاح الحجم «" + tier.Key + "» هو مفتاح بطاقة في الكتالوج")
+			}
+		}
 		saving, err := control.ParseWalletAmount(tier.Saving)
 		if err != nil || saving.Sign() < 0 {
 			if strings.TrimSpace(tier.Saving) != "" {
@@ -334,9 +381,9 @@ func (s HTTPServer) evaluateBundle(ctx context.Context, cards control.VoucherSto
 				items = append(items, item)
 				switch {
 				case !item.Found:
-					tv.Warnings = append(tv.Warnings, "«"+key+"» ليس في الكتالوج")
+					broken("«" + key + "» ليس في الكتالوج")
 				case item.ToAccount:
-					tv.Warnings = append(tv.Warnings, "«"+item.Name+"» يُشحن إلى حساب ولا يدخل في باقة")
+					broken("«" + item.Name + "» يُشحن إلى حساب ولا يدخل في باقة")
 				case !item.Available:
 					tv.Warnings = append(tv.Warnings, "«"+item.Name+"» غير متوفر الآن: "+item.Reason)
 				}
@@ -349,6 +396,15 @@ func (s HTTPServer) evaluateBundle(ctx context.Context, cards control.VoucherSto
 				}
 				if item.Found {
 					prices[item.Price] = true
+				}
+			}
+			if len(part) > 1 {
+				seen := map[string]bool{}
+				for _, item := range items {
+					if item.Found && seen[item.Brand] {
+						broken("البطاقة " + itoa(p+1) + ": خياران من «" + item.BrandName + "»، والزبون يختار الشبكة لا البطاقة")
+					}
+					seen[item.Brand] = true
 				}
 			}
 			if len(part) > 1 && len(prices) > 1 {
@@ -381,6 +437,9 @@ func (s HTTPServer) evaluateBundle(ctx context.Context, cards control.VoucherSto
 					cost.Add(cost, c)
 				} else {
 					costKnown = false
+				}
+				if i == carrier && saving.Cmp(price) >= 0 {
+					cv.Warnings = append(cv.Warnings, "التوفير يساوي سعر «"+item.Name+"» أو يزيد عليه: لا يُباع هذا الاختيار")
 				}
 				if i == carrier && item.Cost != "" {
 					gameMargin := new(big.Rat).Sub(price, ratOrZero(item.Cost))
@@ -508,7 +567,17 @@ func (s HTTPServer) handleCustomerAdminBundles(w http.ResponseWriter, r *http.Re
 		s.customerInternalError(w, "customer bundles read failed", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"bundles": bundles})
+	// What keeps a bundle, or a size of it, off the app whatever the prices,
+	// for the list to flag (a card since deleted from the catalog, say).
+	issues := map[string][]string{}
+	if cards, ok := s.voucherStore(); ok && len(bundles) > 0 {
+		for _, bundle := range bundles {
+			for _, tier := range s.evaluateBundle(r.Context(), cards, bundle).Tiers {
+				issues[bundle.Key] = append(issues[bundle.Key], tier.Broken...)
+			}
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"bundles": bundles, "issues": issues})
 }
 
 type customerBundleRequest struct {
@@ -553,6 +622,23 @@ func (s HTTPServer) handleCustomerAdminSaveBundle(w http.ResponseWriter, r *http
 					writeCustomerError(w, http.StatusBadRequest, "invalid_bundle",
 						"size key "+tier.Key+" is a card's key in the catalog", nil)
 					return
+				}
+				// The buyer picks a part's card by its brand (their network):
+				// two choices of one brand could never both be reached.
+				for p, part := range tier.Parts {
+					brands := map[string]bool{}
+					for _, item := range part {
+						located, found := vouchers.Find(loaded.document, strings.TrimSpace(item))
+						if !found || len(part) < 2 {
+							continue
+						}
+						if brands[located.Brand.Key] {
+							writeCustomerError(w, http.StatusBadRequest, "invalid_bundle",
+								fmt.Sprintf("size %s, card %d: two choices of brand %s", tier.Key, p+1, located.Brand.Key), nil)
+							return
+						}
+						brands[located.Brand.Key] = true
+					}
 				}
 			}
 		}

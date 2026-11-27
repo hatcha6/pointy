@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -35,7 +36,7 @@ func TestCustomerCatalogIsGzippedForACallerThatTakesIt(t *testing.T) {
 	for range 2 {
 		packed := get("gzip, deflate, br")
 		if packed.Code != http.StatusOK || packed.Header().Get("Content-Encoding") != "gzip" ||
-			packed.Header().Get("Vary") != "Accept-Encoding" {
+			strings.Join(packed.Header().Values("Vary"), ", ") != "Authorization, Accept-Encoding" {
 			t.Fatalf("gzip: %d %v", packed.Code, packed.Header())
 		}
 		if packed.Header().Get("ETag") != plain.Header().Get("ETag") {

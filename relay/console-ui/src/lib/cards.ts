@@ -413,7 +413,7 @@ export type CardBundle = {
 export function useCardBundles() {
   return useQuery({
     queryKey: cardKeys.bundles,
-    queryFn: () => api.get<{ bundles: CardBundle[] }>(`${BASE}/bundles`),
+    queryFn: () => api.get<{ bundles: CardBundle[]; issues?: Record<string, string[]> }>(`${BASE}/bundles`),
   });
 }
 
@@ -449,7 +449,7 @@ export type BundleChoiceView = {
 };
 
 export type BundleEvaluation = {
-  tiers: { key: string; saving: string; parts: BundleItemView[][]; choices: BundleChoiceView[]; warnings: string[] }[];
+  tiers: { key: string; saving: string; parts: BundleItemView[][]; choices: BundleChoiceView[]; warnings: string[]; broken: string[] }[];
   choices: string[];
   warnings: string[];
   channels: Record<string, number>;

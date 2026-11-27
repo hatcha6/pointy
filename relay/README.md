@@ -2096,7 +2096,45 @@ store `control/customer_bundles.go`, migration 53).
     refunded (`relay_customer_orders.refunded`).
 - Old relays and old apps: the migration only adds a table and two columns
   with defaults, so a relay from before keeps reading and writing orders; an
-  app that does not know `bundles` ignores the key.
+  app that does not know `bundles` ignores the key, and its order list reads a
+  bundle order as one order of one, with its name and total.
+  - **Compose the first bundle only once every relay node runs this version.**
+    A node from before reads a paid bundle order as a card it cannot find and
+    refunds it whole, and while another node is buying its cards that refund
+    would come on top of the delivery.
+- **The review account always sees bundles** (`customer_bundle_review.go`), so a
+  store reviewer meets the feature whether or not any is on sale: the stored
+  bundles when there are any, else a built-in demo set — «باقة اللاعب» (PUBG UC
+  with network credit, savings 0.750/2.250/4.250) and «باقة الاتصال والإنترنت»
+  (LTT 10/20 with Libyana or Almadar credit, 0.250/0.500). Its artwork is
+  embedded (`assets/bundles/`) and served by SHA-256 under
+  `/v1/customers/images/`. The channel rules still apply: the iPhone build is
+  shown only the services bundle (App Store 3.1.1 / 3.1.3(e)). Its orders are
+  simulated like every review order (no Dafa, no supplier).
+  - `GET /v1/customers/catalog` takes an optional `Authorization: Bearer
+    <access token>`. Without one, with a bad or expired one, or with any other
+    customer's, the answer is the public one, byte for byte and with the same
+    ETag (never a 401). With the review account's, the version and ETag are
+    their own (`reviewCatalogVersion`), so neither ever satisfies the other's
+    `If-None-Match`.
+  - Every catalog answer sends `Vary: Authorization`; a request that carries
+    `Authorization` is answered `Cache-Control: private, no-cache`, an
+    unsigned one `public, no-cache` as before.
+- **Edge cases** (`customer_bundles_edge_test.go`):
+  - A card that goes unavailable or unsold before the order: `409
+    item_unavailable`; after the payment but before anything is bought: the
+    whole order is refunded, so no card is delivered without its partner.
+  - A card deleted from the catalog leaves its part, a size with an empty
+    part (or without its game card) is left out, and the console's list flags
+    the bundle (`issues` on `GET /v1/customers/admin/bundles`).
+  - A size key used twice, or one that is a card's key, is refused on save.
+  - A negative saving is refused; one at or above the game card's price is
+    saved (prices move) and flagged, but the catalog leaves that size out and
+    an order for it is refused.
+  - Two choices of one brand in a part are refused on save (the buyer picks a
+    network, not a card); the catalog keeps the first if one was stored.
+  - When the game card (the one carrying the saving) fails, its share less the
+    saving is refunded once; the other card is delivered at its own price.
 
 ## Shop Wallets (Dafa top-ups)
 
