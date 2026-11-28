@@ -72,6 +72,10 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
   /// The codes whose QR has had its foil scratched off, this visit.
   final Set<String> _scratched = {};
   List<CardCode> _codes = const [];
+
+  /// The order as last read from the relay: a bundle's refunded cards are
+  /// known only once it is delivered, which may be after the page opens.
+  late CardOrder _order = widget.order;
   Set<String> _used = {};
   bool _locked = false;
   bool _loading = true;
@@ -142,6 +146,15 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
           case Error():
             unread = true;
         }
+      } else if (widget.order.bundleItems.isNotEmpty) {
+        // The codes are on this phone, but which of a bundle's cards went
+        // back as credit is the relay's to say (a row in «كروتي» can be
+        // older than the order). Never what decides the codes shown.
+        if (await dependencies.orders.order(widget.order.id) case Ok(
+          :final value,
+        )) {
+          latest = value;
+        }
       }
       _used = await dependencies.vault.usedCodes();
     } on Object {
@@ -152,6 +165,7 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
       return;
     }
     setState(() {
+      _order = latest;
       _loading = false;
       _unread = unread && _codes.isEmpty;
     });
@@ -211,7 +225,10 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
         return;
       }
       Haptics.success();
-      setState(() => _codes = order.codes);
+      setState(() {
+        _order = order;
+        _codes = order.codes;
+      });
     });
   }
 
@@ -485,8 +502,8 @@ class _RevealPageState extends State<RevealPage> with TickerProviderStateMixin {
                   ],
                   // A bundle delivered without one of its cards: which,
                   // and that its money is in the customer's credit.
-                  if (widget.order.partlyRefunded) ...[
-                    BundleRefundNote(order: widget.order),
+                  if (_order.partlyRefunded) ...[
+                    BundleRefundNote(order: _order),
                     const SizedBox(height: CardsSpace.lg),
                   ],
                   if (brand != null) _cards(context, brand, palette),

@@ -3,6 +3,7 @@ package relay
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -403,5 +404,61 @@ func TestBundleOrderReadsLikeAnyOrderInTheList(t *testing.T) {
 	if row["quantity"] != float64(1) || row["name"] != "باقة اللاعب · 60 شدة + 5 دينار" || row["total"] != "9.750" ||
 		row["status"] != "delivered" || row["bundle_items"] == nil {
 		t.Fatalf("row = %v", row)
+	}
+}
+
+// recordFailingStore fails a bundle order's first write of its purchases,
+// as a database blip would.
+type recordFailingStore struct {
+	*control.FileStore
+	failures int
+}
+
+func (s *recordFailingStore) RecordCustomerBundlePurchases(ctx context.Context, id string, purchaseIDs []string) (control.CustomerOrder, error) {
+	if s.failures > 0 {
+		s.failures--
+		return control.CustomerOrder{}, errors.New("database unavailable")
+	}
+	return s.FileStore.RecordCustomerBundlePurchases(ctx, id, purchaseIDs)
+}
+
+func TestBundleIsNotDeliveredUntilItsPurchasesAreOnTheOrder(t *testing.T) {
+	h := newBundleHarness(t)
+	h.saveGamer()
+	h.server.Wallet.TestMode, h.dafa.testWorkspace = false, false
+	h.server.Store = &recordFailingStore{FileStore: h.store, failures: 1}
+	h.cards.server = h.server
+	token := h.customer("0911111111")
+	_, body := h.do(http.MethodPost, "/v1/customers/orders", token, bundleOrder("b-1", "pubg-60", "libyana-5"))
+	id := orderOf(t, body)["id"].(string)
+	_, body = h.do(http.MethodPost, "/v1/customers/orders/"+id+"/confirm", token, map[string]any{"otp": "111111"})
+	// The cards are bought, but the order does not know which purchases
+	// they are: delivered now, it could never show their codes.
+	if order := orderOf(t, body); order["status"] == "delivered" {
+		t.Fatalf("delivered without its purchases: %v", order)
+	}
+	(&CustomerOrderReconciler{Server: h.server}).Round(context.Background())
+	_, body = h.do(http.MethodGet, "/v1/customers/orders/"+id, token, nil)
+	order := orderOf(t, body)
+	if order["status"] != "delivered" || len(order["codes"].([]any)) != 2 {
+		t.Fatalf("order = %v", order)
+	}
+	if calls := h.supplier.calls(); len(calls) != 2 {
+		t.Fatalf("each card is bought once: %v", calls)
+	}
+}
+
+func TestBundleEvaluateBoundsADraft(t *testing.T) {
+	h := newBundleHarness(t)
+	parts := []any{}
+	for i := 0; i < 20; i++ {
+		parts = append(parts, []any{"pubg-60", "libyana-5", "almadar-5"})
+	}
+	draft := map[string]any{"key": "huge", "name": "x", "tiers": []any{map[string]any{"key": "huge-1", "saving": "0", "parts": parts}}}
+	if status, body := h.admin(http.MethodPost, "/v1/customers/admin/bundles/evaluate", map[string]any{"bundle": draft}); status != http.StatusBadRequest {
+		t.Fatalf("a draft of 3^20 picks is evaluated: %d %v", status, body)
+	}
+	if status, body := h.admin(http.MethodPost, "/v1/customers/admin/bundles/evaluate", map[string]any{"bundle": gamerBundle()}); status != http.StatusOK {
+		t.Fatalf("evaluate: %d %v", status, body)
 	}
 }

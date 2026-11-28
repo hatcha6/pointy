@@ -104,10 +104,12 @@ var (
 	customerBundleArtPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 )
 
+// The most a bundle may have of each; the console's evaluate route bounds a
+// draft by the first three too.
 const (
-	maxCustomerBundleTiers   = 8
-	maxCustomerBundleParts   = 4
-	maxCustomerBundleOptions = 6
+	MaxCustomerBundleTiers   = 8
+	MaxCustomerBundleParts   = 4
+	MaxCustomerBundleOptions = 6
 	maxCustomerBundleArt     = 16
 	maxCustomerBundles       = 50
 )
@@ -126,8 +128,8 @@ func NormalizeCustomerBundle(bundle CustomerBundle) (CustomerBundle, error) {
 		return CustomerBundle{}, invalidBundle("name is required (at most 60 characters)")
 	case len([]rune(bundle.Tagline)) > 120:
 		return CustomerBundle{}, invalidBundle("tagline is at most 120 characters")
-	case len(bundle.Tiers) == 0 || len(bundle.Tiers) > maxCustomerBundleTiers:
-		return CustomerBundle{}, invalidBundle("a bundle has 1 to %d sizes", maxCustomerBundleTiers)
+	case len(bundle.Tiers) == 0 || len(bundle.Tiers) > MaxCustomerBundleTiers:
+		return CustomerBundle{}, invalidBundle("a bundle has 1 to %d sizes", MaxCustomerBundleTiers)
 	case len(bundle.Art) > maxCustomerBundleArt:
 		return CustomerBundle{}, invalidBundle("at most %d artworks", maxCustomerBundleArt)
 	}
@@ -158,8 +160,8 @@ func NormalizeCustomerBundle(bundle CustomerBundle) (CustomerBundle, error) {
 			return CustomerBundle{}, invalidBundle("size %q: the saving is not an amount", tier.Key)
 		}
 		tier.Saving = FormatWalletAmount(saving)
-		if len(tier.Parts) < 2 || len(tier.Parts) > maxCustomerBundleParts {
-			return CustomerBundle{}, invalidBundle("size %q: a bundle is 2 to %d cards", tier.Key, maxCustomerBundleParts)
+		if len(tier.Parts) < 2 || len(tier.Parts) > MaxCustomerBundleParts {
+			return CustomerBundle{}, invalidBundle("size %q: a bundle is 2 to %d cards", tier.Key, MaxCustomerBundleParts)
 		}
 		parts := make([][]string, 0, len(tier.Parts))
 		for p, part := range tier.Parts {
@@ -173,8 +175,8 @@ func NormalizeCustomerBundle(bundle CustomerBundle) (CustomerBundle, error) {
 				inPart[item] = true
 				options = append(options, item)
 			}
-			if len(options) == 0 || len(options) > maxCustomerBundleOptions {
-				return CustomerBundle{}, invalidBundle("size %q, card %d: 1 to %d choices", tier.Key, p+1, maxCustomerBundleOptions)
+			if len(options) == 0 || len(options) > MaxCustomerBundleOptions {
+				return CustomerBundle{}, invalidBundle("size %q, card %d: 1 to %d choices", tier.Key, p+1, MaxCustomerBundleOptions)
 			}
 			parts = append(parts, options)
 		}

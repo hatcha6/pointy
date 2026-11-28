@@ -91,6 +91,10 @@ var stepUpRules = []stepUpRule{
 	// A bundle sells its cards for less.
 	rule(http.MethodPut, "/v1/customers/admin/bundles/*"),
 	rule(http.MethodDelete, "/v1/customers/admin/bundles/*"),
+	// An offer sells cards for less to the customers it targets; stopping
+	// or extending one changes who keeps that price.
+	rule(http.MethodPost, "/v1/customers/admin/offers"),
+	rule(http.MethodPatch, "/v1/customers/admin/offers/*"),
 	// A campaign's reward is credit every customer it brings is given.
 	rule(http.MethodPost, "/v1/customers/admin/campaigns"),
 	rule(http.MethodPatch, "/v1/customers/admin/campaigns/*"),

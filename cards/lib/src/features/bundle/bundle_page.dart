@@ -66,11 +66,16 @@ class _BundlePageState extends State<BundlePage> {
   /// The widest the page's details run, on a tablet or a desktop.
   static const double _column = 600;
 
-  late ShelfTier _tier =
-      widget.bundle.tier(widget.initialTier ?? '') ?? widget.bundle.defaultTier;
+  /// The bundle as the shelf has it now: read again before a purchase, so a
+  /// card gone from the shelf since the page opened is never sent.
+  late ShelfBundle _bundle = widget.bundle;
 
-  /// The brands picked, by part: the size's own first cards to begin with.
-  late List<String> _pick = _tier.firstPick;
+  late ShelfTier _tier =
+      _bundle.tier(widget.initialTier ?? '') ?? _bundle.defaultTier;
+
+  /// The brands picked, by part: the size's own first cards to begin with,
+  /// covering every part any size has (sizes may differ in their cards).
+  late List<String> _pick = _bundle.pickFrom(_tier.firstPick);
   final _scroll = ScrollController();
   final _cardGone = ValueNotifier(false);
   bool _buying = false;
@@ -80,7 +85,7 @@ class _BundlePageState extends State<BundlePage> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        CardsScope.of(context).analytics.brandViewed(widget.bundle.asBrand());
+        CardsScope.of(context).analytics.brandViewed(_bundle.asBrand());
       }
     });
   }
@@ -97,7 +102,7 @@ class _BundlePageState extends State<BundlePage> {
     }
     _warmed = true;
     final catalog = CardsScope.of(context).catalog;
-    for (final art in widget.bundle.bundle.art.values.toSet()) {
+    for (final art in _bundle.bundle.art.values.toSet()) {
       final url = catalog.imageUrl(art).toString();
       for (final image in [artImage(url, width: artTileWidth), artImage(url)]) {
         precacheImage(image, context, onError: (_, _) {});
@@ -118,12 +123,12 @@ class _BundlePageState extends State<BundlePage> {
     Haptics.select();
     setState(() {
       _pick = [..._pick]..[part] = brand;
-      _tier = widget.bundle.nearestOffering(_tier, _pick) ?? _tier;
+      _tier = _bundle.nearestOffering(_tier, _pick) ?? _tier;
     });
   }
 
   Future<void> _buy() async {
-    if (_buying || !widget.bundle.offers(_tier, _pick)) {
+    if (_buying || !_bundle.offers(_tier, _pick)) {
       return;
     }
     Haptics.tap();
@@ -132,9 +137,12 @@ class _BundlePageState extends State<BundlePage> {
       if (!await ensureSignedIn(context) || !mounted) {
         return;
       }
+      if (!_takeFreshShelf()) {
+        return;
+      }
       await showCheckout(
         context,
-        brand: widget.bundle.asBrand(_pick),
+        brand: _bundle.asBrand(_pick),
         item: _tier.asItem(_pick),
         bundleItems: [for (final card in _tier.cards(_pick)) card.item.key],
       );
@@ -143,11 +151,42 @@ class _BundlePageState extends State<BundlePage> {
     }
   }
 
+  /// Reads the bundle from the shelf as it is now. False when the pick
+  /// shown can no longer be bought as it is: the page then shows the
+  /// bundle as it stands (or says it is gone) instead of a checkout the
+  /// relay would refuse.
+  bool _takeFreshShelf() {
+    final fresh = CardsScope.of(context).catalog.shelfBundle(_bundle.key);
+    if (fresh == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppLocalizations.of(context).errBundleChanged)),
+      );
+      return false;
+    }
+    if (identical(fresh, _bundle)) {
+      return true;
+    }
+    final before = _tier.cards(_pick).map((card) => card.item.key).join(',');
+    final tier = fresh.tier(_tier.tier.key);
+    final pick = fresh.pickFrom(_pick);
+    final same =
+        tier != null &&
+        fresh.offers(tier, pick) &&
+        tier.cards(pick).map((card) => card.item.key).join(',') == before &&
+        tier.price(pick) == _tier.price(_pick);
+    setState(() {
+      _bundle = fresh;
+      _tier = tier ?? fresh.defaultTier;
+      _pick = tier == null ? fresh.pickFrom(_tier.firstPick) : pick;
+    });
+    return same;
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
-    final bundle = widget.bundle;
+    final bundle = _bundle;
     final brand = bundle.asBrand(_pick);
     final cards = _tier.cards(_pick);
     final cardWidth = BrandCardStage.cardWidthFor(context);
@@ -305,7 +344,7 @@ class _BundlePageState extends State<BundlePage> {
         bottomNavigationBar: BuyBar(
           total: _tier.price(_pick),
           quantity: 1,
-          enabled: true,
+          enabled: bundle.offers(_tier, _pick),
           onQuantity: (_) {},
           onBuy: _buy,
           note: l10n.bundleCards(cards.length),

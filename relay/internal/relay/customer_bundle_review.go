@@ -5,10 +5,13 @@ import (
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
+	"errors"
+	"fmt"
 	"net/http"
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"pointy/relay/internal/control"
@@ -121,8 +124,54 @@ func (s HTTPServer) catalogReviewer(r *http.Request) bool {
 	if !ok {
 		return false
 	}
-	customer, _, err := store.CustomerByAccessToken(r.Context(), control.TokenHash(raw))
-	return err == nil && s.Customers.isReviewPhone(customer.Phone)
+	return s.Customers.isReviewPhone(catalogTokenPhones.phone(r.Context(), store, control.TokenHash(raw), s.clock().Now()))
+}
+
+// catalogTokenPhones remembers whose phone an access token is, for a few
+// minutes: every signed-in catalog fetch asks only whether it is the review
+// account, and a store read for each was a database round trip on the app's
+// busiest route. A token's customer never changes; a token signed out within
+// the window at worst still sees the review account's demo bundles.
+var catalogTokenPhones = &tokenPhoneCache{entries: map[string]tokenPhone{}}
+
+const (
+	catalogTokenPhoneTTL  = 5 * time.Minute
+	catalogTokenPhoneSize = 4096
+)
+
+type tokenPhone struct {
+	phone string
+	until time.Time
+}
+
+type tokenPhoneCache struct {
+	mu      sync.Mutex
+	entries map[string]tokenPhone
+}
+
+// phone is the phone of the customer whose access token hashes to hash, ""
+// when no customer has it.
+func (c *tokenPhoneCache) phone(ctx context.Context, store control.CustomerStore, hash string, now time.Time) string {
+	// Keyed by the store too: two relays in one process (tests) keep apart.
+	key := fmt.Sprintf("%p|%s", store, hash)
+	c.mu.Lock()
+	cached, ok := c.entries[key]
+	c.mu.Unlock()
+	if ok && now.Before(cached.until) {
+		return cached.phone
+	}
+	customer, _, err := store.CustomerByAccessToken(ctx, hash)
+	if err != nil && !errors.Is(err, control.ErrCustomerSessionNotFound) {
+		// A failed read is not remembered: the next fetch asks again.
+		return ""
+	}
+	c.mu.Lock()
+	if len(c.entries) >= catalogTokenPhoneSize {
+		c.entries = map[string]tokenPhone{}
+	}
+	c.entries[key] = tokenPhone{phone: customer.Phone, until: now.Add(catalogTokenPhoneTTL)}
+	c.mu.Unlock()
+	return customer.Phone
 }
 
 // writeDemoBundleArt serves an embedded demo artwork; false when sum is not one.

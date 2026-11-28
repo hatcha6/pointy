@@ -306,6 +306,97 @@ void main() {
     });
   });
 
+  group('sizes of different card counts', () {
+    final bundle = _shelf(
+      bundle: {
+        ...fixtureBundle,
+        'tiers': [
+          {
+            'key': 'gamer-60',
+            'saving': '0.500',
+            'parts': [
+              ['pubg-60'],
+              ['libyana-5', 'almadar-5'],
+            ],
+          },
+          {
+            'key': 'gamer-325',
+            'saving': '1.250',
+            'parts': [
+              ['pubg-325'],
+              ['libyana-10'],
+              ['libyana-5', 'almadar-5'],
+            ],
+          },
+        ],
+      },
+    ).shelfBundles.single;
+
+    test('pick every part any size has', () {
+      expect(bundle.choices.keys, [1, 2]);
+      expect(bundle.pickFrom(bundle.defaultPick), [
+        'pubg',
+        'libyana',
+        'libyana',
+      ]);
+      // A two-card size takes only its own cards from a longer pick.
+      expect(
+        bundle
+            .tier('gamer-60')!
+            .cards(['pubg', 'almadar', 'libyana'])
+            .map((c) => c.item.key),
+        ['pubg-60', 'almadar-5'],
+      );
+    });
+
+    testWidgets('open the bundle page', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(430, 932));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final dependencies = fixtureDependencies(topUps: true);
+      await tester.runAsync(dependencies.catalog.refresh);
+      await tester.pumpWidget(
+        CardsApp(
+          dependencies: dependencies,
+          home: BundlePage(bundle: bundle),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byType(BundlePage), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    });
+  });
+
+  testWidgets('a bundle refunded in part after the reveal opened says so', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(430, 932));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final dependencies = fixtureDependencies(topUps: true);
+    await tester.runAsync(dependencies.catalog.refresh);
+    // Checkout hands over the order still being bought: nothing is known
+    // yet of the card that could not be.
+    final opened = CardOrder.fromJson({
+      ...fixturePartlyRefundedBundleOrder,
+      'status': 'fulfilling',
+      'error_code': '',
+      'bundle_refunded': <String>[],
+      'refunded': '0.000',
+      'codes': <Object>[],
+    });
+    expect(opened.partlyRefunded, isFalse);
+    await tester.pumpWidget(
+      CardsApp(
+        dependencies: dependencies,
+        home: RevealPage(order: opened),
+      ),
+    );
+    await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+    await tester.pumpAndSettle();
+    expect(find.text('تعذّر شراء ليبيانا · 10 دينار'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('a bundle reached as a brand opens its own page', (tester) async {
     await tester.binding.setSurfaceSize(const Size(430, 932));
     addTearDown(() => tester.binding.setSurfaceSize(null));

@@ -627,6 +627,31 @@ func TestCardStockNeedsATapAndItsCodesAreNeverAudited(t *testing.T) {
 	}
 }
 
+// The console asks for a tap on every offer write; a route missing here makes
+// the relay refuse that tap ("this action does not need a passkey tap").
+func TestOffersNeedATap(t *testing.T) {
+	if !needsStepUp(http.MethodPost, "/v1/customers/admin/offers") {
+		t.Error("POST /v1/customers/admin/offers needs a passkey tap")
+	}
+	if !needsStepUp(http.MethodPatch, "/v1/customers/admin/offers/off_1") {
+		t.Error("PATCH /v1/customers/admin/offers/{id} needs a passkey tap")
+	}
+	if needsStepUp(http.MethodGet, "/v1/customers/admin/offers") {
+		t.Error("reading offers needs no tap")
+	}
+}
+
+// The bundle composer prices the draft a moment after every change: a
+// what-if, never an audit line.
+func TestBundleEvaluateIsAQuietWrite(t *testing.T) {
+	if !quietWrite.MatchString("/v1/customers/admin/bundles/evaluate") {
+		t.Error("evaluating a bundle draft changes nothing: no audit line")
+	}
+	if quietWrite.MatchString("/v1/customers/admin/bundles/gamer") || !quietWrite.MatchString("/v1/vouchers/admin/fx/preview") {
+		t.Error("only the what-ifs are quiet")
+	}
+}
+
 func TestStepUpBeginTakesABodyHash(t *testing.T) {
 	h := newHarness(t)
 	b, key := h.register("Omar")

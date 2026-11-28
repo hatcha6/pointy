@@ -317,8 +317,12 @@ var channelNames = map[string]string{
 // evaluateBundle prices every size of a bundle with every pick, as the
 // composer shows it while it is edited.
 func (s HTTPServer) evaluateBundle(ctx context.Context, cards control.VoucherStore, bundle control.CustomerBundle) bundleEvaluation {
-	shelf := s.loadBundleShelf(ctx, cards)
-	mobile := s.mobileGiftCards(ctx)
+	return s.evaluateBundleOn(s.loadBundleShelf(ctx, cards), s.mobileGiftCards(ctx), bundle)
+}
+
+// evaluateBundleOn is evaluateBundle on a shelf already read, so a list of
+// bundles reads the catalog, offers and settings once, not once per bundle.
+func (s HTTPServer) evaluateBundleOn(shelf bundleShelf, mobile string, bundle control.CustomerBundle) bundleEvaluation {
 	now := s.clock().Now()
 	views := map[string]bundleItemView{}
 	view := func(key string) bundleItemView {
@@ -510,6 +514,25 @@ func (s HTTPServer) evaluateBundle(ctx context.Context, cards control.VoucherSto
 	return evaluation
 }
 
+// bundleDraftTooLarge is why a draft has more sizes, cards or choices than a
+// bundle may ("" when it fits): the picks priced grow as the product of them.
+func bundleDraftTooLarge(bundle control.CustomerBundle) string {
+	if len(bundle.Tiers) > control.MaxCustomerBundleTiers {
+		return fmt.Sprintf("a bundle has at most %d sizes", control.MaxCustomerBundleTiers)
+	}
+	for _, tier := range bundle.Tiers {
+		if len(tier.Parts) > control.MaxCustomerBundleParts {
+			return fmt.Sprintf("a bundle is at most %d cards", control.MaxCustomerBundleParts)
+		}
+		for _, part := range tier.Parts {
+			if len(part) > control.MaxCustomerBundleOptions {
+				return fmt.Sprintf("a card of a bundle has at most %d choices", control.MaxCustomerBundleOptions)
+			}
+		}
+	}
+	return ""
+}
+
 func choiceLabel(choice string) string {
 	if choice == "" {
 		return "الافتراضي"
@@ -571,8 +594,9 @@ func (s HTTPServer) handleCustomerAdminBundles(w http.ResponseWriter, r *http.Re
 	// for the list to flag (a card since deleted from the catalog, say).
 	issues := map[string][]string{}
 	if cards, ok := s.voucherStore(); ok && len(bundles) > 0 {
+		shelf, mobile := s.loadBundleShelf(r.Context(), cards), s.mobileGiftCards(r.Context())
 		for _, bundle := range bundles {
-			for _, tier := range s.evaluateBundle(r.Context(), cards, bundle).Tiers {
+			for _, tier := range s.evaluateBundleOn(shelf, mobile, bundle).Tiers {
 				issues[bundle.Key] = append(issues[bundle.Key], tier.Broken...)
 			}
 		}
@@ -592,6 +616,13 @@ func (s HTTPServer) handleCustomerAdminEvaluateBundle(w http.ResponseWriter, r *
 	}
 	var request customerBundleRequest
 	if !decodeCustomerBody(w, r, &request) {
+		return
+	}
+	// A draft is evaluated as it is typed, so it is not held to every rule a
+	// save is; but every pick of every size is priced, so its size is bounded
+	// as a saved bundle's is.
+	if message := bundleDraftTooLarge(request.Bundle); message != "" {
+		writeCustomerError(w, http.StatusBadRequest, "invalid_bundle", message, nil)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"evaluation": s.evaluateBundle(r.Context(), cards, request.Bundle)})

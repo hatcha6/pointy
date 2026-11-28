@@ -142,6 +142,29 @@ class ShelfBundle {
   /// The brands picked by default: the default size's first of each part.
   List<String> get defaultPick => defaultTier.firstPick;
 
+  /// [pick] covering every part any size has: a part [pick] does not reach
+  /// takes the first brand offered there. Sizes may differ in how many
+  /// cards they have, and the page picks by part across all of them.
+  List<String> pickFrom(List<String> pick) {
+    final width = tiers
+        .map((tier) => tier.parts.length)
+        .reduce((a, b) => a > b ? a : b);
+    final options = choices;
+    return [
+      for (var index = 0; index < width; index++)
+        index < pick.length && pick[index].isNotEmpty
+            ? pick[index]
+            : options[index]?.first.key ??
+                  tiers
+                      .where((tier) => index < tier.parts.length)
+                      .first
+                      .parts[index]
+                      .first
+                      .brand
+                      .key,
+    ];
+  }
+
   /// Whether [tier] has a card for every brand in [pick] where the buyer
   /// picks: a size without the buyer's network is not theirs to buy, and
   /// is never quietly sold with another network's card.

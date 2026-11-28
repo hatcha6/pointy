@@ -199,16 +199,18 @@ func (s HTTPServer) advanceCustomerBundle(
 			// order before any is bought.
 			for i := range failures {
 				if failures[i] != "" {
-					if _, _, err := orders.FinishCustomerOrder(ctx, order.ID, false, "item_unavailable", failures[i]); err != nil {
+					finished, applied, err := orders.FinishCustomerOrder(ctx, order.ID, false, "item_unavailable", failures[i])
+					if err != nil {
 						s.logger().Error("refunding a customer bundle failed", "order_id", order.ID, "error", err)
-					} else {
+						return order, nil, false
+					}
+					if applied {
 						s.logger().Warn("customer bundle refunded to credit before buying", "order_id", order.ID, "part", i)
+						if !watching {
+							s.tellCustomerOrderEnded(ctx, finished, false)
+						}
 					}
-					refreshed, err := orders.GetCustomerOrder(ctx, order.ID)
-					if err == nil {
-						order = refreshed
-					}
-					return order, nil, false
+					return finished, nil, false
 				}
 			}
 		}
@@ -242,31 +244,37 @@ func (s HTTPServer) advanceCustomerBundle(
 				purchases[i], fresh[i] = s.buyClaimedCards(vouchers.WithoutSettling(ctx), cards, claim, ranking, 1, nil)
 			}
 		}
-		ids := make([]string, n)
-		firstID := ""
-		for i := range purchases {
-			if claimed[i] {
-				ids[i] = purchases[i].ID
-				if firstID == "" {
-					firstID = purchases[i].ID
-				}
+	}
+
+	// Tie the order to every purchase claimed, on whichever pass claimed it:
+	// a delivered card with no purchase on the order would never show its
+	// code, so the order goes no further until they are written.
+	ids := make([]string, n)
+	firstID, unrecorded := "", false
+	for i := range purchases {
+		if claimed[i] {
+			ids[i] = purchases[i].ID
+			if firstID == "" {
+				firstID = purchases[i].ID
 			}
+			unrecorded = unrecorded || order.Bundle[i].PurchaseID == ""
 		}
-		if firstID != "" {
-			if order.Status == control.CustomerOrderPaid {
-				started, err := orders.StartCustomerOrderFulfilment(ctx, order.ID, firstID)
-				if err != nil {
-					s.logger().Error("tying a customer bundle to its purchases failed", "order_id", order.ID, "error", err)
-					return order, nil, false
-				}
-				order = started
-			}
-			if recorded, err := bundles.RecordCustomerBundlePurchases(ctx, order.ID, ids); err == nil {
-				order = recorded
-			} else {
-				s.logger().Error("recording a customer bundle's purchases failed", "order_id", order.ID, "error", err)
-			}
+	}
+	if firstID != "" && order.Status == control.CustomerOrderPaid {
+		started, err := orders.StartCustomerOrderFulfilment(ctx, order.ID, firstID)
+		if err != nil {
+			s.logger().Error("tying a customer bundle to its purchases failed", "order_id", order.ID, "error", err)
+			return order, nil, false
 		}
+		order = started
+	}
+	if unrecorded {
+		recorded, err := bundles.RecordCustomerBundlePurchases(ctx, order.ID, ids)
+		if err != nil {
+			s.logger().Error("recording a customer bundle's purchases failed", "order_id", order.ID, "error", err)
+			return order, nil, false
+		}
+		order = recorded
 	}
 
 	// Every card's purchase must have ended before the order does.
